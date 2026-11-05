@@ -21,7 +21,7 @@ test('builds catalog for registry tools', async () => {
   const { errors } = await build(root);
   assert.deepEqual(errors, []);
   const cat = readJson(root, 'shell/catalog.json');
-  assert.deepEqual(cat.tools.map((t) => t.id), ['sample']);
+  assert.deepEqual(cat.tools.map((t) => t.id), readJson(root, 'tools/registry.json'));
   assert.equal(cat.tools[0].entry, 'tools/sample/index.html');
   assert.equal(cat.tools[0].thumb, 'tools/sample/thumb.svg');
 });

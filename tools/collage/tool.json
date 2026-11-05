@@ -1,0 +1,15 @@
+{
+  "id": "collage",
+  "name": "拼圖",
+  "group": "做圖",
+  "desc": "多張照片拼成一張",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "assets": {},
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}

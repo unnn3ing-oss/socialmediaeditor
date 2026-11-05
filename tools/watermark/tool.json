@@ -1,0 +1,24 @@
+{
+  "id": "watermark",
+  "name": "浮水印",
+  "group": "做圖",
+  "desc": "批次加上 Logo",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "assets": {
+    "logo.news": {
+      "company": "tvbs-news-logo",
+      "public": "upload"
+    },
+    "logo.old": {
+      "company": "tvbs-old-logo",
+      "public": "upload"
+    }
+  },
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}

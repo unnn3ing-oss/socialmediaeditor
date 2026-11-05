@@ -1,0 +1,60 @@
+{
+  "id": "pattern",
+  "name": "圖片套版",
+  "group": "做圖",
+  "desc": "照片加標題，一鍵套框",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "assets": {
+    "sticker.smile": {
+      "company": "tbao-smile",
+      "public": "../../assets-public/stickers/smile.png"
+    },
+    "sticker.shock": {
+      "company": "tbao-shock",
+      "public": "../../assets-public/stickers/shock.png"
+    },
+    "sticker.cry": {
+      "company": "tbao-cry",
+      "public": "../../assets-public/stickers/cry.png"
+    },
+    "sticker.angry": {
+      "company": "tbao-angry",
+      "public": "../../assets-public/stickers/angry.png"
+    },
+    "sticker.kiss": {
+      "company": "tbao-kiss",
+      "public": "../../assets-public/stickers/kiss.png"
+    },
+    "sticker.laugh": {
+      "company": "tbao-laugh",
+      "public": "../../assets-public/stickers/laugh.png"
+    },
+    "sticker.meh": {
+      "company": "tbao-meh",
+      "public": "../../assets-public/stickers/meh.png"
+    },
+    "frame.ent.ribbon": {
+      "company": "pattern-ribbon-ent",
+      "public": null
+    },
+    "frame.news.ribbon": {
+      "company": "pattern-ribbon-news",
+      "public": null
+    },
+    "frame.logo": {
+      "company": "pattern-logo-white",
+      "public": null
+    },
+    "font.title": {
+      "company": "font-whz-heavy",
+      "public": null
+    }
+  },
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}

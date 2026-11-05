@@ -1,0 +1,56 @@
+{
+  "id": "linepush",
+  "name": "LINE 推播",
+  "group": "做圖",
+  "desc": "LINE 推播圖：單張或四格",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "assets": {
+    "sticker.smile": {
+      "company": "tbao-smile",
+      "public": "../../assets-public/stickers/smile.png"
+    },
+    "sticker.shock": {
+      "company": "tbao-shock",
+      "public": "../../assets-public/stickers/shock.png"
+    },
+    "sticker.cry": {
+      "company": "tbao-cry",
+      "public": "../../assets-public/stickers/cry.png"
+    },
+    "sticker.angry": {
+      "company": "tbao-angry",
+      "public": "../../assets-public/stickers/angry.png"
+    },
+    "sticker.kiss": {
+      "company": "tbao-kiss",
+      "public": "../../assets-public/stickers/kiss.png"
+    },
+    "sticker.laugh": {
+      "company": "tbao-laugh",
+      "public": "../../assets-public/stickers/laugh.png"
+    },
+    "sticker.meh": {
+      "company": "tbao-meh",
+      "public": "../../assets-public/stickers/meh.png"
+    },
+    "line.header": {
+      "company": "line-header",
+      "public": null
+    },
+    "line.grid4": {
+      "company": "line-grid4-ent",
+      "public": null
+    },
+    "font.title": {
+      "company": "font-whz-heavy",
+      "public": null
+    }
+  },
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}

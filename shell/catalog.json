@@ -10,6 +10,72 @@
       "icon": "tools/sample/icon.svg",
       "thumb": "tools/sample/thumb.svg",
       "entry": "tools/sample/index.html"
+    },
+    {
+      "id": "pattern",
+      "name": "圖片套版",
+      "group": "做圖",
+      "desc": "照片加標題，一鍵套框",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/pattern/icon.svg",
+      "thumb": "tools/pattern/thumb.svg",
+      "entry": "tools/pattern/index.html"
+    },
+    {
+      "id": "linepush",
+      "name": "LINE 推播",
+      "group": "做圖",
+      "desc": "LINE 推播圖：單張或四格",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/linepush/icon.svg",
+      "thumb": "tools/linepush/thumb.svg",
+      "entry": "tools/linepush/index.html"
+    },
+    {
+      "id": "collage",
+      "name": "拼圖",
+      "group": "做圖",
+      "desc": "多張照片拼成一張",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/collage/icon.svg",
+      "thumb": "tools/collage/thumb.svg",
+      "entry": "tools/collage/index.html"
+    },
+    {
+      "id": "watermark",
+      "name": "浮水印",
+      "group": "做圖",
+      "desc": "批次加上 Logo",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/watermark/icon.svg",
+      "thumb": "tools/watermark/thumb.svg",
+      "entry": "tools/watermark/index.html"
+    },
+    {
+      "id": "resize",
+      "name": "尺寸",
+      "group": "做圖",
+      "desc": "改成各平台需要的尺寸",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/resize/icon.svg",
+      "thumb": "tools/resize/thumb.svg",
+      "entry": "tools/resize/index.html"
+    },
+    {
+      "id": "design",
+      "name": "設計",
+      "group": "做圖",
+      "desc": "自由排版：文字、貼圖、圖形",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/design/icon.svg",
+      "thumb": "tools/design/thumb.svg",
+      "entry": "tools/design/index.html"
     }
   ]
 }

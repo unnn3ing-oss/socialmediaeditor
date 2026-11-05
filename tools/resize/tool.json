@@ -1,0 +1,15 @@
+{
+  "id": "resize",
+  "name": "尺寸",
+  "group": "做圖",
+  "desc": "改成各平台需要的尺寸",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "assets": {},
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}
