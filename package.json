@@ -1,0 +1,11 @@
+{
+  "name": "socialmediaeditor",
+  "private": true,
+  "description": "小編工具箱：網站、統一外掛與後端 toolbox-api",
+  "scripts": {
+    "test": "node --test test/*.test.js test/server/*.test.js",
+    "e2e": "node --test test/e2e/*.e2e.js",
+    "build": "node build.js",
+    "check": "node build.js --check"
+  }
+}

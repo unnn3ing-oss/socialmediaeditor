@@ -1,0 +1,60 @@
+# 小編工具箱（socialmediaeditor）— 協作規則
+
+一個網站＋一個外掛＋一個後端（`toolbox-api`），工具以「積木」方式增減。設計規格見 `docs/superpowers/specs/2026-11-05-toolbox-design.md`，實作計畫在 `docs/superpowers/plans/`。
+
+## 溝通
+- 一律**繁體中文（台灣口吻）**，絕不用簡體。
+- **結論先行**；善用標題、粗體、清單、表格。
+- 區分「已知事實」和「推論」；決策類問題給多方案優缺比較。
+
+## 作業流程（最重要）
+1. 所有依照需求的更改，**先列出怎麼做、改哪裡**；需要畫面時提供畫面。使用者確認「開始」後才實作。
+2. 先改好、測好、給使用者看（截圖／測試結果），**不要直接推 main**。開發分支：`claude/charming-hamilton-6rk4l5`。
+3. 使用者明確說「**推**」才併入 `main`。Stop hook 提醒「有未提交變更」時，回「Not committing until you say OK」並列出檔案。
+4. 沒有使用者要求不開 PR。
+5. commit 結尾兩行：`Co-Authored-By: <實際模型> <noreply@anthropic.com>` 與 `Claude-Session: <本次 session 連結>`。
+
+## 省 token 規則
+1. **一個版本一個對話**：版本併入 main 後就開新對話。開頭只寫「接著做 X.YZ：〇〇」，不貼歷史脈絡（流程看本檔，設計看 spec）。
+2. **先判斷大小再動手**：
+   - 小改動（修 BUG、改文字、調樣式、單一檔案）→ 主對話直接做，不派子代理。
+   - 大功能有 2 件以上互不相干、檔案不重疊 → 才派子代理平行做。
+   - 會改到同一個函式的工作 → 先在主對話做好共用的掛點、commit，再分派。
+3. **子代理預設**：挑選最適合、最節省的模型，非必要不使用 Opus 或以上等級。提高程度或改動模型都要先說明理由，使用者同意後才換。派出去的子代理不中途換模型（停掉重來會浪費已花的用量），除非使用者要求。
+4. **子代理的指示要完整**：檔案範圍、不能碰的地方、要跑哪幾支測試、截圖存哪、回報格式，一次寫清楚。回報要精簡。
+5. **測試分層**：
+   - 子代理只跑和自己改動相關的測試。
+   - 全部 e2e 只在整合時由主對話跑一次。
+   - 匯出測試以 CI 為準（沙盒的編碼差異不重跑、不查）。
+6. **讀檔要精準**：用 grep 找位置、只讀需要的行數，不整支讀大檔。
+7. **回覆精簡**：結論＋表格，不重複前面講過的內容。
+8. **截圖只在要給使用者確認時拍**，一次拍齊，不反覆拍同一個畫面。
+9. **審查**：每個部分完成後，派另一個獨立代理審查；不通過時由該審查代理只改有問題的地方，非必要不改整體。
+
+## 積木規則（改工具時只讀這些）
+- **改某個工具**：只讀 `tools/<id>/` 與 `sdk/README.md`。
+- **改核心**（`shell/`、`sdk/`、`ui/`、`server/core/`、`extension/core/`）時才讀核心程式。
+- 新增工具：複製 `tools/_template/` → 改 `tool.json` → 在 `tools/registry.json` 加一行 → `node build.js`。
+- 移除工具：從 `tools/registry.json` 刪一行 → `node build.js`。
+- 產生檔（`shell/catalog.json`、`extension/manifest.json`、`extension/routes.gen.js`、`extension/tools/`、`server/routes.gen.js`）**不要手改**，改來源後跑 `node build.js`。
+- 工具內切換功能（分頁、模式）一律用「隱藏」切換，不重建畫面，內容才不會消失。重新整理可以清除內容。
+
+## 公司素材
+- TVBS Logo、粉框藍框、角落緞帶、LINE 黃色標題條、娛樂四格版型、T 寶貼圖等**公司素材絕不能進 repo**（repo 與網站都公開）。只存在後端 R2，輸入公司密碼才拿得到。
+- `tool.json` 的 `assets.<key>.company` 只寫後端的素材代號，不寫檔案路徑。
+
+## 測試
+- 單元：`npm test`（`node --test`，只用 Node 22 內建模組）。
+- e2e：`npm run e2e`（Playwright；沙盒用 `/opt/pw-browsers/chromium`，**不要**執行 `playwright install`）。
+- 組裝檢查：`node build.js --check`。
+- 暫存腳本、截圖放 scratchpad，不放進 repo。
+
+## 版本號（外掛 `extension/core/manifest.base.json` 的 `version`）
+| 這次改了什麼 | 遞增 | 例 |
+|---|---|---|
+| 大改版、新增主要功能 | 主版本 +1，後兩位歸零 | `1.52` → `2.00` |
+| 部分小功能 | 十位數 +1，個位歸零 | `1.52` → `1.60` |
+| 介面完善、小 BUG | 個位數 +1 | `1.52` → `1.53` |
+
+- 升版時同步 `extension/changelog.json`（繁體中文）。
+- 只改網頁或後端、沒動 `extension/` 時不升外掛版號。

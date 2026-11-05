@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>S6-1 按鈕形狀與效果</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.b{box-sizing:border-box;height:44px;padding:0 22px;border-radius:999px;font:500 15px 'Noto Sans TC',system-ui,sans-serif;cursor:pointer;transition:background-color .12s,box-shadow .12s,transform .12s,border-color .12s,color .12s}
+.b:focus-visible{outline:2px solid #1d4fb8;outline-offset:2px}
+.p{background:#1d4fb8;border:1px solid #163d8f;color:#fff}
+.s{background:#fff;border:1px solid #c4c7cc;color:#3c4046}
+.fa.p:hover{background:#163d8f}.fa.p:active{background:#112f6c}
+.fa.s:hover{background:#f1f2f4;border-color:#a9adb3}.fa.s:active{background:#e3e4e6}
+.fb:hover{transform:translateY(-1px)}.fb.p:hover{box-shadow:0 3px 8px rgba(29,79,184,.3)}.fb.s:hover{box-shadow:0 3px 8px rgba(32,33,36,.14)}
+.fb:active{transform:translateY(0);box-shadow:0 1px 2px rgba(32,33,36,.2)}
+.fc.p:hover{background:#1a47a6}.fc.s:hover{border-color:#1d4fb8;color:#1d4fb8}
+.fc:active{transform:scale(.97)}.fc.p:active{box-shadow:inset 0 2px 4px rgba(0,0,0,.3)}.fc.s:active{background:#eef3fc}
+@media (prefers-reduced-motion: reduce){.b{transition:none}.fb:hover,.fc:active{transform:none}}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 1280px; padding: 40px; background: #f6f7f8; color: #202124; font-family: 'Noto Sans TC', system-ui, sans-serif; font-size: 15px; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 700;">按鈕形狀與效果</h1>
+    <p style="margin: 0; color: #55595f;">形狀選一個、效果選一個。最下面一排的按鈕可以實際滑過、按下、用 Tab 鍵選到。</p>
+  </div>
+
+  <!-- 形狀 -->
+  <section aria-labelledby="h-shape" style="display: flex; flex-direction: column; gap: 14px;">
+    <h2 id="h-shape" style="margin: 0; font-size: 17px; font-weight: 700;">形狀</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;">
+
+      <div style="background: #ffffff; border: 1px solid #1d4fb8; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-weight: 700;">A　膠囊</span><span style="padding: 3px 10px; border: 1px solid #1d4fb8; border-radius: 99px; color: #1d4fb8; font-size: 13px;">目前選的</span></div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <span style="box-sizing: border-box; height: 44px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 44px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-weight: 500;">清空</span>
+          <span style="box-sizing: border-box; height: 36px; padding: 0 14px; display: inline-flex; align-items: center; align-self: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500;">重試</span>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">最柔和，和狀態膠囊同一個語言。缺點是跟「外掛已連線」這類狀態長得像，按鈕要靠實心或框線區分。</p>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <span style="font-weight: 700;">B　圓角 8px</span>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <span style="box-sizing: border-box; height: 44px; padding: 0 20px; display: inline-flex; align-items: center; border-radius: 8px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 44px; padding: 0 20px; display: inline-flex; align-items: center; border-radius: 8px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-weight: 500;">清空</span>
+          <span style="box-sizing: border-box; height: 36px; padding: 0 14px; display: inline-flex; align-items: center; align-self: center; border-radius: 6px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500;">重試</span>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">和輸入框、櫥窗卡片的圓角接近，整體最一致。按鈕和狀態膠囊一眼分得開。</p>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <span style="font-weight: 700;">C　方正 3px</span>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <span style="box-sizing: border-box; height: 44px; padding: 0 20px; display: inline-flex; align-items: center; border-radius: 3px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 44px; padding: 0 20px; display: inline-flex; align-items: center; border-radius: 3px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-weight: 500;">清空</span>
+          <span style="box-sizing: border-box; height: 36px; padding: 0 14px; display: inline-flex; align-items: center; align-self: center; border-radius: 3px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500;">重試</span>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">最像專業工具（剪輯、後台），俐落但偏硬。和 Logo A 的圓角外框對比較大。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 效果 -->
+  <section aria-labelledby="h-fx" style="display: flex; flex-direction: column; gap: 14px;">
+    <h2 id="h-fx" style="margin: 0; font-size: 17px; font-weight: 700;">效果（以膠囊示範）</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;">
+
+      <!-- 效果 A -->
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-weight: 700;">A　加深</span>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">只換顏色、不動位置。最安靜，連點時畫面不晃。</p>
+        <div style="display: grid; grid-template-columns: 64px 1fr 1fr; gap: 10px 10px; align-items: center; font-size: 13px; color: #55595f;">
+          <span>一般</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500;">清空</span>
+          <span>滑過</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #163d8f; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #f1f2f4; border: 1px solid #a9adb3; color: #3c4046; font-size: 14px; font-weight: 500;">清空</span>
+          <span>按下</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #112f6c; border: 1px solid #112f6c; color: #fff; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #e3e4e6; border: 1px solid #a9adb3; color: #3c4046; font-size: 14px; font-weight: 500;">清空</span>
+          <span>鍵盤選到</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4fb8;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4fb8;">清空</span>
+          <span>不能按</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #eceef0; border: 1px solid #d5d8dc; color: #6b7077; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #f6f7f8; border: 1px solid #e3e4e6; color: #6b7077; font-size: 14px; font-weight: 500;">清空</span>
+        </div>
+        <div style="display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid #e3e4e6; align-items: center;">
+          <span style="font-size: 13px; color: #55595f; width: 64px;">試按</span>
+          <button type="button" class="b p fa">排入發文</button>
+          <button type="button" class="b s fa">清空</button>
+        </div>
+      </div>
+
+      <!-- 效果 B -->
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-weight: 700;">B　浮起</span>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">滑過時上浮 1px 加陰影，按下貼回去。最有「可以按」的感覺。</p>
+        <div style="display: grid; grid-template-columns: 64px 1fr 1fr; gap: 10px 10px; align-items: center; font-size: 13px; color: #55595f;">
+          <span>一般</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500;">清空</span>
+          <span>滑過</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(29,79,184,.3);">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(32,33,36,.14);">清空</span>
+          <span>按下</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500; box-shadow: 0 1px 2px rgba(32,33,36,.2);">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500; box-shadow: 0 1px 2px rgba(32,33,36,.2);">清空</span>
+          <span>鍵盤選到</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4fb8;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4fb8;">清空</span>
+          <span>不能按</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #eceef0; border: 1px solid #d5d8dc; color: #6b7077; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #f6f7f8; border: 1px solid #e3e4e6; color: #6b7077; font-size: 14px; font-weight: 500;">清空</span>
+        </div>
+        <div style="display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid #e3e4e6; align-items: center;">
+          <span style="font-size: 13px; color: #55595f; width: 64px;">試按</span>
+          <button type="button" class="b p fb">排入發文</button>
+          <button type="button" class="b s fb">清空</button>
+        </div>
+      </div>
+
+      <!-- 效果 C -->
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-weight: 700;">C　內壓</span>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">滑過時次要按鈕框線變藍；按下時縮小一點、往內凹，像實體按鍵。</p>
+        <div style="display: grid; grid-template-columns: 64px 1fr 1fr; gap: 10px 10px; align-items: center; font-size: 13px; color: #55595f;">
+          <span>一般</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500;">清空</span>
+          <span>滑過</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1a47a6; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #1d4fb8; color: #1d4fb8; font-size: 14px; font-weight: 500;">清空</span>
+          <span>按下</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1a47a6; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500; transform: scale(.97); box-shadow: inset 0 2px 4px rgba(0,0,0,.3);">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #eef3fc; border: 1px solid #1d4fb8; color: #1d4fb8; font-size: 14px; font-weight: 500; transform: scale(.97);">清空</span>
+          <span>鍵盤選到</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; color: #fff; font-size: 14px; font-weight: 500; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4fb8;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; color: #3c4046; font-size: 14px; font-weight: 500; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4fb8;">清空</span>
+          <span>不能按</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #eceef0; border: 1px solid #d5d8dc; color: #6b7077; font-size: 14px; font-weight: 500;">排入發文</span>
+          <span style="box-sizing: border-box; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #f6f7f8; border: 1px solid #e3e4e6; color: #6b7077; font-size: 14px; font-weight: 500;">清空</span>
+        </div>
+        <div style="display: flex; gap: 10px; padding-top: 12px; border-top: 1px solid #e3e4e6; align-items: center;">
+          <span style="font-size: 13px; color: #55595f; width: 64px;">試按</span>
+          <button type="button" class="b p fc">排入發文</button>
+          <button type="button" class="b s fc">清空</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 切換開關 -->
+  <section aria-labelledby="h-sw" style="display: flex; flex-direction: column; gap: 14px;">
+    <h2 id="h-sw" style="margin: 0; font-size: 17px; font-weight: 700;">二選一的「切換開關」，你指的是哪一種？</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;">
+
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <span style="font-weight: 700;">甲　滑塊分段</span>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+          <div role="radiogroup" aria-label="下載類型" style="display: inline-flex; padding: 3px; border: 1px solid #c4c7cc; border-radius: 999px; background: #f1f2f4;">
+            <span role="radio" aria-checked="true" style="height: 36px; padding: 0 18px; display: inline-flex; align-items: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; box-shadow: 0 1px 2px rgba(32,33,36,.12); color: #1d4fb8; font-weight: 700;">影片</span>
+            <span role="radio" aria-checked="false" style="height: 36px; padding: 0 18px; display: inline-flex; align-items: center; border: 1px solid transparent; color: #55595f; font-weight: 500;">音訊</span>
+          </div>
+          <div role="radiogroup" aria-label="畫質" style="display: inline-flex; padding: 3px; border: 1px solid #c4c7cc; border-radius: 999px; background: #f1f2f4; font-variant-numeric: tabular-nums;">
+            <span role="radio" aria-checked="false" style="height: 36px; padding: 0 18px; display: inline-flex; align-items: center; border: 1px solid transparent; color: #55595f; font-weight: 500;">720p</span>
+            <span role="radio" aria-checked="true" style="height: 36px; padding: 0 18px; display: inline-flex; align-items: center; border-radius: 999px; background: #fff; border: 1px solid #c4c7cc; box-shadow: 0 1px 2px rgba(32,33,36,.12); color: #1d4fb8; font-weight: 700;">1080p</span>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">兩個選項都看得到，白色滑塊會滑到點的那邊。適合「兩個選項地位相同」的情況。</p>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid #c4c7cc; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <span style="font-weight: 700;">乙　開關＋兩側文字</span>
+        <div style="display: flex; gap: 28px; flex-wrap: wrap; align-items: center; min-height: 44px;">
+          <div style="display: inline-flex; align-items: center; gap: 10px;">
+            <span style="color: #1d4fb8; font-weight: 700;">影片</span>
+            <span role="switch" aria-checked="false" aria-label="改成下載音訊" style="box-sizing: border-box; width: 48px; height: 28px; padding: 3px; border-radius: 999px; background: #f1f2f4; border: 1px solid #c4c7cc; display: inline-flex;"><span style="width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 1px solid #a9adb3; box-sizing: border-box;"></span></span>
+            <span style="color: #55595f;">音訊</span>
+          </div>
+          <div style="display: inline-flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums;">
+            <span style="color: #55595f;">720p</span>
+            <span role="switch" aria-checked="true" aria-label="改成 720p" style="box-sizing: border-box; width: 48px; height: 28px; padding: 3px; border-radius: 999px; background: #1d4fb8; border: 1px solid #163d8f; display: inline-flex; justify-content: flex-end;"><span style="width: 20px; height: 20px; border-radius: 50%; background: #fff;"></span></span>
+            <span style="color: #1d4fb8; font-weight: 700;">1080p</span>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: #55595f; line-height: 1.6;">比較省空間。但開關通常代表「開／關」，用在兩個對等選項時，要看兩側哪個字變藍才知道選了誰。</p>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1280}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
