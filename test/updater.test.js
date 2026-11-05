@@ -187,3 +187,9 @@ test('sidepanel opens site：按主按鈕用 chrome.tabs.create 開網站', asyn
     assert.equal(h, '44px');
   } finally { await browser.close(); }
 });
+
+test('verOf：有 version_name 用它，否則用 version', async () => {
+  const U = await loadUpdater();
+  assert.equal(U.verOf({ version: '1.1', version_name: '1.01' }), '1.01');
+  assert.equal(U.verOf({ version: '1.53' }), '1.53');
+});

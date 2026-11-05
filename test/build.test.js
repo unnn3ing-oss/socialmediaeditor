@@ -89,3 +89,18 @@ test('removing from registry empties catalog and removes copied ext', async () =
   assert.equal(fs.existsSync(path.join(root, 'extension/tools/sample.js')), false);
   assert.match(fs.readFileSync(path.join(root, 'extension/routes.gen.js'), 'utf8'), /toolOps = \{\}/);
 });
+
+test('外掛版號：Chrome 用的 version 去掉開頭的 0，version_name 保留 X.YZ', async () => {
+  const { chromeVersion } = require('../build.js');
+  assert.equal(chromeVersion('1.00'), '1.0');
+  assert.equal(chromeVersion('1.05'), '1.5');
+  assert.equal(chromeVersion('1.53'), '1.53');
+  assert.equal(chromeVersion('2.10'), '2.10');
+  const root = tmpRepo();
+  await build(root);
+  const base = readJson(root, 'extension/core/manifest.base.json');
+  const m = readJson(root, 'extension/manifest.json');
+  assert.equal(m.version_name, base.version);
+  assert.equal(m.version, chromeVersion(base.version));
+  for (const part of m.version.split('.')) assert.ok(part === '0' || !part.startsWith('0'), m.version);
+});

@@ -112,7 +112,7 @@ function setupBackground() {
   setGlobal('chrome', {
     runtime: {
       id: 'self',
-      getManifest: () => ({ version: '1.00', name: '小編工具箱' }),
+      getManifest: () => ({ version: '1.0', version_name: '1.00', name: '小編工具箱' }),
       onMessage: { addListener: (fn) => { state.onMessage = fn; } },
       onInstalled: { addListener: noop },
       onStartup: { addListener: noop },

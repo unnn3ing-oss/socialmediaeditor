@@ -173,7 +173,7 @@ function zhError(err, lead) {
     onProgress('打包安裝檔…');
     const manifest = files.find(f => f.path === 'manifest.json');
     let version;
-    try { version = JSON.parse(new TextDecoder().decode(manifest.bytes)).version; } catch (e) { throw new Error('manifest.json 讀不懂，已停止'); }
+    try { version = (m => m.version_name || m.version)(JSON.parse(new TextDecoder().decode(manifest.bytes))); } catch (e) { throw new Error('manifest.json 讀不懂，已停止'); }
     const zip = new Uint8Array(await buildZip(files.map(f => ({ name: f.path, bytes: f.bytes }))).arrayBuffer());
     return Installer.build(os, zip, version);
   }

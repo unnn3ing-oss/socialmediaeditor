@@ -25,6 +25,9 @@ function listRepoBasenames(root) {
   return names;
 }
 
+// 版號規則是 X.YZ（例如 1.00、1.05）；Chrome 不接受開頭是 0 的數字段，所以給 Chrome 的 version 去掉開頭的 0（1.00→1.0、1.05→1.5），
+// 畫面顯示用 version_name 保留原樣。兩位小數下大小順序不變（1.09→1.9 < 1.10）。
+const chromeVersion = (v) => String(v).split('.').map((n) => String(Number(n))).join('.');
 const sortedUnion = (...lists) => [...new Set(lists.flat())].sort();
 
 async function build(root, { check = false, write = true } = {}) {
@@ -70,6 +73,8 @@ async function build(root, { check = false, write = true } = {}) {
   const withExt = tools.filter((t) => t.ext);
   const manifest = {
     ...base,
+    version: chromeVersion(base.version),
+    version_name: base.version,
     permissions: sortedUnion(base.permissions || [], ...withExt.map((t) => t.ext.permissions)),
     host_permissions: sortedUnion(base.host_permissions || [], ...withExt.map((t) => t.ext.hosts)),
   };
@@ -112,7 +117,7 @@ async function build(root, { check = false, write = true } = {}) {
   return { errors, outputs };
 }
 
-module.exports = { build };
+module.exports = { build, chromeVersion };
 
 if (require.main === module) {
   const check = process.argv.includes('--check');

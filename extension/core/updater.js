@@ -88,7 +88,7 @@
       if (!res.ok) return null;
       const bytes = new Uint8Array(await res.arrayBuffer());
       if ((await gitBlobSha(bytes)) !== f.sha) return null;
-      const v = JSON.parse(new TextDecoder().decode(bytes)).version;
+      const v = verOf(JSON.parse(new TextDecoder().decode(bytes)));
       return typeof v === 'string' && /^\d+(\.\d+){0,3}$/.test(v) ? v : null;
     } catch (e) { return null; }
   }
@@ -116,6 +116,8 @@
     } catch (e) { return {}; }
   }
 
+  // 畫面與比對一律用 version_name（例如 "1.01"）；Chrome 的 version 會去掉開頭的 0（"1.1"），只給 Chrome 讀。
+  function verOf(m) { return (m && (m.version_name || m.version)) || ''; }
   const cmpVer = (a, b) => {
     const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
     for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
@@ -171,7 +173,7 @@
       const status = await compareFile(f.path, f.sha);
       if (status !== 'same') changed.push({ ...f, status });
     }
-    const localVersion = chrome.runtime.getManifest().version;
+    const localVersion = verOf(chrome.runtime.getManifest());
     return { sha: remote.sha, date: remote.date, message: remote.message, version: remote.version || null,
       localVersion, notes: notesBetween(remote.changelog, localVersion, remote.version), changed,
       // 本機比 GitHub 新（例如載入了還沒併入的分支）時不算有更新，免得被引導降級
@@ -327,5 +329,5 @@
     return full ? `${lead}（原文：${full.length > 160 ? full.slice(0, 160) + '…' : full}）` : lead;
   }
 
-  root.Updater = { REPO, checkLatest, pickFolder, getFolder, hasSavedFolder, apply, gitBlobSha, diffManifest, isSafePath, notesBetween, zhError };
+  root.Updater = { REPO, checkLatest, pickFolder, getFolder, hasSavedFolder, apply, gitBlobSha, diffManifest, isSafePath, notesBetween, zhError, verOf };
 })(self);

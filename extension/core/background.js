@@ -2,7 +2,7 @@
 import { toolOps } from '../routes.gen.js';
 import './updater.js';   // 掛上全域 Updater
 
-const ops = { ping: () => ({ ok: true, data: { version: chrome.runtime.getManifest().version } }) };
+const ops = { ping: () => ({ ok: true, data: { version: self.Updater.verOf(chrome.runtime.getManifest()) } }) };
 for (const [id, mod] of Object.entries(toolOps)) {
   for (const [name, fn] of Object.entries(mod)) if (typeof fn === 'function') ops[`${id}.${name}`] = fn;
 }

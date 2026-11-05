@@ -2,7 +2,7 @@
 const SITE = 'https://unnn3ing-oss.github.io/socialmediaeditor/';
 
 document.getElementById('openSite').addEventListener('click', () => { chrome.tabs.create({ url: SITE }); });
-document.getElementById('extVer').textContent = `v${chrome.runtime.getManifest().version}`;
+document.getElementById('extVer').textContent = `v${self.Updater.verOf(chrome.runtime.getManifest())}`;
 
 (function () {
   const card = document.getElementById('updateCard');
