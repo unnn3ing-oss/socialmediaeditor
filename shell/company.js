@@ -3,7 +3,7 @@ import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
 
-const isNetworkFailure = (e) => !e || !e.code || /^http_5/.test(e.code) || e.code === 'bad_response';
+const isNetworkFailure = (e) => !e || !e.code || /^http_5/.test(e.code) || e.code === 'bad_response' || e.code === 'misconfigured';
 
 const mk = (tag, cls, text) => {
   const e = document.createElement(tag);

@@ -6,8 +6,8 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 .ds {
   position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column;
   background:
-    
-    
+
+
     var(--stage, #f6f7f8);
   color: var(--text); font-family: var(--ui-font); text-align: left;
   animation: ds-in .24s ease both;
