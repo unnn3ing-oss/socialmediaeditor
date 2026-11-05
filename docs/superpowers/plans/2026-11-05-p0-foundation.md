@@ -28,9 +28,9 @@
 
 ## Review Focus
 
-1. **重新整理前 0.5 秒內剛打的字**：debounce 還沒存就重新整理 → 字不能丟。`pagehide`／`visibilitychange` 時要立刻存（Task 7 測試 `flushes on pagehide`）。
-2. **IndexedDB 不能用**（無痕視窗、空間滿）：工具仍可操作，保存失敗只跳一次通知，不丟例外（Task 7 測試 `persist degrades without indexedDB`）。
-3. **公司憑證在使用中過期**：已開著的公司工具不能被關掉或清掉內容；只隱藏工具列入口並顯示「公司密碼已過期」（Task 10 測試 `expiry keeps open company pane`）。
+1. **工具內部切換功能**（分頁、模式）來回切換：每個模式填的內容都要還在（Task 7 e2e `internal switch keeps content`）。
+2. **關閉窗格（×）後再開同一個工具**：內容還在，因為 iframe 只是隱藏（Task 6 e2e `closed pane keeps content`）。
+3. **公司憑證在使用中過期**：自動跳登入彈窗；開著的公司工具窗格與內容保留，按取消則保持鎖定（Task 10 e2e `expiry pops login and keeps pane`）。
 4. **拖曳到工作區外放開，或拖曳中按 Esc**：版面完全不變（Task 6 測試 `drop outside keeps layout`）。
 5. **沒裝外掛**：狀態不能永遠停在骨架；3 秒內變成「未安裝外掛」（Task 8 測試 `ext.call rejects with no_extension`、Task 9 e2e `extension pill settles`）。
 
@@ -54,7 +54,7 @@ socialmediaeditor/
 │  └─ catalog.json                build.js 產生
 ├─ sdk/
 │  ├─ toolbox.js                  匯出 tb（聚合下列模組）
-│  ├─ persist.js files.js download.js bridge.js api.js assets.js log.js status.js
+│  ├─ files.js download.js bridge.js api.js assets.js log.js status.js
 │  └─ README.md
 ├─ tools/
 │  ├─ registry.json               ["sample"]
@@ -190,7 +190,7 @@ assert.equal(s('.btn-secondary').borderTopColor, 'rgb(196, 199, 204)');
 - [ ] **Step 2:** `node --test test/contract.test.js` → FAIL。
 - [ ] **Step 3:** 實作 `contract.js`（ES module，不碰 `fs`；檔案檢查一律透過 `ctx`）。
 - [ ] **Step 4:** 建 `_template`。
-  - `tool.json`：`id: "sample"`、`name: "範例工具"`、`group: "做圖"`、`desc: "示範保存與清空"`、`tier: "public"`、`requires: []`、`assets: {}`、`ext: null`、`api: null`、`sdk: 1`、`entry: "index.html"`、`icon: "icon.svg"`、`thumb: "thumb.svg"`。
+  - `tool.json`：`id: "sample"`、`name: "範例工具"`、`group: "做圖"`、`desc: "示範工具內切換與清空"`、`tier: "public"`、`requires: []`、`assets: {}`、`ext: null`、`api: null`、`sdk: 1`、`entry: "index.html"`、`icon: "icon.svg"`、`thumb: "thumb.svg"`。
   - `index.html`：載入 `../../ui/tokens.css` 與 `tool.js`（module）。
   - `TOOL.md`：照 spec 4.7 的欄位。
   - `tool.js` 在 Task 7 才接 SDK，這裡先放一個 `<textarea>` 和「清空」次要按鈕。
@@ -332,6 +332,7 @@ assert.deepEqual([s.left, s.right], ['b', 'a']);
   - `drag to right splits`：用 `page.dispatchEvent` 送 `dragstart`／`dragover`／`drop`（DataTransfer 帶 `text/plain` = id）到 `.dz[data-side=right]` → 兩個窗格；
   - `third tool replaces last-operated`：並排 alpha | beta，點 left 窗格，再點工具列 gamma → left 變 gamma；
   - `iframe kept alive`：在 alpha 的 iframe 輸入框打「測試」→ 被取代後回到 alpha，值仍是「測試」，且 iframe 元素是同一個（比對 `data-created` 時間戳）；
+  - **`closed pane keeps content`**：並排中在 beta 輸入文字 → 按 beta 窗格的 × → 再從工具列開 beta → 文字還在；
   - **`drop outside keeps layout`**：`dragstart` 後在 `#toolbar` 上 `drop`、以及 `dragstart` 後按 Esc → 窗格數與 id 不變、`#dropzones` 隱藏；
   - `brand returns to showcase`。
 - [ ] **Step 2:** `node --test test/e2e/shell.e2e.js` → FAIL。
@@ -347,23 +348,16 @@ assert.deepEqual([s.left, s.right], ['b', 'a']);
 - [ ] **Step 4:** 執行 → PASS；用 Playwright 截圖 1280×820 存 scratchpad，和 `docs/design/S5-Showcase.dc.html` 對照，差異記在任務回報。
 - [ ] **Step 5: Commit** `feat: 外殼櫥窗、工具列、窗格與拖曳並排`
 
-### Task 7: SDK 基礎（保存、檔案、下載、日誌）
+### Task 7: SDK 基礎（檔案、下載、日誌）＋工具內切換範例
 
 **Files:**
-- Create: `sdk/toolbox.js`, `sdk/persist.js`, `sdk/files.js`, `sdk/download.js`, `sdk/log.js`, `sdk/README.md`, `test/sdk.test.js`, `test/e2e/persist.e2e.js`
-- Modify: `tools/_template/tool.js`, `tools/sample/tool.js`（改用 SDK）
+- Create: `sdk/toolbox.js`, `sdk/files.js`, `sdk/download.js`, `sdk/log.js`, `sdk/README.md`, `test/sdk.test.js`, `test/e2e/tool-internal.e2e.js`
+- Modify: `tools/_template/{index.html,tool.js}`, `tools/sample/`（改用 SDK，並示範工具內切換）
 
 **Interfaces:**
 - Produces:
-  - `tb.init(toolId: string) -> tb`（之後所有呼叫都以這個 id 分開存）。
-  - `tb.persist.save(state: any)`：debounce 500ms。
-  - `tb.persist.saveNow() -> Promise<void>`。
-  - `tb.persist.load() -> Promise<any | undefined>`。
-  - `tb.persist.clear() -> Promise<void>`。
-  - IndexedDB 資料庫 `toolbox`、版本 1、object store `state`、key = toolId；可存 Blob（structured clone）。
-  - `pagehide` 與 `visibilitychange`（`hidden`）時自動 `saveNow()`。
-  - `tb.persist.onError(fn)`：保存失敗時呼叫一次（同一次失敗不重複）。
-  - `tb.init` 時呼叫一次 `navigator.storage.persist?.()`（申請不被瀏覽器自動清除；失敗忽略）。
+  - `tb.init(toolId: string) -> tb`（日誌、素材、後端呼叫都帶這個 id）。
+  - **範本工具示範「工具內切換」的寫法**：兩個模式「模式一／模式二」用開關（乙：開關＋兩側文字）切換，每個模式各有一個 `<textarea>`；切換時只改 `hidden`，不重建 DOM、不清值。「清空」只清目前工具全部模式。
   - `tb.files.bind(el: Element, { accept?: string, multiple?: boolean, max?: number, onFiles(files: File[]) })`：點擊開檔案選擇、拖曳放入、在工具頁內 Ctrl+V 貼上；超過 `max` 只取前 `max` 個並回傳 `{ truncated: true }` 給 `onFiles` 的第二個參數。
   - `stampName(date: Date, n: number) -> string`：`'YYMMDDHHMM_n'`（例 `2610122312_1`）。
   - `tb.download(blob, name)`；`tb.download.batch(items: {blob, name}[], { rng = Math.random })`：每張間隔 `500 + rng() * 500` ms。
@@ -375,16 +369,15 @@ assert.deepEqual([s.left, s.right], ['b', 'a']);
   - `batch` 間隔：注入 `rng = () => 0` 與 `() => 0.999`，用假計時器確認間隔 500 與 999；
   - `buildLogPayload('sample', 'Save Failed!', '1.0', 'UA')` → `code === 'savefailed'`，且沒有其他鍵；
   - 傳入額外的 `{ title: 'x' }` 不會出現在結果裡。
-- [ ] **Step 2: 寫 e2e `persist.e2e.js`**（開 `tools/sample/index.html`）：
-  - `restores after reload`：輸入「颱風假」，等 600ms，重新整理 → 還在；
-  - **`flushes on pagehide`**：輸入後**立刻**（<100ms）`page.reload()` → 還在；
-  - `clear removes`：按「清空」後重新整理 → 空白；
-  - **`persist degrades without indexedDB`**：`addInitScript` 讓 `indexedDB.open` 丟錯 → 頁面可輸入、出現一次 `role="status"` 文字「這台瀏覽器不能自動保存」、主控台沒有未處理的例外。
+- [ ] **Step 2: 寫 e2e `tool-internal.e2e.js`**（開 `tools/sample/index.html`）：
+  - **`internal switch keeps content`**：模式一輸入「颱風假」→ 切到模式二輸入「停班停課」→ 切回模式一 → 「颱風假」還在；再切模式二 → 「停班停課」還在；
+  - `clear empties all modes`：按「清空」後兩個模式都是空的；
+  - `reload clears`：重新整理後是空的（確認沒有偷偷寫硬碟）。
 - [ ] **Step 3:** 兩個都執行 → FAIL。
 - [ ] **Step 4:** 實作。`sdk/toolbox.js` 匯出 `tb`，並設 `globalThis.tb = tb`（讓舊的非 module 程式也能用）。
-- [ ] **Step 5:** 寫 `sdk/README.md`：每個公開函式一行說明＋一行範例；開頭寫「工具只能用這裡列出的功能」。
+- [ ] **Step 5:** 寫 `sdk/README.md`：每個公開函式一行說明＋一行範例；開頭寫「工具只能用這裡列出的功能」；另立一節「內容保留規則」：工具內切換功能一律用隱藏、不重建；重新整理可清除。
 - [ ] **Step 6:** 執行 → PASS。
-- [ ] **Step 7: Commit** `feat: SDK 保存、檔案、下載、日誌`
+- [ ] **Step 7: Commit** `feat: SDK 檔案、下載、日誌與工具內切換範例`
 
 ### Task 8: SDK 連線（外掛橋接、後端、素材、狀態）
 
@@ -476,13 +469,17 @@ assert.deepEqual([s.left, s.right], ['b', 'a']);
   - `tbxShell.__checkCompany() -> Promise<void>`：立即執行一次憑證檢查（定時檢查也呼叫它；e2e 直接呼叫）。
   - 憑證過期（開站確認失敗，或每 10 分鐘檢查一次發現 `exp < now`）時：
     - 清 token，工具列與櫥窗隱藏 company 工具；
-    - **已開著的 company 窗格保留**（iframe 不移除），窗格上方顯示提示列「公司密碼已過期，重新輸入後即可繼續」＋按鈕「重新輸入」。
+    - **自動跳出登入彈窗**（同一個 `<dialog>`，標題「公司密碼已過期」）；
+    - **已開著的 company 窗格保留**（iframe 不移除、不重新載入），窗格蓋一層鎖定提示「公司密碼已過期，重新輸入後即可繼續」＋主按鈕「重新輸入」；
+    - 重新解鎖 → 移除鎖定提示、工具列恢復，iframe 內容原封不動；
+    - 按「取消」→ 維持鎖定，按「重新輸入」再叫出彈窗。
 
 - [ ] **Step 1: 寫 e2e**：catalog 換成 alpha(public)＋secret(company)，`/auth` 與 `/auth/status` 用 `page.route` 模擬。
   - `company tool hidden by default`；
   - `unlock shows company tool`：輸入正確密碼 → 出現 secret，膠囊含「剩 30 天」；
   - `wrong password message`；
-  - **`expiry keeps open company pane`**：解鎖、開 secret、在 iframe 輸入文字 → 讓 `/auth/status` 回 401，並觸發檢查（呼叫 `window.tbxShell.__checkCompany()`）→ 工具列沒有 secret，但窗格還在、文字還在、看得到「公司密碼已過期」；
+  - **`expiry pops login and keeps pane`**：解鎖、開 secret、在 iframe 輸入文字 → 讓 `/auth/status` 回 401，並呼叫 `window.tbxShell.__checkCompany()` → 登入彈窗自動開啟、工具列沒有 secret、窗格還在且有鎖定提示；輸入正確密碼 → 鎖定提示消失、iframe 裡的文字還在；
+  - `cancel keeps locked`：過期後按「取消」→ 鎖定提示仍在，按「重新輸入」彈窗再出現；
   - `logout hides company tool`。
 - [ ] **Step 2:** 執行 → FAIL。
 - [ ] **Step 3:** 實作。
