@@ -90,7 +90,7 @@ function zhError(err, lead) {
     try { sub = await picked.getDirectoryHandle(EXT_FOLDER); } catch (e) { /* 還沒有同名資料夾 */ }
     if (sub) {
       if (!(await isEmpty(sub)) && !(await isOurs(sub))) {
-        throw new Error(`「${picked.name}」裡已經有一個「${EXT_FOLDER}」資料夾，但裡面不是空的，也不是這個插件。請換一個資料夾，或把它改名。`);
+        throw new Error(`「${picked.name}」裡已經有一個「${EXT_FOLDER}」資料夾，但裡面不是空的，也不是這個外掛。請換一個資料夾，或把它改名。`);
       }
     } else {
       sub = await picked.getDirectoryHandle(EXT_FOLDER, { create: true });

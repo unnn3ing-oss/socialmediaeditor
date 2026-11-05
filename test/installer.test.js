@@ -43,7 +43,7 @@ test('Windows .cmd：安裝視窗（WinForms）＋開不起來時退回文字模
   assert.match(cmd, /powershell -NoProfile -STA /, 'WinForms 要 STA');
   assert.match(cmd, /\r\nif errorlevel 1 pause\r\nexit \/b\r\n$/, '只有文字模式（結束碼 1）才停下來');
   assert.match(ps, /Add-Type -AssemblyName System\.Windows\.Forms, System\.Drawing/);
-  for (const t of ['開始安裝', '檔案已經放好了！', '打開「開發人員模式」', '按「載入未封裝項目」', '再複製一次路徑', '重新打開 Chrome 擴充功能頁', '沒辦法安裝', '複製錯誤訊息', '重試', '你的電腦還有一份舊位置的插件']) assert(ps.includes(t), t);
+  for (const t of ['開始安裝', '檔案已經放好了！', '打開「開發人員模式」', '按「載入未封裝項目」', '再複製一次路徑', '重新打開 Chrome 擴充功能頁', '沒辦法安裝', '複製錯誤訊息', '重試', '你的電腦還有一份舊位置的外掛']) assert(ps.includes(t), t);
   assert.match(ps, /\} catch \{\r\n    Run-Text\r\n\}/, '視窗做不出來改用文字模式');
   assert.match(ps, /function Run-Text \{[\s\S]*安裝檔完成！[\s\S]*exit 1\r\n\}/);
   assert.match(ps, /exit 0\r\n$/);
@@ -96,11 +96,11 @@ test('Mac .sh：bash 執行後放到 ~/Documents/toolbox-ext；只覆蓋自己�
   fs.writeFileSync(path.join(dir, 'mine.txt'), 'keep');
   r = run();
   assert.notEqual(r.status, 0);
-  assert.match(r.stdout, /裡面不是這個插件/);
+  assert.match(r.stdout, /裡面不是這個外掛/);
   assert.deepEqual(fs.readdirSync(dir), ['mine.txt']);
 });
 
-test('Mac .sh：舊位置（~/toolbox-ext）還有插件就提醒移除，但不刪', () => {
+test('Mac .sh：舊位置（~/toolbox-ext）還有外掛就提醒移除，但不刪', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'snn-home-'));
   const old = path.join(home, 'toolbox-ext');
   fs.mkdirSync(old);
@@ -110,7 +110,7 @@ test('Mac .sh：舊位置（~/toolbox-ext）還有插件就提醒移除，但不
   const r = spawnSync('bash', [script], { env: { PATH: '/usr/bin:/bin', HOME: home, LANG: 'C.UTF-8' }, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert(fs.existsSync(path.join(home, 'Documents', 'toolbox-ext', 'bridge.js')));
-  assert.match(r.stdout, /提醒：舊位置還有一份插件/);
+  assert.match(r.stdout, /提醒：舊位置還有一份外掛/);
   assert(fs.existsSync(path.join(old, 'manifest.json')), '舊位置不刪');
 });
 
@@ -166,7 +166,7 @@ test('Mac .sh：失敗跳錯誤對話框，重試會重跑一次，關閉就結�
   assert.equal(r.status, 1);
   let d = fs.readFileSync(path.join(home, 'dialogs'), 'utf8').trim().split('\n');
   assert.equal(d.length, 4, '開始 → 錯誤（重試）→ 開始 → 錯誤（關閉）');
-  assert.match(d[1], /^stop 沒辦法安裝.*裡面不是這個插件.* 複製錯誤訊息 關閉 重試\|$/);
+  assert.match(d[1], /^stop 沒辦法安裝.*裡面不是這個外掛.* 複製錯誤訊息 關閉 重試\|$/);
   assert.deepEqual(fs.readdirSync(dir), ['mine.txt']);
 
   // 舊位置還有一份：先跳提醒再到完成頁
@@ -177,6 +177,6 @@ test('Mac .sh：失敗跳錯誤對話框，重試會重跑一次，關閉就結�
   r = spawnSync('bash', [script], { env: fakeDialogs(home, ['開始安裝', '下一步', '完成']), encoding: 'utf8' });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   d = fs.readFileSync(path.join(home, 'dialogs'), 'utf8').trim().split('\n');
-  assert.match(d[1], /^caution .*你的電腦還有一份舊位置的插件.* 下一步\|$/);
+  assert.match(d[1], /^caution .*你的電腦還有一份舊位置的外掛.* 下一步\|$/);
   assert.match(d[2], /^note .*檔案已經放好了！/);
 });

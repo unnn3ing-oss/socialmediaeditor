@@ -1,11 +1,11 @@
 // 一鍵安裝檔（仿 videodownload 的 install-windows.cmd / install-mac.sh）：
-// 網頁先從 GitHub 抓好、驗證過的插件檔案打包成 ZIP，再把 ZIP 以 base64 嵌進安裝檔，所以安裝檔執行時不用再連網。
-// 安裝檔只做三件事：把插件放到固定資料夾（「文件」裡的 toolbox-ext）、把資料夾路徑複製到剪貼簿、打開 chrome://extensions。
-// 舊版安裝檔放在家目錄（%USERPROFILE%／~）；舊位置還有插件時只提醒改載入新位置，不刪（Chrome 可能正在用）。
+// 網頁先從 GitHub 抓好、驗證過的外掛檔案打包成 ZIP，再把 ZIP 以 base64 嵌進安裝檔，所以安裝檔執行時不用再連網。
+// 安裝檔只做三件事：把外掛放到固定資料夾（「文件」裡的 toolbox-ext）、把資料夾路徑複製到剪貼簿、打開 chrome://extensions。
+// 舊版安裝檔放在家目錄（%USERPROFILE%／~）；舊位置還有外掛時只提醒改載入新位置，不刪（Chrome 可能正在用）。
 // 「開發人員模式」和「載入未封裝項目」Chrome 不允許程式代按，仍要使用者自己點。
 // 純函式（ES module），Node 與瀏覽器共用。
 const api = (function () {
-  const EXT_NAME = '小編工具箱';   // extension/manifest.json 的 name：資料夾裡是這個插件才會覆蓋
+  const EXT_NAME = '小編工具箱';   // extension/manifest.json 的 name：資料夾裡是這個外掛才會覆蓋
   const FOLDER = 'toolbox-ext';
   const FILES = { win: 'toolbox-install.cmd', mac: 'toolbox-install-mac.sh' };
   const MARK = '#PS-START';
@@ -49,7 +49,7 @@ $OldDir = Join-Path $env:USERPROFILE '__FOLDER__'
 $Name = '__NAME__'
 $Version = '__VERSION__'
 $ZipBytes = [Convert]::FromBase64String('__ZIP__')
-$StepNames = @('檢查資料夾', '寫入插件檔案', '複製資料夾路徑', '開啟 Chrome 擴充功能頁')
+$StepNames = @('檢查資料夾', '寫入外掛檔案', '複製資料夾路徑', '開啟 Chrome 擴充功能頁')
 $S = @{ n = 0; busy = $false; err = '' }
 try { Add-Type -AssemblyName System.IO.Compression } catch {}
 
@@ -71,7 +71,7 @@ function Extract-Zip($root, $report) {
             New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
             $in = $e.Open(); $out = [IO.File]::Create($dest)
             try { $in.CopyTo($out) } finally { $out.Dispose(); $in.Dispose() }
-            & $report 2 "寫入插件檔案（$i / $($files.Count)）" (25 + [int](50 * $i / $files.Count))
+            & $report 2 "寫入外掛檔案（$i / $($files.Count)）" (25 + [int](50 * $i / $files.Count))
         }
     } finally { $za.Dispose() }
 }
@@ -82,11 +82,11 @@ function Install-Ext($report) {
     if (Test-Path $Dir) {
         $ours = IsOurs $Dir
         $empty = -not (Get-ChildItem -Force $Dir | Select-Object -First 1)
-        if (-not ($ours -or $empty)) { throw "「$Dir」已經存在，但裡面不是這個插件。請把它改名或移走，再執行一次安裝檔。" }
+        if (-not ($ours -or $empty)) { throw "「$Dir」已經存在，但裡面不是這個外掛。請把它改名或移走，再執行一次安裝檔。" }
         # 舊版的檔案整批換掉，免得留下新版已經刪掉的檔案
         if ($ours) { Get-ChildItem -Force $Dir | Remove-Item -Recurse -Force }
     }
-    & $report 2 '寫入插件檔案' 25
+    & $report 2 '寫入外掛檔案' 25
     New-Item -ItemType Directory -Force -Path $Dir | Out-Null
     Extract-Zip $Dir $report
     $hasOld = ($OldDir -ne $Dir) -and (Test-Path $OldDir) -and (IsOurs $OldDir)
@@ -112,10 +112,10 @@ function Run-Text {
         Write-Host '安裝檔完成！接著回到 Chrome：' -ForegroundColor Green
         Write-Host '  1. 打開擴充功能頁右上角的「開發人員模式」'
         Write-Host '  2. 按左上角「載入未封裝項目」，在「資料夾」欄位按 Ctrl+V 貼上路徑，再按「選擇資料夾」'
-        Write-Host '  （已經載入過這個位置的話，不用重新載入，到擴充功能頁按插件上的重新整理圖示即可）'
+        Write-Host '  （已經載入過這個位置的話，不用重新載入，到擴充功能頁按外掛上的重新整理圖示即可）'
         if ($r.HasOld) {
             Write-Host ''
-            Write-Host '提醒：舊位置還有一份插件（以前的安裝檔放的）：' -ForegroundColor Yellow
+            Write-Host '提醒：舊位置還有一份外掛（以前的安裝檔放的）：' -ForegroundColor Yellow
             Write-Host "  $OldDir"
             Write-Host '  請在擴充功能頁先「移除」舊的那個，再照上面步驟載入新位置；確認新的能用後，舊資料夾可以刪掉。'
         }
@@ -298,7 +298,7 @@ try {
     $Form.Font = $FontUI
     $Pages = New-Object Collections.ArrayList
 
-    # 標頭：插件圖示 + 名稱 + 版本
+    # 標頭：外掛圖示 + 名稱 + 版本
     $logo = Logo-Image
     if ($logo) {
         $pic = New-Object Windows.Forms.PictureBox
@@ -309,13 +309,13 @@ try {
         $l = Lbl $Form '網' 22 18 48 48 $FontTitle
         $l.BackColor = C '#004aad'; $l.ForeColor = [Drawing.Color]::White; $l.TextAlign = 'MiddleCenter'
     }
-    Lbl $Form '小編工具箱 插件' 84 20 440 24 $FontTitle '#1b1f27' | Out-Null
+    Lbl $Form '小編工具箱 外掛' 84 20 440 24 $FontTitle '#1b1f27' | Out-Null
     Lbl $Form "版本 $Version・TVBS 網路新聞中心" 84 46 440 20 $FontSmall '#5d6676' | Out-Null
     Box $Form 0 84 560 1 '#e3e7ee' | Out-Null
 
     # ① 開始
     $PgStart = Page
-    Lbl $PgStart '這個安裝程式會幫你把「小編工具箱」插件放到電腦上，大約 5 秒完成。' 22 20 516 46 $FontBody '#1b1f27' | Out-Null
+    Lbl $PgStart '這個安裝程式會幫你把「小編工具箱」外掛放到電腦上，大約 5 秒完成。' 22 20 516 46 $FontBody '#1b1f27' | Out-Null
     Lbl $PgStart '會放在這裡（不用改）：' 22 74 516 20 $FontSmall '#5d6676' | Out-Null
     $pathBox = Card $PgStart 22 96 516 46 '#e3e7ee' '#f5f7fb'
     Lbl $pathBox $Dir 10 6 494 34 $FontMono '#1b1f27' | Out-Null
@@ -394,7 +394,7 @@ try {
     $PgOld = Page
     Lbl $PgOld '✓ 檔案已經放好了！' 22 14 516 24 $FontBodyB '#15803d' | Out-Null
     $warn = Card $PgOld 22 48 516 196 '#f0d58a' '#fff7e0'
-    Lbl $warn '⚠ 你的電腦還有一份舊位置的插件：' 12 12 490 24 $FontBodyB '#8a5a00' | Out-Null
+    Lbl $warn '⚠ 你的電腦還有一份舊位置的外掛：' 12 12 490 24 $FontBodyB '#8a5a00' | Out-Null
     Lbl $warn $OldDir 12 40 490 22 $FontMono '#8a5a00' | Out-Null
     Lbl $warn '請先在 Chrome 擴充功能頁把舊的那個按「移除」，再照下一頁的兩步載入新的。' 12 72 490 48 $FontBody '#8a5a00' | Out-Null
     Lbl $warn '舊資料夾不會被刪掉；確認新的能用後，可以自己刪除。' 12 128 490 40 $FontUI '#8a5a00' | Out-Null
@@ -500,7 +500,7 @@ exit 0
       "step() { printf '\\n==> %s\\n' \"$1\"; }",
       '',
       "printf '%s 安裝程式 %s\\n' \"$NAME\" " + `'${version}'`,
-      "START=\"$(printf '這個安裝程式會幫你把「小編工具箱」插件放到電腦上，大約 5 秒完成。\\n\\n會放在這裡（不用改）：\\n%s\\n\\n裝好後還要在 Chrome 點兩下，安裝程式會一步一步教你。' \"$DIR\")\"",
+      "START=\"$(printf '這個安裝程式會幫你把「小編工具箱」外掛放到電腦上，大約 5 秒完成。\\n\\n會放在這裡（不用改）：\\n%s\\n\\n裝好後還要在 Chrome 點兩下，安裝程式會一步一步教你。' \"$DIR\")\"",
       'if [ "$GUI" = 1 ] && [ "$(dlg note "$START" \'取消\' \'開始安裝\')" != \'開始安裝\' ]; then',
       "  echo '已取消，沒有安裝任何東西。'",
       '  exit 0',
@@ -512,11 +512,11 @@ exit 0
       '    # 舊版的檔案整批換掉，免得留下新版已經刪掉的檔案',
       '    find "$DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +',
       '  elif [ -n "$(ls -A "$DIR")" ]; then',
-      '    fail "「$DIR」已經存在，但裡面不是這個插件。請把它改名或移走，再執行一次。"',
+      '    fail "「$DIR」已經存在，但裡面不是這個外掛。請把它改名或移走，再執行一次。"',
       '  fi',
       'fi',
       '',
-      "step '寫入插件檔案'",
+      "step '寫入外掛檔案'",
       '# 第一次寫「文件」資料夾，macOS 會問要不要讓終端機取用：要按「好」',
       'mkdir -p "$DIR" 2>/dev/null || fail "沒辦法寫入「文件」資料夾。macOS 問終端機能不能取用「文件」時請按「好」；按過不允許的話，到 系統設定 → 隱私權與安全性 → 檔案與資料夾 → 終端機，打開「文件資料夾」再執行一次。"',
       'ZIP="$(mktemp -t toolbox-ext.XXXXXX)"',
@@ -548,11 +548,11 @@ exit 0
       "printf '\\n安裝檔完成！接著回到 Chrome：\\n'",
       "echo '  1. 打開擴充功能頁右上角的「開發人員模式」'",
       "echo '  2. 按左上角「載入未封裝項目」，按 ⌘⇧G 貼上路徑後按 Enter，再按「選取」'",
-      "echo '  （已經載入過這個位置的話，不用重新載入，到擴充功能頁按插件上的重新整理圖示即可）'",
+      "echo '  （已經載入過這個位置的話，不用重新載入，到擴充功能頁按外掛上的重新整理圖示即可）'",
       'HAS_OLD=0',
       'if [ "$OLD" != "$DIR" ] && [ -f "$OLD/manifest.json" ] && grep -qF "\"$NAME\"" "$OLD/manifest.json"; then',
       '  HAS_OLD=1',
-      "  printf '\n提醒：舊位置還有一份插件（以前的安裝檔放的）：\n  %s\n' \"$OLD\"",
+      "  printf '\n提醒：舊位置還有一份外掛（以前的安裝檔放的）：\n  %s\n' \"$OLD\"",
       "  echo '  請在擴充功能頁先「移除」舊的那個，再照上面步驟載入新位置；確認新的能用後，舊資料夾可以刪掉。'",
       'fi',
       '',
@@ -560,7 +560,7 @@ exit 0
       '# Chrome 開起來會蓋在上面：等一下再跳對話框（dlg 會把對話框叫到最前面）',
       '[ "$CHROME" = 1 ] && sleep 1',
       'if [ "$HAS_OLD" = 1 ]; then',
-      "  dlg caution \"$(printf '✓ 檔案已經放好了！\\n\\n⚠ 你的電腦還有一份舊位置的插件：\\n%s\\n\\n請先在 Chrome 擴充功能頁把舊的那個按「移除」，再照下一步的兩步載入新的。\\n舊資料夾不會被刪掉；確認新的能用後，可以自己刪除。' \"$OLD\")\" '下一步' >/dev/null",
+      "  dlg caution \"$(printf '✓ 檔案已經放好了！\\n\\n⚠ 你的電腦還有一份舊位置的外掛：\\n%s\\n\\n請先在 Chrome 擴充功能頁把舊的那個按「移除」，再照下一步的兩步載入新的。\\n舊資料夾不會被刪掉；確認新的能用後，可以自己刪除。' \"$OLD\")\" '下一步' >/dev/null",
       'fi',
       "if [ \"$CHROME\" = 1 ]; then LEAD='Chrome 的擴充功能頁已經幫你打開，照下面兩步完成：'; else LEAD='請在 Chrome 網址列輸入 chrome://extensions，再照下面兩步：'; fi",
       "if [ \"$COPIED\" = 1 ]; then TIP='路徑已經複製好了；不小心蓋掉的話按「再複製一次路徑」。'; else TIP='路徑沒有複製成功，請按「再複製一次路徑」。'; fi",
@@ -582,7 +582,7 @@ exit 0
     return typeof btoa === 'function' ? btoa(s) : Buffer.from(s, 'latin1').toString('base64');
   }
 
-  // os：'win' | 'mac'；zipBytes：插件檔案（不含最上層資料夾）的 ZIP。回傳 { name, text, type }
+  // os：'win' | 'mac'；zipBytes：外掛檔案（不含最上層資料夾）的 ZIP。回傳 { name, text, type }
   function build(os, zipBytes, version) {
     const b64 = base64(zipBytes);
     if (os === 'mac') return { name: FILES.mac, text: mac(b64, version), type: 'text/x-shellscript' };

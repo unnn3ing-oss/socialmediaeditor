@@ -20,7 +20,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   dlg.id = 'company-dialog';
   const form = mk('form');
   form.method = 'dialog';
-  const title = mk('h2', null, '公司素材');
+  const title = mk('h2', null, '登入公司帳號');
   const label = mk('label', 'field', '公司密碼');
   const input = mk('input');
   input.type = 'password';
@@ -42,7 +42,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   document.body.appendChild(dlg);
 
   function openLogin(expired = false) {
-    title.textContent = expired ? '公司密碼已過期' : '公司素材';
+    title.textContent = expired ? '公司密碼已過期' : '登入公司帳號';
     err.textContent = '';
     input.value = '';
     if (!dlg.open) dlg.showModal();
