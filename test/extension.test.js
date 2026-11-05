@@ -108,6 +108,7 @@ test('bridge：背景出錯時回 ok:false 並帶 nonce', async () => {
 function setupBackground() {
   const state = { onMessage: null, panelBehavior: null };
   const noop = () => {};
+  setGlobal('self', globalThis);   // updater.js 是給瀏覽器用的，用 self 掛全域
   setGlobal('chrome', {
     runtime: {
       id: 'self',
@@ -131,7 +132,7 @@ test('background：ping 回版本 1.00；點圖示開側邊欄', async () => {
     assert.deepEqual(await bg.handle({ op: 'ping' }), { ok: true, data: { version: '1.00' } });
     assert.deepEqual(st.panelBehavior, { openPanelOnActionClick: true });
     assert.equal(typeof st.onMessage, 'function');
-  } finally { delGlobal('chrome'); }
+  } finally { delGlobal('chrome', 'self'); }
 });
 
 test('background：未知 op 回 unknown_op', async () => {
@@ -142,7 +143,7 @@ test('background：未知 op 回 unknown_op', async () => {
     assert.deepEqual(r, { ok: false, code: 'unknown_op', error: '外掛不支援這個動作' });
     assert.equal((await bg.handle({})).code, 'unknown_op');
     assert.equal((await bg.handle({ op: 'toString' })).code, 'unknown_op');
-  } finally { delGlobal('chrome'); }
+  } finally { delGlobal('chrome', 'self'); }
 });
 
 test('background：只接受自己的內容腳本；onMessage 回傳非同步結果', async () => {
@@ -155,5 +156,5 @@ test('background：只接受自己的內容腳本；onMessage 回傳非同步結
       assert.equal(keep, true);
     });
     assert.equal(got.ok, true);
-  } finally { delGlobal('chrome'); }
+  } finally { delGlobal('chrome', 'self'); }
 });
