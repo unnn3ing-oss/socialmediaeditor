@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小編工具箱</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="shell/shell.css">
+</head>
+<body>
+<header id="top">
+  <button type="button" id="brand" aria-label="回到工具櫥窗">
+    <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="6.5" y="6.5" width="11" height="5" rx="1" fill="currentColor"/><rect x="6.5" y="13.5" width="11" height="1.8" rx="0.9" fill="currentColor"/><rect x="6.5" y="16.3" width="7" height="1.8" rx="0.9" fill="currentColor"/></svg>
+    <span>小編工具箱</span>
+  </button>
+  <nav id="toolbar" aria-label="工具列"></nav>
+  <div id="status" role="status"></div>
+</header>
+<main id="stage">
+  <section id="showcase" aria-busy="true"></section>
+  <section id="work" hidden></section>
+  <div id="dropzones" hidden aria-hidden="true">
+    <div class="dz" data-side="left"><span>放到左邊</span></div>
+    <div class="dz" data-side="right"><span>放到右邊</span></div>
+  </div>
+</main>
+<script type="module" src="shell/main.js"></script>
+</body>
+</html>
