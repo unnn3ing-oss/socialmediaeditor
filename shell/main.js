@@ -4,6 +4,8 @@ import { renderSkeleton, renderShowcase } from './showcase.js';
 import { createToolbar } from './toolbar.js';
 import { createPanes } from './panes.js';
 import { initDrag } from './drag.js';
+import { initStatus, shouldAutoOpenInstall, markInstallShown } from './status.js';
+import { openInstall } from './install.js';
 
 const $ = (id) => document.getElementById(id);
 const showcaseEl = $('showcase');
@@ -95,5 +97,14 @@ async function start() {
   renderCatalog();
   render();
 }
+
+// ---- 狀態列與安裝教學 ----
+const status = initStatus({ root: $('status'), shell: window.tbxShell, openInstall });
+status.runAll().then(() => {
+  if (window.tbxShell.getStatus('extension').state === 'warn' && shouldAutoOpenInstall()) {
+    markInstallShown();
+    openInstall();
+  }
+});
 
 start();

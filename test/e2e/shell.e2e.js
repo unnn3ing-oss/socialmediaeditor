@@ -19,6 +19,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 async function open() {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
   const page = await ctx.newPage();
+  await page.addInitScript(() => sessionStorage.setItem('tbx.installShown', '1')); // 不讓安裝教學自動蓋住畫面
   await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
   await page.goto(srv.url + 'index.html');
   await page.waitForSelector('#showcase .card');
