@@ -15,7 +15,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #toolbar button {
   display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px;
   background: var(--surface); color: var(--btn-text); border: 1px solid var(--line-strong); border-radius: 999px;
-  font: 500 14px var(--font); cursor: pointer;
+  font: 500 14px var(--font); cursor: pointer; white-space: nowrap; flex: none;
 }
 #toolbar button:hover { border-color: var(--accent); color: var(--accent); }
 #toolbar button[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
@@ -31,7 +31,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .showcase-inner h1 { margin: 0; font-size: 26px; font-weight: 700; }
 .group { display: flex; flex-direction: column; gap: 14px; }
 .group h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--muted); }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px; }
 .card .thumb { height: 112px; background: #eceef0; display: flex; align-items: center; justify-content: center; }
 .card .thumb img { max-height: 88px; max-width: 80%; }
 .card .meta { padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }

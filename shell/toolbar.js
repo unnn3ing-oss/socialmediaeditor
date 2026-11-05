@@ -13,7 +13,8 @@ export function createToolbar(root, { onOpen }) {
         const ico = document.createElement('span');
         ico.className = 'ico';
         ico.setAttribute('aria-hidden', 'true');
-        ico.style.setProperty('--ico', `url("${t.icon}")`);
+        // CSS 變數裡的相對網址會以樣式表位置解析，所以先轉成絕對網址
+        ico.style.setProperty('--ico', `url("${new URL(t.icon, document.baseURI).href}")`);
         const label = document.createElement('span');
         label.textContent = t.name;
         b.append(ico, label);
