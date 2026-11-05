@@ -338,8 +338,25 @@ socialmediaeditor/
   - 新外掛**不注入**熱門新聞庫。
   - facebook.com 相關功能留到 P3，到時再設計「偵測到舊外掛就讓給舊外掛」的機制。
 - **YT 下載助手**（已知事實）：`videodownload/host/installer.py` 的 `allowed_origins` 只寫一個外掛 ID。要改成同時允許新舊兩個外掛，已裝的人重跑一次安裝程式。**這會改到 videodownload repo，P2 時另外請你確認。**
+- **固定外掛 ID**：`manifest.json` 加 `key`（比照 videodownload），每台電腦的外掛 ID 都相同，下載助手的 `allowed_origins` 才能寫死。
 - **側邊欄**：第一版只放「開啟小編工具箱」與狀態。
 - **版本**：從 `1.00` 開始，規則比照 QuickPatterntool（`manifest.json`、`changelog.json`）。
+
+### 8.1 安裝與更新（比照「網新快速排程」）
+程式從 -schedulenewnet 的 `web/installer.js` 複製改名。
+
+| 步驟 | 做法 |
+|---|---|
+| 入口 | 頂列「安裝外掛」開 5 步驟全螢幕教學；電腦版開站偵測不到外掛時自動跳出（手機不跳） |
+| 一鍵安裝檔 | 網頁從 GitHub 抓最新的 `extension/`（每個檔案以 git blob SHA 驗證），打包嵌進 Windows `toolbox-install.cmd`／Mac `toolbox-install-mac.sh`，安裝檔執行時不用再連網 |
+| 安裝檔做的事 | 放到「文件」裡的 `toolbox-ext`（同名資料夾不是這個外掛就停下、不覆蓋）→ 路徑複製到剪貼簿 → 打開 `chrome://extensions` |
+| 使用者要自己點 | 「開發人員模式」→「載入未封裝項目」→ 貼上路徑（Chrome 不允許程式代按） |
+| 安裝畫面 | Windows：一般安裝視窗（開始 → 進度 → 兩步圖解；失敗可重試、複製錯誤訊息），開不起來時退回文字模式。Mac：終端機執行 `bash ~/Downloads/toolbox-install-mac.sh`，過程用系統對話框 |
+| 公司電腦擋安裝檔 | 教學裡可改用「選擇資料夾並寫入」或下載 ZIP |
+| 自動更新 | 每小時、Chrome 啟動、打開側邊欄時檢查 GitHub；有新版時圖示顯示紅色「新」，側邊欄跳出彈窗。按「立即更新」第一次選外掛資料夾（之後記住），只寫入有變動的檔案，完成後重新載入外掛 |
+
+- `build.js` 產生的 `extension/manifest.json` 要一起提交，安裝檔和自動更新才抓得到。
+- YT 下載的**本機下載助手**仍用 videodownload 自己的安裝程式；P2 再評估是否併進同一個安裝檔。
 
 ---
 
@@ -395,4 +412,4 @@ socialmediaeditor/
 |---|---|---|
 | 1 | 網址 | `https://unnn3ing-oss.github.io/socialmediaeditor/` |
 | 2 | 外掛名稱 | 小編工具箱 |
-| 3 | 同事安裝方式 | 比照現有外掛（zip＋載入未封裝，附安裝教學） |
+| 3 | 同事安裝方式 | ✅ 已定：比照網新快速排程（第 8.1 節） |
