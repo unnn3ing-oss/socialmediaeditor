@@ -4,32 +4,153 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LINE 推播</title>
-<link rel="stylesheet" href="../../ui/tokens.css">
-<style>
-  .tool { max-width: 640px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
-  .tool textarea { width: 100%; }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@700;900&display=swap">
+<link rel="stylesheet" href="tool.css">
 </head>
 <body>
-<main class="tool">
-  <!-- 二選一：開關＋兩側文字。切換只改 hidden，不重建、不清空。 -->
-  <div class="switch-wrap" id="modes">
-    <span id="lbl-1" class="is-on">模式一</span>
-    <button type="button" class="switch" role="switch" aria-checked="false" aria-label="切換到模式二" id="mode-switch"></button>
-    <span id="lbl-2">模式二</span>
+<header class="topbar">
+  <div class="tb-left">
+    <h1>LINE 推播圖</h1>
+    <div class="mode-tabs"><!-- 版面頁籤由 tool.js 依有沒有公司素材產生 --></div>
+    <div class="tb-tools" id="tbTools" hidden>
+      <button type="button" id="quickfillReopen" hidden>快速填入</button>
+      <button type="button" id="headerOpenBtn" hidden>頂部標籤</button>
+    </div>
   </div>
-  <section id="panel-1">
-    <label class="field">模式一的內容
-      <textarea id="text-1" rows="6"></textarea>
-    </label>
-  </section>
-  <section id="panel-2" hidden>
-    <label class="field">模式二的內容
-      <textarea id="text-2" rows="6"></textarea>
-    </label>
-  </section>
-  <div><button type="button" class="btn btn-secondary" id="clear">清空</button></div>
+  <nav class="stepper" id="stepper" aria-label="製作步驟">
+    <button type="button" class="step-btn active" data-step="1" title="編輯畫面" aria-label="步驟 1：編輯畫面"><i>1</i><span class="step-label">編輯畫面</span></button>
+    <span class="step-line" id="stepLine"></span>
+    <button type="button" class="step-btn" data-step="2" title="畫面檢查" aria-label="步驟 2：畫面檢查"><i>2</i><span class="step-label">畫面檢查</span></button>
+  </nav>
+  <p class="sub" id="modeSub" hidden></p>
+  <div class="tb-right">
+    <button type="button" class="ghost" id="helpDetailBtn">使用說明</button>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+  <div class="float-stack" id="floatStack">
+    <div class="top-label-box" id="quickfillBox">
+      <button type="button" class="panel-x" id="quickfillClose" aria-label="收起快速填入" title="收起">✕</button>
+      <div class="quickfill-header" id="quickfillHeader">
+        <span class="quickfill-title">快速填入</span>
+      </div>
+      <div class="quickfill-body" id="quickfillBody">
+        <textarea id="quickfillText" rows="6"></textarea>
+        <div class="btn-row">
+          <button type="button" class="primary" id="quickfillBtn">快速填入</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-label-box" id="newsHeaderBox" hidden>
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:10px">
+          <input type="checkbox" id="showHeaderToggle" checked style="width:auto; margin:0">
+          頂部標籤
+        </label>
+        <input type="text" id="topLabel" value="" aria-label="頂部標籤文字">
+      </div>
+    </div>
+
+    <div id="cellsList"></div>
+
+    <div class="check-panel" id="checkPanel" hidden></div>
+  </div>
+
+  <div class="center-col" id="centerCol">
+    <div class="page-tabs">
+      <button type="button" class="page-tab active" data-page="0">第 1 頁</button>
+      <button type="button" class="page-tab" data-page="1">第 2 頁</button>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="canvas" width="1040" height="800"></canvas>
+    </div>
+  </div>
 </main>
+
+<div class="dock" id="dock">
+  <div class="dock-stickers" id="dockStickers" title="先在預覽圖點選要編輯的格子，再點貼圖加入；可在預覽圖上拖曳移動、滑鼠滾輪縮放，點貼圖右上角「✕」移除。">
+    <span class="dock-label" id="stickerLabel">表情貼圖</span>
+    <div class="sticker-palette" id="stickerPalette"></div>
+  </div>
+  <span class="dock-sep" id="dockSep"></span>
+  <div class="dock-colors" id="g4Colors" hidden>
+    <label>底色 <input type="color" id="g4Bg" value="#ffffff"></label>
+    <label>說明字色 <input type="color" id="g4Cap" value="#ffffff"></label>
+  </div>
+  <label class="dock-switch" id="edgeSwitch" title="開啟後，預覽圖會用紅框框出照片「看得到」的範圍，編輯時當參考用；露白檢查與提示在步驟 2 才進行" hidden>
+    <input type="checkbox" id="edgeCheckToggle">
+    <span class="sw-track"><span class="sw-knob"></span></span>
+    <span class="sw-label">檢查照片邊緣</span>
+  </label>
+  <div id="downloadRow">
+    <button type="button" id="backStepBtn" hidden>← 返回編輯</button>
+    <span class="dock-chip" id="dockChip" hidden></span>
+    <button type="button" class="ghost" id="resetAllBtn">清除本頁</button>
+    <button type="button" class="primary" id="nextStepBtn">下一步：畫面檢查 →</button>
+    <button type="button" class="light" id="downloadJpgBtn" hidden>下載本頁</button>
+    <button type="button" class="primary" id="downloadAllBtn" hidden>全部下載</button>
+    <div class="dl-confirm" id="dlConfirm" role="dialog" aria-label="下載前確認" hidden>
+      <div class="dl-confirm-text">已確認無錯字、圖片無露白？</div>
+      <div class="dl-confirm-actions">
+        <button type="button" id="dlConfirmBack">再修改</button>
+        <button type="button" class="primary" id="dlConfirmOk">確認下載</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gap-tip" id="gapTip" role="tooltip" hidden></div>
+
+<div class="lock-toast" id="lockToast" role="status" hidden>
+  <span>🔒 套版已鎖定，回上一步才能調整</span>
+  <button type="button" id="lockToastBtn">返回上一步更改</button>
+</div>
+
+<div class="status-toast" id="statusToast" role="status" aria-live="polite" title="點一下關閉" hidden></div>
+
+<div class="modal-overlay" id="helpOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>LINE 推播圖使用說明</h2>
+      <button type="button" id="helpCloseBtn" class="modal-close" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body">
+      <h3>步驟 1：編輯畫面</h3>
+      <ul>
+        <li><b>選版面、選頁面</b>：最上方切換版面，預覽圖上方切換「第 1 頁／第 2 頁」；各版面、各頁的內容都會保留，重新整理才會清空。</li>
+        <li><b>快速填入</b>：貼上以 ★ 開頭的標題（空格或驚嘆號、問號會自動換行），標題下一行貼上文章網址會自動抓首圖。</li>
+        <li><b>放照片</b>：把圖片拖進格子、雙擊格子選檔，或選好格子後按 Ctrl+V 貼上；在照片上拖曳可移動、滾輪可縮放。</li>
+        <li><b>四格 A</b>：白底 2×2 四格，每格可加一行說明（留空就不畫），底色與說明字色在底部工具列選。</li>
+        <li><b>貼圖</b>：先點格子，再點底部的表情，拖曳移動、滾輪縮放，點右上角「✕」移除。</li>
+      </ul>
+      <h3>步驟 2：畫面檢查與下載</h3>
+      <ul>
+        <li>檢查缺圖、缺標題與疑似露白；缺漏補齊前不能「全部下載」，露白只提醒、仍可下載。</li>
+        <li>輸出為 PNG（無損、300dpi、小於 2MB），六宮格 1040×800，四格 1040×1040。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head">
+      <h2 id="confirmTitle">確定要清除本頁？</h2>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0" id="confirmBody">這會清空「本頁」所有格子目前的文字、標籤與圖片設定，且無法復原（不會影響另一頁）。</p>
+      <div class="btn-row" style="justify-content:flex-end; margin-top:16px">
+        <button type="button" id="confirmCancelBtn">取消</button>
+        <button type="button" id="confirmOkBtn" class="primary">清除本頁</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="tool.js"></script>
 </body>
 </html>

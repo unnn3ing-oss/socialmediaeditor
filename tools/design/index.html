@@ -5,31 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>設計</title>
 <link rel="stylesheet" href="../../ui/tokens.css">
-<style>
-  .tool { max-width: 640px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
-  .tool textarea { width: 100%; }
-</style>
+<link rel="stylesheet" href="design.css">
 </head>
 <body>
-<main class="tool">
-  <!-- 二選一：開關＋兩側文字。切換只改 hidden，不重建、不清空。 -->
-  <div class="switch-wrap" id="modes">
-    <span id="lbl-1" class="is-on">模式一</span>
-    <button type="button" class="switch" role="switch" aria-checked="false" aria-label="切換到模式二" id="mode-switch"></button>
-    <span id="lbl-2">模式二</span>
-  </div>
-  <section id="panel-1">
-    <label class="field">模式一的內容
-      <textarea id="text-1" rows="6"></textarea>
-    </label>
-  </section>
-  <section id="panel-2" hidden>
-    <label class="field">模式二的內容
-      <textarea id="text-2" rows="6"></textarea>
-    </label>
-  </section>
-  <div><button type="button" class="btn btn-secondary" id="clear">清空</button></div>
-</main>
+<!-- 設計：內容由 design-ui.js 建立（畫布、工具列、屬性面板、頁面列）。
+     工具內的切換（屬性／圖層、頁面）都只改 hidden／class，不重建畫面，內容不會消失。 -->
+<section class="dz" id="designApp" aria-label="平面設計"></section>
+<script src="design-core.js"></script>
+<script src="design-fonts.js"></script>
+<script src="design-render.js"></script>
+<script src="design-export.js"></script>
 <script type="module" src="tool.js"></script>
 </body>
 </html>

@@ -1,0 +1,456 @@
+// =====================================================================================
+// 設計：渲染（網頁版專用，外掛不需要；updater.js／deploy.js 的 SKIP 會略過 design-*）
+//
+// render(ctx, page, opts)：把一頁畫到 Canvas，預覽與匯出共用同一個函式（所見即所得）。
+// 不碰 DOM（離屏畫布只在需要時才建立）；選取框、把手、吸附線等 DOM 疊層不會輸出。
+// 瀏覽器掛在 QPTDesign.render，node 用 module.exports（test/design-render.test.js）。
+// =====================================================================================
+(function (root) {
+  'use strict';
+
+  const MOSAIC_MIN = 14, MOSAIC_DIV = 5, GRAY = '#808080';
+
+  const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
+  const imgSize = im => ({
+    w: im.naturalWidth || im.videoWidth || im.width || 0,
+    h: im.naturalHeight || im.videoHeight || im.height || 0,
+  });
+  function makeCanvas(opts, w, h) {
+    const c = opts && opts.createCanvas ? opts.createCanvas(w, h)
+      : root.document.createElement('canvas');
+    c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h));
+    return c;
+  }
+
+  // ---- 顏料（純色／線性／放射漸層）------------------------------------------------------
+  // 在物件自己的框（未旋轉、左上為原點、w×h）內建立 fillStyle；純色字串原樣回傳。scale 目前用不到
+  // （漸層座標跟著 canvas 的 transform 走，預覽與匯出倍率不同也一致），保留給之後需要像素座標的情況。
+  // 線性：angle 照 CSS（0°＝由下往上、90°＝由左往右），漸層線長＝|w·sinθ|+|h·cosθ|。
+  // 放射：cx、cy 以框的寬高為準（預設 0.5），r 以「中心到角落」為 1（預設 1）。
+  function paintStyle(ctx, paint, w, h, scale) {
+    if (typeof paint === 'string' && paint) return paint;
+    if (!paint || typeof paint !== 'object') return '#000000';
+    const from = paint.from || '#ffffff', to = paint.to || '#000000';
+    let g;
+    if (paint.type === 'linear') {
+      const t = num(paint.angle, 180) * Math.PI / 180;
+      const sx = Math.sin(t), sy = -Math.cos(t);
+      const L = Math.abs(w * Math.sin(t)) + Math.abs(h * Math.cos(t));
+      const cx = w / 2, cy = h / 2;
+      g = ctx.createLinearGradient(cx - sx * L / 2, cy - sy * L / 2, cx + sx * L / 2, cy + sy * L / 2);
+    } else if (paint.type === 'radial') {
+      const cx = num(paint.cx, 0.5) * w, cy = num(paint.cy, 0.5) * h;
+      const R = Math.max(1e-6, num(paint.r, 1) * Math.hypot(w / 2, h / 2));
+      g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+    } else return '#000000';
+    g.addColorStop(0, from); g.addColorStop(1, to);
+    return g;
+  }
+
+  // ---- 文字排版 -----------------------------------------------------------------
+  const layoutCache = new Map();
+  function fontStr(fonts, obj) {
+    const size = num(obj.size, 80);
+    return fonts && fonts.fontCss ? fonts.fontCss(obj.font, size) : `${size}px sans-serif`;
+  }
+  // 弧形文字排版：單行（\n 當空白、不換行、不看 align）。每個字以自己寬度的中點放在圓弧上並轉成切線方向。
+  // glyphs 的 x 是相對框水平中心、y 是「未平移」座標（arc>0 時弧頂的字心在 -R，arc<0 時弧底在 +R），rot 是弧度。
+  // minY／maxY 是所有字的格子（字寬 × 行高）四個角的 y 包絡；height ＝ maxY − minY。
+  // 畫的時候 arc>0 把 minY 貼到框上緣，arc<0 把 maxY 貼到框下緣。
+  function arcLayout(ctx, text, lineH, ls, arc) {
+    const chars = [...text.replace(/\n/g, ' ')];
+    const ws = chars.map(ch => ctx.measureText(ch).width);
+    const L = ws.reduce((a, b) => a + b, 0) + ls * Math.max(0, chars.length - 1);
+    const theta = Math.abs(arc) * Math.PI / 180;
+    const R = L > 0 ? L / theta : 0;
+    const up = arc > 0, hh = lineH / 2;
+    const glyphs = [];
+    let minY = Infinity, maxY = -Infinity, acc = 0;
+    chars.forEach((ch, i) => {
+      const s = acc + ws[i] / 2 - L / 2;          // 字心沿弧的位置（以整行中點為 0）
+      acc += ws[i] + ls;
+      const phi = R > 0 ? s / R : 0;
+      const g = up ? { x: R * Math.sin(phi), y: -R * Math.cos(phi), rot: phi }
+        : { x: R * Math.sin(phi), y: R * Math.cos(phi), rot: -phi };
+      const c = Math.cos(g.rot), sn = Math.sin(g.rot);
+      for (const [dx, dy] of [[-ws[i] / 2, -hh], [ws[i] / 2, -hh], [ws[i] / 2, hh], [-ws[i] / 2, hh]]) {
+        const y = g.y + dx * sn + dy * c;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      glyphs.push({ ch, w: ws[i], x: g.x, y: g.y, rot: g.rot });
+    });
+    if (!glyphs.length) { minY = -hh; maxY = hh; }
+    return { lines: [chars.join('')], lineH, height: maxY - minY, arc, L, R, glyphs, minY, maxY };
+  }
+  // 逐字量測（全形英數混排都適用）；累計超過 obj.w 就換行，'\n' 強制換行。
+  function layoutText(ctx, obj, fonts) {
+    const size = num(obj.size, 80), ls = num(obj.letterSpacing, 0), lh = num(obj.lineHeight, 1.25);
+    const gen = fonts && fonts.gen ? fonts.gen() : 0;
+    const text = String(obj.text == null ? '' : obj.text);
+    const arc = num(obj.arc, 0);
+    const key = [text, obj.font, size, obj.w, ls, lh, gen, arc].join('|');
+    const hit = layoutCache.get(key);
+    if (hit) return hit;
+    ctx.font = fontStr(fonts, obj);
+    if (arc) {
+      const out = arcLayout(ctx, text, size * lh, ls, arc);
+      if (layoutCache.size > 500) layoutCache.clear();
+      layoutCache.set(key, out);
+      return out;
+    }
+    const lines = [];
+    for (const para of text.split('\n')) {
+      let cur = '', acc = 0;
+      for (const ch of para) {
+        const cw = ctx.measureText(ch).width + ls;
+        if (cur && acc + cw > obj.w) { lines.push(cur); cur = ''; acc = 0; }
+        cur += ch; acc += cw;
+      }
+      lines.push(cur);
+    }
+    const lineH = size * lh;
+    const out = { lines, lineH, height: lines.length * lineH };
+    if (layoutCache.size > 500) layoutCache.clear();
+    layoutCache.set(key, out);
+    return out;
+  }
+  let measureCtx = null;
+  // UI 用來更新文字物件的 h。沒有 DOM 時（node）用字寬＝字級的粗估。
+  function textHeight(obj, fonts, ctx) {
+    if (!ctx) {
+      if (!measureCtx && root.document) measureCtx = root.document.createElement('canvas').getContext('2d');
+      ctx = measureCtx;
+    }
+    if (!ctx) ctx = { font: '', measureText: () => ({ width: num(obj.size, 80) }) };
+    return layoutText(ctx, obj, fonts).height;
+  }
+
+  // ---- 幾何小工具 -----------------------------------------------------------------
+  // 影像擺放（image 物件與圖片背景共用，和 resize.js 的 fx/fy 同一種記法）
+  function place(iw, ih, w, h, fit, view) {
+    const sc = view && view.scale != null ? view.scale : 1;
+    const ox = view && view.ox != null ? view.ox : 0.5, oy = view && view.oy != null ? view.oy : 0.5;
+    const k = (fit === 'contain' ? Math.min(w / iw, h / ih) : Math.max(w / iw, h / ih)) * sc;
+    const dw = iw * k, dh = ih * k;
+    return { dx: (w - dw) * ox, dy: (h - dh) * oy, dw, dh };
+  }
+  function roundRectPath(c, x, y, w, h, r) {
+    r = Math.max(0, Math.min(num(r, 0), w / 2, h / 2));
+    c.beginPath();
+    if (!r) { c.rect(x, y, w, h); return; }
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  function placeholder(c, w, h) {
+    c.save();
+    c.fillStyle = '#d9d9d9'; c.fillRect(0, 0, w, h);
+    c.beginPath(); c.rect(0, 0, w, h); c.clip();
+    c.strokeStyle = '#a8a8a8'; c.lineWidth = 2;
+    c.beginPath();
+    for (let i = -h; i < w; i += 16) { c.moveTo(i, h); c.lineTo(i + h, 0); }
+    c.stroke();
+    c.restore();
+  }
+
+  // ---- 混合模式 ---------------------------------------------------------------------
+  // blend → Canvas globalCompositeOperation；缺值或未知視同 normal（source-over）
+  const BLEND_OPS = {
+    normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', darken: 'darken',
+    lighten: 'lighten', 'color-dodge': 'color-dodge', 'color-burn': 'color-burn', 'hard-light': 'hard-light',
+    'soft-light': 'soft-light', difference: 'difference', exclusion: 'exclusion', hue: 'hue',
+    saturation: 'saturation', color: 'color', luminosity: 'luminosity',
+  };
+  const blendOp = b => (typeof b === 'string' && Object.prototype.hasOwnProperty.call(BLEND_OPS, b) ? BLEND_OPS[b] : 'source-over');
+
+  // ---- 多邊形／星形頂點 ---------------------------------------------------------------
+  // 物件局部座標（左上為原點、未旋轉）。頂點在以框中心為圓心、半軸 w/2、h/2 的橢圓上，第一個頂點朝正上方。
+  // 星形：外圈（偶數索引）在橢圓上、內圈（奇數索引）在 inner 倍橢圓上交錯。其他 kind 回空陣列。
+  function polygonPoints(o) {
+    const w = num(o.w, 0), h = num(o.h, 0), cx = w / 2, cy = h / 2;
+    let n, k = null;
+    if (o.kind === 'polygon') n = Math.max(3, Math.round(num(o.sides, 6)));
+    else if (o.kind === 'star') { n = Math.max(3, Math.round(num(o.points, 5))) * 2; k = num(o.inner, 0.5); }
+    else return [];
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / n;
+      const r = k != null && i % 2 ? k : 1;
+      pts.push([cx + cx * r * Math.cos(a), cy + cy * r * Math.sin(a)]);
+    }
+    return pts;
+  }
+  // 在物件局部座標建立形狀路徑（rect 含 radius、ellipse、polygon、star）；一般繪製與剪裁共用。
+  // 呼叫端要先自己套好 translate／rotate。其他 kind（line、arrow）回 false 且不動路徑。
+  function shapePath(ctx, o, scale) {
+    const w = o.w, h = o.h;
+    if (o.kind === 'ellipse') { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); return true; }
+    if (o.kind === 'rect') { roundRectPath(ctx, 0, 0, w, h, o.radius); return true; }
+    if (o.kind === 'polygon' || o.kind === 'star') {
+      ctx.beginPath();
+      polygonPoints(o).forEach(([x, y], i) => { if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      ctx.closePath();
+      return true;
+    }
+    return false;
+  }
+
+  // ---- 背景 -----------------------------------------------------------------------
+  function drawBg(ctx, page, opts) {
+    const bg = page.bg || { type: 'solid', color: '#ffffff' };
+    const W = page.w, H = page.h;
+    if (bg.type === 'gradient' || bg.type === 'radial') {
+      // 線性（gradient）的角度同 CSS；放射（radial）的中心與半徑見 paintStyle
+      ctx.fillStyle = paintStyle(ctx, bg.type === 'gradient' ? Object.assign({}, bg, { type: 'linear', angle: num(bg.angle, 180) }) : bg, W, H, 1);
+      ctx.fillRect(0, 0, W, H);
+      return false;
+    }
+    if (bg.type === 'image') {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+      const im = opts.images && opts.images[bg.asset];
+      const s = im && imgSize(im);
+      if (!s || !s.w) { placeholder(ctx, W, H); return true; }
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+      ctx.imageSmoothingQuality = 'high';
+      const p = place(s.w, s.h, W, H, bg.fit, bg.view);
+      ctx.drawImage(im, p.dx, p.dy, p.dw, p.dh);
+      ctx.restore();
+      return false;
+    }
+    ctx.fillStyle = bg.color || '#ffffff'; ctx.fillRect(0, 0, W, H);
+    return false;
+  }
+
+  // ---- 物件 -----------------------------------------------------------------------
+  function drawImageObj(ctx, o, opts, scale) {
+    const im = opts.images && opts.images[o.asset];
+    const s = im && imgSize(im);
+    if (!s || !s.w) { placeholder(ctx, o.w, o.h); return true; }
+    const pw = Math.max(1, Math.ceil(o.w * scale)), ph = Math.max(1, Math.ceil(o.h * scale));
+    const a = makeCanvas(opts, pw, ph), ac = a.getContext('2d');
+    ac.scale(pw / o.w, ph / o.h);
+    // 圓角裁切 → 擺放影像
+    ac.save();
+    roundRectPath(ac, 0, 0, o.w, o.h, o.radius);
+    ac.clip();
+    ac.imageSmoothingQuality = 'high';
+    const p = place(s.w, s.h, o.w, o.h, o.fit, o.view);
+    ac.drawImage(im, p.dx, p.dy, p.dw, p.dh);
+    ac.restore();
+    let out = a;
+    if (o.gray) {
+      // 抽色：只作用在這張圖自己的離屏畫布；用 destination-in 把透明處（圓角、留白）還原，不會被染黑
+      const b = makeCanvas(opts, pw, ph), bc = b.getContext('2d');
+      bc.drawImage(a, 0, 0);
+      bc.globalCompositeOperation = 'saturation';
+      bc.fillStyle = '#000'; bc.fillRect(0, 0, pw, ph);
+      bc.globalCompositeOperation = 'destination-in';
+      bc.drawImage(a, 0, 0);
+      out = b;
+    }
+    // 混合模式只套在這一步（離屏畫布本身用 source-over 畫）
+    const op = blendOp(o.blend);
+    if (op !== 'source-over') ctx.globalCompositeOperation = op;
+    ctx.drawImage(out, 0, 0, o.w, o.h);
+    if (op !== 'source-over') ctx.globalCompositeOperation = 'source-over';
+    return false;
+  }
+
+  function drawText(ctx, o, opts, scale) {
+    const fonts = opts.fonts;
+    const lay = layoutText(ctx, o, fonts);
+    const ls = num(o.letterSpacing, 0);
+    const st = o.stroke && o.stroke.w > 0 ? o.stroke : null;
+    const sh = o.shadow && (o.shadow.blur > 0 || o.shadow.x || o.shadow.y) ? o.shadow : null;
+    ctx.font = fontStr(fonts, o);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.lineJoin = 'round';
+    const align = o.align === 'left' || o.align === 'right' ? o.align : 'center';
+
+    const dy = lay.glyphs ? (num(o.arc, 0) > 0 ? -lay.minY : o.h - lay.maxY) : 0;
+    const pass = (stroke) => {
+      if (lay.glyphs) {
+        // 弧形文字：逐字平移＋旋轉到切線方向，字心對齊弧上的位置（陰影位移不受旋轉影響）
+        ctx.textAlign = 'center';
+        for (const g of lay.glyphs) {
+          ctx.save();
+          ctx.translate(o.w / 2 + g.x, g.y + dy);
+          ctx.rotate(g.rot);
+          if (stroke) ctx.strokeText(g.ch, 0, 0); else ctx.fillText(g.ch, 0, 0);
+          ctx.restore();
+        }
+        return;
+      }
+      lay.lines.forEach((line, i) => {
+        const y = i * lay.lineH + lay.lineH / 2;
+        if (!ls) {
+          const x = align === 'left' ? 0 : align === 'right' ? o.w : o.w / 2;
+          ctx.textAlign = align;
+          if (stroke) ctx.strokeText(line, x, y); else ctx.fillText(line, x, y);
+          return;
+        }
+        // 字距：逐字 fillText，對齊以行寬（不含最後一個字距）為準
+        ctx.textAlign = 'left';
+        const chars = [...line];
+        const ws = chars.map(ch => ctx.measureText(ch).width);
+        const lw = ws.reduce((a, b) => a + b, 0) + ls * Math.max(0, chars.length - 1);
+        let x = align === 'left' ? 0 : align === 'right' ? o.w - lw : (o.w - lw) / 2;
+        chars.forEach((ch, k) => {
+          if (stroke) ctx.strokeText(ch, x, y); else ctx.fillText(ch, x, y);
+          x += ws[k] + ls;
+        });
+      });
+    };
+    const setShadow = on => {
+      ctx.shadowColor = on ? sh.color || 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0)';
+      // 陰影的位移與模糊不受 transform 影響，要自己乘上 scale
+      ctx.shadowOffsetX = on ? num(sh.x, 0) * scale : 0;
+      ctx.shadowOffsetY = on ? num(sh.y, 0) * scale : 0;
+      ctx.shadowBlur = on ? num(sh.blur, 0) * scale : 0;
+    };
+    if (st) {
+      ctx.lineWidth = st.w * 2; ctx.strokeStyle = st.color || '#000000';
+      setShadow(!!sh);                      // 陰影只加在第一次繪製
+      pass(true);
+      setShadow(false);
+    } else setShadow(!!sh);
+    ctx.fillStyle = paintStyle(ctx, o.color || '#111111', o.w, o.h, scale);
+    pass(false);
+    setShadow(false);
+  }
+
+  function drawShape(ctx, o, scale) {
+    const w = o.w, h = o.h, sw = o.stroke && o.stroke.w > 0 ? o.stroke.w : 0;
+    const hasFill = o.fill && o.fill !== 'none' && o.fill !== 'transparent';
+    if (o.kind === 'line' || o.kind === 'arrow') {
+      const lw = sw || 2, color = sw ? (o.stroke.color || '#000000') : (o.fill || '#000000');
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'butt';
+      const my = h / 2;
+      if (o.kind === 'arrow') {
+        const hl = Math.min(w, Math.max(16, lw * 4));
+        ctx.beginPath(); ctx.moveTo(0, my); ctx.lineTo(Math.max(0, w - hl + 1), my); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w, my); ctx.lineTo(w - hl, my - hl / 2); ctx.lineTo(w - hl, my + hl / 2); ctx.closePath(); ctx.fill();
+      } else { ctx.beginPath(); ctx.moveTo(0, my); ctx.lineTo(w, my); ctx.stroke(); }
+      return;
+    }
+    shapePath(ctx, o, scale);
+    if (hasFill) { ctx.fillStyle = paintStyle(ctx, o.fill, w, h, scale); ctx.fill(); }
+    if (sw) { ctx.lineWidth = sw; ctx.strokeStyle = o.stroke.color || '#000000'; ctx.lineJoin = 'round'; ctx.stroke(); }
+  }
+
+  function drawSticker(ctx, o, opts) {
+    const im = opts.stickers && opts.stickers[o.sticker];
+    const s = im && imgSize(im);
+    if (!s || !s.w) { placeholder(ctx, o.w, o.h); return true; }
+    const k = Math.min(o.w / s.w, o.h / s.h);
+    const dw = s.w * k, dh = s.h * k;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(im, (o.w - dw) / 2, (o.h - dh) / 2, dw, dh);
+    return false;
+  }
+
+  // 馬賽克：在畫布像素座標上做（頁面座標 × scale），讀取目前已畫好的像素，每格取真實平均色
+  function drawMosaic(ctx, o, page, scale) {
+    const CW = Math.ceil(page.w * scale), CH = Math.ceil(page.h * scale);
+    const x0 = Math.max(0, Math.floor(o.x * scale)), y0 = Math.max(0, Math.floor(o.y * scale));
+    const x1 = Math.min(CW, Math.ceil((o.x + o.w) * scale)), y1 = Math.min(CH, Math.ceil((o.y + o.h) * scale));
+    const w = x1 - x0, h = y1 - y0;
+    if (w < 1 || h < 1) return;
+    const b = Math.max(1, Math.round(Math.max(MOSAIC_MIN, Math.round(Math.min(o.w, o.h) / MOSAIC_DIV)) * scale));
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = o.opacity == null ? 1 : o.opacity;
+    let data;
+    try { data = ctx.getImageData(x0, y0, w, h).data; }
+    catch (e) { ctx.fillStyle = GRAY; ctx.fillRect(x0, y0, w, h); ctx.restore(); return; }   // 畫布被污染讀不到像素：用灰色蓋住
+    for (let by = 0; by < h; by += b) {
+      for (let bx = 0; bx < w; bx += b) {
+        const bw = Math.min(b, w - bx), bh = Math.min(b, h - by);
+        let r = 0, g = 0, bl = 0;
+        for (let yy = by; yy < by + bh; yy++) {
+          let i = (yy * w + bx) * 4;
+          for (let xx = 0; xx < bw; xx++, i += 4) { r += data[i]; g += data[i + 1]; bl += data[i + 2]; }
+        }
+        const n = bw * bh;
+        ctx.fillStyle = `rgb(${Math.round(r / n)},${Math.round(g / n)},${Math.round(bl / n)})`;
+        ctx.fillRect(x0 + bx, y0 + by, bw, bh);
+      }
+    }
+    ctx.restore();
+  }
+
+  // opts = { scale=1, images, stickers, fonts, skipIds:Set, createCanvas? }
+  function render(ctx, page, opts) {
+    opts = opts || {};
+    const scale = opts.scale || 1;
+    let pending = false;
+    ctx.save();
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    if (drawBg(ctx, page, opts)) pending = true;
+    const objs = page.objects || [];
+    const groups = page.groups || {};
+    // 畫單一物件（含變換、透明度、混合模式）
+    const drawObj = o => {
+      if (o.type === 'mosaic') { drawMosaic(ctx, o, page, scale); return; }
+      ctx.save();
+      ctx.globalAlpha = o.opacity == null ? 1 : o.opacity;
+      const op = blendOp(o.blend);
+      if (op !== 'source-over' && o.type !== 'image') ctx.globalCompositeOperation = op;   // 圖片在離屏畫回頁面時才套
+      ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
+      if (o.rot) ctx.rotate(o.rot * Math.PI / 180);
+      ctx.translate(-o.w / 2, -o.h / 2);
+      if (o.type === 'image') { if (drawImageObj(ctx, o, opts, scale)) pending = true; }
+      else if (o.type === 'text') drawText(ctx, o, opts, scale);
+      else if (o.type === 'shape') drawShape(ctx, o, scale);
+      else if (o.type === 'sticker') { if (drawSticker(ctx, o, opts)) pending = true; }
+      ctx.restore();
+    };
+    const visible = o => o && !o.hidden && !(opts.skipIds && opts.skipIds.has(o.id));
+    // 剪裁群組：成員連續，最上層（陣列最後一個）是外框形狀
+    const clipMask = gid => {
+      const g = groups[gid];
+      if (!g || !g.clip) return null;
+      let last = null;
+      for (const o of objs) if (o && o.groupId === gid) last = o;
+      return last;
+    };
+    const doneGroups = new Set();
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (!o) continue;
+      const mask = o.groupId != null && !doneGroups.has(o.groupId) ? clipMask(o.groupId) : null;
+      if (mask) {
+        doneGroups.add(o.groupId);
+        // 外框隱藏（或被略過）時整個群組不畫：外框一消失，群組的畫面範圍就沒有定義
+        if (visible(mask)) {
+          ctx.save();
+          ctx.translate(mask.x + mask.w / 2, mask.y + mask.h / 2);
+          if (mask.rot) ctx.rotate(mask.rot * Math.PI / 180);
+          ctx.translate(-mask.w / 2, -mask.h / 2);
+          shapePath(ctx, mask, scale);
+          ctx.restore();   // 路徑已用當時的 transform 轉成裝置座標，restore 不會動它
+          ctx.save();
+          ctx.clip();
+          for (const m of objs) if (m && m.groupId === o.groupId && m !== mask && visible(m)) drawObj(m);
+          ctx.restore();
+        }
+        continue;
+      }
+      if (o.groupId != null && doneGroups.has(o.groupId) && groups[o.groupId] && groups[o.groupId].clip) continue;
+      if (visible(o)) drawObj(o);
+    }
+    ctx.restore();
+    return { pending };
+  }
+
+  const api = { render, layoutText, textHeight, place, paintStyle, shapePath, polygonPoints, blendOp };
+  const Q = root.QPTDesign = root.QPTDesign || {};
+  Q.render = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);

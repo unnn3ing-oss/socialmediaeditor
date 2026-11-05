@@ -4,32 +4,89 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>尺寸</title>
-<link rel="stylesheet" href="../../ui/tokens.css">
-<style>
-  .tool { max-width: 640px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
-  .tool textarea { width: 100%; }
-</style>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="segmented.css">
+<link rel="stylesheet" href="resize.css">
 </head>
 <body>
-<main class="tool">
-  <!-- 二選一：開關＋兩側文字。切換只改 hidden，不重建、不清空。 -->
-  <div class="switch-wrap" id="modes">
-    <span id="lbl-1" class="is-on">模式一</span>
-    <button type="button" class="switch" role="switch" aria-checked="false" aria-label="切換到模式二" id="mode-switch"></button>
-    <span id="lbl-2">模式二</span>
+<div class="wrap">
+  <div class="layout" id="resizeApp">
+    <div class="card">
+      <div class="dropzone wm-photo-drop" id="rsDrop" tabindex="0">
+        <div id="rsDropText">點擊選擇照片，或把照片拖曳到這裡<br>可以一次選多張<span class="hint-desk">；也能直接 Ctrl+V 貼上</span></div>
+      </div>
+      <div class="hint" id="rsHint">輸入想要的寬高，所有照片一起轉換</div>
+
+      <div class="btn-row" style="margin-top:16px; margin-bottom:20px">
+        <button id="rsResetBtn" style="flex:1">全部清除</button>
+        <button class="primary" id="rsDownloadBtn" style="flex:1" disabled>下載圖片</button>
+        <button class="primary" id="rsDownloadAllBtn" style="flex:1 1 100%" hidden>全部下載</button>
+      </div>
+
+      <div class="edit-box">
+        <div class="field">
+          <label>轉換方式</label>
+          <div class="bg-toggle" id="rsMode">
+            <button type="button" class="active" data-mode="cover">裁切填滿</button>
+            <button type="button" data-mode="fit">等比縮放</button>
+          </div>
+          <div class="hint" id="rsModeHint"></div>
+        </div>
+
+        <div class="field">
+          <label>輸出尺寸（像素）</label>
+          <div class="rs-size">
+            <input type="number" id="rsW" min="1" max="10000" step="1" placeholder="寬" inputmode="numeric" aria-label="寬度">
+            <button type="button" id="rsSwapBtn" class="rs-swap" title="對調寬高" aria-label="對調寬高">⇄</button>
+            <input type="number" id="rsH" min="1" max="10000" step="1" placeholder="高" inputmode="numeric" aria-label="高度">
+          </div>
+          <div class="hint" id="rsSizeHint"></div>
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <label>輸出格式</label>
+          <div class="bg-toggle" id="rsFormat">
+            <button type="button" class="active" data-fmt="auto">沿用原圖</button>
+            <button type="button" data-fmt="jpeg">JPG</button>
+            <button type="button" data-fmt="png">PNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-col">
+      <div class="canvas-wrap wm-stage" id="rsStage">
+        <div class="wm-empty" id="rsEmpty">上傳或貼上照片，輸入寬高就會顯示轉換後的樣子</div>
+        <canvas id="rsCanvas" width="1080" height="1080" hidden></canvas>
+      </div>
+      <div class="status" id="rsStatus">請先上傳照片</div>
+      <div class="thumbs-shelf" id="rsShelf" hidden>
+        <button type="button" class="shelf-nav" id="rsShelfPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
+        <div class="batch-thumbs" id="rsThumbs"></div>
+        <button type="button" class="shelf-nav" id="rsShelfNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
+      </div>
+      <div class="hint preview-hint" id="rsPreviewHint"></div>
+
+    </div>
   </div>
-  <section id="panel-1">
-    <label class="field">模式一的內容
-      <textarea id="text-1" rows="6"></textarea>
-    </label>
-  </section>
-  <section id="panel-2" hidden>
-    <label class="field">模式二的內容
-      <textarea id="text-2" rows="6"></textarea>
-    </label>
-  </section>
-  <div><button type="button" class="btn btn-secondary" id="clear">清空</button></div>
-</main>
+</div>
+
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <h2 id="confirmTitle">確定要全部清除？</h2>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0" id="confirmMessage">這會清空目前畫面上的所有設定，且無法復原。</p>
+      <div class="btn-row" style="justify-content:flex-end; margin-top:16px">
+        <button type="button" id="confirmCancelBtn">取消</button>
+        <button type="button" id="confirmOkBtn" class="primary">全部清除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="segmented.js"></script>
 <script type="module" src="tool.js"></script>
 </body>
 </html>

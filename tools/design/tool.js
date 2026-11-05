@@ -1,24 +1,33 @@
-// 設計：示範「工具內切換功能」的寫法。
-// 規則：切換模式只改 hidden，不重建 DOM，每個模式的內容才會保留；「清空」才會刪除。
+// 設計：自由排版（文字、圖片、貼圖、形狀、馬賽克）。畫面與邏輯照舊工具搬入（design-*.js），這裡只接素材與下載。
+// - 貼圖：tb.assets.get('sticker.<id>')，有密碼是 T 寶、沒密碼是通用貼紙。
+// - 字型：有密碼且取得 font.title 就載入成 WHZ-Heavy；沒密碼預設 Noto Sans TC 900，選單不出現 WHZ-Heavy。
 import { tb } from '../../sdk/toolbox.js';
 
 tb.init('design');
 
-const sw = document.getElementById('mode-switch');
-const panels = [document.getElementById('panel-1'), document.getElementById('panel-2')];
-const labels = [document.getElementById('lbl-1'), document.getElementById('lbl-2')];
-const texts = [document.getElementById('text-1'), document.getElementById('text-2')];
+const Q = window.QPTDesign;
+const stickerIds = Q.core.STICKERS;
 
-function showMode(i) {
-  panels.forEach((p, k) => { p.hidden = k !== i; });
-  labels.forEach((l, k) => l.classList.toggle('is-on', k === i));
-  sw.setAttribute('aria-checked', String(i === 1));
-  sw.setAttribute('aria-label', i === 0 ? '切換到模式二' : '切換到模式一');
-}
+const [title, ...stickers] = await Promise.all([
+  tb.assets.get('font.title').catch(() => null),
+  ...stickerIds.map((s) => tb.assets.get('sticker.' + s).catch(() => null)),
+]);
 
-sw.addEventListener('click', () => showMode(sw.getAttribute('aria-checked') === 'true' ? 0 : 1));
+const stickerUrls = {};
+stickerIds.forEach((s, i) => { stickerUrls[s] = stickers[i] && stickers[i].url ? stickers[i].url : ''; });
 
-document.getElementById('clear').addEventListener('click', () => {
-  texts.forEach((t) => { t.value = ''; });
-  texts[sw.getAttribute('aria-checked') === 'true' ? 1 : 0].focus();
+Q.fonts.configure({ titleUrl: title && title.url ? title.url : null });
+Q.core.setDefaultFont(Q.fonts.defaultId());
+Q.host = {
+  stickerUrl: (s) => stickerUrls[s] || '',
+  download: (blob, name) => tb.download(blob, name),
+};
+
+await new Promise((resolve, reject) => {
+  const s = document.createElement('script');
+  s.src = 'design-ui.js';
+  s.onload = resolve;
+  s.onerror = () => { tb.log.error('design-ui-load-failed'); reject(new Error('design-ui')); };
+  document.body.appendChild(s);
 });
+document.documentElement.dataset.designReady = '1';

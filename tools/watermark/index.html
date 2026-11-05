@@ -4,32 +4,113 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>浮水印</title>
-<link rel="stylesheet" href="../../ui/tokens.css">
-<style>
-  .tool { max-width: 640px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
-  .tool textarea { width: 100%; }
-</style>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="segmented.css">
+<link rel="stylesheet" href="watermark.css">
 </head>
 <body>
-<main class="tool">
-  <!-- 二選一：開關＋兩側文字。切換只改 hidden，不重建、不清空。 -->
-  <div class="switch-wrap" id="modes">
-    <span id="lbl-1" class="is-on">模式一</span>
-    <button type="button" class="switch" role="switch" aria-checked="false" aria-label="切換到模式二" id="mode-switch"></button>
-    <span id="lbl-2">模式二</span>
+<div class="wrap">
+  <div class="layout" id="watermarkApp">
+    <div class="card">
+      <!-- 左上：拖放／點擊選取照片（可一次選多張） -->
+      <div class="dropzone wm-photo-drop" id="wmPhotoDrop" tabindex="0">
+        <div id="wmPhotoText">點擊選擇照片，或把照片拖曳到這裡<br>可以一次選多張<span class="hint-desk">；也能直接 Ctrl+V 貼上</span></div>
+      </div>
+      <div class="hint" id="wmPhotoHint">輸出會保持原圖尺寸</div>
+
+      <div class="btn-row" style="margin-top:16px; margin-bottom:20px">
+        <button id="wmResetBtn" style="flex:1">全部清除</button>
+        <button class="primary" id="wmDownloadBtn" style="flex:1" disabled>下載圖片</button>
+        <button class="primary" id="wmDownloadAllBtn" style="flex:1 1 100%" hidden>全部下載</button>
+      </div>
+
+      <div class="edit-box">
+        <!-- 沒密碼：只有「上傳自己的 Logo」；有密碼：多出公司 Logo（新版／舊版）選項。由 tool.js 依 tb.assets.get 的結果決定 -->
+        <div class="field" id="wmLogoField" hidden>
+          <label>浮水印圖</label>
+          <div class="bg-toggle" id="wmLogoToggle" hidden>
+            <button type="button" class="active" data-logo="new">新版 NEWS</button>
+            <button type="button" data-logo="old">舊版 新聞網</button>
+            <button type="button" data-logo="custom">自己上傳</button>
+          </div>
+          <div class="dropzone wm-logo-drop" id="wmLogoDrop" tabindex="0">
+            <img id="wmLogoThumb" class="batch-item-thumb" alt="" hidden>
+            <div id="wmLogoText">點擊選擇浮水印圖<br>或拖曳到此處（建議用背景透明的 PNG／SVG）</div>
+          </div>
+          <div class="hint" id="wmLogoHint"></div>
+        </div>
+
+        <div class="field">
+          <label>全部套用位置</label>
+          <div class="wm-corners" id="wmGrid" role="group" aria-label="浮水印位置（四個角）">
+            <button type="button" data-px="0" data-py="0" aria-label="左上"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 18 7 7M7 15.5V7h8.5"/></svg></button>
+            <button type="button" data-px="1" data-py="0" aria-label="右上"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 18 7 7M7 15.5V7h8.5"/></svg></button>
+            <button type="button" data-px="0" data-py="1" aria-label="左下"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 18 7 7M7 15.5V7h8.5"/></svg></button>
+            <button type="button" data-px="1" data-py="1" aria-label="右下"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 18 7 7M7 15.5V7h8.5"/></svg></button>
+            <button type="button" id="wmAutoBtn" class="wm-auto" title="每張照片各自把浮水印放在四個角裡最暗的地方">自動（最暗的角）</button>
+          </div>
+          <div class="hint" id="wmPosHint"></div>
+        </div>
+
+        <div class="field">
+          <label for="wmSize">大小<output id="wmSizeOut" for="wmSize"></output></label>
+          <input type="range" id="wmSize" min="5" max="60" step="1" value="13">
+        </div>
+        <div class="field">
+          <label for="wmTransparency">透明度<output id="wmTransparencyOut" for="wmTransparency"></output></label>
+          <input type="range" id="wmTransparency" min="0" max="90" step="1" value="0">
+          <div class="hint">0% 是完全不透明，數字越大越淡。</div>
+        </div>
+        <div class="field">
+          <label for="wmMargin">邊距<output id="wmMarginOut" for="wmMargin"></output></label>
+          <input type="range" id="wmMargin" min="0" max="15" step="1" value="3">
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <label>輸出格式</label>
+          <div class="bg-toggle" id="wmFormat">
+            <button type="button" class="active" data-fmt="auto">沿用原圖</button>
+            <button type="button" data-fmt="jpeg">JPG</button>
+            <button type="button" data-fmt="png">PNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-col">
+      <div class="canvas-wrap wm-stage" id="wmStage">
+        <div class="wm-empty" id="wmEmpty">上傳或貼上照片，浮水印會自動疊上去</div>
+        <canvas id="wmCanvas" width="1080" height="720" hidden></canvas>
+      </div>
+      <div class="status" id="wmStatus">請先上傳照片</div>
+      <!-- 展示窗：跟「圖片套版」的批次一樣，多張照片排成一列，點一張就在上面預覽 -->
+      <div class="thumbs-shelf" id="wmShelf" hidden>
+        <button type="button" class="shelf-nav" id="wmShelfPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
+        <div class="batch-thumbs" id="wmThumbs"></div>
+        <button type="button" class="shelf-nav" id="wmShelfNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
+      </div>
+      <div class="hint preview-hint">在預覽上拖曳浮水印（抓的範圍比 Logo 大）可以換位置，只會改目前這一張；<span class="hint-desk">滑鼠停在浮水印上滾動滾輪可以放大縮小。</span>大小、透明度、邊距，以及左側的位置鈕會套用到所有照片。</div>
+
+    </div>
   </div>
-  <section id="panel-1">
-    <label class="field">模式一的內容
-      <textarea id="text-1" rows="6"></textarea>
-    </label>
-  </section>
-  <section id="panel-2" hidden>
-    <label class="field">模式二的內容
-      <textarea id="text-2" rows="6"></textarea>
-    </label>
-  </section>
-  <div><button type="button" class="btn btn-secondary" id="clear">清空</button></div>
-</main>
+</div>
+
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <h2 id="confirmTitle">確定要全部清除？</h2>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0" id="confirmMessage">這會清空目前畫面上的所有設定，且無法復原。</p>
+      <div class="btn-row" style="justify-content:flex-end; margin-top:16px">
+        <button type="button" id="confirmCancelBtn">取消</button>
+        <button type="button" id="confirmOkBtn" class="primary">全部清除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="segmented.js"></script>
 <script type="module" src="tool.js"></script>
 </body>
 </html>

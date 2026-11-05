@@ -4,32 +4,96 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>圖片套版</title>
-<link rel="stylesheet" href="../../ui/tokens.css">
-<style>
-  .tool { max-width: 640px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 16px; }
-  .tool textarea { width: 100%; }
-</style>
+<!-- 標題字型：沒密碼時用 Noto Sans TC 粗體（Canvas 畫字前會先載入）；有密碼時改載公司字型 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap">
+<link rel="stylesheet" href="pattern.css">
 </head>
 <body>
-<main class="tool">
-  <!-- 二選一：開關＋兩側文字。切換只改 hidden，不重建、不清空。 -->
-  <div class="switch-wrap" id="modes">
-    <span id="lbl-1" class="is-on">模式一</span>
-    <button type="button" class="switch" role="switch" aria-checked="false" aria-label="切換到模式二" id="mode-switch"></button>
-    <span id="lbl-2">模式二</span>
+<div class="wrap">
+  <div class="layout" id="layoutApp">
+    <div class="card">
+      <div id="batchFields">
+        <div class="btn-row batch-actions" id="batchActions" style="margin-top:0; margin-bottom:20px">
+          <button class="primary" id="batchGenerateBtn" style="flex:1">全部完成</button>
+          <button id="batchDownloadAllBtn" style="flex:1">全部下載</button>
+          <button id="helpBtn" type="button">使用說明</button>
+        </div>
+
+        <div id="batchItemsList"></div>
+
+        <div class="btn-row">
+          <button id="batchResetBtn" style="flex:1">全部清除</button>
+          <button id="addBatchItemBtn" style="flex:1">＋ 再做一張</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-col">
+      <div id="batchPreview">
+        <div class="canvas-wrap">
+          <canvas id="batchCanvas" width="1080" height="1080"></canvas>
+          <textarea class="title-overlay" id="batchPreviewTitleInput" placeholder="點兩下輸入內容" spellcheck="false" tabindex="-1" hidden></textarea>
+        </div>
+        <!-- 貼圖與馬賽克（stickers.js 填內容）：每一組各自一份，編輯的是目前預覽的那一組 -->
+        <div class="fx-bar" id="batchFxSlot"></div>
+        <div class="thumbs-shelf" id="batchThumbsShelf" hidden>
+          <button type="button" class="shelf-nav" id="batchThumbsPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
+          <div class="batch-thumbs" id="batchThumbs"></div>
+          <button type="button" class="shelf-nav" id="batchThumbsNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
+        </div>
+        <div class="preview-title" id="batchPreviewTitle"></div>
+        <div class="status" id="batchStatus">按某一組的「完成」後，預覽會顯示在這裡</div>
+        <div class="hint preview-hint">點兩下預覽圖輸入標題；<span class="hint-desk">點一下即可 Ctrl+V 貼上圖片；滾輪縮放、</span><span class="hint-touch">雙指縮放、</span>拖曳調整位置。</div>
+      </div>
+    </div>
   </div>
-  <section id="panel-1">
-    <label class="field">模式一的內容
-      <textarea id="text-1" rows="6"></textarea>
-    </label>
-  </section>
-  <section id="panel-2" hidden>
-    <label class="field">模式二的內容
-      <textarea id="text-2" rows="6"></textarea>
-    </label>
-  </section>
-  <div><button type="button" class="btn btn-secondary" id="clear">清空</button></div>
-</main>
+</div>
+
+<div class="modal-overlay" id="helpOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>圖片套版使用說明</h2>
+      <button type="button" id="helpCloseBtn" class="modal-close" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body">
+      <h3>基本流程</h3>
+      <ul>
+        <li>按「＋ 再做一張」新增一組，放入照片（點擊選取、拖曳或 Ctrl+V 貼上）、輸入標題。</li>
+        <li>預覽上滾輪（手機雙指）縮放照片、拖曳調整位置；點兩下預覽圖可以直接改標題。</li>
+        <li>按該組的「完成」存成圖，全部做完按「全部下載」；檔名是「年月日時分_編號」。</li>
+      </ul>
+      <h3>通用框</h3>
+      <ul>
+        <li>標題第一行是大標，第二行（可不填）是副標；太長會自動縮小字級。</li>
+        <li>左上角標籤可以改字，<b>留空就不畫</b>；主色有 5 款預設，也能用色盤自訂。</li>
+      </ul>
+      <h3>貼圖與馬賽克</h3>
+      <ul>
+        <li>預覽下方點一下加到畫面，拖曳移動、滾輪縮放，按 × 或 Delete 刪除；每一組各自一份。</li>
+        <li>「抽色」可以把照片變成黑白（標題、邊框、貼圖仍是彩色）。</li>
+      </ul>
+      <h3>內容不會消失</h3>
+      <ul>
+        <li>切換框、背景類型、收合展開各組，內容都會保留；重新整理頁面才會清除。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <h2 id="confirmTitle">確定要全部清除？</h2>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0" id="confirmMessage">這會清空目前畫面上的所有設定，且無法復原。</p>
+      <div class="btn-row" style="justify-content:flex-end; margin-top:16px">
+        <button type="button" id="confirmCancelBtn">取消</button>
+        <button type="button" id="confirmOkBtn" class="primary">全部清除</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script type="module" src="tool.js"></script>
 </body>
 </html>
