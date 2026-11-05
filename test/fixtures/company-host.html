@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-Hant-TW"><head><meta charset="utf-8"><title>公司模式測試外殼</title>
+<style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style></head>
+<body>
+<script>
+// 測試用：假裝外殼已解鎖公司素材，再用 iframe 開工具頁（?tool=<id>）。
+window.tbxShell = { company: () => ({ unlocked: true }) };
+const id = new URLSearchParams(location.search).get('tool');
+const f = document.createElement('iframe');
+f.src = '../../tools/' + id + '/index.html';
+f.name = 'tool';
+document.body.appendChild(f);
+</script>
+</body></html>
