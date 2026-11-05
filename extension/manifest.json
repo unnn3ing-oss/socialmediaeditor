@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "小編工具箱",
+  "version": "1.00",
+  "permissions": [
+    "alarms",
+    "sidePanel",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "https://raw.githubusercontent.com/*"
+  ]
+}
