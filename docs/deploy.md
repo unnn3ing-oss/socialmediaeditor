@@ -166,7 +166,7 @@ npx wrangler deploy
 | 想做的事 | 怎麼做 |
 |---|---|
 | 換 Logo、版型 | `後端網址/admin` 上傳同名檔案 |
-| 看有沒有人回報錯誤 | 登入管理頁後，開 `後端網址/admin/logs?days=7`（日誌只保留 30 天，不含任何內容） |
+| 看有沒有人回報錯誤 | 登入 `後端網址/admin`，按「錯誤日誌」的「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
 | 更新後端程式 | 在 `server` 資料夾再執行一次 `npx wrangler deploy` |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |
 

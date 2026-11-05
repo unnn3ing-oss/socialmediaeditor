@@ -91,6 +91,16 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <p class="msg" id="listMsg" role="status"></p>
     </section>
 
+    <section class="card">
+      <h2>錯誤日誌</h2>
+      <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。</p>
+      <div class="row"><button id="logBtn" type="button">查看最近 7 天</button></div>
+      <p class="msg" id="logMsg" role="status"></p>
+      <div class="scroll" id="logWrap" hidden>
+        <table><thead><tr><th>時間</th><th>工具</th><th>代碼</th><th>版本</th></tr></thead><tbody id="logRows"></tbody></table>
+      </div>
+    </section>
+
     <section class="confirm" id="confirm" hidden role="alertdialog" aria-labelledby="cfTitle">
       <h2 id="cfTitle">確定要刪除嗎？</h2>
       <p id="cfText"></p>
@@ -194,6 +204,24 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       else say($('listMsg'), res.error || '刪除失敗。', 'err');
     }).catch(function () { say($('listMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('cfYes').disabled = false; });
+  };
+
+  $('logBtn').onclick = function () {
+    $('logBtn').disabled = true; say($('logMsg'), '讀取中');
+    api('/admin/logs?days=7').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var tb = $('logRows'); tb.textContent = '';
+      res.data.forEach(function (r) {
+        var tr = document.createElement('tr');
+        [fmtTime(r.at), r.tool, r.code, r.ver || ''].forEach(function (t, i) {
+          var c = document.createElement('td'); c.textContent = t; if (i === 0) c.className = 'num'; tr.appendChild(c);
+        });
+        tb.appendChild(tr);
+      });
+      $('logWrap').hidden = !res.data.length;
+      say($('logMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '最近 7 天沒有任何錯誤。', 'good');
+    }).catch(function () { say($('logMsg'), '讀取日誌失敗。', 'err'); })
+      .then(function () { $('logBtn').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };
