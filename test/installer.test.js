@@ -63,7 +63,14 @@ test('Windows .cmd：安裝視窗（WinForms）＋開不起來時退回文字模
 
 test('嵌入內容與版本號格式不對就不產生', () => {
   assert.throws(() => I.windows("AAA'; rm", '1.0.0'), /格式不對/);
-  assert.throws(() => I.mac('QQ==', '1.0'), /版本號/);
+  for (const v of ['1', 'v1.0', "1.0'; rm", '1.0.0.0.0', '']) assert.throws(() => I.mac('QQ==', v), /版本號/, v);
+});
+
+test('工具箱兩段式版號（1.00）可以產生安裝檔', () => {
+  for (const v of ['1.00', '1.2.3']) {
+    assert.match(I.mac('QQ==', v), new RegExp(v.replace(/\./g, '\\.')));
+    assert.match(I.windows('QQ==', v), new RegExp(v.replace(/\./g, '\\.')));
+  }
 });
 
 test('Mac .sh：bash 執行後放到 ~/Documents/toolbox-ext；只覆蓋自己的資料夾', () => {

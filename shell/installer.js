@@ -13,7 +13,7 @@ const api = (function () {
   // 嵌進安裝檔的字串不能打斷引號或指令：base64 只會有 A–Z a–z 0–9 + / =，版本只允許 x.y.z
   function check(zipB64, version) {
     if (typeof zipB64 !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(zipB64)) throw new Error('安裝檔內容格式不對');
-    if (!/^\d+\.\d+\.\d+$/.test(String(version))) throw new Error('版本號格式不對');
+    if (!/^\d+(\.\d+){1,3}$/.test(String(version))) throw new Error('版本號格式不對');
   }
 
   // Windows：.cmd 前半段叫 PowerShell 讀這個檔案自己、執行 #PS-START 之後的部分（和 videodownload 相同寫法）。

@@ -1,4 +1,4 @@
-// 「安裝外掛」全螢幕教學（自 -schedulenewnet 的 deploy.js 複製改名）：
+// 「安裝外掛」全螢幕教學：
 // 把 Chrome 擴充功能的最新版檔案「準備」到你的電腦上，再一步步教你到 chrome://extensions 載入。
 //
 // 網頁沒辦法直接替瀏覽器安裝擴充功能，所以這裡只負責準備檔案：
@@ -167,7 +167,7 @@ function zhError(err, lead) {
     return new Blob([...local, ...central, end], { type: 'application/zip' });
   }
 
-  // 一鍵安裝檔：ZIP 不含最上層資料夾（安裝檔自己建 schedulenewnet-ext），版本取自 manifest.json
+  // 一鍵安裝檔：ZIP 不含最上層資料夾（安裝檔自己建 toolbox-ext），版本取自 manifest.json
   async function buildInstaller(os, onProgress) {
     const files = await fetchExtensionFiles(onProgress);
     onProgress('打包安裝檔…');
