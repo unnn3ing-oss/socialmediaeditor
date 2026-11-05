@@ -19,6 +19,13 @@ export const CHECKS = [
     // warn 時按下的動作
     onWarnClick: ({ openInstall }) => openInstall(),
   },
+  {
+    // 公司素材：由 company.js 自己更新狀態；未解鎖時不顯示（state 'hidden'）
+    id: 'company',
+    label: '正在確認公司密碼',
+    passive: true,
+    onClick: () => window.dispatchEvent(new CustomEvent('tbx:company-logout')),
+  },
 ];
 
 export function initStatus({ root, shell, openInstall, checks = CHECKS }) {
@@ -28,6 +35,7 @@ export function initStatus({ root, shell, openInstall, checks = CHECKS }) {
     root.textContent = '';
     for (const c of checks) {
       const v = shell.getStatus(c.id);
+      if (v.state === 'hidden') continue;
       if (v.state === 'checking') {
         const sk = document.createElement('span');
         sk.className = 'sk';
@@ -38,26 +46,26 @@ export function initStatus({ root, shell, openInstall, checks = CHECKS }) {
         root.appendChild(sk);
         continue;
       }
-      const clickable = v.state === 'warn' && c.onWarnClick;
+      const clickable = Boolean(c.onClick) || (v.state === 'warn' && c.onWarnClick);
       const pill = document.createElement(clickable ? 'button' : 'span');
       pill.className = `pill pill-${v.state}`;
       pill.dataset.status = c.id;
       pill.textContent = v.text;
       if (clickable) {
         pill.type = 'button';
-        pill.addEventListener('click', () => c.onWarnClick({ openInstall }));
+        pill.addEventListener('click', () => (c.onClick ? c.onClick() : c.onWarnClick({ openInstall })));
       }
       root.appendChild(pill);
     }
   }
 
   shell.onStatus(render);
-  for (const c of checks) shell.setStatus(c.id, { state: 'checking', text: c.label });
+  for (const c of checks) shell.setStatus(c.id, { state: c.passive ? 'hidden' : 'checking', text: c.label });
   render();
 
   return {
     async runAll() {
-      await Promise.all(checks.map(async (c) => shell.setStatus(c.id, await c.run())));
+      await Promise.all(checks.filter((c) => !c.passive).map(async (c) => shell.setStatus(c.id, await c.run())));
     },
     byId,
   };

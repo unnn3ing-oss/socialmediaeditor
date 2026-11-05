@@ -42,8 +42,31 @@ export function createPanes(root, { onFocus, onClose }) {
     }, 0);
   });
 
+  // 公司憑證過期時蓋一層鎖定提示；iframe 本身不動，內容原封不動。
+  function setLocked(id, locked) {
+    const p = panes.get(id);
+    if (!p) return;
+    let lock = p.pane.querySelector('.pane-lock');
+    if (locked && !lock) {
+      lock = document.createElement('div');
+      lock.className = 'pane-lock';
+      const msg = document.createElement('p');
+      msg.textContent = '公司密碼已過期，重新輸入後即可繼續';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-primary';
+      btn.textContent = '重新輸入';
+      btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('tbx:company-login')));
+      lock.append(msg, btn);
+      p.pane.appendChild(lock);
+    } else if (!locked && lock) {
+      lock.remove();
+    }
+  }
+
   return {
     ensure,
+    setLocked,
     get: (id) => panes.get(id),
     // sides: { left: toolOrNull, right: toolOrNull }
     sync({ split, left, right, last }) {

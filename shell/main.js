@@ -6,6 +6,7 @@ import { createPanes } from './panes.js';
 import { initDrag } from './drag.js';
 import { initStatus, shouldAutoOpenInstall, markInstallShown } from './status.js';
 import { openInstall } from './install.js';
+import { initCompany } from './company.js';
 
 const $ = (id) => document.getElementById(id);
 const showcaseEl = $('showcase');
@@ -100,6 +101,7 @@ async function start() {
 
 // ---- 狀態列與安裝教學 ----
 const status = initStatus({ root: $('status'), shell: window.tbxShell, openInstall });
+initCompany({ shell: window.tbxShell, button: $('company-btn') });
 status.runAll().then(() => {
   if (window.tbxShell.getStatus('extension').state === 'warn' && shouldAutoOpenInstall()) {
     markInstallShown();

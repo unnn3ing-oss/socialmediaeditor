@@ -63,3 +63,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   .showcase-inner { padding: 24px 16px 40px; }
   #toolbar { flex-wrap: nowrap; overflow-x: auto; flex-basis: 100%; order: 3; }
 }
+
+/* 公司憑證過期：蓋在窗格上的鎖定提示（iframe 保留） */
+.pane-lock { position: absolute; inset: 44px 0 0 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgba(246, 247, 248, .96); text-align: center; padding: 24px; }
+.pane-lock p { margin: 0; font-size: 16px; font-weight: 700; }
+#company-btn[hidden] { display: none; }
