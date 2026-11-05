@@ -2,12 +2,16 @@
 import { toolRoutes } from './routes.gen.js';
 import { json, fail, preflight } from './core/http.js';
 import { handleAuth } from './core/auth.js';
+import { handleAssets } from './core/assets.js';
+import { handleAdmin } from './core/admin.js';
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
 // 依序嘗試各模組；模組不處理就回 null
 const modules = [
-  (req, env, ctx, path) => handleAuth(req, env, path)
+  (req, env, ctx, path) => handleAuth(req, env, path),
+  (req, env, ctx, path) => handleAssets(req, env, path),
+  (req, env, ctx, path) => handleAdmin(req, env, path)
 ];
 
 export default {
