@@ -14,10 +14,10 @@ const [headerAsset, grid4Asset, ...stickerAssets] = await Promise.all([
   tb.assets.get('line.grid4'),
   ...STICKER_IDS.map(id => tb.assets.get(`sticker.${id}`)),
 ]);
-const fontAsset = await tb.assets.get('font.title');
+const fontAsset = await tb.assets.get('font.line');
 const COMPANY = Boolean(headerAsset?.url || grid4Asset?.url);
 
-// 標題字型：公司版 WHZ-Heavy（FontFace 載入）；通用版 Noto Sans TC 900（Google Fonts）。
+// 標題字型：公司版台北黑體粗體（同舊工具，FontFace 載入）；通用版 Noto Sans TC 900（Google Fonts）。
 const TITLE_FONT = 'TbTitleFont';
 async function loadTitleFont() {
   try {

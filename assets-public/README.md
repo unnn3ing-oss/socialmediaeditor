@@ -13,7 +13,8 @@
 | `line.header` | `line-header` | 無（不加標題條） | LINE 推播 |
 | `line.grid4` | `line-grid4-ent` | 無（改畫通用四格 A） | LINE 推播 |
 | `logo.news`、`logo.old` | `tvbs-news-logo`、`tvbs-old-logo` | 使用者上傳 | 浮水印 |
-| `font.title` | `font-whz-heavy`（woff2） | 無（用 Noto Sans TC 粗體） | 圖片套版、LINE 推播、設計 |
+| `font.title` | `font-whz-heavy`（woff2） | 無（用 Noto Sans TC 粗體） | 圖片套版、設計 |
+| `font.line` | `font-taipei-sans-bold`（woff2，台北黑體粗體，同舊 LINE 工具） | 無（用 Noto Sans TC 粗體） | LINE 推播 |
 
 ## 貼圖來源與授權
 `stickers/*.png` 由 Google **Noto Color Emoji** 字型輸出，加白色描邊與陰影（400×400 透明底）。

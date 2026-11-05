@@ -142,6 +142,7 @@ test('有密碼：要求黃色標題條與娛樂四格素材，公司版面出�
   assert.ok(t.requested.includes('line-header') || t.requested.includes('line-grid4-ent'), `requested=${t.requested}`);
   assert.ok(t.requested.includes('line-header'));
   assert.ok(t.requested.includes('line-grid4-ent'));
+  assert.ok(t.requested.includes('font-taipei-sans-bold'), `requested=${t.requested}`);
   assert.ok(t.requested.some((k) => k.startsWith('tbao-')), '貼圖走公司素材');
   const tabs = await t.frame.$$eval('.mode-tab', (els) => els.map((e) => e.textContent));
   assert.deepEqual(tabs, ['新聞', '娛樂', '四格 A']);
