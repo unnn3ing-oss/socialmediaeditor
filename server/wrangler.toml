@@ -1,0 +1,27 @@
+# 小編工具箱後端。部署步驟見 docs/deploy.md
+name = "toolbox-api"
+main = "index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://unnn3ing-oss.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "toolbox"
+database_id = "填入你的 ID"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "toolbox-files"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "填入你的 ID"
+
+# 每天台灣時間 03:17 清理日誌（UTC 19:17）
+[triggers]
+crons = ["17 19 * * *"]
+
+# Secrets 不寫在這裡，用 wrangler secret put 設定：
+#   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET
