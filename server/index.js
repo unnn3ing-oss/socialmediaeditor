@@ -3,7 +3,11 @@ import { toolRoutes } from './routes.gen.js';
 import { json, fail, preflight } from './core/http.js';
 import { handleAuth } from './core/auth.js';
 import { handleAssets } from './core/assets.js';
-import { handleAdmin } from './core/admin.js';
+import { handleAdmin, adminExtras } from './core/admin.js';
+import { handleLogs, adminLogs, cleanup } from './core/logs.js';
+import { handleFetch } from './core/fetch.js';
+
+adminExtras.push(adminLogs);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -11,6 +15,8 @@ const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 const modules = [
   (req, env, ctx, path) => handleAuth(req, env, path),
   (req, env, ctx, path) => handleAssets(req, env, path),
+  (req, env, ctx, path) => handleLogs(req, env, path),
+  (req, env, ctx, path) => handleFetch(req, env, path),
   (req, env, ctx, path) => handleAdmin(req, env, path)
 ];
 
@@ -37,5 +43,7 @@ export default {
     }
   },
 
-  async scheduled(event, env, ctx) {}
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(cleanup(env, Date.now()));
+  }
 };
