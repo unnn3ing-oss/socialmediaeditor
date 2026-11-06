@@ -135,6 +135,17 @@ test('貼文列表：用對應粉專的 token，整理欄位與下一頁游標',
   assert.equal(new URL(c.url).searchParams.get('limit'), '5');
 });
 
+test('貼文列表：很長、含 % 與 . 的游標也能翻下一頁', async () => {
+  const env = fbEnv();
+  routes.push([/\/222\/published_posts$/, () => reply({ data: [], paging: {} })]);
+  const cur = 'QVFI' + 'x'.repeat(1200) + '.%3D';
+  const { res } = await getJ(env, '/fb/posts?page=222&after=' + encodeURIComponent(cur));
+  assert.equal(res.status, 200);
+  const c = calls.find((x) => x.path.endsWith('/published_posts'));
+  assert.equal(new URL(c.url).searchParams.get('after'), cur);
+  assert.equal((await getJ(env, '/fb/posts?page=222&after=' + 'x'.repeat(2001))).res.status, 400);
+});
+
 test('不在設定裡的粉專回 404；參數格式錯回 400', async () => {
   const env = fbEnv();
   assert.equal((await getJ(env, '/fb/posts?page=999')).body.code, 'fb_unknown_page');

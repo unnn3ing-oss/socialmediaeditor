@@ -75,7 +75,7 @@ p.sub { margin: 0; color: var(--muted); font-size: 13px; }
     display: flex; align-items: center; gap: 8px;
     padding: 4px 6px; border: none; border-radius: 99px;
     background: transparent; color: var(--muted);
-    font-size: 15px; font-weight: 700;
+    font-size: 15px; font-weight: 500;
   }
 .step-btn i {
     width: 24px; height: 24px; border-radius: 50%;
@@ -135,7 +135,7 @@ p.sub { margin: 0; color: var(--muted); font-size: 13px; }
     padding: 18px;
     box-shadow: var(--shadow);
   }
-label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+label { display: block; font-size: 15px; font-weight: 500; margin-bottom: 6px; }
 input[type="text"],
 input[type="password"],
 textarea {
@@ -177,17 +177,17 @@ button.primary {
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
-    font-weight: 600;
+    font-weight: 500;
   }
 button.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .canvas-wrap { display: flex; justify-content: center; width: 100%; }
-.mode-tab { white-space: nowrap; background: transparent; border: none; border-radius: 99px; padding: 6px 18px; color: var(--muted); font-size: 15px; font-weight: 700; }
+.mode-tab { white-space: nowrap; background: transparent; border: none; border-radius: 99px; padding: 6px 18px; color: var(--muted); font-size: 15px; font-weight: 500; }
 .mode-tab:hover { color: var(--text); }
 .mode-tab.active,
 .mode-tab.active:hover { color: var(--accent); }
 .seg { display: flex; gap: 4px; background: var(--track); border: none; border-radius: 999px; padding: 4px; }
-.seg button { flex: 1; border: none; background: transparent; border-radius: 999px; padding: 6px 8px; font-size: 14px; color: var(--muted); font-weight: 700; }
+.seg button { flex: 1; border: none; background: transparent; border-radius: 999px; padding: 6px 8px; font-size: 14px; color: var(--muted); font-weight: 500; }
 .seg button.active { background: var(--knob); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 43, 102, .15); }
 .seg-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .seg-row .swatch-label { width: 78px; flex-shrink: 0; }
@@ -205,7 +205,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .dock-stickers { display: flex; align-items: center; gap: 12px; }
 .dock-stickers[hidden],
 .dock-sep[hidden] { display: none; }
-.dock-label { font-size: 13px; font-weight: 800; color: var(--text); white-space: nowrap; }
+.dock-label { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; }
 .dock-sep { width: 1px; height: 32px; background: var(--border); }
 .dock .sticker-palette { margin: 0; gap: 8px; flex-wrap: nowrap; }
 .dock .sticker-btn { width: 46px; height: 46px; padding: 3px; border-radius: 10px; background: #fff; border-color: var(--border); }
@@ -218,7 +218,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #downloadRow button {
     position: relative; white-space: nowrap;
     background: #fff; border-color: var(--border); color: var(--text);
-    padding: 9px 18px; font-weight: 700; border-radius: 99px;
+    padding: 9px 18px; font-weight: 500; border-radius: 99px;
   }
 #downloadRow button:hover { border-color: var(--accent); color: var(--accent); }
 #downloadRow button.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: var(--shadow-btn); }
@@ -228,7 +228,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #downloadRow button.light { background: #fff; border-color: var(--border); color: var(--text); }
 #downloadRow button.light:hover { background: var(--step-soft); border-color: var(--accent); }
 #downloadRow button[hidden] { display: none; }
-#downloadRow #backStepBtn { background: transparent; border-color: transparent; color: var(--muted); font-weight: 700; padding-left: 8px; padding-right: 8px; box-shadow: none; }
+#downloadRow #backStepBtn { background: transparent; border-color: transparent; color: var(--muted); font-weight: 500; padding-left: 8px; padding-right: 8px; box-shadow: none; }
 #downloadRow #backStepBtn:hover { background: transparent; border-color: transparent; color: var(--accent); text-decoration: underline; }
 .dock.checking #downloadRow #downloadJpgBtn { background: transparent; border-color: var(--border); color: var(--text); }
 .dock.checking #downloadRow #downloadJpgBtn:hover { background: var(--step-soft); border-color: var(--accent); }
@@ -243,10 +243,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     content: attr(data-tip);
     position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
     background: #b91c1c; color: #fff;
-    font-size: 12px; font-weight: 600; white-space: nowrap;
+    font-size: 12px; font-weight: 500; white-space: nowrap;
     padding: 4px 10px; border-radius: 6px; z-index: 20; pointer-events: none;
   }
-.dock-switch { display: inline-flex; margin: 0; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.dock-switch { display: inline-flex; margin: 0; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
 .dock-switch[hidden] { display: none; }
 .dock-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
 .sw-track { position: relative; flex: none; width: 42px; height: 24px; border-radius: 99px; background: #9aa5b8; transition: background .2s ease; }
@@ -259,7 +259,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #uiTip { z-index: 400; }
 .gap-tip[hidden] { display: none; }
 .gap-tip b { display: block; font-size: 14px; margin-bottom: 2px; }
-.dock-chip { box-sizing: border-box; font-size: 14px; font-weight: 700; padding: 9px 18px; border: 1px solid transparent; border-radius: 99px; white-space: nowrap; }
+.dock-chip { box-sizing: border-box; font-size: 14px; font-weight: 500; padding: 9px 18px; border: 1px solid transparent; border-radius: 99px; white-space: nowrap; }
 .dock-chip[hidden] { display: none !important; }
 .dock-chip.bad { background: #fee2e2; color: #b91c1c; }
 .dock-chip .warn-dot { width: 18px; height: 18px; font-size: 12px; }
@@ -290,11 +290,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .dl-confirm[hidden] { display: none; }
 .dl-confirm-text { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
 .dl-confirm-actions { display: flex; gap: 8px; }
-#downloadRow .dl-confirm-actions button { flex: 1 1 0; height: auto; padding: 9px 6px; font-size: 14px; font-weight: 700; border-radius: 99px; background: var(--track); border-color: var(--track); color: var(--text); }
+#downloadRow .dl-confirm-actions button { flex: 1 1 0; height: auto; padding: 9px 6px; font-size: 14px; font-weight: 500; border-radius: 99px; background: var(--track); border-color: var(--track); color: var(--text); }
 #downloadRow .dl-confirm-actions button:hover { background: var(--border); border-color: var(--border); }
 #downloadRow .dl-confirm-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 #downloadRow .dl-confirm-actions button.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
-.modal .btn-row button { border: none; border-radius: 99px; padding: 9px 22px; font-weight: 700; background: var(--track); color: var(--text); }
+.modal .btn-row button { border: none; border-radius: 99px; padding: 9px 22px; font-weight: 500; background: var(--track); color: var(--text); }
 .modal .btn-row button:hover { background: var(--border); }
 .modal .btn-row button.primary { background: var(--accent); color: #fff; }
 .modal .btn-row button.primary:hover { background: var(--accent-dark); }
@@ -331,7 +331,7 @@ canvas {
 .status-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .status-toast[hidden] { display: none; }
 .page-tabs { margin: 0; }
-.page-tab { background: transparent; border: none; border-radius: 99px; padding: 6px 20px; color: var(--muted); font-weight: 600; font-size: 15px; }
+.page-tab { background: transparent; border: none; border-radius: 99px; padding: 6px 20px; color: var(--muted); font-weight: 500; font-size: 15px; }
 .page-tab:hover { color: var(--text); }
 .page-tab.active,
 .page-tab.active:hover { color: var(--accent); }
@@ -351,11 +351,11 @@ canvas {
 .panel-x { position: absolute; top: 8px; right: 8px; border: none; background: transparent; color: var(--muted); padding: 2px 8px; font-size: 16px; line-height: 1; }
 .panel-x:hover { background: var(--bg); color: var(--text); }
 #quickfillBox { position: relative; }
-#quickfillBtn { width: 100%; font-weight: 700; padding: 10px; }
+#quickfillBtn { width: 100%; font-weight: 500; padding: 10px; }
 .tb-tools { gap: 10px; }
 .tb-tools[hidden],
 .tb-tools button[hidden] { display: none; }
-.tb-tools button { white-space: nowrap; background: var(--knob); border: none; border-radius: 99px; padding: 6px 16px; color: var(--accent); font-weight: 700; font-size: 15px; box-shadow: 0 1px 3px rgba(0, 43, 102, .15); }
+.tb-tools button { white-space: nowrap; background: var(--knob); border: none; border-radius: 99px; padding: 6px 16px; color: var(--accent); font-weight: 500; font-size: 15px; box-shadow: 0 1px 3px rgba(0, 43, 102, .15); }
 .tb-tools button:hover { background: var(--card-bg); filter: brightness(.97); }
 .check-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 15px; font-weight: 700; }
 .check-head small { font-size: 12px; font-weight: 700; }
@@ -368,16 +368,16 @@ canvas {
 .check-row .n { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
 .check-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .check-row .t.empty { color: var(--muted); }
-.chip { flex: none; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.chip { flex: none; font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
 .check-row .chip-slot { flex: none; box-sizing: border-box; width: 34px; display: flex; align-items: center; justify-content: center; }
-.dot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 800; line-height: 1; font-style: normal; cursor: default; }
+.dot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; line-height: 1; font-style: normal; cursor: default; }
 .dot.ok { background: #dcfce7; color: #15803d; }
 .dot.warn { background: #facc15; color: #1f2328; }
 .dot.bad { background: #dc2626; color: #fff; }
 .chip.ok { background: #dcfce7; color: #15803d; }
 .chip.bad { background: #fee2e2; color: #b91c1c; }
 .chip.warn { background: #fef3c7; color: #92400e; }
-.warn-dot { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #facc15; color: #1f2328; font-size: 13px; font-weight: 800; line-height: 1; font-style: normal; cursor: help; }
+.warn-dot { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #facc15; color: #1f2328; font-size: 13px; font-weight: 700; line-height: 1; font-style: normal; cursor: help; }
 .check-note { margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.6; }
 .check-other { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; }
 .check-other button { padding: 3px 10px; font-size: 12px; margin-left: 6px; }
@@ -392,7 +392,7 @@ canvas {
   }
 .lock-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .lock-toast[hidden] { display: none; }
-.lock-toast button { background: #2f7bff; border: none; color: #fff; border-radius: 99px; padding: 6px 14px; font-weight: 700; font-size: 14px; }
+.lock-toast button { background: #2f7bff; border: none; color: #fff; border-radius: 99px; padding: 6px 14px; font-weight: 500; font-size: 14px; }
 .top-label-box {
     border: 1px solid var(--border);
     border-radius: 10px;

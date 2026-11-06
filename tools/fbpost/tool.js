@@ -160,6 +160,19 @@ function setBusy(list, on) {
   if (on) list.append(skelRow(), skelRow(), skelRow());
   if (on) list.setAttribute('aria-busy', 'true'); else list.removeAttribute('aria-busy');
 }
+// 排序：時間最近（先發的在上）／時間最遠；只重排現有的列，不重新讀臉書。選擇記在這台瀏覽器
+const SORT_KEY = 'fbpost.schedSort';
+try { const v = localStorage.getItem(SORT_KEY); if (v === 'near' || v === 'far') $('schedSort').value = v; } catch { /* 無痕或封鎖儲存：用預設 */ }
+function applySort() {
+  const list = $('schedList'), far = $('schedSort').value === 'far';
+  const rows = [...list.querySelectorAll(':scope > li.item')];
+  rows.sort((a, b) => (Number(a.dataset.at) - Number(b.dataset.at)) * (far ? -1 : 1));
+  list.append(...rows);
+}
+$('schedSort').addEventListener('change', () => {
+  try { localStorage.setItem(SORT_KEY, $('schedSort').value); } catch { /* 略過 */ }
+  applySort();
+});
 async function loadSched() {
   const list = $('schedList'), hint = $('schedHint');
   const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
@@ -185,8 +198,8 @@ async function loadSched() {
     });
     const move = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '改時間', dataset: { act: 'resched' } });
     move.addEventListener('click', () => openResched(it));
-    const li = el('li', { className: 'item', dataset: { post: it.id } },
-      it.picture ? el('img', { className: 'thumb', src: it.picture, alt: '', loading: 'lazy' }) : el('div', { className: 'thumb ph' }),
+    const li = el('li', { className: 'item', dataset: { post: it.id, at: String(it.at || 0) } },
+      it.picture ? el('img', { className: 'thumb', src: it.picture, alt: '', loading: 'lazy' }) : el('div', { className: 'thumb ph txt', textContent: '文字' }),
       el('div', { className: 'body' },
         el('div', { className: 'meta' }, el('b', { textContent: it.at ? fmtTime(it.at) : '—' }), el('span', { className: 'muted', textContent: pageName(it.page) })),
         el('p', { className: 'msg', textContent: it.message || '（沒有文字）' }),
@@ -194,6 +207,7 @@ async function loadSched() {
       el('div', { className: 'act' }, move, cancel));
     return li;
   }));
+  applySort();
 }
 $('schedPage').addEventListener('change', loadSched);
 $('schedReload').addEventListener('click', () => { loadSched(); pollFailed(); });
@@ -288,25 +302,37 @@ setInterval(() => { if (document.visibilityState === 'visible') pollFailed(); },
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollFailed(); });
 
 // ---------- 成效 ----------
-let statsLoaded = false, statsNext = null;
+let statsLoaded = false, statsNext = null, statsBusy = false;
 const METRIC_NAMES = { post_media_view: '瀏覽', post_total_media_view_unique: '觸及人數', post_clicks: '點擊' };
 async function loadStats(reset) {
   const page = $('statsPage').value;
-  const list = $('statsList'), hint = $('statsHint');
-  if (reset) { list.replaceChildren(); statsNext = null; }
+  const list = $('statsList'), hint = $('statsHint'), more = $('statsMore'), moreHint = $('statsMoreHint');
+  if (statsBusy && !reset) return;
+  if (reset) { list.replaceChildren(); statsNext = null; more.hidden = true; }
+  moreHint.textContent = '';
   if (!page) { hint.textContent = '沒有粉專'; return; }
   statsLoaded = true;
-  hint.textContent = '讀取中…';
+  statsBusy = true;
+  if (reset) hint.textContent = '讀取中…';
+  else { more.disabled = true; more.textContent = '載入中…'; }
   setBusy(list, true);
   try {
     const r = await tb.api.call(`/fb/posts?page=${page}&limit=10` + (statsNext ? '&after=' + encodeURIComponent(statsNext) : ''));
     setBusy(list, false);
     statsNext = r.next;
-    $('statsMore').hidden = !statsNext;
+    more.hidden = !statsNext;
     hint.textContent = '';
     list.append(...r.items.map(statRow));
     if (!list.children.length) hint.textContent = '沒有貼文';
-  } catch (e) { setBusy(list, false); hint.textContent = '讀取失敗：' + errText(e); }
+  } catch (e) {
+    setBusy(list, false);
+    // 第一頁失敗寫在上方；「載入更多」失敗寫在按鈕旁，按鈕留著可以再按
+    if (reset || !list.children.length) hint.textContent = '讀取失敗：' + errText(e);
+    else moreHint.textContent = '讀取失敗：' + errText(e);
+  } finally {
+    statsBusy = false;
+    more.disabled = false; more.textContent = '載入更多';
+  }
 }
 function statRow(p) {
   const out = el('div', { className: 'ins', hidden: true });

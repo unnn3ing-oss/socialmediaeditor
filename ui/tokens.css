@@ -36,7 +36,7 @@ body { font-family: var(--font); font-size: 15px; line-height: 1.6; color: var(-
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 44px; min-width: 44px; padding: 0 20px;
-  font: 700 15px/1 var(--font); border-radius: 999px; border: 1px solid var(--line-strong);
+  font: 500 15px/1 var(--font); border-radius: 999px; border: 1px solid var(--line-strong);
   cursor: pointer; text-decoration: none;
   transition: transform .1s ease, background-color .1s ease, color .1s ease, border-color .1s ease;
 }
@@ -59,7 +59,7 @@ a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visib
 
 /* 開關：二選一，兩側文字 */
 .switch-wrap { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; color: var(--muted); }
-.switch-wrap .is-on { color: var(--accent); font-weight: 700; }
+.switch-wrap .is-on { color: var(--accent); font-weight: 500; }
 .switch {
   width: 48px; height: 28px; padding: 3px; border-radius: 999px; flex: none;
   background: var(--fill); border: 1px solid var(--line-strong);
@@ -78,7 +78,7 @@ a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visib
 .pill {
   display: inline-flex; align-items: center; gap: 8px; min-height: 29px; padding: 5px 12px;
   border: 1px solid var(--line); border-radius: 99px; background: var(--surface);
-  font: 700 13px/1.2 var(--font); font-variant-numeric: tabular-nums; color: var(--text);
+  font: 500 13px/1.2 var(--font); font-variant-numeric: tabular-nums; color: var(--text);
 }
 button.pill { cursor: pointer; position: relative; }
 button.pill::after { content: ''; position: absolute; inset: -8px 0; }
@@ -105,7 +105,7 @@ button.pill::after { content: ''; position: absolute; inset: -8px 0; }
   width: min(440px, calc(100vw - 32px)); background: var(--surface); color: var(--text);
 }
 .dialog::backdrop { background: rgba(15, 30, 60, .45); }
-.dialog h2 { margin: 0 0 16px; font-size: 18px; font-weight: 800; }
+.dialog h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; }
 .dialog .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 
 /* 卡片 */

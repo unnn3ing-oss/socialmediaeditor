@@ -5,8 +5,8 @@
 body { margin: 0; background: var(--stage); color: var(--text); font-family: var(--font); }
 .fp { max-width: 960px; margin: 0 auto; padding: 24px 16px 40px; display: flex; flex-direction: column; gap: 14px; }
 .fp-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.fp-head h1 { margin: 0; font-size: 20px; font-weight: 800; }
-.fp-head #newPost { min-height: 46px; padding: 0 24px; font-weight: 800; box-shadow: var(--shadow-btn); }
+.fp-head h1 { margin: 0; font-size: 20px; font-weight: 700; }
+.fp-head #newPost { min-height: 46px; padding: 0 24px; font-weight: 500; box-shadow: var(--shadow-btn); }
 .fp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 20px; box-shadow: var(--shadow); }
 .grow { flex: 1; }
 .hint { margin: 0; font-size: 13px; color: var(--muted); }
@@ -17,7 +17,7 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 
 /* 分段按鈕：淡藍膠囊，選中白底藍字 */
 .seg { display: inline-flex; border: 0; border-radius: 999px; padding: 4px; background: var(--accent-tint); max-width: 100%; align-self: flex-start; flex-wrap: wrap; }
-.seg button { border: 0; background: transparent; padding: 0 16px; min-height: 34px; font: 700 13px var(--font); color: var(--muted); border-radius: 999px; white-space: nowrap; cursor: pointer; }
+.seg button { border: 0; background: transparent; padding: 0 16px; min-height: 34px; font: 500 13px var(--font); color: var(--muted); border-radius: 999px; white-space: nowrap; cursor: pointer; }
 .seg button.is-on { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 43, 102, .15); }
 .seg.sm button { min-height: 30px; padding: 0 12px; }
 #tabs { margin-bottom: 12px; }
@@ -34,6 +34,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .item, .sk-row { display: flex; gap: 14px; align-items: flex-start; padding: 12px 4px; border-top: 1px solid var(--line); }
 .list > :first-child { border-top: 0; }
+.thumb.txt { display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); }
 .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; background: var(--fill); flex: none; }
 .item .body, .sk-row .body { flex: 1; min-width: 0; }
 .item .meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 14px; }
@@ -41,7 +42,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .item .act, .sk-row .act { display: flex; flex-direction: column; gap: 6px; }
 .item .act a { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .ins { margin-top: 6px; font-size: 13px; color: var(--accent-strong); background: var(--accent-soft); border-radius: 12px; padding: 6px 12px; }
-.more { display: flex; justify-content: center; margin-top: 10px; }
+.more { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; }
 
 /* 讀取中骨架列（尺寸同真的一列，資料進來不跳版） */
 @keyframes sk-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
@@ -57,7 +58,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .item .meta, .ins, .hint, #capCount, #failCount, .dot-badge, .tp-time, .tp-date, .fp-modal .pg { font-variant-numeric: tabular-nums; }
 
 /* 已排程：紅點、留言狀態、留言失敗清單 */
-.dot-badge { display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: #fde2e2; color: #9b1c1c; font: 700 12px/20px var(--font); text-align: center; vertical-align: middle; }
+.dot-badge { display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: #fde2e2; color: #9b1c1c; font: 500 12px/20px var(--font); text-align: center; vertical-align: middle; }
 .seg button.is-on .dot-badge { background: #fde2e2; color: #9b1c1c; }
 .cm { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 .cm.ok { color: var(--ok-text); }
@@ -83,7 +84,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal .grow { display: none; }
 
 /* 按鈕（verify.css .btn） */
-.fp-modal .btn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--track); border-radius: 999px; padding: 10px 20px; font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-decoration: none; min-height: 0; box-shadow: none; transition: transform .08s ease, filter .08s ease; }
+.fp-modal .btn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--track); border-radius: 999px; padding: 10px 20px; font: inherit; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; text-decoration: none; min-height: 0; box-shadow: none; transition: transform .08s ease, filter .08s ease; }
 .fp-modal .btn:hover { background: var(--surface); color: var(--accent); box-shadow: 0 0 0 1px var(--border); }
 .fp-modal .btn.primary, .fp-modal .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 20px -10px rgba(0,74,173,.7); }
 .fp-modal .btn.primary:hover, .fp-modal .btn-primary:hover { background: var(--accent-dark); color: #fff; }
@@ -101,7 +102,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 
 /* 膠囊切換（.mode-switch／.tpl） */
 .fp-modal .seg { display: inline-flex; background: var(--track); border-radius: 999px; padding: 4px; border: 0; overflow: visible; max-width: 100%; overflow-x: auto; }
-.fp-modal .seg button { flex: 1; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.fp-modal .seg button { flex: 1; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .fp-modal .seg button + button { border-left: 0; }
 .fp-modal .seg button.is-on { color: var(--accent); background: var(--field-bg); box-shadow: 0 4px 14px -6px rgba(0,74,173,.5); }
 .fp-modal #modeSeg { flex: 1; max-width: 236px; }
@@ -113,7 +114,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal .url-block { grid-area: url; min-width: 0; }
 .fp-modal .m-left { grid-area: left; min-width: 0; }
 .fp-modal .m-right { grid-area: right; min-width: 0; display: flex; flex-direction: column; }
-.fp-modal .url-block label, .fp-modal .m-right label, .fp-modal .m-left label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.fp-modal .url-block label, .fp-modal .m-right label, .fp-modal .m-left label { display: block; margin: 14px 0 6px; font-size: 13px; font-weight: 500; color: var(--muted); }
 .fp-modal .url-block label, .fp-modal #titleBlock > label { margin-top: 0; }
 .fp-modal .m-right small { font-weight: 400; }
 .fp-modal .urlrow { display: flex; gap: 8px; }
@@ -123,7 +124,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal textarea { font-family: inherit; resize: vertical; }
 .fp-modal #url { padding: 7px 10px; font-size: 14px; }
 .fp-modal .hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
-.fp-modal .hint.bad { color: var(--danger); font-weight: 700; }
+.fp-modal .hint.bad { color: var(--danger); font-weight: 500; }
 .fp-modal .hint.ok { color: var(--ok); }
 .fp-modal .hint.warn { color: #6b4a00; }
 .fp-modal .hint.pre { white-space: pre-wrap; word-break: break-all; }
@@ -136,7 +137,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal #title { flex: 1; min-width: 0; line-height: var(--tlh); resize: none; overflow-x: auto; overflow-y: hidden; white-space: pre; padding: 7px 10px; font-size: 14px; }
 .fp-modal .t-cnts { flex: 0 0 52px; padding-top: 8px; font-size: 12px; line-height: var(--tlh); color: var(--muted); font-variant-numeric: tabular-nums; display: block; }
 .fp-modal .t-cnts span { display: block; height: var(--tlh); line-height: var(--tlh); white-space: nowrap; }
-.fp-modal .t-cnts .bad { color: var(--danger); font-weight: 700; }
+.fp-modal .t-cnts .bad { color: var(--danger); font-weight: 500; }
 @media (hover: none) { .fp-modal #url, .fp-modal #title { font-size: 16px; } }
 
 /* 預覽 */
@@ -174,7 +175,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 
 /* 粉專按鈕 */
 .fp-modal .pg { display: inline-flex; align-items: stretch; border: 1.5px solid var(--accent); border-radius: 999px; overflow: hidden; background: var(--surface); }
-.fp-modal .pg button { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; min-height: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.fp-modal .pg button { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 500; padding: 8px 14px; min-height: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .fp-modal .pg .box { width: 14px; height: 14px; border: 1.5px solid var(--accent); border-radius: 4px; display: inline-block; line-height: 11px; font-size: 11px; text-align: center; }
 .fp-modal .pg.on { background: var(--accent); }
 .fp-modal .pg.on button { color: #fff; }
@@ -187,7 +188,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal .pg.done .pg-mode, .fp-modal .pg.fail .pg-mode { border-left-color: rgba(0,0,0,.15); }
 .fp-modal .pg.busy { opacity: .7; }
 .fp-modal .pg button:disabled { cursor: default; }
-.fp-modal .pg .retry { font-size: 12px; font-weight: 800; background: #fff; color: #9b1c1c; border-radius: 999px; margin: 4px 4px 4px 0; padding: 2px 10px; }
+.fp-modal .pg .retry { font-size: 12px; font-weight: 500; background: #fff; color: #9b1c1c; border-radius: 999px; margin: 4px 4px 4px 0; padding: 2px 10px; }
 
 /* 立即／排程選單、時間視窗 */
 .fp-modal .menu, .fp-modal .timepop { position: absolute; z-index: 70; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 18px 40px -12px rgba(0,0,0,.4); padding: 6px; }

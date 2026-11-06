@@ -12,20 +12,20 @@ export const ADMIN_HTML = `<!doctype html>
 *{box-sizing:border-box}
 body{margin:0;background:radial-gradient(900px 500px at 8% -10%,#dce8ff,transparent 60%),radial-gradient(800px 500px at 100% 0,#e4eeff,transparent 60%),var(--bg);background-attachment:fixed;color:var(--ink);font:16px/1.6 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
 .top{display:flex;align-items:center;gap:10px;background:#fff;border-bottom:1px solid var(--edge);padding:12px 28px}
-.top .logo{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#2f7bff,#004aad);color:#fff;font-weight:900;font-size:16px;line-height:1}
-.top .word{font-size:18px;font-weight:800}
-.top .word b{color:var(--brand);font-weight:800}
+.top .logo{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#2f7bff,#004aad);color:#fff;font-weight:800;font-size:16px;line-height:1}
+.top .word{font-size:18px;font-weight:700}
+.top .word b{color:var(--brand);font-weight:700}
 .top .sub{font-size:14px;font-weight:700;color:var(--mute);margin-left:4px}
 main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
-h1{font-size:22px;font-weight:800;margin:0 0 4px}
-h2{font-size:18px;font-weight:800;margin:0 0 12px}
+h1{font-size:22px;font-weight:700;margin:0 0 4px}
+h2{font-size:18px;font-weight:700;margin:0 0 12px}
 p{margin:0 0 12px;color:var(--sub)}
 code{background:var(--soft);color:var(--brand);padding:1px 7px;border-radius:7px;font-size:.9em}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 24px 60px -30px rgba(0,43,102,.35)}
-label{display:block;font-weight:700;margin:12px 0 4px}
+label{display:block;font-weight:500;margin:12px 0 4px}
 input[type=text],input[type=password],input[type=number],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit}
 input[type=file]{width:100%;min-height:44px;padding:8px 0;font:inherit}
-button{min-height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-weight:700;cursor:pointer}
+button{min-height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-weight:500;cursor:pointer}
 button:hover:not(:disabled){border-color:var(--brand);color:var(--brand)}
 button.primary{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 10px 24px -10px rgba(0,74,173,.7)}
 button.primary:hover:not(:disabled){background:var(--brand-strong);color:#fff}
@@ -41,9 +41,9 @@ td.err{color:var(--danger);font-weight:600}
 .msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e6ecf6;vertical-align:middle}
-th{font-size:14px;color:var(--mute);font-weight:700}
+th{font-size:14px;color:var(--mute);font-weight:500}
 td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
-.tag{display:inline-block;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:700;line-height:24px;color:var(--mute)}
+.tag{display:inline-block;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:500;line-height:24px;color:var(--mute)}
 .tag.company{border-color:transparent;background:var(--soft);color:var(--brand)}
 .scroll{overflow-x:auto}
 .sk{height:20px;border-radius:6px;background:linear-gradient(90deg,#e6ecf6 25%,#f1f5fb 50%,#e6ecf6 75%);background-size:200% 100%;animation:sk 1.2s linear infinite;margin:10px 0}

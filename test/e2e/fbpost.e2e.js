@@ -33,13 +33,14 @@ const URL1 = 'https://news.tvbs.com.tw/life/3012345';
 const URL_ENT = 'https://news.tvbs.com.tw/entertainment/3012346';
 
 // api.failPage：送到這個粉專就失敗一次；api.posts：收到的發文（multipart 欄位）
+const LONG_CURSOR = 'QVFI' + 'x'.repeat(700) + '.%3D';
 async function open({ company = false, viewport = { width: 1280, height: 900 } } = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const now = Math.floor(Date.now() / 1000);
   const api = {
-    failPage: null, posts: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0,
+    failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0,
     scheduled: {
       111: [
         { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' } },
@@ -66,7 +67,13 @@ async function open({ company = false, viewport = { width: 1280, height: 900 } }
     if (u.pathname === '/fb/pages') return okJ(PAGES);
     if (api.hold && /^\/fb\/(scheduled|insights)$/.test(u.pathname)) await api.hold;   // 測骨架屏：先卡住回應
     if (u.pathname === '/fb/scheduled') return okJ({ items: api.scheduled[u.searchParams.get('page')] || [] });
-    if (u.pathname === '/fb/posts') return okJ({ items: [{ id: '111_1', message: '舊貼文', created: new Date().toISOString(), url: 'https://facebook.com/1', picture: '', reactions: 5, comments: 2, shares: 1 }], next: null });
+    if (u.pathname === '/fb/posts') {
+      // 第一頁帶一個很長的游標（臉書真的會給這種），第二頁沒有下一頁
+      const after = u.searchParams.get('after');
+      if (!after) return okJ({ items: [{ id: '111_1', message: '舊貼文', created: new Date().toISOString(), url: 'https://facebook.com/1', picture: '', reactions: 5, comments: 2, shares: 1 }], next: LONG_CURSOR });
+      api.afters.push(after);
+      return okJ({ items: [{ id: '111_2', message: '更舊的貼文', created: new Date().toISOString(), url: 'https://facebook.com/2', picture: '', reactions: 1, comments: 0, shares: 0 }], next: null });
+    }
     if (u.pathname === '/fb/insights') return okJ({ post: '111_1', metrics: { post_media_view: 1234, post_clicks: 56 }, missing: [] });
     if (u.pathname === '/fb/cancel') {
       const b = JSON.parse(req.postData());
@@ -226,6 +233,34 @@ test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完
   release(); api.hold = null;
   await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent) && !document.querySelector('#statsList .ins[aria-busy]'));
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#statsList .meta')).fontVariantNumeric), 'tabular-nums');
+  assert.deepEqual(errors, []);
+});
+
+test('已排程：純文字顯示「文字」；排序可切換時間最近／最遠，記住選擇', async () => {
+  const { page, errors } = await open();
+  await page.waitForSelector('#schedList .item');
+  assert.equal(await page.textContent('#schedList .item .thumb.txt'), '文字');
+  const order = () => page.$$eval('#schedList .item', (ls) => ls.map((l) => l.dataset.post));
+  assert.deepEqual(await order(), ['111_7', '111_8']);
+  await page.selectOption('#schedSort', 'far');
+  assert.deepEqual(await order(), ['111_8', '111_7']);
+  assert.equal(await page.evaluate(() => localStorage.getItem('fbpost.schedSort')), 'far');
+  await page.click('#schedReload');
+  await page.waitForFunction(() => document.querySelectorAll('#schedList .item').length === 2);
+  assert.deepEqual(await order(), ['111_8', '111_7']);
+  assert.deepEqual(errors, []);
+});
+
+test('成效：載入更多（很長的游標）接上第二頁，載入中按鈕不能再按', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#tabs [data-tab=stats]');
+  await page.waitForSelector('#statsList .item');
+  await page.waitForSelector('#statsMore:not([hidden])');
+  await page.click('#statsMore');
+  await page.waitForFunction(() => document.querySelectorAll('#statsList .item').length === 2);
+  assert.deepEqual(api.afters, [LONG_CURSOR]);
+  assert.equal(await page.isHidden('#statsMore'), true);
+  assert.equal(await page.isDisabled('#statsMore'), false);
   assert.deepEqual(errors, []);
 });
 

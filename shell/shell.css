@@ -8,18 +8,18 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #brand {
   display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 8px; margin-left: -8px;
   background: none; border: 0; border-radius: 8px; color: var(--text); cursor: pointer;
-  font: 800 18px var(--font);
+  font: 700 18px var(--font);
 }
-#brand .logo { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #2f7bff, #004aad); color: #fff; font-weight: 900; font-size: 16px; line-height: 1; }
-#brand .word b { color: var(--accent); font-weight: 800; }
+#brand .logo { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #2f7bff, #004aad); color: #fff; font-weight: 800; font-size: 16px; line-height: 1; }
+#brand .word b { color: var(--accent); font-weight: 700; }
 #toolbar { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
 #toolbar button {
   display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px;
   background: var(--accent-tint); color: var(--muted); border: 0; border-radius: 999px;
-  font: 700 14px var(--font); cursor: pointer; white-space: nowrap; flex: none;
+  font: 500 14px var(--font); cursor: pointer; white-space: nowrap; flex: none;
 }
 #toolbar button:hover { background: var(--accent-soft); color: var(--accent); }
-#toolbar button[aria-pressed='true'] { background: var(--accent); color: #fff; font-weight: 700; }
+#toolbar button[aria-pressed='true'] { background: var(--accent); color: #fff; font-weight: 500; }
 #toolbar button:active { transform: scale(.97); }
 .ico { width: 16px; height: 16px; flex: none; background: currentColor; -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
 #status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -34,7 +34,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #showcase { height: 100%; overflow: auto; background: transparent; }
 .showcase-inner { width: 100%; max-width: 1120px; margin: 0 auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow); }
 #showcase { padding: 28px 24px 40px; }
-.showcase-inner h1 { margin: 0; font-size: 24px; font-weight: 800; }
+.showcase-inner h1 { margin: 0; font-size: 24px; font-weight: 700; }
 .group { display: flex; flex-direction: column; gap: 14px; }
 .group h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px; }
@@ -61,7 +61,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 
 /* 拖曳放置區 */
 #dropzones { position: absolute; inset: 0; z-index: 20; display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-.dz { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); background: rgba(255, 255, 255, .5); margin: 8px; border-radius: 12px; border: 2px dashed transparent; }
+.dz { display: flex; align-items: center; justify-content: center; font-weight: 500; color: var(--accent); background: rgba(255, 255, 255, .5); margin: 8px; border-radius: 12px; border: 2px dashed transparent; }
 .dz.is-over { background: var(--accent-soft); border-color: var(--accent); }
 .dz span { pointer-events: none; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 16px; }
 

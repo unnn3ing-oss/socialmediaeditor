@@ -33,6 +33,7 @@
     </div>
     <div class="bar">
       <label class="inline">粉專 <select id="schedPage"></select></label>
+      <label class="inline">排序 <select id="schedSort"><option value="near">時間最近</option><option value="far">時間最遠</option></select></label>
       <button type="button" class="btn btn-secondary btn-sm" id="schedReload">重新整理</button>
       <span class="hint" id="schedHint" role="status"></span>
     </div>
@@ -46,7 +47,7 @@
       <span class="hint" id="statsHint" role="status"></span>
     </div>
     <ul class="list" id="statsList"></ul>
-    <div class="more"><button type="button" class="btn btn-secondary btn-sm" id="statsMore" hidden>載入更多</button></div>
+    <div class="more"><button type="button" class="btn btn-secondary btn-sm" id="statsMore" hidden>載入更多</button><span class="hint bad" id="statsMoreHint" role="status"></span></div>
   </section>
   </div>
 </main>

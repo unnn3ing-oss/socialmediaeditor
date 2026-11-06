@@ -8,7 +8,7 @@
 body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(--text); font-family: var(--font, system-ui, sans-serif); }
 .dz button, .dz-modal button {
   font: inherit; cursor: pointer; color: var(--text); background: var(--field-bg);
-  border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-weight: 500;
 }
 .dz button:disabled, .dz-modal button:disabled { opacity: .45; cursor: not-allowed; }
 .dz button.primary, .dz-modal button.primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: var(--shadow-btn); }
@@ -46,7 +46,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-tool {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 7px 4px !important; border-radius: 14px !important; border: 1px solid var(--line); background: var(--surface);
-  font-size: 12px !important; font-weight: 700; color: var(--text); line-height: 1.2;
+  font-size: 12px !important; font-weight: 500; color: var(--text); line-height: 1.2;
 }
 .dz-tool:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .dz-tool svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -137,7 +137,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 }
 .dz-page-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .dz-status { min-height: 1.4em; margin-top: 8px; font-size: 14px; color: var(--text); text-align: center; }
-.dz-status.err { color: var(--bad-text); font-weight: 600; }
+.dz-status.err { color: var(--bad-text); font-weight: 500; }
 .dz-hint { margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--muted); text-align: center; }
 .dz-touch { display: none; }
 @media (hover: none) {
@@ -180,7 +180,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-icon-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .dz-icon-row button { flex: 1 1 30%; padding: 6px 4px; font-size: 12px; }
 .dz-checks { display: flex; gap: 16px; margin: 10px 0 2px; }
-.dz-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin: 0; cursor: pointer; }
+.dz-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; margin: 0; cursor: pointer; }
 .dz-check input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 .dz-note { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .dz-note:empty { display: none; }
@@ -230,7 +230,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 
 /* ---- 右側面板分頁（屬性｜圖層）---- */
 .dz-tabs { margin: 0 0 4px; }
-.dz-tabs button { font-weight: 700; }
+.dz-tabs button { font-weight: 500; }
 .dz-panel [role="tabpanel"][hidden] { display: none; }
 
 /* ---- 圖層面板：最上層排第一；群組標題可收合、成員縮排 ---- */
@@ -253,7 +253,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-layer svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .dz-layer-grip svg { width: 14px; height: 14px; stroke-width: 2.6; }
 .dz-layer-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dz-layer-badge { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; background: rgba(0, 74, 173, 0.1); color: var(--accent); font-size: 11px; font-weight: 600; }
+.dz-layer-badge { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; background: rgba(0, 74, 173, 0.1); color: var(--accent); font-size: 11px; font-weight: 500; }
 .dz .dz-layer button {
   flex: 0 0 28px; width: 28px; height: 28px; padding: 0; margin: 0; border: none; border-radius: 8px;
   background: transparent; box-shadow: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
@@ -269,7 +269,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 
 /* ---- 檢視列右側：專案檔與匯出 ---- */
 .dz-viewbar-end { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.dz-export-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px !important; padding: 8px 16px !important; font-weight: 700; }
+.dz-export-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px !important; padding: 8px 16px !important; font-weight: 500; }
 .dz-export-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---- 匯出彈窗 ---- */
@@ -289,13 +289,13 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-modal-x { border: none !important; background: transparent !important; box-shadow: none !important; font-size: 22px !important; line-height: 1; padding: 4px 10px !important; color: var(--muted); }
 .dz-modal-x:hover { color: var(--accent); }
 .dz-modal-body { padding: 4px 20px 8px; overflow-y: auto; }
-.dz-modal-body .dz-lbl { flex-basis: 64px; font-weight: 600; }
+.dz-modal-body .dz-lbl { flex-basis: 64px; font-weight: 500; }
 .dz-modal-body .dz-toggle { margin: 0; }
 .dz-modal-body .dz-note { margin: 0 0 8px 72px; }
 .dz-modal-body input[type="text"] { width: 100%; min-width: 0; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--field-bg); font-size: 14px; }
 .dz-modal-body input[type="range"] { flex: 1 1 auto; accent-color: var(--accent); }
 .dz-modal-body .dz-row[hidden] { display: none; }
-.dz-exp-summary { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-dark); font-size: 13px; font-weight: 600; }
+.dz-exp-summary { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-dark); font-size: 13px; font-weight: 500; }
 .dz-exp-summary:empty { display: none; }
 .dz-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--border); }
 .dz-modal-foot .primary { min-width: 96px; }

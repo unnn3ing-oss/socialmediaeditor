@@ -289,10 +289,11 @@ async function listPosts(request, env, q) {
   const page = q.get('page');
   if (!isId(page)) return fail(request, env, 'bad_request', '缺少粉專 ID（page）。');
   const after = q.get('after') || '';
-  if (after && !/^[A-Za-z0-9_=-]{1,500}$/.test(after)) return fail(request, env, 'bad_request');
+  // 臉書的翻頁游標可能很長、含 % 或 .（舊版只收 500 字內英數，第二頁會被擋）
+  if (after && !/^[A-Za-z0-9_=%.-]{1,2000}$/.test(after)) return fail(request, env, 'bad_request');
   const n = Number(q.get('limit'));
   const limit = Number.isInteger(n) && n >= 1 && n <= 50 ? n : 20;
-  const key = `fb:posts:${page}:${limit}:${after}`;
+  const key = `fb:posts:${page}:${limit}:${after ? await sha16(after) : ''}`; // KV 鍵上限 512 bytes
   const hit = await cacheGet(env, key);
   if (hit) return ok(request, env, hit);
   const token = await tokenFor(env, page);
