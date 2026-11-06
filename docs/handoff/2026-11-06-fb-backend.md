@@ -56,6 +56,18 @@
 
 > B 版實作備註：快取鍵改為 `fb:pages:<FB_TOKEN 的 SHA-256 前 16 碼>`；`/me/accounts` 用 `after` 游標翻頁（不跟 `paging.next`，網址裡有 token）；`/me/accounts` 回空陣列是正常結果（管理頁顯示「沒有授權任何粉專」）；**這版不改 `server/wrangler.toml`**（使用者 Mac 上有填 ID 的未提交改動）。測試 24 項，全部 220 項通過。獨立審查（token 外洩、去重、快取鍵、管理頁 XSS）通過，無需修改。下一步：使用者 `git pull` → `secret put FB_TOKEN`（用戶 token）→ 部署 → 檢查臉書連線。
 
+## 版本 1：粉專 ID 備援（2026-11-06 使用者確認「開始」）
+背景（已知事實）：使用者的用戶 token 有效、權限齊全，但粉專屬企業管理平台、token 缺 `business_management`，`/me/accounts` 回空陣列 → 管理頁顯示「沒有授權任何粉專」。`debug_token` 的 `granular_scopes` 列得出 6 個粉專 ID。規格與版本 2 決定見 `docs/superpowers/specs/2026-11-06-fb-page-token.md`。
+| 項目 | 做法 | 狀態 |
+|---|---|---|
+| 共用換 token 函式 `derivePages(env, userToken)` | `/me/accounts` ＋ `debug_token` 的 `granular_scopes` 粉專 ID（聯集）；後者逐一打 `/<id>?fields=…,access_token`；`scanTokens` 與 `tokenFor` 都用它 | ⬜ |
+| debug_token 身分 | 有 `FB_APP_ID`＋`FB_APP_SECRET` 用 App token，否則用 token 自己查 | ⬜ |
+| 權限標示 | 走 granular 路線時沒有 `tasks`；改用 `pages_manage_posts`／`read_insights` 的 `target_ids` 判斷能否發文／看成效 | ⬜ |
+| 讀不到授權範圍 | 管理頁顯示「讀不到授權範圍，請設定 FB_APP_ID／FB_APP_SECRET」，不只說「沒有授權任何粉專」 | ⬜ |
+| 安全 | 換出的 token 先 `rememberSecret` 再使用；KV／回應／日誌不含任何 token | ⬜ |
+| 測試、deploy.md | 假 `debug_token`（含 granular_scopes）、假 `/<id>`；發文用換出的 token | ⬜ |
+| 不動 | `wrangler.toml`、外掛、網站 | — |
+
 ## 下一步
 - [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞
 - [x] 寫 `test/server/fb.test.js`，全綠（15 項；全部 211 項通過）
