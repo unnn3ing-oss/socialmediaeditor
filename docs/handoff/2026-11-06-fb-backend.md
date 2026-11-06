@@ -14,6 +14,7 @@
 | 成效指標 | `post_media_view`、`post_total_media_view_unique`、`post_clicks`、`post_reactions_by_type_total`；整批失敗（code 100）就逐一重問，回 `missing` | `post_impressions*` 已在 2025-11／2026-06 停用 |
 | 排程範圍 | 10 分鐘後～30 天內（Unix 秒） | 保守取臉書限制 |
 | 稽核 | 發文成功／失敗寫進 `logs`（tool=`fb`，code 例如 `post-published`、`post-failed-190`），不記內文 | 規格「日誌不含內容」 |
+| 網新排程 | **放到最後再考慮**（2026-11-06 使用者指示）。若之後搬進來，**管理頁要保留「發文方式」模式切換**：Graph API 直發（本模組）／網新後台（舊流程，經外掛）| 兩條發文路線並存，由管理者切換 |
 | appsecret_proof | 有設 `FB_APP_SECRET` 就自動帶 | 臉書建議；沒設也能跑 |
 
 ## 路由
@@ -45,7 +46,7 @@
 - [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞
 - [x] 寫 `test/server/fb.test.js`，全綠（15 項；全部 211 項通過）
 - [x] 管理頁卡片、`wrangler.toml`、`deploy.md`（步驟 6-2）、規格 §6
-- [ ] 派獨立代理審查（CLAUDE.md 省 token 規則第 9 條），重點：token 外洩、白名單繞過
+- [x] 派獨立代理審查：token 外洩、白名單繞過、驗證都通過；修 1 項（`loadPages` 遇到限流或連不上時不寫快取，避免粉專消失 10 分鐘），測試 16 項
 - [ ] 給使用者看測試結果；說「推」才併入 main，同時更新 CLAUDE.md「目前進度」
 - [ ] 使用者部署後實測：管理頁看 token 狀態 → `/fb/pages` → 發一篇排程貼文再到粉專後台刪掉
 
@@ -58,6 +59,8 @@
 - 外掛和網頁沒動 → 不升版號、不改 `extension/changelog.json`。
 
 ## 延後的 P2（使用者尚未回覆 4 個決定）
+> **2026-11-06 使用者指示：網新排程最後再考慮。** 若搬進來，管理頁（`server/core/admin-page.js`）要加「發文方式」切換：`graph`（本 fb 模組直發）／`newsnet`（網新後台，經外掛）。設定值建議存 KV `fb:mode`，`GET /fb/mode` 讓工具讀取、`PUT /admin/fb/mode` 讓管理頁修改。這版**不做**，只記錄。
+
 P2a 網新排程、P2b YT 下載。先做共用掛點：build.js 支援 ext 資料夾、外掛推播通道 `tb.ext.on`、`tb.status.set`。待決定事項：
 1. 拆兩個對話（推薦）
 2. 圖床改用公司憑證（推薦）

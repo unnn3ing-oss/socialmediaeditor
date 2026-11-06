@@ -415,3 +415,4 @@ socialmediaeditor/
 | 1 | 網址 | `https://unnn3ing-oss.github.io/socialmediaeditor/` |
 | 2 | 外掛名稱 | 小編工具箱 |
 | 3 | 同事安裝方式 | ✅ 已定：比照網新快速排程（第 8.1 節） |
+| 4 | 網新排程何時搬入 | **最後再考慮**（2026-11-06）。搬入時管理頁保留「發文方式」切換：Graph API 直發／網新後台 |

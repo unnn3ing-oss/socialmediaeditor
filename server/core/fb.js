@@ -54,6 +54,7 @@ export async function loadPages(env, { fresh = false } = {}) {
     if (c && c.count === tokens.length && Array.isArray(c.pages)) return c.pages;
   }
   const pages = [];
+  let transient = false;
   for (let i = 0; i < tokens.length; i++) {
     try {
       const me = await graphGet(env, tokens[i], '/me', { fields: 'id,name,link,picture{url},followers_count,fan_count' });
@@ -64,9 +65,9 @@ export async function loadPages(env, { fresh = false } = {}) {
         followers: Number.isFinite(me.followers_count) ? me.followers_count : (Number.isFinite(me.fan_count) ? me.fan_count : null),
         idx: i
       });
-    } catch (e) { /* 這組 token 不能用：管理頁會顯示原因 */ }
+    } catch (e) { if (!(e instanceof GraphError) || e.code !== 'fb_token_invalid') transient = true; /* 這組 token 不能用：管理頁會顯示原因 */ }
   }
-  await cachePut(env, PAGES_KEY, { count: tokens.length, pages }, PAGES_TTL);
+  if (!transient) await cachePut(env, PAGES_KEY, { count: tokens.length, pages }, PAGES_TTL); // 暫時性失敗（限流、連不上）不快取
   return pages;
 }
 

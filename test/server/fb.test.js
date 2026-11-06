@@ -245,3 +245,13 @@ test('scrub 會抹掉 token 與 access_token 參數', async () => {
   noToken(s);
   assert.ok(!s.includes('zzz'));
 });
+
+test('暫時性失敗（限流）不快取粉專清單，下次會重問', async () => {
+  const env = fbEnv();
+  let n = 0;
+  routes.push([/\/me$/, (url, init, tok) => (n++ === 0 ? fbErr(4, 'rate') : reply({ ...PAGES[tok], link: '' }))]);
+  const a = await getJ(env, '/fb/pages');
+  assert.equal(a.body.data.length, 1);
+  const b = await getJ(env, '/fb/pages');
+  assert.equal(b.body.data.length, 2);
+});
