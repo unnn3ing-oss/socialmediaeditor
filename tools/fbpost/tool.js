@@ -158,7 +158,7 @@ function skelRow() {
 function setBusy(list, on) {
   list.querySelectorAll(':scope > .sk-row').forEach((n) => n.remove());
   if (on) list.append(skelRow(), skelRow(), skelRow());
-  list.toggleAttribute('aria-busy', on);
+  if (on) list.setAttribute('aria-busy', 'true'); else list.removeAttribute('aria-busy');
 }
 async function loadSched() {
   const list = $('schedList'), hint = $('schedHint');

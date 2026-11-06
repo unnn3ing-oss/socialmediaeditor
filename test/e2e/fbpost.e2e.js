@@ -210,7 +210,7 @@ test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完
   let release; api.hold = new Promise((r) => { release = r; });
   await page.click('#schedReload');
   await page.waitForFunction(() => document.querySelectorAll('#schedList .sk-row[aria-hidden=true]').length === 3);
-  assert.equal(await page.getAttribute('#schedList', 'aria-busy'), '');
+  assert.equal(await page.getAttribute('#schedList', 'aria-busy'), 'true');
   const h = await page.evaluate(() => document.querySelector('#schedList .sk-row').getBoundingClientRect().height);
   release(); api.hold = null;
   await page.waitForSelector('#schedList .item');

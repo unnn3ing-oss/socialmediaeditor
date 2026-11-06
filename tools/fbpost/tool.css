@@ -235,6 +235,6 @@ select { min-height: 36px; }
   .fp-modal #sendBtn { flex: 1; justify-content: center; min-height: 44px; }
 }
 @media (max-width: 760px) {
-  .fail-box .item, .item { flex-wrap: wrap; }
-  .item .act { flex-direction: row; flex-wrap: wrap; }
+  .fail-box .item, .item, .sk-row { flex-wrap: wrap; }
+  .item .act, .sk-row .act { flex-direction: row; flex-wrap: wrap; }
 }
