@@ -28,3 +28,11 @@
 | `tb.assets.get(key)` | 取素材：公司模式先抓後端版，失敗退回通用版；回傳 `{ url }`、`{ upload: true }` 或 `null` | `const logo = await tb.assets.get('logo')` |
 | `tb.status.get(id)` | 讀外殼狀態（`{ state, text }`）；單獨開啟工具頁時回「請從小編工具箱開啟」 | `tb.status.get('extension')` |
 | `tb.status.on(fn)` | 狀態改變時通知，回傳取消函式 | `const off = tb.status.on((id, v) => {})` |
+
+## 新聞規則（網新快速排程同一套）
+純函式、可單獨 import（不經過 `tb`），排程發布與圖片套版共用：
+- `sdk/news-rules.js`：`autoLines(title)` 標題自動換行、`charWidth`、`frameForUrl(url)`（`/entertainment/` → `'ent'`，其他 `'news'`）、`buildLink(url, utm)`、`articleId`
+- `sdk/news-article.js`：`parseArticle(html, url)` → `{ title, tags, images:[{url,caption}], fallbackCaption }`、`formatCopy({title, caption, tags})`（【標題】／圖說／#標籤）、`mainCaption`、`replaceTitleLine`、`bindTitle`＋`learnSeps`＋`titleAsOneLine`
+- `sdk/news-sched.js`：排程時間（臉書範圍 10 分鐘～30 天）`defaultAt`、`combine`、`validate`、`formatTyping`、`step`、`fmtWhen`
+
+文章 HTML 用後端 `tb.api.call('/fetch/article?url=…')` 取得，主圖用 `/fetch/image?url=…`。來源是 `unnn3ing-oss/schedulenewnet` 的 `web/rules.js`、`article.js`、`sched.js`，改動要和網新同步。
