@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/sample/icon.svg",
       "thumb": "tools/sample/thumb.svg",
-      "entry": "tools/sample/index.html"
+      "entry": "tools/sample/index.html?v=9fb5fbbc54"
     },
     {
       "id": "pattern",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html"
+      "entry": "tools/pattern/index.html?v=533b0512ee"
     },
     {
       "id": "linepush",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html"
+      "entry": "tools/linepush/index.html?v=3cf10bd0ee"
     },
     {
       "id": "collage",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html"
+      "entry": "tools/collage/index.html?v=1fc2dab2cb"
     },
     {
       "id": "watermark",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html"
+      "entry": "tools/watermark/index.html?v=5ad8c214c1"
     },
     {
       "id": "resize",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html"
+      "entry": "tools/resize/index.html?v=95418266c5"
     },
     {
       "id": "design",
@@ -75,7 +75,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html"
+      "entry": "tools/design/index.html?v=3eb3ed3c29"
     },
     {
       "id": "fbpost",
@@ -86,7 +86,7 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html"
+      "entry": "tools/fbpost/index.html?v=6ed6520824"
     }
   ]
 }

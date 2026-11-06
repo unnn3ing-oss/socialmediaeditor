@@ -30,6 +30,20 @@ function listRepoBasenames(root) {
 const chromeVersion = (v) => String(v).split('.').map((n) => String(Number(n))).join('.');
 const sortedUnion = (...lists) => [...new Set(lists.flat())].sort();
 
+// 工具網址的版本號：工具資料夾＋共用的 sdk／ui 內容雜湊。內容一改網址就變，瀏覽器不會沿用舊的快取。
+function contentHash(root, dirs) {
+  const h = require('node:crypto').createHash('sha256');
+  const walk = (rel) => {
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs)) return;
+    if (fs.statSync(abs).isDirectory()) {
+      for (const f of fs.readdirSync(abs).sort()) if (!f.startsWith('.')) walk(`${rel}/${f}`);
+    } else { h.update(rel + '\0'); h.update(fs.readFileSync(abs)); h.update('\0'); }
+  };
+  dirs.forEach(walk);
+  return h.digest('hex').slice(0, 10);
+}
+
 async function build(root, { check = false, write = true } = {}) {
   const { validateTool, validateRegistry } = await import(path.join(__dirname, 'shell/contract.js'));
   const toolsDir = path.join(root, 'tools');
@@ -65,7 +79,7 @@ async function build(root, { check = false, write = true } = {}) {
   outputs['shell/catalog.json'] = JSON.stringify({
     tools: tools.map((t) => ({
       id: t.id, name: t.name, group: t.group, desc: t.desc, tier: t.tier, requires: t.requires,
-      icon: at(t.id, t.icon), thumb: at(t.id, t.thumb), entry: at(t.id, t.entry),
+      icon: at(t.id, t.icon), thumb: at(t.id, t.thumb), entry: `${at(t.id, t.entry)}?v=${contentHash(root, [`tools/${t.id}`, 'sdk', 'ui'])}`,
     })),
   }, null, 2) + '\n';
 

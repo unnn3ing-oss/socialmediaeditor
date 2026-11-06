@@ -22,8 +22,18 @@ test('builds catalog for registry tools', async () => {
   assert.deepEqual(errors, []);
   const cat = readJson(root, 'shell/catalog.json');
   assert.deepEqual(cat.tools.map((t) => t.id), readJson(root, 'tools/registry.json'));
-  assert.equal(cat.tools[0].entry, 'tools/sample/index.html');
+  assert.match(cat.tools[0].entry, /^tools\/sample\/index\.html\?v=[0-9a-f]{10}$/);
   assert.equal(cat.tools[0].thumb, 'tools/sample/thumb.svg');
+});
+
+test('entry 版本號：工具內容改了就跟著變', async () => {
+  const root = tmpRepo();
+  await build(root);
+  const before = readJson(root, 'shell/catalog.json').tools[0].entry;
+  fs.appendFileSync(path.join(root, 'tools/sample/index.html'), '<!-- 改 -->');
+  await build(root);
+  const after = readJson(root, 'shell/catalog.json').tools[0].entry;
+  assert.notEqual(before, after);
 });
 
 test('merges ext permissions and copies ext.js', async () => {
