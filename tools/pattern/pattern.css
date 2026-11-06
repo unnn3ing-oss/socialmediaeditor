@@ -690,3 +690,5 @@
 .quickfill .qf-row { display: flex; gap: 8px; }
 .quickfill input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); font: inherit; background: var(--bg); color: var(--text); }
 .quickfill .hint.qf-error { color: #dc2626; }
+.title-lines-warn { color: #dc2626; margin: 4px 0 0; font-size: 13px; }
+.title-lines-warn[hidden] { display: none; }

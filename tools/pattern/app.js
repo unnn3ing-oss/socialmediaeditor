@@ -188,6 +188,9 @@ function titleFont(size, weight = 900) {
 const whzFontReady = Promise.resolve();
 const BOX_CENTER = 880;      // fixed vertical center of the headline block (measured from real TVBS exports — 1/2/3-line titles all anchor here)
 const LINE_HEIGHT_RATIO = 93 / 67; // measured line-height : font-size ratio
+const MAX_TITLE_LINES = 4;     // 標題最多 4 行，第 5 行起不畫、輸入框旁標紅
+// 1～3 行以 BOX_CENTER 置中（實測 TVBS 版型）；4 行時最後一行對齊 3 行的底線、整塊往上長，才不會貼到圖片底邊
+const anchorY = (centerY, n, lineHeight) => (centerY === BOX_CENTER && n > 3 ? centerY - (n - 3) * lineHeight / 2 : centerY);
 
 // The font-size slider is labelled in Canva's own "字級" units (matching what
 // the user sees in Canva), not raw canvas px. Canva 字級 50 measured out to
@@ -346,6 +349,7 @@ function usesDarkTitle(bg) {
 }
 
 function drawTitle(targetCtx, lines, baseSize, centerY, color = TITLE_LIGHT) {
+  lines = lines.slice(0, MAX_TITLE_LINES);
   if (lines.length === 0) return;
 
   const paddingX = 60;
@@ -353,6 +357,7 @@ function drawTitle(targetCtx, lines, baseSize, centerY, color = TITLE_LIGHT) {
   const fontSize = fitFontSize(targetCtx, lines, maxWidth, baseSize);
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const n = lines.length;
+  centerY = anchorY(centerY, n, lineHeight);
 
   targetCtx.textAlign = 'center';
   targetCtx.textBaseline = 'middle';
@@ -440,7 +445,7 @@ function layoutTitleOverlay(overlay, canvasEl, bg, title, canvaSize, frame) {
   const drawn = Math.max(1, rows.lines.length);
   const lineCount = Math.max(1, rows.total);
   const lead = rows.lines.length ? rows.lead : 0;
-  const centerY = bg && bg.type === 'color' ? SIZE / 2 : BOX_CENTER;
+  const centerY = anchorY(bg && bg.type === 'color' ? SIZE / 2 : BOX_CENTER, Math.min(drawn, MAX_TITLE_LINES), lineHeight);
   const top = centerY - drawn * lineHeight / 2 - lead * lineHeight - TITLE_BOX_PAD_Y;
   const border = 2;
   overlay.style.left = `${canvasEl.offsetLeft + TITLE_PAD_X * k}px`;
@@ -1184,11 +1189,21 @@ function buildBatchItemBlock(item, index) {
   }));
 
   const textareaLabel = document.createElement('label');
-  textareaLabel.textContent = '標題（Enter 換行）';
+  textareaLabel.textContent = '標題（Enter 換行，最多 4 行）';
   const textarea = document.createElement('textarea');
   textarea.placeholder = titlePlaceholder(item.frame);
   textarea.value = item.title;
+  const linesWarn = document.createElement('p');
+  linesWarn.className = 'hint warn title-lines-warn';
+  linesWarn.setAttribute('role', 'status');
+  const checkLines = () => {
+    const n = parseLines(textarea.value).length;
+    linesWarn.textContent = n > MAX_TITLE_LINES ? `標題有 ${n} 行，最多 ${MAX_TITLE_LINES} 行，第 ${MAX_TITLE_LINES + 1} 行起不會畫上去` : '';
+    linesWarn.hidden = !linesWarn.textContent;
+  };
+  checkLines();
   textarea.addEventListener('input', () => {
+    checkLines();
     invalidateDone();
     item.title = textarea.value;
     previewBatchItem(item);
@@ -1282,6 +1297,7 @@ function buildBatchItemBlock(item, index) {
   block.appendChild(genBox);
   block.appendChild(textareaLabel);
   block.appendChild(textarea);
+  block.appendChild(linesWarn);
   block.appendChild(fontSizeField);
   block.appendChild(picker.root);
   block.appendChild(errorEl);

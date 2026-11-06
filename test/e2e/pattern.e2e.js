@@ -266,3 +266,21 @@ test('快速填入：有密碼時娛樂網址選粉框、新聞網址選藍框',
   await frame.press('#qfUrl', 'Enter');
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent) && document.querySelector('.batch-item-block [data-frame="news"].active'), null, { timeout: 8000 });
 });
+
+test('標題最多 4 行：第 5 行起顯示提示；4 行時最後一行對齊 3 行的底線往上長', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', { company: true });
+  await frame.waitForSelector('.batch-item-block');
+  await setupItem(page, frame, '一\n二\n三\n四');
+  assert.equal(await frame.isVisible('.title-lines-warn'), false);
+  assert.ok((await frame.locator('.batch-item-block label').allTextContents()).some((t) => /最多 4 行/.test(t)));
+  await frame.fill('.batch-item-block textarea', '一\n二\n三\n四\n五');
+  assert.equal(await frame.isVisible('.title-lines-warn'), true);
+  assert.match(await frame.textContent('.title-lines-warn'), /最多 4 行/);
+  // 幾何：3 行的最後一行在 880+lh；4 行的最後一行也要在同一個位置
+  const r = await frame.evaluate(() => {
+    const lh = 93, last = (n) => anchorY(BOX_CENTER, n, lh) + (n - 1) * lh / 2;
+    return { three: last(3), four: last(4), one: anchorY(BOX_CENTER, 1, lh) };
+  });
+  assert.equal(r.four, r.three);
+  assert.equal(r.one, 880, '1～3 行仍以 880 置中');
+});
