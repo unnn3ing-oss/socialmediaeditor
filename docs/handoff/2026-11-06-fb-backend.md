@@ -46,13 +46,15 @@
 背景：使用者拿到的是**用戶 token**（類型 User、永不過期、權限齊全），臉書規定發文／成效要用粉專 token。
 | 項目 | 做法 | 狀態 |
 |---|---|---|
-| 判斷 token 類型 | `loadPages` 先打 `/me`（粉專欄位）；回 code 100（User 節點沒有這些欄位）就當用戶 token，改打 `/me/accounts`（含 `access_token`、`tasks`，最多翻 5 頁） | ⬜ |
-| 換出的粉專 token | **只放 Worker 記憶體**（`graph.js` 的 `remember()`，10 分鐘），**不寫 KV**；記憶體沒有就重打 `/me/accounts`；`scrub` 也會抹掉這些 token | ⬜ |
-| 重複粉專 | 同一粉專同時有直接粉專 token 和用戶 token 換出的，**優先用直接的** | ⬜ |
-| KV 快取 | 每個粉專記 `idx`（第幾組 token）＋`via: 'page'|'user'`＋`tasks`，不記 token | ⬜ |
-| 管理頁 | 每組 token 一列，「粉專」欄列出它能管的所有粉專；沒有 `CREATE_CONTENT` 的標「無發文權限」；用戶 token 顯示「資料存取到期」 | ⬜ |
-| 測試 | 用戶 token 換粉專、發文用換出的 token、KV／回應都不含任何 token、混放與重複 | ⬜ |
-| deploy.md 6-2 | 改成「貼用戶 token 或粉專 token 都可以」 | ⬜ |
+| 判斷 token 類型 | `loadPages` 先打 `/me`（粉專欄位）；回 code 100（User 節點沒有這些欄位）就當用戶 token，改打 `/me/accounts`（含 `access_token`、`tasks`，最多翻 5 頁） | ✅ |
+| 換出的粉專 token | **只放 Worker 記憶體**（`graph.js` 的 `remember()`，10 分鐘），**不寫 KV**；記憶體沒有就重打 `/me/accounts`；`scrub` 也會抹掉這些 token | ✅ |
+| 重複粉專 | 同一粉專同時有直接粉專 token 和用戶 token 換出的，**優先用直接的** | ✅ |
+| KV 快取 | 每個粉專記 `idx`（第幾組 token）＋`via: 'page'|'user'`＋`tasks`，不記 token | ✅ |
+| 管理頁 | 每組 token 一列，「粉專」欄列出它能管的所有粉專；沒有 `CREATE_CONTENT` 的標「無發文權限」；用戶 token 顯示「資料存取到期」 | ✅ |
+| 測試 | 用戶 token 換粉專、發文用換出的 token、KV／回應都不含任何 token、混放與重複 | ✅ |
+| deploy.md 6-2 | 改成「貼用戶 token 或粉專 token 都可以」 | ✅ |
+
+> B 版實作備註：快取鍵改為 `fb:pages:<FB_TOKEN 的 SHA-256 前 16 碼>`；`/me/accounts` 用 `after` 游標翻頁（不跟 `paging.next`，網址裡有 token）；`/me/accounts` 回空陣列是正常結果（管理頁顯示「沒有授權任何粉專」）；**這版不改 `server/wrangler.toml`**（使用者 Mac 上有填 ID 的未提交改動）。測試 24 項，全部 220 項通過。
 
 ## 下一步
 - [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞

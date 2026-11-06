@@ -6,6 +6,11 @@ const ORIGIN = 'https://unnn3ing-oss.github.io';
 const TOKEN_A = 'EAAPageTokenAAAAAAAAAAAAAAAAAAAAAAAA111';
 const TOKEN_B = 'EAAPageTokenBBBBBBBBBBBBBBBBBBBBBBBB222';
 const SECRET = 'app-secret-xyz-123456';
+const TOKEN_U = 'EAAUserTokenUUUUUUUUUUUUUUUUUUUUUUUUU999';
+const PT = { '333': 'EAADerivedPage333333333333333333333333', '444': 'EAADerivedPage444444444444444444444444', '111': 'EAADerivedPage111111111111111111111111' };
+// 用戶 token 的 /me/accounts（兩頁，用 after 游標翻）
+let accounts;
+const hasPagesCache = (env) => [...env.CACHE.store.keys()].some((k) => k.startsWith('fb:pages:'));
 let worker, tokenMod, fbMod;
 const load = async () => (worker = worker || (await import('../../server/index.js')).default);
 const loadToken = async () => (tokenMod = tokenMod || (await import('../../server/core/token.js')));
@@ -27,7 +32,12 @@ async function tokenOf(url, init) {
   return null;
 }
 
-test.beforeEach(() => {
+test.beforeEach(async () => {
+  (await loadFb())._resetFbMemory();
+  accounts = [
+    [{ id: '333', name: '用戶粉專甲', access_token: PT['333'], tasks: ['ANALYZE', 'ADVERTISE', 'MODERATE', 'CREATE_CONTENT', 'MANAGE'] }],
+    [{ id: '444', name: '用戶粉專乙', access_token: PT['444'], tasks: ['ANALYZE'] }]
+  ];
   calls = [];
   routes = [];
   realFetch = globalThis.fetch;
@@ -37,6 +47,13 @@ test.beforeEach(() => {
     calls.push({ url, init, tok, path: new URL(url).pathname });
     for (const [re, fn] of routes) if (re.test(new URL(url).pathname)) return fn(url, init, tok);
     const p = new URL(url).pathname;
+    if (p.endsWith('/me/accounts') && tok === TOKEN_U) {
+      const after = new URL(url).searchParams.get('after');
+      const i = after ? Number(after.replace('CUR', '')) : 0;
+      const last = i >= accounts.length - 1;
+      return reply({ data: accounts[i] || [], paging: last ? { cursors: { after: 'CUR' + i } } : { cursors: { after: 'CUR' + (i + 1) }, next: `https://graph.facebook.com/v26.0/me/accounts?access_token=${TOKEN_U}&after=CUR${i + 1}` } });
+    }
+    if (p.endsWith('/me') && tok === TOKEN_U) return fbErr(100, '(#100) Tried accessing nonexisting field (followers_count) on node type (User)');
     if (p.endsWith('/me')) return PAGES[tok] ? reply({ ...PAGES[tok], link: 'https://fb.com/x', followers_count: 1000 }) : fbErr(190, 'Invalid OAuth access token ' + tok);
     return reply({ data: [] });
   };
@@ -62,7 +79,7 @@ async function postJ(env, body) {
   const text = await res.text();
   return { res, text, body: JSON.parse(text) };
 }
-const noToken = (text) => { for (const t of [TOKEN_A, TOKEN_B, SECRET]) assert.ok(!text.includes(t), '回應不可含 token／secret'); };
+const noToken = (text) => { for (const t of [TOKEN_A, TOKEN_B, SECRET, TOKEN_U, ...Object.values(PT)]) assert.ok(!text.includes(t), '回應不可含 token／secret'); };
 
 test('沒有公司憑證回 401，也不會打 Graph', async () => {
   const env = fbEnv();
@@ -202,13 +219,13 @@ test('發文檢查：時間範圍、連結＋圖片衝突、空內容、圖片�
 test('token 失效：回 502、清掉粉專快取、錯誤訊息不含 token，並記錄失敗', async () => {
   const env = fbEnv();
   await getJ(env, '/fb/pages');
-  assert.ok(env.CACHE.store.has('fb:pages:v1'));
+  assert.ok(hasPagesCache(env));
   routes.push([/\/111\/feed$/, () => fbErr(190, `Error validating access token: ${TOKEN_A} has expired`)]);
   const { res, body, text } = await postJ(env, { page: '111', message: 'x' });
   assert.equal(res.status, 502);
   assert.equal(body.code, 'fb_token_invalid');
   noToken(text);
-  assert.ok(!env.CACHE.store.has('fb:pages:v1'));
+  assert.ok(!hasPagesCache(env));
   const codes = env.DB.raw.prepare('SELECT code FROM logs').all().map((r) => r.code);
   assert.deepEqual(codes, ['post-failed-190']);
 });
@@ -233,7 +250,7 @@ test('管理頁：列出每組 token 的狀態與缺少的權限，不含 token�
   assert.equal(res.status, 200);
   noToken(text);
   assert.equal(body.data.version, 'v26.0');
-  assert.deepEqual(body.data.tokens.map((t) => [t.page.name, t.valid, t.type, t.expiresAt, t.missingScopes.length]),
+  assert.deepEqual(body.data.tokens.map((t) => [t.pages[0].name, t.valid, t.type, t.expiresAt, t.missingScopes.length]),
     [['新聞粉專', true, 'PAGE', 0, 0], ['娛樂粉專', true, 'PAGE', 0, 3]]);
 });
 
@@ -254,4 +271,102 @@ test('暫時性失敗（限流）不快取粉專清單，下次會重問', async
   assert.equal(a.body.data.length, 1);
   const b = await getJ(env, '/fb/pages');
   assert.equal(b.body.data.length, 2);
+});
+
+// ---- 用戶 token（B 版） ----
+const userEnv = (extra = {}) => mkEnv({ FB_TOKEN: TOKEN_U, ...extra });
+const dumpStores = (env) => [...env.CACHE.store.values()].map((v) => v.value).join('\n') + JSON.stringify(env.DB.raw.prepare('SELECT * FROM logs').all());
+
+test('用戶 token：用 /me/accounts 換出粉專（after 游標翻頁，不跟 next），KV 與回應不含任何 token', async () => {
+  const env = userEnv();
+  const { res, body, text } = await getJ(env, '/fb/pages');
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.data.map((p) => [p.id, p.name]), [['333', '用戶粉專甲'], ['444', '用戶粉專乙']]);
+  noToken(text);
+  noToken(dumpStores(env));
+  const acc = calls.filter((c) => c.path.endsWith('/me/accounts'));
+  assert.equal(acc.length, 2);
+  assert.equal(new URL(acc[1].url).searchParams.get('after'), 'CUR1');
+  assert.ok(acc.every((c) => c.url.startsWith('https://graph.facebook.com/v26.0/me/accounts?')));
+});
+
+test('用戶 token：發文用換出的粉專 token；記憶體清掉後會重新換', async () => {
+  const env = userEnv();
+  routes.push([/\/333\/feed$/, () => reply({ id: '333_1' })]);
+  const r1 = await postJ(env, { page: '333', message: 'hi' });
+  assert.equal(r1.res.status, 200);
+  assert.equal(calls.find((c) => c.path.endsWith('/333/feed')).tok, PT['333']);
+  noToken(r1.text);
+  (await loadFb())._resetFbMemory();
+  const before = calls.filter((c) => c.path.endsWith('/me/accounts')).length;
+  await postJ(env, { page: '333', message: 'hi2' });
+  assert.ok(calls.filter((c) => c.path.endsWith('/me/accounts')).length > before);
+  assert.equal(calls.filter((c) => c.path.endsWith('/333/feed')).pop().tok, PT['333']);
+});
+
+test('用戶 token：換出的粉專 token 出現在臉書錯誤訊息裡也會被抹掉', async () => {
+  const env = userEnv();
+  routes.push([/\/333\/feed$/, () => fbErr(190, `Error validating access token: ${PT['333']} expired; user ${TOKEN_U}`)]);
+  const { res, body, text } = await postJ(env, { page: '333', message: 'x' });
+  assert.equal(res.status, 502);
+  assert.equal(body.code, 'fb_token_invalid');
+  noToken(text);
+  noToken(dumpStores(env));
+});
+
+test('同一粉專：直接的粉專 token 優先（即使用戶 token 排在前面）', async () => {
+  accounts = [[{ id: '111', name: '新聞粉專', access_token: PT['111'], tasks: ['CREATE_CONTENT', 'ANALYZE'] }, { id: '333', name: '用戶粉專甲', access_token: PT['333'], tasks: ['CREATE_CONTENT'] }]];
+  const env = mkEnv({ FB_TOKEN: `${TOKEN_U},${TOKEN_A}` });
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_1' })]);
+  const { body } = await getJ(env, '/fb/pages');
+  assert.deepEqual(body.data.map((p) => p.id).sort(), ['111', '333']);
+  await postJ(env, { page: '111', message: 'x' });
+  assert.equal(calls.find((c) => c.path.endsWith('/111/feed')).tok, TOKEN_A);
+});
+
+test('粉專已不在授權清單：回 fb_unknown_page，不是 500', async () => {
+  const env = userEnv();
+  await getJ(env, '/fb/pages');                       // 快取裡有 444
+  (await loadFb())._resetFbMemory();
+  accounts = [[accounts[0][0]]];                      // 444 被撤銷
+  const { res, body } = await postJ(env, { page: '444', message: 'x' });
+  assert.equal(res.status, 404);
+  assert.equal(body.code, 'fb_unknown_page');
+});
+
+test('快取鍵跟著 FB_TOKEN 變：換 token 不會讀到舊的對應', async () => {
+  const env = fbEnv();
+  await getJ(env, '/fb/pages');
+  env.FB_TOKEN = TOKEN_U;
+  const { body } = await getJ(env, '/fb/pages');
+  assert.deepEqual(body.data.map((p) => p.id), ['333', '444']);
+});
+
+test('管理頁：用戶 token 列出所有粉專、權限不足標記、資料存取到期，不含任何 token', async () => {
+  accounts = [[{ id: '111', name: '新聞粉專', access_token: PT['111'], tasks: ['CREATE_CONTENT', 'ANALYZE'] }, { id: '444', name: '用戶粉專乙', access_token: PT['444'], tasks: ['ANALYZE'] }]];
+  const env = mkEnv({ FB_TOKEN: `${TOKEN_U},${TOKEN_A}` });
+  const dax = nowSec() + 80 * 86400;
+  routes.push([/\/debug_token$/, (url) => {
+    const input = new URL(url).searchParams.get('input_token');
+    return reply({ data: { is_valid: true, type: input === TOKEN_U ? 'USER' : 'PAGE', expires_at: 0, data_access_expires_at: input === TOKEN_U ? dax : 0, scopes: ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts'] } });
+  }]);
+  const { body, text } = await getJ(env, '/admin/fb', 'admin');
+  noToken(text);
+  const [u, a] = body.data.tokens;
+  assert.equal(u.kind, 'user');
+  assert.equal(u.dataAccessExpiresAt, dax);
+  assert.deepEqual(u.pages.map((p) => [p.id, p.usedBy || null, p.canPost]), [['111', 2, true], ['444', null, false]]);
+  assert.equal(a.kind, 'page');
+  assert.equal(a.dataAccessExpiresAt, null);
+  assert.deepEqual(a.pages.map((p) => [p.id, p.canPost, p.canInsights]), [['111', true, true]]);
+});
+
+test('用戶 token 沒授權任何粉專：清單是空的，管理頁標示 user', async () => {
+  accounts = [[]];
+  const env = userEnv();
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data, []);
+  routes.push([/\/debug_token$/, () => reply({ data: { is_valid: true, type: 'USER', expires_at: 0, scopes: [] } })]);
+  const t = (await getJ(env, '/admin/fb', 'admin')).body.data.tokens[0];
+  assert.equal(t.kind, 'user');
+  assert.deepEqual(t.pages, []);
 });

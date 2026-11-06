@@ -4,14 +4,13 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run } from './db.js';
-import { pageTokens, graphGet, graphPost, GraphError, scrub, graphBase } from './graph.js';
+import { pageTokens, graphGet, graphPost, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts'];
 export const POST_METRICS = ['post_media_view', 'post_total_media_view_unique', 'post_clicks', 'post_reactions_by_type_total'];
 export const MAX_IMAGE = 10 * 1024 * 1024;
 export const MAX_MESSAGE = 63206;
 const MIN_SCHEDULE = 10 * 60, MAX_SCHEDULE = 30 * 86400;
-const PAGES_KEY = 'fb:pages:v1';
 const PAGES_TTL = 600, POSTS_TTL = 60, INSIGHTS_TTL = 600;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
@@ -46,35 +45,107 @@ async function audit(env, code) {
   catch (e) { /* 記錄失敗不影響發文 */ }
 }
 
-// 每組 token 對應哪個粉專：快取裡只存「第幾組」，不存 token 本身
-export async function loadPages(env, { fresh = false } = {}) {
-  const tokens = pageTokens(env);
-  if (!fresh) {
-    const c = await cacheGet(env, PAGES_KEY);
-    if (c && c.count === tokens.length && Array.isArray(c.pages)) return c.pages;
+// ---- token → 粉專 ----
+// FB_TOKEN 每一組可以是「粉專 token」或「用戶 token」：
+//   粉專 token：/me 就是粉專本身。
+//   用戶 token：/me 回 code 100（User 沒有粉專欄位），改打 /me/accounts 換出各粉專 token。
+// KV 只記粉專資料＋第幾組 token（idx）＋來源（via），不記任何 token；換出的粉專 token 只放記憶體。
+const PAGE_FIELDS = 'id,name,link,picture{url},followers_count,fan_count';
+const MEM_TTL_MS = 10 * 60 * 1000;
+const ACCOUNTS_MAX_PAGES = 5;
+const derivedMem = new Map();   // 用戶 token → { at, tokens: Map(粉專ID → 粉專 token) }
+
+export function _resetFbMemory() { derivedMem.clear(); }
+
+async function sha16(text) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return [...d.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+// 快取鍵跟著 FB_TOKEN 內容變：換 token 後不會讀到舊的對應
+async function pagesKey(env) { return 'fb:pages:' + (await sha16(String(env.FB_TOKEN || ''))); }
+
+const pageInfo = (me) => ({
+  id: me.id, name: me.name || '', link: me.link || '',
+  picture: (me.picture && me.picture.data && me.picture.data.url) || '',
+  followers: Number.isFinite(me.followers_count) ? me.followers_count : (Number.isFinite(me.fan_count) ? me.fan_count : null)
+});
+
+// 用 after 游標翻頁（不跟 paging.next：那個網址裡有 token）；回 [{ ...粉專資料, tasks, token }]
+async function fetchAccounts(env, userToken) {
+  const out = [];
+  let after = '';
+  for (let n = 0; n < ACCOUNTS_MAX_PAGES; n++) {
+    const r = await graphGet(env, userToken, '/me/accounts', { fields: PAGE_FIELDS + ',access_token,tasks', limit: 100, after });
+    for (const a of r.data || []) {
+      if (!isId(a.id) || typeof a.access_token !== 'string') continue;
+      rememberSecret(a.access_token);
+      out.push({ ...pageInfo(a), tasks: Array.isArray(a.tasks) ? a.tasks : [], token: a.access_token });
+    }
+    const cur = r.paging && r.paging.cursors && r.paging.cursors.after;
+    if (!(r.paging && r.paging.next) || !cur || typeof cur !== 'string') break;
+    after = cur;
   }
-  const pages = [];
+  derivedMem.set(userToken, { at: Date.now(), tokens: new Map(out.map((a) => [a.id, a.token])) });
+  return out;
+}
+
+// 逐組掃描：回 { pages, info }。info[i] = { kind: 'page'|'user'|'invalid'|'error', pageIds, error }
+export async function scanTokens(env) {
+  const tokens = pageTokens(env);
+  const info = tokens.map(() => ({ kind: 'error', pageIds: [], error: '' }));
+  const direct = [], viaUser = [];
   let transient = false;
   for (let i = 0; i < tokens.length; i++) {
     try {
-      const me = await graphGet(env, tokens[i], '/me', { fields: 'id,name,link,picture{url},followers_count,fan_count' });
-      if (!isId(me.id) || pages.some((p) => p.id === me.id)) continue;
-      pages.push({
-        id: me.id, name: me.name || '', link: me.link || '',
-        picture: (me.picture && me.picture.data && me.picture.data.url) || '',
-        followers: Number.isFinite(me.followers_count) ? me.followers_count : (Number.isFinite(me.fan_count) ? me.fan_count : null),
-        idx: i
-      });
-    } catch (e) { if (!(e instanceof GraphError) || e.code !== 'fb_token_invalid') transient = true; /* 這組 token 不能用：管理頁會顯示原因 */ }
+      const me = await graphGet(env, tokens[i], '/me', { fields: PAGE_FIELDS });
+      if (isId(me.id)) { direct.push({ ...pageInfo(me), idx: i, via: 'page', tasks: null }); info[i] = { kind: 'page', pageIds: [me.id], error: '' }; }
+      continue;
+    } catch (e) {
+      if (!(e instanceof GraphError) || e.code !== 'fb_bad_request') {
+        info[i] = { kind: e instanceof GraphError && e.code === 'fb_token_invalid' ? 'invalid' : 'error', pageIds: [], error: e instanceof GraphError ? e.message : '' };
+        if (!(e instanceof GraphError) || e.code !== 'fb_token_invalid') transient = true;
+        continue;
+      }
+    }
+    // code 100：當作用戶 token
+    try {
+      const acc = await fetchAccounts(env, tokens[i]);
+      info[i] = { kind: 'user', pageIds: acc.map((a) => a.id), error: '' };
+      for (const a of acc) viaUser.push({ ...pageInfo(a), idx: i, via: 'user', tasks: a.tasks });
+    } catch (e) {
+      info[i] = { kind: e instanceof GraphError && e.code === 'fb_token_invalid' ? 'invalid' : 'error', pageIds: [], error: e instanceof GraphError ? e.message : '' };
+      if (!(e instanceof GraphError) || e.code !== 'fb_token_invalid') transient = true;
+    }
   }
-  if (!transient) await cachePut(env, PAGES_KEY, { count: tokens.length, pages }, PAGES_TTL); // 暫時性失敗（限流、連不上）不快取
+  // 同一個粉專：直接的粉專 token 優先，其次依 FB_TOKEN 順序
+  const pages = [];
+  for (const p of [...direct, ...viaUser]) if (!pages.some((x) => x.id === p.id)) pages.push(p);
+  return { pages, info, transient };
+}
+
+export async function loadPages(env, { fresh = false } = {}) {
+  const key = await pagesKey(env);
+  if (!fresh) {
+    const c = await cacheGet(env, key);
+    if (c && Array.isArray(c.pages)) return c.pages;
+  }
+  const { pages, transient } = await scanTokens(env);
+  if (!transient) await cachePut(env, key, { pages }, PAGES_TTL); // 暫時性失敗（限流、連不上）不快取
   return pages;
 }
 
 async function tokenFor(env, pageId) {
   const pages = await loadPages(env);
   const p = pages.find((x) => x.id === pageId);
-  return p ? pageTokens(env)[p.idx] || null : null;
+  if (!p) return null;
+  const t = pageTokens(env)[p.idx];
+  if (!t) return null;
+  if (p.via !== 'user') return t;
+  const mem = derivedMem.get(t);
+  if (mem && Date.now() - mem.at < MEM_TTL_MS && mem.tokens.has(pageId)) return mem.tokens.get(pageId);
+  const acc = await fetchAccounts(env, t);
+  const hit = acc.find((a) => a.id === pageId);
+  return hit ? hit.token : null;   // 已不在授權清單 → fb_unknown_page
 }
 
 const publicPage = ({ id, name, link, picture, followers }) => ({ id, name, link, picture, followers });
@@ -247,7 +318,7 @@ export async function handleFb(request, env, path) {
     if (path === '/fb/insights' && request.method === 'GET') return await insights(request, env, q);
     if (path === '/fb/post' && request.method === 'POST') return await createPost(request, env);
   } catch (e) {
-    if (e instanceof GraphError && e.code === 'fb_token_invalid') await cacheDel(env, PAGES_KEY);
+    if (e instanceof GraphError && e.code === 'fb_token_invalid') await cacheDel(env, await pagesKey(env));
     return graphFail(request, env, e);
   }
   return fail(request, env, 'not_found');
@@ -255,30 +326,42 @@ export async function handleFb(request, env, path) {
 
 // ---- 管理頁：每組 token 的狀態（不回傳 token 值） ----
 // GET /admin/fb（已通過 admin 驗證）
+const pageRow = (p) => ({
+  id: p.id, name: p.name,
+  canPost: p.tasks === null || p.tasks.includes('CREATE_CONTENT') || p.tasks.includes('MANAGE'),
+  canInsights: p.tasks === null || p.tasks.includes('ANALYZE') || p.tasks.includes('MANAGE')
+});
+
 export async function adminFb(request, env, path) {
   if (path !== '/admin/fb' || request.method !== 'GET') return null;
   const tokens = pageTokens(env);
   const appToken = env.FB_APP_ID && env.FB_APP_SECRET ? `${env.FB_APP_ID}|${env.FB_APP_SECRET}` : null;
-  await cacheDel(env, PAGES_KEY);
-  const pages = await loadPages(env, { fresh: true });
+  const { pages, info, transient } = await scanTokens(env);
+  if (!transient) await cachePut(env, await pagesKey(env), { pages }, PAGES_TTL);
+  // 這組 token 能管的粉專（含被別組優先使用的，管理頁照實列出）
   const items = [];
   for (let i = 0; i < tokens.length; i++) {
-    const item = { index: i + 1, page: null, valid: false, type: '', expiresAt: null, dataAccessExpiresAt: null, scopes: [], missingScopes: [], error: '' };
-    const p = pages.find((x) => x.idx === i);
-    if (p) item.page = { id: p.id, name: p.name };
+    const inf = info[i];
+    const mine = inf.pageIds.map((id) => {
+      const used = pages.find((x) => x.id === id);
+      return used && used.idx === i ? pageRow(used) : { id, name: (used && used.name) || id, canPost: true, canInsights: true, usedBy: used ? used.idx + 1 : null };
+    });
+    const item = {
+      index: i + 1, kind: inf.kind, pages: mine, valid: inf.kind === 'page' || inf.kind === 'user', type: '',
+      expiresAt: null, dataAccessExpiresAt: null, scopes: [], missingScopes: [], error: inf.error || ''
+    };
     try {
       const r = await graphGet(env, appToken || tokens[i], '/debug_token', { input_token: tokens[i] });
       const d = r.data || {};
       item.valid = !!d.is_valid;
       item.type = d.type || '';
       item.expiresAt = Number.isFinite(d.expires_at) ? d.expires_at : null;            // 0 代表不會過期
-      item.dataAccessExpiresAt = Number.isFinite(d.data_access_expires_at) ? d.data_access_expires_at : null;
+      item.dataAccessExpiresAt = Number.isFinite(d.data_access_expires_at) && d.data_access_expires_at > 0 ? d.data_access_expires_at : null;
       item.scopes = Array.isArray(d.scopes) ? d.scopes : [];
       item.missingScopes = NEEDED_SCOPES.filter((s) => !item.scopes.includes(s));
       if (d.error && d.error.message) item.error = scrub(env, d.error.message);
     } catch (e) {
-      item.error = e instanceof GraphError ? e.message : scrub(env, e && e.message);
-      item.valid = !!p;
+      if (!item.error) item.error = e instanceof GraphError ? e.message : scrub(env, e && e.message);
     }
     items.push(item);
   }

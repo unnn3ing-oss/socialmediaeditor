@@ -94,7 +94,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <section class="card">
       <h2>臉書連線</h2>
-      <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組粉專 token 的狀態（不會顯示 token 本身）。</p>
+      <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組 token（用戶 token 或粉專 token）能管哪些粉專（不會顯示 token 本身）。用戶 token 請留意「資料存取到」的日期，過了要重新授權。</p>
       <div class="row"><button id="fbBtn" type="button">檢查臉書連線</button></div>
       <p class="msg" id="fbMsg" role="status"></p>
       <div class="scroll" id="fbWrap" hidden>
@@ -244,13 +244,24 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       var bad = 0;
       d.tokens.forEach(function (t) {
         var exp = t.expiresAt === 0 ? '不會過期' : t.expiresAt ? fmtTime(t.expiresAt * 1000) : '—';
-        var okRow = t.valid && t.page && !t.missingScopes.length;
+        if (t.dataAccessExpiresAt) exp += '；資料存取到 ' + fmtTime(t.dataAccessExpiresAt * 1000);
+        var warn = [];
+        var names = t.pages.map(function (p) {
+          var n = p.name;
+          if (p.usedBy) n += '（改用第 ' + p.usedBy + ' 組）';
+          if (!p.canPost) { n += '（無發文權限）'; warn.push(1); }
+          if (!p.canInsights) { n += '（無成效權限）'; warn.push(1); }
+          return n;
+        });
+        var pageText = names.length ? names.join('、') : (t.kind === 'user' ? '沒有授權任何粉專' : '（找不到粉專）');
+        var kindText = t.kind === 'user' ? '用戶 token' : t.kind === 'page' ? '粉專 token' : (t.type || '—');
+        var okRow = t.valid && t.pages.length && !t.missingScopes.length && !warn.length;
         if (!okRow) bad++;
         var tr = document.createElement('tr');
-        [t.index, t.page ? t.page.name : '（找不到粉專）', t.valid ? '有效' : '無效' + (t.error ? '：' + t.error : ''), t.type || '—', exp, t.missingScopes.join('、') || '—']
+        [t.index, pageText, t.valid ? '有效' : '無效' + (t.error ? '：' + t.error : ''), kindText, exp, t.missingScopes.join('、') || '—']
           .forEach(function (v, i) {
             var c = document.createElement('td'); c.textContent = v;
-            if ((i === 2 && !t.valid) || (i === 5 && t.missingScopes.length) || (i === 1 && !t.page)) c.className = 'err';
+            if ((i === 2 && !t.valid) || (i === 5 && t.missingScopes.length) || (i === 1 && (!t.pages.length || warn.length))) c.className = 'err';
             tr.appendChild(c);
           });
         tb.appendChild(tr);

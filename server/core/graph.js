@@ -22,10 +22,14 @@ export async function appsecretProof(env, token) {
   return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// 從用戶 token 換出來的粉專 token：只放在這個 Worker 的記憶體（不寫 KV），也要被 scrub 抹掉
+const remembered = new Set();
+export function rememberSecret(t) { if (typeof t === 'string' && t.length >= 8) remembered.add(t); }
+
 // 把字串裡出現的任何 token、app secret 抹掉
 export function scrub(env, text) {
   let s = String(text == null ? '' : text);
-  for (const t of [...pageTokens(env), env.FB_APP_SECRET].filter((x) => typeof x === 'string' && x.length >= 8)) s = s.split(t).join('***');
+  for (const t of [...pageTokens(env), ...remembered, env.FB_APP_SECRET].filter((x) => typeof x === 'string' && x.length >= 8)) s = s.split(t).join('***');
   return s.replace(/access_token=[^&\s"']+/g, 'access_token=***').slice(0, 300);
 }
 
