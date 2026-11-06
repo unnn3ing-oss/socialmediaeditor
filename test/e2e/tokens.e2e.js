@@ -23,12 +23,12 @@ test('tokens.css computed styles', async () => {
     const p = await s('#p');
     assert.equal(p.borderRadius, '999px');
     assert.equal(p.height, '44px');
-    assert.equal(p.backgroundColor, 'rgb(29, 79, 184)');
-    assert.equal((await s('#s')).borderTopColor, 'rgb(196, 199, 204)');
+    assert.equal(p.backgroundColor, 'rgb(0, 74, 173)');
+    assert.equal((await s('#s')).borderTopColor, 'rgba(0, 74, 173, 0.12)');
     assert.equal((await s('#sm')).height, '36px');
     const d = await s('#d');
-    assert.equal(d.backgroundColor, 'rgb(236, 238, 240)');
-    assert.equal(d.color, 'rgb(107, 112, 119)');
+    assert.equal(d.backgroundColor, 'rgb(238, 241, 246)');
+    assert.equal(d.color, 'rgb(107, 114, 128)');
     const sw = await s('#sw');
     assert.equal(sw.width, '48px');
     assert.equal(sw.height, '28px');
@@ -51,7 +51,7 @@ test('tokens.css computed styles', async () => {
       const c = getComputedStyle(document.activeElement);
       return [c.outlineWidth, c.outlineStyle, c.outlineColor, c.outlineOffset];
     });
-    assert.deepEqual(f, ['2px', 'solid', 'rgb(29, 79, 184)', '2px']);
+    assert.deepEqual(f, ['2px', 'solid', 'rgb(0, 74, 173)', '2px']);
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal((await s('#sk')).animationName, 'none');
