@@ -60,13 +60,15 @@
 背景（已知事實）：使用者的用戶 token 有效、權限齊全，但粉專屬企業管理平台、token 缺 `business_management`，`/me/accounts` 回空陣列 → 管理頁顯示「沒有授權任何粉專」。`debug_token` 的 `granular_scopes` 列得出 6 個粉專 ID。規格與版本 2 決定見 `docs/superpowers/specs/2026-11-06-fb-page-token.md`。
 | 項目 | 做法 | 狀態 |
 |---|---|---|
-| 共用換 token 函式 `derivePages(env, userToken)` | `/me/accounts` ＋ `debug_token` 的 `granular_scopes` 粉專 ID（聯集）；後者逐一打 `/<id>?fields=…,access_token`；`scanTokens` 與 `tokenFor` 都用它 | ⬜ |
-| debug_token 身分 | 有 `FB_APP_ID`＋`FB_APP_SECRET` 用 App token，否則用 token 自己查 | ⬜ |
-| 權限標示 | 走 granular 路線時沒有 `tasks`；改用 `pages_manage_posts`／`read_insights` 的 `target_ids` 判斷能否發文／看成效 | ⬜ |
-| 讀不到授權範圍 | 管理頁顯示「讀不到授權範圍，請設定 FB_APP_ID／FB_APP_SECRET」，不只說「沒有授權任何粉專」 | ⬜ |
-| 安全 | 換出的 token 先 `rememberSecret` 再使用；KV／回應／日誌不含任何 token | ⬜ |
-| 測試、deploy.md | 假 `debug_token`（含 granular_scopes）、假 `/<id>`；發文用換出的 token | ⬜ |
+| 共用換 token 函式 `derivePages(env, userToken)` | `/me/accounts` ＋ `debug_token` 的 `granular_scopes` 粉專 ID（聯集）；後者逐一打 `/<id>?fields=…,access_token`；`scanTokens` 與 `tokenFor` 都用它 | ✅ |
+| debug_token 身分 | 有 `FB_APP_ID`＋`FB_APP_SECRET` 用 App token，否則用 token 自己查 | ✅ |
+| 權限標示 | 走 granular 路線時沒有 `tasks`；改用 `pages_manage_posts`／`read_insights` 的 `target_ids` 判斷能否發文／看成效 | ✅ |
+| 讀不到授權範圍 | 管理頁顯示「讀不到授權範圍，請設定 FB_APP_ID／FB_APP_SECRET」，不只說「沒有授權任何粉專」 | ✅ |
+| 安全 | 換出的 token 先 `rememberSecret` 再使用；KV／回應／日誌不含任何 token | ✅ |
+| 測試、deploy.md | 假 `debug_token`（含 granular_scopes）、假 `/<id>`；發文用換出的 token | ✅ |
 | 不動 | `wrangler.toml`、外掛、網站 | — |
+
+> 版本 1 實作備註：`derivePages()` 回 `{ pages, hint, skipped }`；`tokenFor` 記憶體沒有時重跑 `derivePages`。單一粉專換不到 token（權限不足等）只略過並計入 `skipped`；token 失效、限流、連不上才算整組失敗（`isFatal`）。測試 31 項。
 
 ## 下一步
 - [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞

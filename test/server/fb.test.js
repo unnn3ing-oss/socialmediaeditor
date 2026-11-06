@@ -370,3 +370,102 @@ test('用戶 token 沒授權任何粉專：清單是空的，管理頁標示 use
   assert.equal(t.kind, 'user');
   assert.deepEqual(t.pages, []);
 });
+
+// ---- 版本 1：/me/accounts 是空的，改從授權範圍（granular_scopes）找粉專 ----
+const GP = { '555': 'EAAGranularPage555555555555555555555555', '666': 'EAAGranularPage666666666666666666666666' };
+const noTokenG = (text) => { noToken(text); for (const t of Object.values(GP)) assert.ok(!text.includes(t), '回應不可含換出的 token'); };
+function granularRoutes({ debugFail = false } = {}) {
+  accounts = [[]];
+  routes.push([/\/debug_token$/, (url, init, tok) => {
+    if (debugFail) return fbErr(100, 'debug not allowed');
+    return reply({ data: { is_valid: true, type: 'USER', expires_at: 0, scopes: ['pages_show_list', 'pages_manage_posts', 'read_insights', 'pages_read_engagement'],
+      granular_scopes: [
+        { scope: 'pages_show_list', target_ids: ['555', '666', '777'] },
+        { scope: 'pages_manage_posts', target_ids: ['555', '666'] },
+        { scope: 'read_insights', target_ids: ['555'] },
+        { scope: 'public_profile' }
+      ] } });
+  }]);
+  routes.push([/^\/v26\.0\/(555|666|777)$/, (url, init, tok) => {
+    const id = new URL(url).pathname.split('/').pop();
+    assert.equal(tok, TOKEN_U);
+    if (id === '777') return fbErr(10, 'no role on this page');
+    return reply({ id, name: '企業粉專' + id, followers_count: 10, access_token: GP[id] });
+  }]);
+}
+
+test('授權範圍備援：/me/accounts 空的時候從 granular_scopes 換出粉專，KV／回應不含 token', async () => {
+  granularRoutes();
+  const env = userEnv();
+  const { res, body, text } = await getJ(env, '/fb/pages');
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.data.map((p) => p.id), ['555', '666']);
+  noTokenG(text);
+  noTokenG(dumpStores(env));
+});
+
+test('授權範圍備援：排程發文用換出的粉專 token；記憶體清掉後重新換', async () => {
+  granularRoutes();
+  const env = userEnv();
+  routes.push([/\/555\/feed$/, () => reply({ id: '555_1' })]);
+  const at = nowSec() + 7200;
+  const r = await postJ(env, { page: '555', message: '排程測試', scheduledAt: at });
+  assert.equal(r.res.status, 200);
+  assert.deepEqual(r.body.data, { id: '555_1', scheduled: true, at });
+  const feed = calls.find((c) => c.path.endsWith('/555/feed'));
+  assert.equal(feed.tok, GP['555']);
+  assert.equal(feed.init.body.get('published'), 'false');
+  noTokenG(r.text);
+  (await loadFb())._resetFbMemory();
+  await postJ(env, { page: '555', message: '再一次' });
+  assert.equal(calls.filter((c) => c.path.endsWith('/555/feed')).pop().tok, GP['555']);
+});
+
+test('授權範圍備援：換出的 token 出現在錯誤訊息裡也會被抹掉', async () => {
+  granularRoutes();
+  const env = userEnv();
+  routes.push([/\/666\/feed$/, () => fbErr(190, `Error validating access token: ${GP['666']} invalid`)]);
+  const { res, text } = await postJ(env, { page: '666', message: 'x' });
+  assert.equal(res.status, 502);
+  noTokenG(text);
+  noTokenG(dumpStores(env));
+});
+
+test('有 FB_APP_ID／SECRET 時用 App 身分查授權範圍', async () => {
+  granularRoutes();
+  const env = userEnv({ FB_APP_ID: '12345', FB_APP_SECRET: SECRET });
+  await getJ(env, '/fb/pages');
+  const d = calls.find((c) => c.path.endsWith('/debug_token'));
+  assert.equal(d.tok, `12345|${SECRET}`);
+  assert.equal(new URL(d.url).searchParams.get('input_token'), TOKEN_U);
+});
+
+test('管理頁：授權範圍路線標示發文／成效權限、換不到 token 的粉專數', async () => {
+  granularRoutes();
+  const env = userEnv();
+  const { body, text } = await getJ(env, '/admin/fb', 'admin');
+  noTokenG(text);
+  const t = body.data.tokens[0];
+  assert.equal(t.kind, 'user');
+  assert.equal(t.skipped, 1);
+  assert.deepEqual(t.pages.map((p) => [p.id, p.canPost, p.canInsights]), [['555', true, true], ['666', true, false]]);
+});
+
+test('讀不到授權範圍：管理頁提示 debug_failed', async () => {
+  granularRoutes({ debugFail: true });
+  const env = userEnv();
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data, []);
+  const t = (await getJ(env, '/admin/fb', 'admin')).body.data.tokens[0];
+  assert.equal(t.hint, 'debug_failed');
+});
+
+test('查授權範圍被限流：不快取，下次重問', async () => {
+  accounts = [[]];
+  let n = 0;
+  routes.push([/\/debug_token$/, () => (n++ === 0 ? fbErr(4, 'rate') : reply({ data: { granular_scopes: [{ scope: 'pages_manage_posts', target_ids: ['555'] }] } }))]);
+  routes.push([/^\/v26\.0\/555$/, () => reply({ id: '555', name: 'x', access_token: GP['555'] })]);
+  const env = userEnv();
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data, []);
+  assert.ok(!hasPagesCache(env));
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data.map((p) => p.id), ['555']);
+});

@@ -253,7 +253,10 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
           if (!p.canInsights) { n += '（無成效權限）'; warn.push(1); }
           return n;
         });
-        var pageText = names.length ? names.join('、') : (t.kind === 'user' ? '沒有授權任何粉專' : '（找不到粉專）');
+        var pageText = names.length ? names.join('、')
+          : t.hint === 'debug_failed' ? '讀不到授權範圍，請設定 FB_APP_ID／FB_APP_SECRET 後再檢查'
+          : t.kind === 'user' ? '沒有授權任何粉專' : '（找不到粉專）';
+        if (t.skipped) { pageText += '；另有 ' + t.skipped + ' 個粉專換不到 token（可能沒有粉專角色）'; warn.push(1); }
         var kindText = t.kind === 'user' ? '用戶 token' : t.kind === 'page' ? '粉專 token' : (t.type || '—');
         var okRow = t.valid && t.pages.length && !t.missingScopes.length && !warn.length;
         if (!okRow) bad++;

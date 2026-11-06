@@ -85,8 +85,55 @@ async function fetchAccounts(env, userToken) {
     if (!(r.paging && r.paging.next) || !cur || typeof cur !== 'string') break;
     after = cur;
   }
-  derivedMem.set(userToken, { at: Date.now(), tokens: new Map(out.map((a) => [a.id, a.token])) });
   return out;
+}
+
+// 這些錯誤代表整組 token 不能用或暫時連不上；其餘（單一粉專沒權限、查不到）只略過那一項
+const isFatal = (e) => !(e instanceof GraphError) || ['fb_token_invalid', 'fb_rate_limited', 'fb_unreachable'].includes(e.code);
+
+// 用戶 token 授權了哪些粉專（debug_token 的 granular_scopes）。
+// 回 { ok, ids, post, insights }：post／insights 是有該權限的粉專 ID Set，null 代表沒限定粉專（全部）。
+async function grantedTargets(env, userToken) {
+  const appToken = env.FB_APP_ID && env.FB_APP_SECRET ? `${env.FB_APP_ID}|${env.FB_APP_SECRET}` : null;
+  let d;
+  try { d = ((await graphGet(env, appToken || userToken, '/debug_token', { input_token: userToken })) || {}).data || {}; }
+  catch (e) { if (isFatal(e)) throw e; return { ok: false, ids: [], post: null, insights: null }; }
+  const gs = Array.isArray(d.granular_scopes) ? d.granular_scopes : [];
+  const idsOf = (scope) => {
+    const g = gs.find((x) => x && x.scope === scope);
+    return g && Array.isArray(g.target_ids) ? g.target_ids.map(String).filter(isId) : null;
+  };
+  const ids = new Set();
+  for (const g of gs) {
+    if (!g || !Array.isArray(g.target_ids) || !(String(g.scope).startsWith('pages_') || g.scope === 'read_insights')) continue;
+    for (const id of g.target_ids.map(String)) if (isId(id)) ids.add(id);
+  }
+  const post = idsOf('pages_manage_posts'), insights = idsOf('read_insights');
+  return { ok: !!gs.length, ids: [...ids], post: post && new Set(post), insights: insights && new Set(insights) };
+}
+
+// 用戶 token → 各粉專資料與粉專 token（/me/accounts ＋ 授權範圍裡的粉專 ID，聯集）。
+// 換出的 token 一律先 rememberSecret 再做別的事；只存在記憶體。
+// 回 { pages: [{ ...粉專資料, tasks, perm, token }], hint: ''|'debug_failed'|'no_targets', skipped: 換不到 token 的粉專數 }
+async function derivePages(env, userToken) {
+  const acc = await fetchAccounts(env, userToken);
+  const g = await grantedTargets(env, userToken);
+  const pages = acc.map((a) => ({ ...a }));
+  let skipped = 0;
+  for (const id of g.ids) {
+    if (pages.some((p) => p.id === id)) continue;
+    try {
+      const me = await graphGet(env, userToken, `/${id}`, { fields: PAGE_FIELDS + ',access_token' });
+      if (typeof me.access_token !== 'string') { skipped++; continue; }
+      rememberSecret(me.access_token);
+      if (!isId(me.id)) { skipped++; continue; }
+      pages.push({ ...pageInfo(me), tasks: null, token: me.access_token });
+    } catch (e) { if (isFatal(e)) throw e; skipped++; }
+  }
+  for (const p of pages) p.perm = { post: g.post ? g.post.has(p.id) : null, insights: g.insights ? g.insights.has(p.id) : null };
+  derivedMem.set(userToken, { at: Date.now(), tokens: new Map(pages.map((p) => [p.id, p.token])) });
+  const hint = pages.length ? '' : (!g.ok ? 'debug_failed' : 'no_targets');
+  return { pages, hint, skipped };
 }
 
 // 逐組掃描：回 { pages, info }。info[i] = { kind: 'page'|'user'|'invalid'|'error', pageIds, error }
@@ -109,9 +156,9 @@ export async function scanTokens(env) {
     }
     // code 100：當作用戶 token
     try {
-      const acc = await fetchAccounts(env, tokens[i]);
-      info[i] = { kind: 'user', pageIds: acc.map((a) => a.id), error: '' };
-      for (const a of acc) viaUser.push({ ...pageInfo(a), idx: i, via: 'user', tasks: a.tasks });
+      const { pages: acc, hint, skipped } = await derivePages(env, tokens[i]);
+      info[i] = { kind: 'user', pageIds: acc.map((a) => a.id), error: '', hint, skipped };
+      for (const a of acc) viaUser.push({ ...pageInfo(a), idx: i, via: 'user', tasks: a.tasks, perm: a.perm });
     } catch (e) {
       info[i] = { kind: e instanceof GraphError && e.code === 'fb_token_invalid' ? 'invalid' : 'error', pageIds: [], error: e instanceof GraphError ? e.message : '' };
       if (!(e instanceof GraphError) || e.code !== 'fb_token_invalid') transient = true;
@@ -143,9 +190,9 @@ async function tokenFor(env, pageId) {
   if (p.via !== 'user') return t;
   const mem = derivedMem.get(t);
   if (mem && Date.now() - mem.at < MEM_TTL_MS && mem.tokens.has(pageId)) return mem.tokens.get(pageId);
-  const acc = await fetchAccounts(env, t);
+  const { pages: acc } = await derivePages(env, t);
   const hit = acc.find((a) => a.id === pageId);
-  return hit ? hit.token : null;   // 已不在授權清單 → fb_unknown_page
+  return hit ? hit.token : null;   // 已不在授權範圍 → fb_unknown_page
 }
 
 const publicPage = ({ id, name, link, picture, followers }) => ({ id, name, link, picture, followers });
@@ -326,11 +373,10 @@ export async function handleFb(request, env, path) {
 
 // ---- 管理頁：每組 token 的狀態（不回傳 token 值） ----
 // GET /admin/fb（已通過 admin 驗證）
-const pageRow = (p) => ({
-  id: p.id, name: p.name,
-  canPost: p.tasks === null || p.tasks.includes('CREATE_CONTENT') || p.tasks.includes('MANAGE'),
-  canInsights: p.tasks === null || p.tasks.includes('ANALYZE') || p.tasks.includes('MANAGE')
-});
+// 有 tasks（/me/accounts）看 tasks；沒有就看授權範圍（perm）；都沒有當作可以
+const allowed = (p, task, key) => (Array.isArray(p.tasks) ? p.tasks.includes(task) || p.tasks.includes('MANAGE')
+  : !(p.perm && p.perm[key] === false));
+const pageRow = (p) => ({ id: p.id, name: p.name, canPost: allowed(p, 'CREATE_CONTENT', 'post'), canInsights: allowed(p, 'ANALYZE', 'insights') });
 
 export async function adminFb(request, env, path) {
   if (path !== '/admin/fb' || request.method !== 'GET') return null;
@@ -348,7 +394,8 @@ export async function adminFb(request, env, path) {
     });
     const item = {
       index: i + 1, kind: inf.kind, pages: mine, valid: inf.kind === 'page' || inf.kind === 'user', type: '',
-      expiresAt: null, dataAccessExpiresAt: null, scopes: [], missingScopes: [], error: inf.error || ''
+      expiresAt: null, dataAccessExpiresAt: null, scopes: [], missingScopes: [], error: inf.error || '',
+      hint: inf.hint || '', skipped: inf.skipped || 0
     };
     try {
       const r = await graphGet(env, appToken || tokens[i], '/debug_token', { input_token: tokens[i] });
