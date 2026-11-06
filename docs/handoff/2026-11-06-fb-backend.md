@@ -31,20 +31,20 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/graph.js` | Graph 用戶端：`pageTokens`、`appsecretProof`、`scrub`（抹掉 token）、`classify`、`graphGet`、`graphPost`、`GraphError` | ✅ 已寫，未測 |
-| `server/core/fb.js` | `handleFb`、`adminFb`、`loadPages`、`checkPost`（純函式，可單測） | ✅ 已寫，未測 |
-| `server/core/http.js` | `MESSAGES`／`STATUS` 加上 fb 錯誤代碼（訊息見上；狀態碼：not_configured 503、token_invalid 502、permission 403、rate_limited 429、bad_request 400、error 502、unreachable 502、unknown_page 404） | ⬜ |
-| `server/index.js` | `modules` 加 `handleFb`；`adminExtras.push(adminFb)` | ⬜ |
-| `server/core/admin-page.js` | 加「臉書連線」卡片：按鈕呼叫 `/admin/fb`，表格列出每組 token 狀態，缺權限標紅 | ⬜ |
-| `server/wrangler.toml` | `[vars]` 加 `FB_GRAPH_VERSION = "v26.0"`；Secrets 註解加 `FB_TOKEN`、`FB_APP_ID`、`FB_APP_SECRET`（後兩個選填） | ⬜ |
-| `docs/deploy.md` | 新增「步驟：連接臉書粉專」：`npx wrangler secret put FB_TOKEN` → 部署 → 管理頁按「檢查臉書連線」 | ⬜ |
-| `test/server/fb.test.js` | 假 `globalThis.fetch` 模擬 Graph（參考 `test/server/fetch.test.js`）：沒憑證 401、沒設 token 503、粉專清單、未知粉專 404、發文（feed／photos／排程）參數正確、排程超出範圍 400、token 失效 → 清快取＋502、**回應與錯誤訊息都不含 token**、insights 逐一重問、admin 不含 token | ⬜ |
-| 規格 §6 表格 | 加一列 fb 模組 | ⬜ |
+| `server/core/graph.js` | Graph 用戶端：`pageTokens`、`appsecretProof`、`scrub`（抹掉 token）、`classify`、`graphGet`、`graphPost`、`GraphError` | ✅ 完成，測試通過 |
+| `server/core/fb.js` | `handleFb`、`adminFb`、`loadPages`、`checkPost`（純函式，可單測） | ✅ 完成，測試通過 |
+| `server/core/http.js` | `MESSAGES`／`STATUS` 加上 fb 錯誤代碼（訊息見上；狀態碼：not_configured 503、token_invalid 502、permission 403、rate_limited 429、bad_request 400、error 502、unreachable 502、unknown_page 404） | ✅ |
+| `server/index.js` | `modules` 加 `handleFb`；`adminExtras.push(adminFb)` | ✅ |
+| `server/core/admin-page.js` | 加「臉書連線」卡片：按鈕呼叫 `/admin/fb`，表格列出每組 token 狀態，缺權限標紅 | ✅ |
+| `server/wrangler.toml` | `[vars]` 加 `FB_GRAPH_VERSION = "v26.0"`；Secrets 註解加 `FB_TOKEN`、`FB_APP_ID`、`FB_APP_SECRET`（後兩個選填） | ✅ |
+| `docs/deploy.md` | 新增「步驟：連接臉書粉專」：`npx wrangler secret put FB_TOKEN` → 部署 → 管理頁按「檢查臉書連線」 | ✅ |
+| `test/server/fb.test.js` | 假 `globalThis.fetch` 模擬 Graph（參考 `test/server/fetch.test.js`）：沒憑證 401、沒設 token 503、粉專清單、未知粉專 404、發文（feed／photos／排程）參數正確、排程超出範圍 400、token 失效 → 清快取＋502、**回應與錯誤訊息都不含 token**、insights 逐一重問、admin 不含 token | ✅ |
+| 規格 §6 表格 | 加一列 fb 模組 | ✅ |
 
 ## 下一步
-- [ ] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞
-- [ ] 寫 `test/server/fb.test.js`，全綠
-- [ ] 管理頁卡片、`wrangler.toml`、`deploy.md`、規格 §6
+- [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞
+- [x] 寫 `test/server/fb.test.js`，全綠（15 項；全部 211 項通過）
+- [x] 管理頁卡片、`wrangler.toml`、`deploy.md`（步驟 6-2）、規格 §6
 - [ ] 派獨立代理審查（CLAUDE.md 省 token 規則第 9 條），重點：token 外洩、白名單繞過
 - [ ] 給使用者看測試結果；說「推」才併入 main，同時更新 CLAUDE.md「目前進度」
 - [ ] 使用者部署後實測：管理頁看 token 狀態 → `/fb/pages` → 發一篇排程貼文再到粉專後台刪掉

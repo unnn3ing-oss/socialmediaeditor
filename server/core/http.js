@@ -7,9 +7,19 @@ export const MESSAGES = {
   not_found: '找不到。',
   too_large: '內容太大。',
   bad_request: '請求內容不正確。',
-  misconfigured: '後端設定不完整，請檢查 Secrets。'
+  misconfigured: '後端設定不完整，請檢查 Secrets。',
+  fb_not_configured: '後端還沒設定臉書 token（FB_TOKEN）。',
+  fb_token_invalid: '臉書 token 失效或過期，請到管理頁檢查。',
+  fb_permission: '臉書 token 缺少需要的權限。',
+  fb_rate_limited: '臉書呼叫太頻繁，請稍後再試。',
+  fb_bad_request: '臉書拒絕這個請求。',
+  fb_error: '臉書回傳錯誤。',
+  fb_unreachable: '連不到臉書。',
+  fb_unknown_page: '這個粉專不在後端設定的 token 裡。'
 };
-export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500 };
+export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
+  fb_not_configured: 503, fb_token_invalid: 502, fb_permission: 403, fb_rate_limited: 429, fb_bad_request: 400,
+  fb_error: 502, fb_unreachable: 502, fb_unknown_page: 404 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

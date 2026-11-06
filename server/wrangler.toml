@@ -5,6 +5,8 @@ compatibility_date = "2026-10-01"
 
 [vars]
 ALLOWED_ORIGIN = "https://unnn3ing-oss.github.io"
+# 臉書 Graph API 版本（臉書出新版、舊版快到期時再改）
+FB_GRAPH_VERSION = "v26.0"
 
 [[d1_databases]]
 binding = "DB"
@@ -25,3 +27,4 @@ crons = ["17 19 * * *"]
 
 # Secrets 不寫在這裡，用 wrangler secret put 設定：
 #   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET
+#   臉書：FB_TOKEN（粉專長效 token，多組用逗號分隔）；選填 FB_APP_ID、FB_APP_SECRET

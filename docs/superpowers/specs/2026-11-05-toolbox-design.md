@@ -289,12 +289,13 @@ socialmediaeditor/
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
 | fetch | `GET /fetch?url=` | 代抓公開網頁的標題與 OG 圖；只允許白名單網域 | KV 快取 |
+| fb | `GET /fb/pages`、`/fb/posts`、`/fb/scheduled`、`/fb/insights`、`POST /fb/post`、`GET /admin/fb` | 臉書粉專：清單、貼文成效、發文／排程（需公司憑證）；管理頁檢查 token 狀態。只放行這些動作，不做萬用代理 | 粉專 token 放 Secrets（`FB_TOKEN`），KV 快取 |
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
 | rundown | `/t/sched/rundown` | 轉送 Rundown 到 Apps Script（從 `snn-images` 複製） | Secrets |
 | cron | 每日 | 清理過期圖床檔案、日誌 | — |
 
 - 工具專屬路由放在 `tools/<id>/api.js`，`build.js` 自動掛到 `/t/<id>/`。
-- 必要 Secrets：`COMPANY_PASSWORD`、`ADMIN_PASSWORD`、`SESSION_SECRET`；Rundown 另需 `RUNDOWN_URL`、`RUNDOWN_TOKEN`。
+- 必要 Secrets：`COMPANY_PASSWORD`、`ADMIN_PASSWORD`、`SESSION_SECRET`；Rundown 另需 `RUNDOWN_URL`、`RUNDOWN_TOKEN`；臉書另需 `FB_TOKEN`（選填 `FB_APP_ID`、`FB_APP_SECRET`）。
 - CORS 只允許工具箱網址。
 - **部署要你在 Cloudflare 操作**（建立 D1、R2、KV、設定 Secrets）。我會寫好逐步說明和 `wrangler.toml`。
 

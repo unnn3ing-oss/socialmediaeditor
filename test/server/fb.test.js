@@ -1,0 +1,247 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { mkEnv } = require('../helpers/fake-env.js');
+
+const ORIGIN = 'https://unnn3ing-oss.github.io';
+const TOKEN_A = 'EAAPageTokenAAAAAAAAAAAAAAAAAAAAAAAA111';
+const TOKEN_B = 'EAAPageTokenBBBBBBBBBBBBBBBBBBBBBBBB222';
+const SECRET = 'app-secret-xyz-123456';
+let worker, tokenMod, fbMod;
+const load = async () => (worker = worker || (await import('../../server/index.js')).default);
+const loadToken = async () => (tokenMod = tokenMod || (await import('../../server/core/token.js')));
+const loadFb = async () => (fbMod = fbMod || (await import('../../server/core/fb.js')));
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+const fbEnv = (extra = {}) => mkEnv({ FB_TOKEN: `${TOKEN_A},\n${TOKEN_B}`, ...extra });
+
+// 假 Graph：依 token 決定是哪個粉專；routes 可覆寫
+let calls, realFetch, routes;
+const PAGES = { [TOKEN_A]: { id: '111', name: '新聞粉專' }, [TOKEN_B]: { id: '222', name: '娛樂粉專' } };
+const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const fbErr = (code, message, status = 400) => reply({ error: { code, message, type: 'OAuthException' } }, status);
+
+async function tokenOf(url, init) {
+  const u = new URL(url);
+  if (u.searchParams.get('access_token')) return u.searchParams.get('access_token');
+  if (init && init.body instanceof FormData) return init.body.get('access_token');
+  return null;
+}
+
+test.beforeEach(() => {
+  calls = [];
+  routes = [];
+  realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    url = String(url);
+    const tok = await tokenOf(url, init);
+    calls.push({ url, init, tok, path: new URL(url).pathname });
+    for (const [re, fn] of routes) if (re.test(new URL(url).pathname)) return fn(url, init, tok);
+    const p = new URL(url).pathname;
+    if (p.endsWith('/me')) return PAGES[tok] ? reply({ ...PAGES[tok], link: 'https://fb.com/x', followers_count: 1000 }) : fbErr(190, 'Invalid OAuth access token ' + tok);
+    return reply({ data: [] });
+  };
+});
+test.afterEach(() => { globalThis.fetch = realFetch; });
+
+async function call(path, init = {}, env) {
+  const w = await load();
+  const headers = Object.assign({ origin: ORIGIN }, init.headers || {});
+  return w.fetch(new Request('https://api.test' + path, { ...init, headers }), env, { waitUntil() {} });
+}
+async function auth(env, kind = 'company') {
+  const { signToken } = await loadToken();
+  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600)) };
+}
+async function getJ(env, path, kind) {
+  const res = await call(path, { headers: await auth(env, kind) }, env);
+  const text = await res.text();
+  return { res, text, body: JSON.parse(text) };
+}
+async function postJ(env, body) {
+  const res = await call('/fb/post', { method: 'POST', headers: { ...(await auth(env)), 'content-type': 'application/json' }, body: JSON.stringify(body) }, env);
+  const text = await res.text();
+  return { res, text, body: JSON.parse(text) };
+}
+const noToken = (text) => { for (const t of [TOKEN_A, TOKEN_B, SECRET]) assert.ok(!text.includes(t), '回應不可含 token／secret'); };
+
+test('沒有公司憑證回 401，也不會打 Graph', async () => {
+  const env = fbEnv();
+  const res = await call('/fb/pages', {}, env);
+  assert.equal(res.status, 401);
+  const admin = await getJ(env, '/fb/pages', 'admin');
+  assert.equal(admin.res.status, 401);
+  assert.equal(calls.length, 0);
+});
+
+test('沒設 FB_TOKEN 回 fb_not_configured', async () => {
+  const env = mkEnv();
+  const { res, body } = await getJ(env, '/fb/pages');
+  assert.equal(res.status, 503);
+  assert.equal(body.code, 'fb_not_configured');
+});
+
+test('粉專清單：每組 token 對應一個粉專，回應不含 token，第二次走快取', async () => {
+  const env = fbEnv();
+  const { res, body, text } = await getJ(env, '/fb/pages');
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.data.map((p) => [p.id, p.name, p.followers]), [['111', '新聞粉專', 1000], ['222', '娛樂粉專', 1000]]);
+  assert.ok(!('idx' in body.data[0]));
+  noToken(text);
+  for (const v of env.CACHE.store.values()) noToken(v.value);
+  const n = calls.length;
+  await getJ(env, '/fb/pages');
+  assert.equal(calls.length, n);
+});
+
+test('有 FB_APP_SECRET 時帶 appsecret_proof（HMAC-SHA256 hex）', async () => {
+  const env = fbEnv({ FB_APP_SECRET: SECRET });
+  await getJ(env, '/fb/pages');
+  const crypto = require('node:crypto');
+  const expect = crypto.createHmac('sha256', SECRET).update(TOKEN_A).digest('hex');
+  const c = calls.find((x) => x.tok === TOKEN_A);
+  assert.equal(new URL(c.url).searchParams.get('appsecret_proof'), expect);
+  assert.match(c.url, /graph\.facebook\.com\/v26\.0\//);
+});
+
+test('貼文列表：用對應粉專的 token，整理欄位與下一頁游標', async () => {
+  const env = fbEnv();
+  routes.push([/\/222\/published_posts$/, () => reply({
+    data: [{ id: '222_9', message: '哈囉', created_time: '2026-11-01T00:00:00+0000', permalink_url: 'https://fb.com/p', full_picture: 'https://img', status_type: 'added_photos', shares: { count: 3 }, comments: { summary: { total_count: 4 } }, reactions: { summary: { total_count: 5 } } }],
+    paging: { cursors: { after: 'CUR1' }, next: 'https://graph.facebook.com/next' }
+  })]);
+  const { res, body } = await getJ(env, '/fb/posts?page=222&limit=5');
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.data.items[0], { id: '222_9', message: '哈囉', created: '2026-11-01T00:00:00+0000', url: 'https://fb.com/p', picture: 'https://img', type: 'added_photos', shares: 3, comments: 4, reactions: 5 });
+  assert.equal(body.data.next, 'CUR1');
+  const c = calls.find((x) => x.path.endsWith('/published_posts'));
+  assert.equal(c.tok, TOKEN_B);
+  assert.equal(new URL(c.url).searchParams.get('limit'), '5');
+});
+
+test('不在設定裡的粉專回 404；參數格式錯回 400', async () => {
+  const env = fbEnv();
+  assert.equal((await getJ(env, '/fb/posts?page=999')).body.code, 'fb_unknown_page');
+  assert.equal((await getJ(env, '/fb/posts?page=../me')).res.status, 400);
+  assert.equal((await getJ(env, '/fb/posts?page=111&after=a%26b')).res.status, 400);
+  assert.equal((await getJ(env, '/fb/insights?post=111')).res.status, 400);
+  assert.equal((await getJ(env, '/fb/insights?post=999_1')).body.code, 'fb_unknown_page');
+  assert.equal((await getJ(env, '/fb/whatever')).res.status, 404);
+});
+
+test('成效：整批失敗時逐一重問，被停用的指標列在 missing', async () => {
+  const env = fbEnv();
+  routes.push([/\/111_7\/insights$/, (url) => {
+    const m = new URL(url).searchParams.get('metric');
+    if (m.includes(',') || m === 'post_clicks') return fbErr(100, '(#100) The value must be a valid insights metric');
+    return reply({ data: [{ name: m, values: [{ value: m === 'post_reactions_by_type_total' ? { like: 2 } : 42 }] }] });
+  }]);
+  const { body } = await getJ(env, '/fb/insights?post=111_7');
+  assert.deepEqual(body.data.metrics, { post_media_view: 42, post_total_media_view_unique: 42, post_reactions_by_type_total: { like: 2 } });
+  assert.deepEqual(body.data.missing, ['post_clicks']);
+});
+
+test('發文（文字＋連結）走 /feed，token 放本文不放網址', async () => {
+  const env = fbEnv();
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_55' })]);
+  const { res, body, text } = await postJ(env, { page: '111', message: '新聞來了', link: 'https://news.tvbs.com.tw/x' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.data, { id: '111_55', scheduled: false, at: null });
+  noToken(text);
+  const c = calls.find((x) => x.path.endsWith('/feed'));
+  assert.equal(c.init.method, 'POST');
+  assert.ok(!c.url.includes('access_token'));
+  assert.equal(c.init.body.get('message'), '新聞來了');
+  assert.equal(c.init.body.get('link'), 'https://news.tvbs.com.tw/x');
+  assert.equal(c.init.body.get('published'), null);
+  const log = env.DB.raw.prepare('SELECT tool, code FROM logs').all();
+  assert.deepEqual(log.map((r) => ({ ...r })), [{ tool: 'fb', code: 'post-published' }]);
+});
+
+test('排程發圖（網址）走 /photos，帶 published=false 與排程時間', async () => {
+  const env = fbEnv();
+  routes.push([/\/222\/photos$/, () => reply({ id: '9', post_id: '222_9' })]);
+  const at = nowSec() + 3600;
+  const { body } = await postJ(env, { page: '222', message: '圖說', imageUrl: 'https://example.com/a.jpg', scheduledAt: at });
+  assert.deepEqual(body.data, { id: '222_9', scheduled: true, at });
+  const fd = calls.find((x) => x.path.endsWith('/photos')).init.body;
+  assert.equal(fd.get('caption'), '圖說');
+  assert.equal(fd.get('url'), 'https://example.com/a.jpg');
+  assert.equal(fd.get('published'), 'false');
+  assert.equal(fd.get('scheduled_publish_time'), String(at));
+});
+
+test('multipart 上傳圖片檔轉成 source', async () => {
+  const env = fbEnv();
+  routes.push([/\/111\/photos$/, () => reply({ id: '1', post_id: '111_1' })]);
+  const fd = new FormData();
+  fd.append('page', '111');
+  fd.append('message', '有圖');
+  fd.append('image', new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1, 2])], { type: 'image/jpeg' }), 'a.jpg');
+  const res = await call('/fb/post', { method: 'POST', headers: await auth(env), body: fd }, env);
+  assert.equal(res.status, 200);
+  const src = calls.find((x) => x.path.endsWith('/photos')).init.body.get('source');
+  assert.equal(src.size, 5);
+});
+
+test('發文檢查：時間範圍、連結＋圖片衝突、空內容、圖片類型', async () => {
+  const { checkPost } = await loadFb();
+  const now = 1_800_000_000;
+  assert.match(checkPost({ page: '1', message: 'x', scheduledAt: now + 60 }, now), /10 分鐘/);
+  assert.match(checkPost({ page: '1', message: 'x', scheduledAt: now + 31 * 86400 }, now), /30 天/);
+  assert.match(checkPost({ page: '1', link: 'https://a', imageUrl: 'https://b' }, now), /擇一/);
+  assert.match(checkPost({ page: '1', message: '  ' }, now), /至少/);
+  assert.match(checkPost({ page: '1', imageUrl: 'http://b' }, now), /https/);
+  assert.match(checkPost({ page: '1', image: { size: 10, type: 'application/pdf' } }, now), /只支援/);
+  assert.equal(typeof checkPost({ page: '1', message: 'ok', scheduledAt: now + 3600 }, now), 'object');
+  const env = fbEnv();
+  const { res } = await postJ(env, { page: '111', message: 'x', scheduledAt: nowSec() + 60 });
+  assert.equal(res.status, 400);
+  assert.equal(calls.filter((x) => x.path.endsWith('/feed')).length, 0);
+});
+
+test('token 失效：回 502、清掉粉專快取、錯誤訊息不含 token，並記錄失敗', async () => {
+  const env = fbEnv();
+  await getJ(env, '/fb/pages');
+  assert.ok(env.CACHE.store.has('fb:pages:v1'));
+  routes.push([/\/111\/feed$/, () => fbErr(190, `Error validating access token: ${TOKEN_A} has expired`)]);
+  const { res, body, text } = await postJ(env, { page: '111', message: 'x' });
+  assert.equal(res.status, 502);
+  assert.equal(body.code, 'fb_token_invalid');
+  noToken(text);
+  assert.ok(!env.CACHE.store.has('fb:pages:v1'));
+  const codes = env.DB.raw.prepare('SELECT code FROM logs').all().map((r) => r.code);
+  assert.deepEqual(codes, ['post-failed-190']);
+});
+
+test('權限不足、呼叫太頻繁對應到各自的代碼', async () => {
+  const env = fbEnv();
+  routes.push([/\/111\/scheduled_posts$/, () => fbErr(200, 'Requires pages_manage_posts')]);
+  routes.push([/\/222\/scheduled_posts$/, () => fbErr(4, 'Application request limit reached')]);
+  assert.equal((await getJ(env, '/fb/scheduled?page=111')).res.status, 403);
+  assert.equal((await getJ(env, '/fb/scheduled?page=222')).body.code, 'fb_rate_limited');
+});
+
+test('管理頁：列出每組 token 的狀態與缺少的權限，不含 token；要管理憑證', async () => {
+  const env = fbEnv({ FB_APP_ID: '12345', FB_APP_SECRET: SECRET });
+  routes.push([/\/debug_token$/, (url, init, tok) => {
+    assert.equal(tok, `12345|${SECRET}`);
+    const input = new URL(url).searchParams.get('input_token');
+    return reply({ data: { is_valid: true, type: 'PAGE', expires_at: 0, scopes: input === TOKEN_A ? ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts'] : ['pages_show_list'] } });
+  }]);
+  assert.equal((await call('/admin/fb', { headers: await auth(env, 'company') }, env)).status, 401);
+  const { res, body, text } = await getJ(env, '/admin/fb', 'admin');
+  assert.equal(res.status, 200);
+  noToken(text);
+  assert.equal(body.data.version, 'v26.0');
+  assert.deepEqual(body.data.tokens.map((t) => [t.page.name, t.valid, t.type, t.expiresAt, t.missingScopes.length]),
+    [['新聞粉專', true, 'PAGE', 0, 0], ['娛樂粉專', true, 'PAGE', 0, 3]]);
+});
+
+test('scrub 會抹掉 token 與 access_token 參數', async () => {
+  const { scrub, pageTokens } = await import('../../server/core/graph.js');
+  const env = { FB_TOKEN: `${TOKEN_A} ${TOKEN_A} short`, FB_APP_SECRET: SECRET };
+  assert.deepEqual(pageTokens(env), [TOKEN_A]);
+  const s = scrub(env, `bad ${TOKEN_A} ${SECRET} https://x?access_token=zzz&y=1`);
+  noToken(s);
+  assert.ok(!s.includes('zzz'));
+});

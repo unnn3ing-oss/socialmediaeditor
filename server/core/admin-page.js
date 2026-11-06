@@ -29,6 +29,7 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--li
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .msg{min-height:24px;margin:8px 0 0;font-weight:600}
 .msg.err{color:var(--danger)}
+td.err{color:var(--danger);font-weight:600}
 .msg.good{color:#1a6b3a}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e3e5e8;vertical-align:middle}
@@ -92,8 +93,18 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
 
     <section class="card">
+      <h2>臉書連線</h2>
+      <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組粉專 token 的狀態（不會顯示 token 本身）。</p>
+      <div class="row"><button id="fbBtn" type="button">檢查臉書連線</button></div>
+      <p class="msg" id="fbMsg" role="status"></p>
+      <div class="scroll" id="fbWrap" hidden>
+        <table><thead><tr><th>#</th><th>粉專</th><th>狀態</th><th>類型</th><th>到期</th><th>缺少的權限</th></tr></thead><tbody id="fbRows"></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>錯誤日誌</h2>
-      <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。</p>
+      <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。臉書發文的成功／失敗也記在這裡（工具 <code>fb</code>）。</p>
       <div class="row"><button id="logBtn" type="button">查看最近 7 天</button></div>
       <p class="msg" id="logMsg" role="status"></p>
       <div class="scroll" id="logWrap" hidden>
@@ -222,6 +233,33 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       say($('logMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '最近 7 天沒有任何錯誤。', 'good');
     }).catch(function () { say($('logMsg'), '讀取日誌失敗。', 'err'); })
       .then(function () { $('logBtn').disabled = false; });
+  };
+
+  $('fbBtn').onclick = function () {
+    $('fbBtn').disabled = true; say($('fbMsg'), '檢查中');
+    api('/admin/fb').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data, tb = $('fbRows'); tb.textContent = '';
+      if (!d.configured) { $('fbWrap').hidden = true; return say($('fbMsg'), '還沒設定 FB_TOKEN，請照部署說明「連接臉書粉專」操作。', 'err'); }
+      var bad = 0;
+      d.tokens.forEach(function (t) {
+        var exp = t.expiresAt === 0 ? '不會過期' : t.expiresAt ? fmtTime(t.expiresAt * 1000) : '—';
+        var okRow = t.valid && t.page && !t.missingScopes.length;
+        if (!okRow) bad++;
+        var tr = document.createElement('tr');
+        [t.index, t.page ? t.page.name : '（找不到粉專）', t.valid ? '有效' : '無效' + (t.error ? '：' + t.error : ''), t.type || '—', exp, t.missingScopes.join('、') || '—']
+          .forEach(function (v, i) {
+            var c = document.createElement('td'); c.textContent = v;
+            if ((i === 2 && !t.valid) || (i === 5 && t.missingScopes.length) || (i === 1 && !t.page)) c.className = 'err';
+            tr.appendChild(c);
+          });
+        tb.appendChild(tr);
+      });
+      $('fbWrap').hidden = false;
+      var note = 'Graph ' + d.version + (d.appSecret ? '' : '；未設 FB_APP_SECRET（選填）');
+      say($('fbMsg'), bad ? bad + ' 組 token 有問題。' + note : '全部正常。' + note, bad ? 'err' : 'good');
+    }).catch(function (e) { say($('fbMsg'), '檢查失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('fbBtn').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };

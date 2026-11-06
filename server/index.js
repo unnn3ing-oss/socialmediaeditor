@@ -6,8 +6,9 @@ import { handleAssets } from './core/assets.js';
 import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
+import { handleFb, adminFb } from './core/fb.js';
 
-adminExtras.push(adminLogs);
+adminExtras.push(adminLogs, adminFb);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -17,6 +18,7 @@ const modules = [
   (req, env, ctx, path) => handleAssets(req, env, path),
   (req, env, ctx, path) => handleLogs(req, env, path),
   (req, env, ctx, path) => handleFetch(req, env, path),
+  (req, env, ctx, path) => handleFb(req, env, path),
   (req, env, ctx, path) => handleAdmin(req, env, path)
 ];
 

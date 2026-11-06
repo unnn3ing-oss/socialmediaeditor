@@ -149,6 +149,43 @@ npx wrangler deploy
 
 ---
 
+## 步驟 6-2：連接臉書粉專（選做）
+
+讓工具箱可以讀粉專貼文成效、發文和排程。token **只存在 Cloudflare**，不要貼到 GitHub、聊天或任何文件裡。
+
+1. 準備好**粉專長效 token**（每個粉專一組）。在 Graph API Explorer 的「存取權杖偵錯工具」確認：類型是 `Page`、到期是「永不」，權限包含：
+
+   | 權限 | 用途 |
+   |---|---|
+   | `pages_show_list` | 列出粉專 |
+   | `pages_read_engagement` | 讀貼文、留言數、心情數 |
+   | `read_insights` | 讀貼文成效 |
+   | `pages_manage_posts` | 發文、排程 |
+
+2. 在 `server` 資料夾執行，出現提示時貼上 token（**多個粉專用逗號隔開，貼在同一行**）：
+
+   ```
+   npx wrangler secret put FB_TOKEN
+   ```
+
+   **成功的樣子：** 印出 `Success! Uploaded secret FB_TOKEN`。
+
+3. （選填，建議）如果臉書 App 有開「要求 App 密鑰」，或想讓管理頁用 App 身分檢查 token，也設定這兩個（在 Meta 開發者後台 → 你的 App → 設定 → 基本資料）：
+
+   ```
+   npx wrangler secret put FB_APP_ID
+   npx wrangler secret put FB_APP_SECRET
+   ```
+
+4. 重新部署：`npx wrangler deploy`
+5. 打開 `後端網址/admin` 登入，按「臉書連線」的「檢查臉書連線」。
+
+   **成功的樣子：** 每組 token 一列，看得到粉專名稱，狀態「有效」，到期「不會過期」，「缺少的權限」是「—」，上方顯示「全部正常。」
+
+> 要換 token 或新增粉專：重新執行第 2 步（要貼上**全部**的 token，新值會整個取代舊值），再部署一次。
+
+---
+
 ## 步驟 7：開啟網站（併入 main 之後才做）
 
 這一步等程式併入 `main` 之後再做：
@@ -168,6 +205,7 @@ npx wrangler deploy
 | 換 Logo、版型 | `後端網址/admin` 上傳同名檔案 |
 | 看有沒有人回報錯誤 | 登入 `後端網址/admin`，按「錯誤日誌」的「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
 | 更新後端程式 | 在 `server` 資料夾再執行一次 `npx wrangler deploy` |
+| 臉書 token 換了、新增粉專 | 照步驟 6-2 第 2 步重設 `FB_TOKEN`，再部署，管理頁按「檢查臉書連線」 |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |
 
 每天台灣時間 03:17 後端會自動清掉 30 天前的日誌，不用管。
@@ -179,4 +217,6 @@ npx wrangler deploy
 | 工具箱顯示公司素材載不到、瀏覽器主控台有 CORS 錯誤 | 網站網址和 `ALLOWED_ORIGIN` 不一致 | 檢查 `wrangler.toml` 的 `ALLOWED_ORIGIN`（不要結尾斜線），重新部署 |
 | 輸入公司密碼一直失敗 | 密碼設錯，或 Secrets 沒設 | 重新執行步驟 3 對應的指令 |
 | `/assets/manifest` 出現 `misconfigured` | `SESSION_SECRET` 少於 32 字，或密碼沒設 | 重新產生金鑰並重設 |
+| 工具箱說「臉書 token 失效或過期」 | token 被撤銷，或擁有者改了密碼、拿掉權限 | 管理頁按「檢查臉書連線」看哪一組，重新產生 token 後照步驟 6-2 重設 |
+| 工具箱說「臉書 token 缺少需要的權限」 | 產生 token 時沒勾到權限 | 管理頁看「缺少的權限」，重新產生 token 時勾上 |
 | 步驟 2 說找不到資料庫 | `database_id` 填錯 | 回步驟 1 檢查 `wrangler.toml` |
