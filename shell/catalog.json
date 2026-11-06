@@ -76,6 +76,17 @@
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
       "entry": "tools/design/index.html"
+    },
+    {
+      "id": "fbpost",
+      "name": "排程發布",
+      "group": "發文與素材",
+      "desc": "臉書粉專多選發文、排程與成效",
+      "tier": "company",
+      "requires": [],
+      "icon": "tools/fbpost/icon.svg",
+      "thumb": "tools/fbpost/thumb.svg",
+      "entry": "tools/fbpost/index.html"
     }
   ]
 }

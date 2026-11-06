@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>排程發布</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../../ui/tokens.css">
+<link rel="stylesheet" href="tool.css">
+</head>
+<body>
+<main class="fp">
+  <header class="fp-head">
+    <h1>排程發布</h1>
+    <span class="pill" id="pagesState">讀取粉專中…</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="pagesRefresh">重新整理粉專</button>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-primary" id="newPost">＋ 新增發文</button>
+  </header>
+
+  <div class="seg" role="tablist" aria-label="分頁" id="tabs">
+    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="stats">成效</button>
+  </div>
+
+  <section id="tab-sched" class="tab">
+    <div class="bar">
+      <label class="inline">粉專 <select id="schedPage"></select></label>
+      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">重新整理</button>
+      <span class="hint" id="schedHint" role="status"></span>
+    </div>
+    <ul class="list" id="schedList"></ul>
+  </section>
+
+  <section id="tab-stats" class="tab" hidden>
+    <div class="bar">
+      <label class="inline">粉專 <select id="statsPage"></select></label>
+      <button type="button" class="btn btn-secondary btn-sm" id="statsReload">重新整理</button>
+      <span class="hint" id="statsHint" role="status"></span>
+    </div>
+    <ul class="list" id="statsList"></ul>
+    <div class="more"><button type="button" class="btn btn-secondary btn-sm" id="statsMore" hidden>載入更多</button></div>
+  </section>
+</main>
+
+<!-- 新增發文（彈窗）：關閉不會清內容，只有「清空」會清 -->
+<dialog class="fp-modal" id="modal" aria-labelledby="mTitle">
+  <header class="m-head">
+    <h2 id="mTitle">新增發文</h2>
+    <div class="seg sm" role="group" aria-label="發文模式" id="modeSeg">
+      <button type="button" class="is-on" data-mode="frame">作圖框</button>
+      <button type="button" data-mode="text">純文字</button>
+    </div>
+    <span class="grow"></span>
+    <button type="button" class="x" id="mClose" aria-label="關閉（內容會保留）" title="關閉（內容會保留）">✕</button>
+  </header>
+
+  <div class="m-body">
+    <div class="url-block">
+      <label for="url">文章網址</label>
+      <div class="urlrow">
+        <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://news.tvbs.com.tw/…">
+        <button type="button" class="btn btn-secondary btn-sm" id="fillBtn">帶入</button>
+      </div>
+      <p class="hint" id="urlHint" role="status"></p>
+    </div>
+
+    <div class="m-left">
+      <!-- 作圖框 -->
+      <div id="framePane">
+        <div class="canvas-wrap" id="canvasWrap" tabindex="0" aria-label="照片：點選、拖曳或貼上">
+          <canvas id="editorCanvas" width="1080" height="1080"></canvas>
+        </div>
+        <div class="under">
+          <div class="seg sm" role="group" aria-label="版型" id="frameSeg"></div>
+          <button type="button" class="btn btn-secondary btn-sm" id="pickImg">選照片</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="clearImg" hidden>移除照片</button>
+        </div>
+        <div class="fx-bar" id="fxBar" role="group" aria-label="T寶貼圖與馬賽克"></div>
+        <p class="hint">預覽就是實際送出的圖（照片＋框＋標題＋貼圖）。滾輪或雙指縮放、拖曳移動照片。</p>
+      </div>
+
+      <!-- 純文字 -->
+      <div id="textPane" hidden>
+        <div class="seg sm" role="group" aria-label="純文字樣式" id="textSeg">
+          <button type="button" class="is-on" data-text="card">底圖</button>
+          <button type="button" data-text="native">臉書原生背景（實驗）</button>
+          <button type="button" data-text="plain">無底色</button>
+        </div>
+        <div id="cardPane">
+          <div class="canvas-wrap text"><canvas id="textCanvas" width="1080" height="1080"></canvas></div>
+          <div class="swatches" id="swatches" role="radiogroup" aria-label="底色"></div>
+          <label class="field">底圖文字
+            <textarea id="cardText" rows="4" placeholder="要畫在底圖上的文字（Enter 換行）"></textarea>
+          </label>
+          <p class="hint">以圖片貼文送出（1080×1080），小編文會放在圖片說明。</p>
+        </div>
+        <div id="nativePane" hidden>
+          <label class="field">背景代碼（text_format_preset_id）
+            <input id="presetId" type="text" inputmode="numeric" autocomplete="off" placeholder="例如 106018623298955">
+          </label>
+          <p class="hint warn">實驗功能：臉書沒有公開背景代碼清單，也沒有正式文件。小編文超過約 130 字、有換行太多或代碼無效時，臉書可能直接發成一般文字貼文。</p>
+        </div>
+        <div id="plainPane" hidden>
+          <p class="hint">只發小編文，沒有圖片也沒有底色。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="m-right">
+      <div id="titleBlock">
+        <label for="title">標題 <small class="muted">每行 15 字、最多 3 行</small></label>
+        <div class="title-box">
+          <textarea id="title" rows="3" wrap="off" spellcheck="false" placeholder="一行一句（Enter 換行，最多 3 行）"></textarea>
+          <div class="t-cnts" id="titleCnts" aria-hidden="true"></div>
+        </div>
+      </div>
+      <label class="field">小編文 <small class="muted" id="capCount"></small>
+        <textarea id="caption" rows="8" placeholder="小編文（含 hashtag、文章連結）"></textarea>
+      </label>
+
+      <fieldset class="when">
+        <legend>發布時間</legend>
+        <div class="seg sm" role="group" aria-label="發布時間" id="whenSeg">
+          <button type="button" class="is-on" data-when="now">立即發布</button>
+          <button type="button" data-when="sched">排程發布</button>
+        </div>
+        <div class="tp" id="timeRow" hidden>
+          <div class="tp-row">
+            <input id="tpDate" type="date" aria-label="日期">
+            <input id="tpTime" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="2130" aria-label="時間（直接打 4 碼，2130＝21:30）">
+          </div>
+          <div class="chips">
+            <button type="button" class="btn btn-secondary btn-sm" data-add="30">+30 分</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-add="60">+1 小時</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-add="1440">明天</button>
+          </div>
+          <p class="hint" id="tpHint" role="status"></p>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+
+  <footer class="m-foot">
+    <div class="pages" id="pages" role="group" aria-label="要發的粉專"></div>
+    <ul class="results" id="results" aria-live="polite"></ul>
+    <div class="send">
+      <span class="hint" id="sendMsg" role="status"></span>
+      <button type="button" class="btn btn-secondary" id="clearBtn">清空</button>
+      <button type="button" class="btn btn-primary" id="sendBtn">全部送出</button>
+    </div>
+  </footer>
+</dialog>
+
+<dialog class="dialog" id="confirmDlg" aria-labelledby="cfTitle">
+  <h2 id="cfTitle"></h2>
+  <p id="cfBody" class="muted"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="cfNo">取消</button>
+    <button type="button" class="btn btn-primary" id="cfYes">確定</button>
+  </div>
+</dialog>
+
+<input type="file" id="fileInput" accept="image/*" hidden>
+<script type="module" src="tool.js"></script>
+</body>
+</html>

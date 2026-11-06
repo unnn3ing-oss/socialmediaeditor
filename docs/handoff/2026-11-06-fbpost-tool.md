@@ -22,25 +22,26 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/graph.js` | 加 `graphDelete(env, token, path)` | ⬜ |
-| `server/core/fb.js` | `POST /fb/cancel`（body `{post}`；先 GET `is_published`，已發布→拒絕；未發布→DELETE；稽核 `post-canceled`）；`checkPost` 加 `textPreset`（數字 5–20 碼、只能純文字、需有內文）；multipart 收 `textPreset` | ⬜ |
-| `server/core/fetch.js` | `GET /fetch/image?url=`：白名單同 `/fetch`、手動轉址逐跳檢查、只收 `image/jpeg|png|gif|webp`、≤10 MB、回原始位元組＋CORS | ⬜ |
-| `test/server/fb.test.js`、`test/server/fetch.test.js` | 上述新路由的單元測試 | ⬜ |
-| `tools/fbpost/tool.json` | tier company、assets 同 pattern（sticker.*、frame.*.ribbon、frame.logo、font.title） | ⬜ |
-| `tools/fbpost/index.html`、`tool.css` | 主畫面（粉專狀態、分頁、＋新增發文）＋ `<dialog>` 彈窗 | ⬜ |
-| `tools/fbpost/editor.js` | ES module：`createPhotoEditor({canvas, assets})` → `loadFile/loadUrl/clear/setFrame/setTitle/exportBlob/hasImage/onChange`；畫法取自 `tools/pattern/app.js`（漸層、緞帶、Logo、通用框 C、標題字型）；貼圖／馬賽克取自網新 `stickers.js` | ⬜ |
-| `tools/fbpost/textcard.js` | `drawTextCard(canvas, {text, bg})`：1080×1080 底色＋自動換行置中文字；色票清單 | ⬜ |
-| `tools/fbpost/tool.js` | 主邏輯：粉專清單、分頁、已排程＋取消、成效、彈窗表單、送出流程（逐頁、重送） | ⬜ |
-| `tools/fbpost/TOOL.md`、`icon.svg`、`thumb.svg` | 說明與圖示 | ⬜ |
-| `tools/registry.json` → `node build.js` | 加 `fbpost` | ⬜ |
-| `test/e2e/fbpost.e2e.js` | 假後端：送出（單／多粉專、一個失敗再重送）、取消排程、彈窗關閉再開內容還在、清空、分頁切換保留 | ⬜ |
+| `server/core/graph.js` | 加 `graphDelete(env, token, path)` | ✅ |
+| `server/core/fb.js` | `POST /fb/cancel`（body `{post}`；先 GET `is_published`，已發布→拒絕；未發布→DELETE；稽核 `post-canceled`）；`checkPost` 加 `textPreset`（數字 5–20 碼、只能純文字、需有內文）；multipart 收 `textPreset` | ✅ |
+| `server/core/fetch.js` | `GET /fetch/image?url=`：白名單同 `/fetch`、手動轉址逐跳檢查、只收 `image/jpeg|png|gif|webp`、≤10 MB、回原始位元組＋CORS | ✅ |
+| `test/server/fb.test.js`、`test/server/fetch.test.js` | 上述新路由的單元測試 | ✅ |
+| `tools/fbpost/tool.json` | tier company、assets 同 pattern（sticker.*、frame.*.ribbon、frame.logo、font.title） | ✅ |
+| `tools/fbpost/index.html`、`tool.css` | 主畫面（粉專狀態、分頁、＋新增發文）＋ `<dialog>` 彈窗 | ✅ |
+| `tools/fbpost/editor.js` | ES module：`createPhotoEditor({canvas, assets})` → `loadFile/loadUrl/clear/setFrame/setTitle/exportBlob/hasImage/onChange`；畫法取自 `tools/pattern/app.js`（漸層、緞帶、Logo、通用框 C、標題字型）；貼圖／馬賽克取自網新 `stickers.js` | ✅ |
+| `tools/fbpost/textcard.js` | `drawTextCard(canvas, {text, bg})`：1080×1080 底色＋自動換行置中文字；色票清單 | ✅ |
+| `tools/fbpost/tool.js` | 主邏輯：粉專清單、分頁、已排程＋取消、成效、彈窗表單、送出流程（逐頁、重送） | ✅ |
+| `tools/fbpost/TOOL.md`、`icon.svg`、`thumb.svg` | 說明與圖示 | ✅ |
+| `tools/registry.json` → `node build.js` | 加 `fbpost` | ✅ |
+| `test/e2e/fbpost.e2e.js` | 假後端：送出（單／多粉專、一個失敗再重送）、取消排程、彈窗關閉再開內容還在、清空、分頁切換保留 | ✅ |
 | 規格 §1 表、§6 fb 列 | 加「排程發布」一列、新路由 | ⬜ |
 
 ## 下一步
-- [ ] 後端：graphDelete、/fb/cancel、textPreset、/fetch/image ＋ 單元測試（`npm test`）
-- [ ] 前端：editor.js、textcard.js（可派子代理，介面見上表）
-- [ ] 前端：index.html、tool.css、tool.js、tool.json、TOOL.md、registry、build
-- [ ] e2e＋截圖給使用者
+- [x] 後端：graphDelete、/fb/cancel、textPreset、/fetch/image ＋ 單元測試（`npm test` 239 過）
+- [x] 前端：editor.js、textcard.js
+- [x] 前端：index.html、tool.css、tool.js、tool.json、TOOL.md、registry、build；SDK `tb.api.call` 的 body 可傳 FormData
+- [x] e2e（`test/e2e/fbpost.e2e.js` 7 過）＋截圖給使用者
+- [ ] 規格 §1、§6 補排程發布與新路由
 - [ ] 獨立代理審查（sonnet）
 - [ ] 使用者部署（`git pull origin claude/fb-backend` → `cd server && npx wrangler deploy`）＋網站測試；說「推」才併 main，同 commit 更新 CLAUDE.md 目前進度
 

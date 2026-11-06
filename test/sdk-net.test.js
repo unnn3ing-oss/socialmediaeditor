@@ -126,3 +126,15 @@ test('status standalone returns warn; with shell delegates', async () => {
   const s = createStatus({ getShell: () => shell });
   assert.deepEqual(s.get('extension'), { state: 'ok', text: 'extension' });
 });
+
+test('api.call：FormData 原樣送出（不轉 JSON、不設 content-type），回應照樣解析', async () => {
+  const { createApi } = await import('../sdk/api.js');
+  const calls = [];
+  const api = createApi({ fetchFn: async (url, init) => { calls.push(init); return jsonRes({ ok: true, data: { id: 1 } }); }, storage: fakeStorage(), base: 'https://x' });
+  const fd = new FormData();
+  fd.append('page', '1');
+  const data = await api.call('/fb/post', { method: 'POST', body: fd });
+  assert.equal(data.id, 1);
+  assert.equal(calls[0].body, fd);
+  assert.equal(calls[0].headers['content-type'], undefined);
+});

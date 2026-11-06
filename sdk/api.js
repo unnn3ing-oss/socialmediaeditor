@@ -20,7 +20,8 @@ export function createApi({ fetchFn = (...a) => globalThis.fetch(...a), storage 
       if (cred) headers.Authorization = `Bearer ${cred.token}`;
       const init = { method, headers };
       if (body !== undefined) {
-        if (raw) init.body = body;
+        // raw 或 FormData（multipart，瀏覽器自己帶 boundary）原樣送出
+        if (raw || (typeof FormData !== 'undefined' && body instanceof FormData)) init.body = body;
         else { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
       }
       const res = await fetchFn(base + path, init);

@@ -24,7 +24,7 @@
 | 函式 | 說明 | 範例 |
 |---|---|---|
 | `tb.ext.call(op, payload, { timeout })` | 呼叫外掛；3 秒沒回應就 reject，`code === 'no_extension'`；外掛回報失敗時 reject 帶 `code`、`error` | `await tb.ext.call('ping')` |
-| `tb.api.call(path, { method, body, raw })` | 呼叫後端，自動帶公司憑證；`ok: false` 時 reject 帶 `code` | `await tb.api.call('/logs', { method: 'POST', body })` |
+| `tb.api.call(path, { method, body, raw })` | 呼叫後端，自動帶公司憑證；`ok: false` 時 reject 帶 `code`；`body` 是 `FormData` 時以 multipart 原樣送出（回應照樣解析 JSON） | `await tb.api.call('/logs', { method: 'POST', body })` |
 | `tb.assets.get(key)` | 取素材：公司模式先抓後端版，失敗退回通用版；回傳 `{ url }`、`{ upload: true }` 或 `null` | `const logo = await tb.assets.get('logo')` |
 | `tb.status.get(id)` | 讀外殼狀態（`{ state, text }`）；單獨開啟工具頁時回「請從小編工具箱開啟」 | `tb.status.get('extension')` |
 | `tb.status.on(fn)` | 狀態改變時通知，回傳取消函式 | `const off = tb.status.on((id, v) => {})` |
