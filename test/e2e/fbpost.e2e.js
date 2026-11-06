@@ -182,3 +182,15 @@ test('沒勾粉專、沒照片會擋下，不送出', async () => {
   assert.match(await page.textContent('#sendMsg'), /照片/);
   assert.equal(api.posts.length, 0);
 });
+
+test('連點送出只會發一次', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await page.click('#modeSeg [data-mode=text]');
+  await page.check('#pages .pg input >> nth=0');
+  await page.fill('#cardText', '連點');
+  await page.evaluate(() => { const b = document.getElementById('sendBtn'); b.click(); b.click(); });
+  await page.waitForFunction(() => document.querySelector('#sendMsg').textContent.startsWith('完成'));
+  assert.equal(api.posts.length, 1);
+  assert.deepEqual(errors, []);
+});

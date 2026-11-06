@@ -231,7 +231,7 @@ document.addEventListener('paste', (e) => {
 $('clearImg').addEventListener('click', () => editor && editor.clearImage());
 
 // 標題：每行字數
-function titleLines() { return $('title').value.split('\n'); }
+function titleLines() { return $('title').value.replace(/\s+$/, '').split('\n'); }   // 尾端多的換行不算一行
 function renderTitleCounts() {
   const lines = titleLines();
   $('titleCnts').replaceChildren(...lines.map((l, i) => el('span', { className: [...l].length > TITLE_MAX || i >= TITLE_LINES ? 'bad' : '', textContent: `${[...l].length}/${TITLE_MAX}` })));
@@ -407,25 +407,28 @@ async function send(ids) {
   if (sending) return;
   const msg = $('sendMsg');
   if (!ids.length) { msg.textContent = '請先勾選要發的粉專'; return; }
-  let p;
-  try { p = await buildPayload(); } catch (e) { msg.textContent = errText(e); return; }
-  sending = true;
+  sending = true;   // 在任何 await 之前就鎖上，避免連點兩下重複發文
   $('sendBtn').disabled = true;
-  if (ids.length > 1 || !$('results').querySelector(`[data-page="${ids[0]}"]`)) $('results').replaceChildren();
-  let okN = 0;
-  for (const [i, id] of ids.entries()) {
-    msg.textContent = `送出中 ${i + 1}/${ids.length}…`;
-    showResult(id, 'wait', '送出中…');
-    try {
-      await sendOne(id, p);
-      okN++;
-      showResult(id, 'ok', p.at ? '已排程 ' + fmtTime(p.at) : '已發布');
-    } catch (e) { showResult(id, 'bad', errText(e), true); }
+  try {
+    let p;
+    try { p = await buildPayload(); } catch (e) { msg.textContent = errText(e); return; }
+    if (ids.length > 1 || !$('results').querySelector(`[data-page="${ids[0]}"]`)) $('results').replaceChildren();
+    let okN = 0;
+    for (const [i, id] of ids.entries()) {
+      msg.textContent = `送出中 ${i + 1}/${ids.length}…`;
+      showResult(id, 'wait', '送出中…');
+      try {
+        await sendOne(id, p);
+        okN++;
+        showResult(id, 'ok', p.at ? '已排程 ' + fmtTime(p.at) : '已發布');
+      } catch (e) { showResult(id, 'bad', errText(e), true); }
+    }
+    msg.textContent = okN === ids.length ? `完成：${okN} 個粉專都成功` : `成功 ${okN}、失敗 ${ids.length - okN}（失敗的可按「重送」）`;
+    if (okN && p.at) loadSched();
+  } finally {
+    sending = false;
+    $('sendBtn').disabled = false;
   }
-  sending = false;
-  $('sendBtn').disabled = false;
-  msg.textContent = okN === ids.length ? `完成：${okN} 個粉專都成功` : `成功 ${okN}、失敗 ${ids.length - okN}（失敗的可按「重送」）`;
-  if (okN && p.at) loadSched();
 }
 $('sendBtn').addEventListener('click', () => send(pages.filter((x) => picked.has(x.id)).map((x) => x.id)));
 

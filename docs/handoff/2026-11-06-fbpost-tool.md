@@ -42,7 +42,7 @@
 - [x] 前端：index.html、tool.css、tool.js、tool.json、TOOL.md、registry、build；SDK `tb.api.call` 的 body 可傳 FormData
 - [x] e2e（`test/e2e/fbpost.e2e.js` 7 過）＋截圖給使用者
 - [x] 規格 §1、§6 補排程發布與新路由
-- [ ] 獨立代理審查（sonnet）
+- [x] 獨立代理審查（sonnet）：通過；修正連點重複發文、彈窗關著時按退格誤刪貼圖、標題尾端換行被算成一行
 - [ ] 使用者部署（`git pull origin claude/fb-backend` → `cd server && npx wrangler deploy`）＋網站測試；說「推」才併 main，同 commit 更新 CLAUDE.md 目前進度
 
 ## 測試

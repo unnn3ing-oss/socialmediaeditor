@@ -501,6 +501,7 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
 
   document.addEventListener('keydown', e => {
     if (selectedId === null || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+    if (!canvas.offsetParent) return;   // 彈窗關著時不處理（避免在別處按退格誤刪貼圖）
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
     e.preventDefault();
