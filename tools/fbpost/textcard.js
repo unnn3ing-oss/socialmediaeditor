@@ -1,113 +1,82 @@
-// 純文字貼文的底色卡片（仿 Facebook 的背景色票）。
-// 色票的 bg 有兩種表示法：
-//   - 字串 '#rrggbb'：純色
-//   - 物件 { from, to }：左上 → 右下 135 度的雙色漸層
+// 純文字貼文的底圖卡片：照網新排程（schedulenewnet web/app.js 的 drawTextCard）。
+// 色票資料取自網新 config.js 的 textCardStyles（只是顏色，不是公司素材）；網新底部的 wordmark 圖是公司素材，這裡不畫。
+// 版面（量自網新後端產圖）：字級 76、行距 110、最大寬 880、整塊置中在 y≈524（不論幾行）、深色陰影右下偏移 5px。
 // 畫布固定 1080×1080。
 const SIZE = 1080;
-const MAX_W = 880;       // 文字最大寬度
-const MAX_H = 880;       // 文字區最大高度
-const FONT_MAX = 72, FONT_MIN = 36;
-const LINE_RATIO = 1.35; // 行高 / 字級
-const FONT_STACK = '"Noto Sans TC", "Microsoft JhengHei", sans-serif';
+const TC = { px: 76, lineH: 110, maxW: 880, centerY: 524, baseOff: 23, shadow: 'rgba(0,0,0,.85)', blur: 5, off: 5 };
+const FALLBACK = '"Microsoft JhengHei", "PingFang TC", "PMingLiU", sans-serif';
 
-export const TEXT_SWATCHES = [
-  { id: 'purple', name: '紫', bg: '#8E44EF', fg: '#ffffff' },
-  { id: 'red', name: '紅', bg: '#F02849', fg: '#ffffff' },
-  { id: 'orange', name: '橘', bg: '#F7923B', fg: '#ffffff' },
-  { id: 'green', name: '綠', bg: '#45BD62', fg: '#ffffff' },
-  { id: 'blue', name: '藍', bg: '#1877F2', fg: '#ffffff' },
-  { id: 'navy', name: '深藍', bg: '#0B2A5B', fg: '#ffffff' },
-  { id: 'black', name: '黑', bg: '#1C1E21', fg: '#ffffff' },
-  { id: 'pink', name: '粉', bg: '#FF66B3', fg: '#ffffff' },
-  { id: 'gray', name: '淺灰', bg: '#E4E6EB', fg: '#1C1E21' },
-  { id: 'sunset', name: '夕陽', bg: { from: '#FF9A3D', to: '#F02849' }, fg: '#ffffff' },
-  { id: 'ocean', name: '海洋', bg: { from: '#36D1DC', to: '#1877F2' }, fg: '#ffffff' },
-  { id: 'dusk', name: '暮光', bg: { from: '#8E44EF', to: '#FF66B3' }, fg: '#ffffff' }
-];
+const RAW_STYLES = [
+  { key: 'flash', label: '快訊紅', bg: '#b00020' }, { key: 'intl', label: '國際藍', bg: '#0d2b6b' },
+  { key: 'wx', label: '氣象青', bg: '#0a6e7c' }, { key: 'life', label: '生活橘', bg: '#c46a1a' },
+  { key: 'night', label: '深夜黑', bg: '#111111' }, { key: 'money', label: '財經綠', bg: '#0f5132' },
+  { key: 'mocha', label: '咖啡灰', bg: '#5a5448' },
+  { key: 'qpt-c80000', label: 'QPT #C80000', bg: '#c80000' }, { key: 'qpt-ff3916', label: 'QPT #FF3916', bg: '#ff3916' },
+  { key: 'qpt-5fa646', label: 'QPT #5FA646', bg: '#5fa646' }, { key: 'qpt-4c8b74', label: 'QPT #4C8B74', bg: '#4c8b74' },
+  { key: 'qpt-ff9900', label: 'QPT #FF9900', bg: '#ff9900' }, { key: 'qpt-1c6294', label: 'QPT #1C6294', bg: '#1c6294' },
+  { key: 'qpt-cb6ce6', label: 'QPT #CB6CE6', bg: '#cb6ce6' }, { key: 'qpt-d84040', label: 'QPT #D84040', bg: '#d84040' },
+  { key: 'qpt-ff7ead', label: 'QPT #FF7EAD', bg: '#ff7ead' }, { key: 'qpt-004aad', label: 'QPT #004AAD', bg: '#004aad' },
+  { key: 'qpt-000000', label: 'QPT #000000', bg: '#000000' }, { key: 'qpt-48413f', label: 'QPT #48413F', bg: '#48413f' },
+  { key: 'qpt-a6a6a6', label: 'QPT #A6A6A6', bg: '#a6a6a6' }, { key: 'qpt-5cafcc', label: 'QPT #5CAFCC', bg: '#5cafcc' },
+  { key: 'qpt-ffdd30', label: 'QPT #FFDD30', bg: '#ffdd30' }, { key: 'qpt-7261c9', label: 'QPT #7261C9', bg: '#7261c9' },
+  { key: 'qpt-d13885', label: 'QPT #D13885', bg: '#d13885' }, { key: 'qpt-3667a8', label: 'QPT #3667A8', bg: '#3667a8' },
+  { key: 'qpt-3f8c59', label: 'QPT #3F8C59', bg: '#3f8c59' },
+].map((s) => ({ ...s, fg: '#ffffff' }));
 
-// 給 UI 色塊用的 CSS background 值
-export function swatchCss(swatch) {
-  const bg = swatch && swatch.bg;
-  if (!bg) return '#1877F2';
-  if (typeof bg === 'string') return bg;
-  return `linear-gradient(135deg, ${bg.from}, ${bg.to})`;
-}
-
-function fillBackground(c, swatch) {
-  const bg = (swatch && swatch.bg) || TEXT_SWATCHES[4].bg;
-  if (typeof bg === 'string') {
-    c.fillStyle = bg;
-  } else {
-    const g = c.createLinearGradient(0, 0, SIZE, SIZE);
-    g.addColorStop(0, bg.from);
-    g.addColorStop(1, bg.to);
-    c.fillStyle = g;
+// 底色按 HSB 排序（同網新 app.js／QPT：中性色在前、依亮度；其餘依色相，粉紅歸到紅色家族）
+function hexToHSB(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+  let hue = 0;
+  if (delta !== 0) {
+    if (max === r) hue = ((g - b) / delta) % 6; else if (max === g) hue = (b - r) / delta + 2; else hue = (r - g) / delta + 4;
+    hue *= 60; if (hue < 0) hue += 360;
   }
-  c.fillRect(0, 0, SIZE, SIZE);
+  return { hue, saturation: max === 0 ? 0 : delta / max, brightness: max };
+}
+const NEUTRAL_SATURATION = 0.15, PINK_HUE_START = 320;
+const redFamilyHue = (h) => (h >= PINK_HUE_START ? h - 360 : h);
+export const TEXT_SWATCHES = RAW_STYLES.slice().sort((a, b) => {
+  const ha = hexToHSB(a.bg), hb = hexToHSB(b.bg);
+  const an = ha.saturation < NEUTRAL_SATURATION, bn = hb.saturation < NEUTRAL_SATURATION;
+  if (an !== bn) return an ? -1 : 1;
+  if (an) return ha.brightness - hb.brightness;
+  return redFamilyHue(ha.hue) - redFamilyHue(hb.hue) || hb.saturation - ha.saturation;
+});
+export const DEFAULT_SWATCH = RAW_STYLES[0].key;
+export const swatchCss = (s) => (s && s.bg) || '#b00020';
+
+const fontOf = (fontLoaded) => (fontLoaded ? `${TC.px}px "WHZ-Heavy", ${FALLBACK}` : `900 ${TC.px}px "Noto Sans TC", ${FALLBACK}`);
+
+// 一行超過 maxW 就折行
+export function wrapRows(c, text) {
+  const rows = [];
+  String(text).split('\n').forEach((para) => {
+    let cur = '';
+    for (const ch of para) { if (cur && c.measureText(cur + ch).width > TC.maxW) { rows.push(cur); cur = ''; } cur += ch; }
+    rows.push(cur);
+  });
+  return rows;
 }
 
-// 不能出現在行首的標點（避頭點）：折行時留在上一行
-const NO_LINE_START = '，。、；：？！）」』】》〉,.;:?!)]}%…—';
-const TOKEN_RE = /[\x21-\x7E]+|\s+|[\s\S]/gu;   // 英數連續字當一個詞、空白、其他一字一詞
-
-function wrapLine(c, line, maxW) {
-  const out = [];
-  let cur = '';
-  const push = () => { out.push(cur.replace(/\s+$/, '')); cur = ''; };
-  const tokens = line.match(TOKEN_RE) || [];
-  for (const tok of tokens) {
-    const isSpace = /^\s+$/.test(tok);
-    if (isSpace && !cur) continue;                       // 行首不放空白
-    if (c.measureText(cur + tok).width <= maxW) { cur += tok; continue; }
-    if (isSpace) { push(); continue; }
-    if (NO_LINE_START.includes(tok[0]) && cur) { cur += tok; continue; }   // 避頭點
-    if (cur) push();
-    if (c.measureText(tok).width <= maxW) { cur = tok; continue; }
-    // 單一詞比整行還寬：逐字拆開
-    for (const ch of tok) {
-      if (cur && c.measureText(cur + ch).width > maxW) push();
-      cur += ch;
-    }
-  }
-  if (cur || !out.length) out.push(cur.replace(/\s+$/, ''));
-  return out;
-}
-
-function layout(c, text) {
-  const paras = text.replace(/\r/g, '').split('\n');
-  let size = FONT_MAX, lines = [];
-  for (; size >= FONT_MIN; size -= 2) {
-    c.font = `700 ${size}px ${FONT_STACK}`;
-    lines = paras.flatMap(p => (p.trim() ? wrapLine(c, p, MAX_W) : ['']));
-    if (lines.length * size * LINE_RATIO <= MAX_H) break;
-  }
-  size = Math.max(FONT_MIN, Math.min(FONT_MAX, size));
-  return { size, lines };
-}
-
-// canvas 需為 1080×1080（這裡會自行設定）。opts.hint 為 true 且沒有文字時畫淡淡的「輸入文字」
-export function drawTextCard(canvas, { text = '', swatch, hint = false } = {}) {
+// text＝標題（一行一句，\n 分行）；沒有字時畫提示
+export function drawTextCard(canvas, { text = '', swatch, fontLoaded = false } = {}) {
   canvas.width = SIZE;
   canvas.height = SIZE;
   const c = canvas.getContext('2d');
-  fillBackground(c, swatch);
-  const fg = (swatch && swatch.fg) || '#ffffff';
+  const st = swatch || TEXT_SWATCHES[0];
+  c.fillStyle = st.bg;
+  c.fillRect(0, 0, SIZE, SIZE);
+  const real = String(text || '').trim();
+  c.font = fontOf(fontLoaded);
+  c.fillStyle = st.fg;
   c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  if (!String(text).trim()) {
-    if (hint) {
-      c.globalAlpha = 0.5;
-      c.fillStyle = fg;
-      c.font = `700 56px ${FONT_STACK}`;
-      c.fillText('輸入文字', SIZE / 2, SIZE / 2);
-      c.globalAlpha = 1;
-    }
-    return;
-  }
-  const { size, lines } = layout(c, String(text));
-  const lh = size * LINE_RATIO;
-  c.font = `700 ${size}px ${FONT_STACK}`;
-  c.fillStyle = fg;
-  const top = SIZE / 2 - (lines.length * lh) / 2 + lh / 2;
-  lines.forEach((l, i) => c.fillText(l, SIZE / 2, top + i * lh));
+  c.textBaseline = 'alphabetic';
+  if (!real) c.globalAlpha = 0.5;
+  c.shadowColor = TC.shadow; c.shadowBlur = TC.blur; c.shadowOffsetX = TC.off; c.shadowOffsetY = TC.off;
+  const rows = wrapRows(c, real || '在右邊輸入標題');
+  const y0 = TC.centerY - (rows.length - 1) * TC.lineH / 2 + TC.baseOff;
+  rows.forEach((r, i) => c.fillText(r, SIZE / 2, y0 + i * TC.lineH));
+  c.shadowColor = 'transparent'; c.shadowOffsetX = c.shadowOffsetY = 0;
+  c.globalAlpha = 1;
 }

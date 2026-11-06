@@ -1,9 +1,15 @@
-// 排程發布（公司專屬）：多粉專發文／排程、已排程（取消）、成效。
-// 新增發文是彈窗（介面參照網新排程），**關閉彈窗不清內容**，只有「清空」會清（工具箱內容保留規則）。
-// 後端：/fb/pages、/fb/post（multipart）、/fb/scheduled、/fb/cancel、/fb/posts、/fb/insights、/fetch、/fetch/image。
+// 排程發布（公司專屬）：多粉專發文／排程、已排程（改時間、取消、留言狀態）、成效。
+// 新增發文彈窗照網新快速排程（schedulenewnet web/app.js）重做：貼文章網址自動帶入、粉專晶片各自立即／排程、全部送出。
+// 標題換行、文章解析、小編文格式、排程時間規則都用 sdk/news-*.js（和網新同一套）。
+// 內容保留：切換分頁／模式一律用 hidden；彈窗只有「確認關閉」「清空」「再發一篇」會清內容。
+// 後端：/fb/pages、/fb/post（multipart）、/fb/scheduled、/fb/cancel、/fb/reschedule、/fb/comments、/fb/comment/retry、/fb/comment/dismiss、
+//       /fb/posts、/fb/insights、/fetch/article、/fetch/image。
 import { tb } from '../../sdk/toolbox.js';
+import { autoLines, buildLink, frameForUrl } from '../../sdk/news-rules.js';
+import { parseArticle, formatCopy, mainCaption, overrideOneLine, bindTitle, learnSeps, titleAsOneLine, replaceTitleLine } from '../../sdk/news-article.js';
+import * as Sched from '../../sdk/news-sched.js';
 import { createPhotoEditor } from './editor.js';
-import { TEXT_SWATCHES, drawTextCard, swatchCss } from './textcard.js';
+import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
 
 tb.init('fbpost');
 
@@ -14,13 +20,14 @@ const el = (tag, { dataset, ...props } = {}, ...kids) => {
   for (const k of kids) if (k != null) n.append(k);
   return n;
 };
-const MIN_AHEAD = 10 * 60, MAX_AHEAD = 30 * 86400;
 const TITLE_MAX = 15, TITLE_LINES = 3, NATIVE_MAX = 130;
+const DEFAULT_COMMENT = '看更多新聞內容';
 const FRAME_NAMES = { news: '新聞（藍框）', ent: '娛樂（粉框）', generic: '通用框', none: '無框' };
 const errText = (e) => (e && e.message) || '發生錯誤';
 const pad = (n) => String(n).padStart(2, '0');
 const fmtTime = (sec) => { const d = new Date(sec * 1000); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const fmtIso = (s) => { const t = Date.parse(s); return Number.isNaN(t) ? '' : fmtTime(Math.floor(t / 1000)); };
+const now = () => new Date();
 
 // ---------- 確認框 ----------
 function confirmBox(title, body, yes = '確定') {
@@ -54,8 +61,57 @@ segment($('tabs'), 'tab', (t) => {
   if (t === 'stats' && !statsLoaded) loadStats(true);
 });
 
+// ---------- 時間編輯（日期＋4 碼時間＋快捷鈕；排程發布的晶片與「改時間」共用）----------
+// 規則全部來自 sdk/news-sched.js：10 分鐘～30 天、↑↓ ±10 分、直接打 4 碼（2130＝21:30）
+function createTimeEditor({ onChange = () => {}, onEnter = () => {} } = {}) {
+  const date = el('input', { type: 'date', className: 'tp-date', ariaLabel: '日期' });
+  const time = el('input', { type: 'text', inputMode: 'numeric', maxLength: 5, autocomplete: 'off', className: 'tp-time', placeholder: '2130', ariaLabel: '時間（直接打 4 碼，2130＝21:30）' });
+  const hint = el('p', { className: 'hint' });
+  const chips = el('div', { className: 'chips' }, ...[['30', '+30 分'], ['60', '+1 小時'], ['1440', '明天']]
+    .map(([m, t]) => el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: t, dataset: { add: m } })));
+  const root = el('div', { className: 'tp-body' }, el('div', { className: 'tp-row' }, date, time), hint, chips);
+  let last = null;   // 最後一次合法（可解析）的時間
+  const read = () => Sched.combine(date.value, time.value);
+  function refresh() {
+    const n = now(), at = read(), err = Sched.validate(at, n);
+    hint.textContent = err ? err.msg : `排程 ${Sched.fmtWhen(at, n)}・直接打 4 碼（2130＝21:30），↑↓ 每次 10 分`;
+    hint.className = 'hint ' + (err ? 'bad' : 'ok');
+    time.setAttribute('aria-invalid', String(!!err));
+    return !err;
+  }
+  function set(at) {
+    const n = now();
+    date.min = Sched.fmtDateInput(n); date.max = Sched.fmtDateInput(Sched.latest(n));
+    last = at;
+    date.value = Sched.fmtDateInput(at); time.value = Sched.fmtTime(at);
+    refresh();
+  }
+  const take = () => { const at = read(); if (at) { last = at; onChange(at); } refresh(); };   // 打字／選日期：能解析就寫回（超出範圍送出前會擋）
+  time.addEventListener('input', () => { const v = Sched.formatTyping(time.value); if (v !== time.value) time.value = v; take(); });
+  date.addEventListener('change', take);
+  time.addEventListener('blur', () => { if (last && !read()) time.value = Sched.fmtTime(last); });
+  time.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const at = Sched.step(read() || last || now(), e.key === 'ArrowUp' ? 1 : -1);
+      set(at); onChange(at);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (refresh()) onEnter();
+    }
+  });
+  chips.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-add]');
+    if (!b) return;
+    const at = new Date((read() || last || now()).getTime() + Number(b.dataset.add) * 60000);
+    set(at); onChange(at);
+  });
+  return { root, set, get: () => read(), valid: refresh, focus: () => { time.focus(); time.select(); } };
+}
+
 // ---------- 粉專 ----------
 let pages = [];
+const pageLabel = (p) => p.label || p.name;
 async function loadPages(refresh = false) {
   const st = $('pagesState');
   st.className = 'pill';
@@ -69,7 +125,7 @@ async function loadPages(refresh = false) {
     st.className = 'pill pill-warn';
     st.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : e.code === 'fb_not_configured' ? '後端還沒設定臉書 token' : '粉專讀取失敗：' + errText(e);
   }
-  renderPageChecks();
+  renderPageChips();
   for (const sel of [$('schedPage'), $('statsPage')]) {
     const keep = sel.value;
     sel.replaceChildren(...(sel.id === 'schedPage' ? [el('option', { value: '', textContent: '全部粉專' })] : []),
@@ -84,6 +140,12 @@ $('pagesRefresh').addEventListener('click', () => loadPages(true));
 const pageName = (id) => (pages.find((p) => p.id === id) || {}).name || id;
 
 // ---------- 已排程 ----------
+const COMMENT_TEXT = { pending: '等待留言', done: '已留言', canceled: '已取消留言' };
+function commentLine(c) {
+  if (!c) return null;
+  if (c.status === 'failed') return el('p', { className: 'cm bad', textContent: '留言失敗' + (c.error ? '：' + c.error : '') });
+  return el('p', { className: 'cm' + (c.status === 'done' ? ' ok' : ''), textContent: COMMENT_TEXT[c.status] || c.status });
+}
 async function loadSched() {
   const list = $('schedList'), hint = $('schedHint');
   const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
@@ -98,24 +160,115 @@ async function loadSched() {
   items.sort((a, b) => (a.at || 0) - (b.at || 0));
   hint.textContent = (items.length ? `共 ${items.length} 篇` : '目前沒有排程') + (errs.length ? `；${errs.join('；')}` : '');
   list.replaceChildren(...items.map((it) => {
-    const btn = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '取消排程' });
-    btn.addEventListener('click', async () => {
+    const cancel = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '取消排程' });
+    cancel.addEventListener('click', async () => {
       if (!(await confirmBox('取消這篇排程？', `${pageName(it.page)}｜${it.at ? fmtTime(it.at) : ''}\n取消後臉書上這篇排程會被刪除，無法復原。`, '取消排程'))) return;
-      btn.disabled = true;
+      cancel.disabled = true;
       try { await tb.api.call('/fb/cancel', { method: 'POST', body: { post: it.id } }); li.remove(); hint.textContent = '已取消一篇排程'; }
-      catch (e) { btn.disabled = false; hint.textContent = '取消失敗：' + errText(e); }
+      catch (e) { cancel.disabled = false; hint.textContent = '取消失敗：' + errText(e); }
     });
-    const li = el('li', { className: 'item' },
+    const move = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '改時間', dataset: { act: 'resched' } });
+    move.addEventListener('click', () => openResched(it));
+    const li = el('li', { className: 'item', dataset: { post: it.id } },
       it.picture ? el('img', { className: 'thumb', src: it.picture, alt: '', loading: 'lazy' }) : el('div', { className: 'thumb ph' }),
       el('div', { className: 'body' },
         el('div', { className: 'meta' }, el('b', { textContent: it.at ? fmtTime(it.at) : '—' }), el('span', { className: 'muted', textContent: pageName(it.page) })),
-        el('p', { className: 'msg', textContent: it.message || '（沒有文字）' })),
-      el('div', { className: 'act' }, btn));
+        el('p', { className: 'msg', textContent: it.message || '（沒有文字）' }),
+        commentLine(it.comment)),
+      el('div', { className: 'act' }, move, cancel));
     return li;
   }));
 }
 $('schedPage').addEventListener('change', loadSched);
-$('schedReload').addEventListener('click', loadSched);
+$('schedReload').addEventListener('click', () => { loadSched(); pollFailed(); });
+
+// 改時間：同網新的時間視窗；確定後 POST /fb/reschedule
+let rsTarget = null;
+const rsEd = createTimeEditor({ onEnter: () => $('rsYes').click() });
+$('rsEditor').append(rsEd.root);
+function openResched(it) {
+  rsTarget = it;
+  $('rsWhat').textContent = `${pageName(it.page)}｜目前排在 ${it.at ? fmtTime(it.at) : '—'}`;
+  $('rsErr').textContent = '';
+  rsEd.set(it.at ? new Date(it.at * 1000) : Sched.defaultAt(now()));
+  $('rsDlg').showModal();
+  rsEd.focus();
+}
+$('rsNo').addEventListener('click', () => $('rsDlg').close());
+$('rsYes').addEventListener('click', async () => {
+  if (!rsTarget || !rsEd.valid()) return;
+  const at = rsEd.get(), btn = $('rsYes');
+  btn.disabled = true;
+  try {
+    await tb.api.call('/fb/reschedule', { method: 'POST', body: { post: rsTarget.id, time: Math.floor(at.getTime() / 1000) } });
+    $('rsDlg').close();
+    $('schedHint').textContent = `已改成 ${Sched.fmtWhen(at, now())}`;
+    await loadSched();
+    $('schedHint').textContent = `已改成 ${Sched.fmtWhen(at, now())}`;
+  } catch (e) {
+    $('rsErr').textContent = e.code === 'already_published' ? '這篇已經發布了，不能再改時間。' : errText(e);
+  } finally { btn.disabled = false; }
+});
+
+// ---------- 留言失敗通知（工具內）----------
+// 工具開著時每 60 秒（頁面看得到才打）查失敗的留言：已排程分頁籤顯示紅點＋數字、上方列出項目（補留言／知道了）、新失敗跳瀏覽器通知。
+// 第一次載入就已存在的失敗只顯示紅點、不跳通知。
+const fails = { items: [], seen: new Set(), first: true };
+function renderFails() {
+  const n = fails.items.length;
+  $('schedBadge').hidden = !n;
+  $('schedBadge').textContent = n ? String(n) : '';
+  $('failBox').hidden = !n;
+  $('failCount').textContent = String(n);
+  $('failList').replaceChildren(...fails.items.map((c) => {
+    const retry = el('button', { type: 'button', className: 'btn btn-primary btn-sm', textContent: '補留言', dataset: { act: 'retry' } });
+    const dismiss = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '知道了', dataset: { act: 'dismiss' } });
+    const note = el('p', { className: 'cm bad', textContent: '原因：' + (c.error || '未知') });
+    const li = el('li', { className: 'item fail', dataset: { comment: c.id } },
+      el('div', { className: 'body' },
+        el('div', { className: 'meta' }, el('b', { textContent: pageName(c.page) }), el('span', { className: 'muted', textContent: c.due ? '預計 ' + fmtTime(c.due) : '' })),
+        el('p', { className: 'msg', textContent: String(c.message || '').replace(/\s+/g, ' ').slice(0, 80) }), note),
+      el('div', { className: 'act' }, retry, dismiss));
+    const run = (path, okText) => async () => {
+      retry.disabled = dismiss.disabled = true;
+      try {
+        await tb.api.call(path, { method: 'POST', body: { id: c.id } });
+        fails.items = fails.items.filter((x) => x.id !== c.id);
+        renderFails();
+        $('schedHint').textContent = okText;
+        loadSched();
+      } catch (e) { retry.disabled = dismiss.disabled = false; note.textContent = '失敗：' + errText(e); }
+    };
+    retry.addEventListener('click', run('/fb/comment/retry', '已重新排入留言'));
+    dismiss.addEventListener('click', run('/fb/comment/dismiss', '已標示知道了'));
+    return li;
+  }));
+}
+async function notifyFails(fresh) {
+  if (typeof Notification === 'undefined') return;
+  try {
+    if (Notification.permission === 'default') await Notification.requestPermission();   // 第一次需要時才問；拒絕就只剩紅點
+    if (Notification.permission !== 'granted') return;
+    new Notification('臉書留言失敗', { body: `${fresh.length} 則留言沒送出，請到「已排程」分頁處理`, tag: 'fbpost-comment-fail' });
+  } catch { /* 通知失敗不影響主流程 */ }
+}
+let polling = false;
+async function pollFailed() {
+  if (polling) return;
+  polling = true;
+  try {
+    const r = await tb.api.call('/fb/comments?status=failed');
+    const items = (r.items || []).filter((i) => !i.dismissed);
+    const fresh = items.filter((i) => !fails.seen.has(i.id));
+    items.forEach((i) => fails.seen.add(i.id));
+    fails.items = items;
+    renderFails();
+    if (fresh.length && !fails.first) notifyFails(fresh);
+    fails.first = false;
+  } catch { /* 沒登入或後端還沒部署：不打擾 */ } finally { polling = false; }
+}
+setInterval(() => { if (document.visibilityState === 'visible') pollFailed(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollFailed(); });
 
 // ---------- 成效 ----------
 let statsLoaded = false, statsNext = null;
@@ -181,45 +334,59 @@ async function loadAssets() {
   return { company: Boolean(ribbonEnt || ribbonNews), ribbonEnt, ribbonNews, logo, fontLoaded, stickers };
 }
 
-// ---------- 新增發文彈窗 ----------
+// =====================================================================
+// 新增發文彈窗
+// =====================================================================
 const modal = $('modal');
-$('newPost').addEventListener('click', () => { modal.showModal(); });
-$('mClose').addEventListener('click', () => modal.close());   // 只關閉，內容保留
+const state = { articleUrl: '', fontLoaded: false };
+const cap = { auto: '', title: null };   // 小編文：上次自動填進去的全文、上次同步進【】的標題
+let sending = false;
 
+// ---------- 作圖框編輯器 ----------
 let editor = null, frameCtl = null;
 const editorReady = loadAssets().then((assets) => {
-  editor = createPhotoEditor({ canvas: $('editorCanvas'), wrap: $('canvasWrap'), fxBar: $('fxBar'), assets });
+  state.fontLoaded = assets.fontLoaded;
+  editor = createPhotoEditor({
+    canvas: $('editorCanvas'), wrap: $('canvasWrap'), fxBar: $('fxBar'), assets,
+    titleOverlay: $('titleOverlay'), onEmptyClick: () => $('fileInput').click(),
+  });
   const frameSeg = $('frameSeg');
   frameSeg.replaceChildren(...editor.frames().map((k) => el('button', { type: 'button', textContent: FRAME_NAMES[k] || k, dataset: { frame: k } })));
   frameCtl = segment(frameSeg, 'frame', (k) => editor.setFrame(k));
   frameCtl.set(editor.getFrame());
-  editor.onChange(() => { $('clearImg').hidden = !editor.hasImage(); });
+  editor.onChange(() => { const has = editor.hasImage(); $('clearImg').hidden = !has; $('fxBtn').hidden = !has; if (!has) closeFx(); });
+  // 預覽上點兩下改的標題寫回標題框，走標題框自己的 input（計數、【標題】同步都同一條路）
+  editor.onTitleInput((v) => { $('title').value = v; $('title').dispatchEvent(new Event('input')); });
   editor.setTitle($('title').value);
+  renderCard();
 }).catch(() => { tb.log.error('fbpost-editor-failed'); });
 
-let mode = 'frame', textStyle = 'card';
-const modeSeg = segment($('modeSeg'), 'mode', (m) => {
-  mode = m;
-  $('framePane').hidden = m !== 'frame';
-  $('textPane').hidden = m !== 'text';
-  $('titleBlock').hidden = m !== 'frame';
-  updateCount();
-});
-const textSeg = segment($('textSeg'), 'text', (t) => {
-  textStyle = t;
-  $('cardPane').hidden = t !== 'card';
-  $('nativePane').hidden = t !== 'native';
-  $('plainPane').hidden = t !== 'plain';
-  updateCount();
-});
+// 😊 T寶／馬賽克工具列：預設收起，點按鈕展開，加完或點外面收起（照網新）
+function closeFx() { $('fxBar').hidden = true; $('fxBtn').setAttribute('aria-expanded', 'false'); }
+$('fxBtn').addEventListener('click', () => { const open = $('fxBar').hidden; $('fxBar').hidden = !open; $('fxBtn').setAttribute('aria-expanded', String(open)); });
+$('fxBar').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !/刪除/.test(b.getAttribute('aria-label') || '')) closeFx(); });
+document.addEventListener('pointerdown', (e) => { if (!$('fxBar').hidden && !$('fxBar').contains(e.target) && !$('fxBtn').contains(e.target)) closeFx(); });
 
-// 照片：選檔按鈕、拖曳、貼上（點畫布本身是拿來拖曳照片，不開選檔）
+let mode = 'frame', textStyle = 'card';
+function syncPanes() {
+  $('framePane').hidden = mode !== 'frame';
+  $('textPane').hidden = mode !== 'text';
+  $('cardPane').hidden = textStyle !== 'card';
+  $('nativePane').hidden = textStyle !== 'native';
+  $('plainPane').hidden = textStyle !== 'plain';
+  $('titleBlock').hidden = mode === 'text' && textStyle !== 'card';   // 原生背景／無底色不用標題
+  updateCount();
+  if (mode === 'text') renderCard();
+}
+const modeSeg = segment($('modeSeg'), 'mode', (m) => { mode = m; syncPanes(); });
+const textSeg = segment($('textSeg'), 'text', (t) => { textStyle = t; syncPanes(); });
+
+// 照片：點畫布（沒照片時）、拖曳、貼上
 async function takeImage(file) {
   await editorReady;
   if (!editor) return;
   try { await editor.loadFile(file); } catch (e) { $('urlHint').textContent = errText(e); }
 }
-$('pickImg').addEventListener('click', () => $('fileInput').click());
 $('fileInput').addEventListener('change', () => { const f = $('fileInput').files[0]; $('fileInput').value = ''; if (f) takeImage(f); });
 $('canvasWrap').addEventListener('dragover', (e) => e.preventDefault());
 $('canvasWrap').addEventListener('drop', (e) => { e.preventDefault(); const f = [...(e.dataTransfer?.files || [])].find((x) => x.type.startsWith('image/')); if (f) takeImage(f); });
@@ -230,34 +397,60 @@ document.addEventListener('paste', (e) => {
 });
 $('clearImg').addEventListener('click', () => editor && editor.clearImage());
 
-// 標題：每行字數
-function titleLines() { return $('title').value.replace(/\s+$/, '').split('\n'); }   // 尾端多的換行不算一行
-function renderTitleCounts() {
-  const lines = titleLines();
-  $('titleCnts').replaceChildren(...lines.map((l, i) => el('span', { className: [...l].length > TITLE_MAX || i >= TITLE_LINES ? 'bad' : '', textContent: `${[...l].length}/${TITLE_MAX}` })));
+// ---------- 標題（作圖框與純文字底圖共用）----------
+const titleEl = $('title');
+bindTitle(titleEl);   // sdk 的 titleAsOneLine 讀這個標題框
+const titleRows = () => titleEl.value.replace(/\r/g, '').split('\n');
+const getLines = () => titleRows().map((l) => l.trim()).filter(Boolean);   // 送出／畫圖用：去掉空行
+function updateCounters() {
+  const rs = titleRows();
+  let n = 0;
+  $('titleCnts').replaceChildren(...rs.map((r) => {
+    const s = el('span');
+    if (!r.trim()) return s;
+    const len = [...r.trim()].length;
+    s.textContent = `${len}/${TITLE_MAX}`;
+    s.className = len > TITLE_MAX || n >= TITLE_LINES ? 'bad' : '';
+    n++;
+    return s;
+  }));
+  titleEl.rows = Math.max(3, rs.length);
+  if (editor) editor.setTitle(titleEl.value);
+  renderCard();
 }
-$('title').addEventListener('input', () => { renderTitleCounts(); if (editor) editor.setTitle($('title').value); });
-renderTitleCounts();
+function setLines(lines) { titleEl.value = lines.join('\n'); updateCounters(); }
+// 小編文的【標題】那一行跟著標題框走：沒改過的相鄰兩行照文章原本的接法，新的用空格接（網新 syncCaptionTitle）
+function syncCaptionTitle() {
+  const c = $('caption'), t = titleAsOneLine();
+  const r = replaceTitleLine(c.value, t, cap.title);
+  if (r.index < 0) return;   // 小編把【…】那一行刪掉了：不再補回來
+  cap.title = t;
+  if (r.text === c.value) return;
+  if (c.value === cap.auto) cap.auto = r.text;
+  c.value = r.text;
+  updateCount();
+}
+titleEl.addEventListener('input', () => { updateCounters(); syncCaptionTitle(); });
 
-// 純文字底圖
-let swatch = TEXT_SWATCHES[0];
-function renderCard() { drawTextCard($('textCanvas'), { text: $('cardText').value, swatch, hint: true }); }
-$('swatches').replaceChildren(...TEXT_SWATCHES.map((s, i) => {
-  const b = el('button', { type: 'button', className: 'sw' + (i === 0 ? ' is-on' : ''), title: s.name, ariaLabel: s.name });
+// ---------- 純文字底圖 ----------
+let swatch = TEXT_SWATCHES.find((s) => s.key === DEFAULT_SWATCH) || TEXT_SWATCHES[0];
+function renderCard() { drawTextCard($('textCanvas'), { text: getLines().join('\n'), swatch, fontLoaded: state.fontLoaded }); }
+function pickSwatch(s) {
+  swatch = s;
+  for (const x of $('swatches').children) { const on = x.dataset.key === s.key; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); }
+  renderCard();
+}
+$('swatches').replaceChildren(...TEXT_SWATCHES.map((s) => {
+  const b = el('button', { type: 'button', className: 'sw' + (s === swatch ? ' is-on' : ''), title: s.label, ariaLabel: s.label, dataset: { key: s.key } });
   b.setAttribute('role', 'radio');
-  b.setAttribute('aria-checked', String(i === 0));
+  b.setAttribute('aria-checked', String(s === swatch));
   b.style.background = swatchCss(s);
-  b.addEventListener('click', () => {
-    swatch = s;
-    for (const x of $('swatches').children) { x.classList.toggle('is-on', x === b); x.setAttribute('aria-checked', String(x === b)); }
-    renderCard();
-  });
+  b.addEventListener('click', () => pickSwatch(s));
   return b;
 }));
-$('cardText').addEventListener('input', renderCard);
-document.fonts.load('700 72px "Noto Sans TC"', '字').catch(() => {}).then(renderCard);
+document.fonts.load('900 76px "Noto Sans TC"', '字').catch(() => {}).then(renderCard);
 
-// 小編文字數（原生背景提醒 130 字）
+// ---------- 小編文、留言小編文 ----------
 function updateCount() {
   const n = [...$('caption').value].length;
   const native = mode === 'text' && textStyle === 'native';
@@ -266,146 +459,215 @@ function updateCount() {
 }
 $('caption').addEventListener('input', updateCount);
 
-// 文章網址帶入：標題（空的才填）、主圖（作圖框沒照片才放）、網址（小編文沒有才加）
-$('fillBtn').addEventListener('click', async () => {
-  const url = $('url').value.trim(), hint = $('urlHint');
-  if (!/^https:\/\//.test(url)) { hint.textContent = '請貼 https 開頭的文章網址'; return; }
-  hint.textContent = '讀取中…';
+// 留言用的文章網址：優先用最後一次帶入記住的原始網址，沒有才看網址欄
+const articleUrl = () => {
+  if (state.articleUrl) return state.articleUrl;
+  const u = $('url').value.trim();
+  return /^https?:\/\/\S+$/i.test(u) ? u : '';
+};
+// 每個粉專的留言 = （填的 || 看更多新聞內容）＋換行＋文章網址（帶該粉專 utm）；沒有網址時有填才送、沒填不留言
+function commentFor(p) {
+  const custom = $('comment').value.trim();
+  const url = articleUrl();
+  if (!url) return custom;
+  return `${custom || DEFAULT_COMMENT}\n${buildLink(url, p.utm)}`;
+}
+function updateCommentPreview() {
+  const first = checkedChips()[0];
+  const p = first && pages.find((x) => x.id === first.id);
+  const box = $('commentPrev');
+  if (!p) { box.textContent = '勾選粉專後，這裡顯示留言預覽'; return; }
+  const text = commentFor(p);
+  box.textContent = text ? `留言預覽（${pageLabel(p)}）：\n${text}` : `留言預覽（${pageLabel(p)}）：不會留言（沒有文章網址也沒填留言）`;
+}
+$('comment').addEventListener('input', updateCommentPreview);
+
+// ---------- 文章網址自動帶入（同網新 quickFill）----------
+const hint = (msg, cls) => { const h = $('urlHint'); h.textContent = msg || ''; h.className = 'hint' + (cls ? ' ' + cls : ''); };
+// 帶入時標題、小編文、畫布先放骨架（灰底 shimmer），各自拿到結果就拿掉
+function skel(node, on) { node.classList.toggle('is-skel', on); if (node.tagName === 'TEXTAREA') node.readOnly = on; node.setAttribute('aria-busy', String(on)); }
+const skelNodes = () => [$('title'), $('caption'), $('canvasWrap')];
+let filling = false;
+async function loadMainImage(images) {
+  for (const im of images.slice(0, 3)) {   // 失敗再試下一張，最多 3 張
+    try {
+      const res = await tb.api.call('/fetch/image?url=' + encodeURIComponent(im.url), { raw: true });
+      let blob = await res.blob();
+      if (!/^image\//.test(blob.type)) blob = new Blob([blob], { type: 'image/jpeg' });
+      await editor.loadFile(blob);
+      return true;
+    } catch { /* 試下一張 */ }
+  }
+  return false;
+}
+async function quickFill() {
+  if (filling) return;
+  const url = $('url').value.trim();
+  if (!/^https?:\/\/\S+$/i.test(url)) { hint('請先貼文章網址（https 開頭）', 'bad'); return; }
+  filling = true; $('fillBtn').disabled = true; hint('帶入中…');
+  const capCur = $('caption').value;
+  skel($('title'), true); skel($('canvasWrap'), true);
+  if (!capCur.trim() || capCur === cap.auto) skel($('caption'), true);
   try {
-    const d = await tb.api.call('/fetch?url=' + encodeURIComponent(url));
+    await editorReady;
+    let art;
+    try {
+      const r = await tb.api.call('/fetch/article?url=' + encodeURIComponent(url));
+      art = parseArticle(r.html, r.url || url);
+    } catch (e) { hint('帶入失敗：' + (e.code === 'host_not_allowed' ? '這個網址不在允許的網域（tvbs.com.tw）' : errText(e)), 'bad'); return; }
+    state.articleUrl = url;
     const done = [];
-    if (d.title && !$('title').value.trim()) { $('title').value = d.title; $('title').dispatchEvent(new Event('input')); done.push('標題'); }
-    if (d.title && !$('cardText').value.trim()) { $('cardText').value = d.title; renderCard(); }
-    if (!$('caption').value.includes(url)) {
-      const head = d.title && !$('caption').value.trim() ? `【${d.title}】\n` : '';
-      $('caption').value = ($('caption').value.trim() ? $('caption').value.replace(/\s+$/, '') + '\n\n' : head) + url;
+    // 網址是 /entertainment/ 就自動切娛樂粉框，其他回新聞藍框（沒有公司素材時只有通用框，維持原樣）
+    const f = frameForUrl(url);
+    if (editor && frameCtl && editor.frames().includes(f)) frameCtl.set(f);
+    if (art.title) {
+      const lines = autoLines(art.title);
+      learnSeps(overrideOneLine(art.title), lines);   // 小編文的【標題】接回原標題的樣子
+      setLines(lines);
+      done.push('標題');
+    }
+    skel($('title'), false);
+    let imgFail = false;
+    if (art.images.length && editor) { if (await loadMainImage(art.images)) done.push('主圖'); else imgFail = true; }
+    skel($('canvasWrap'), false);
+    // 小編文：空的或還是自動帶的就整段重帶；小編改過就不覆蓋，只更新【標題】那一行
+    const caption = mainCaption(art);
+    const fill = !$('caption').value.trim() || $('caption').value === cap.auto;
+    if (fill) {
+      const t = titleAsOneLine();
+      $('caption').value = cap.auto = formatCopy({ title: t, caption, tags: art.tags });
+      cap.title = t;
       updateCount();
-      done.push('網址');
-    }
-    if (d.image) {
-      await editorReady;
-      if (editor && !editor.hasImage()) {
-        try {
-          const res = await tb.api.call('/fetch/image?url=' + encodeURIComponent(d.image), { raw: true });
-          await editor.loadFile(await res.blob());
-          done.push('主圖');
-        } catch { hint.textContent = '主圖讀取失敗，請手動放照片'; }
-      }
-    }
-    if (!hint.textContent.startsWith('主圖')) hint.textContent = done.length ? '已帶入：' + done.join('、') : '沒有可帶入的內容（已填的欄位不會覆蓋）';
-  } catch (e) { hint.textContent = '帶入失敗：' + errText(e); }
-});
+      done.push('小編文');
+    } else syncCaptionTitle();
+    const notes = [];
+    if (!art.title) notes.push('沒讀到標題');
+    if (imgFail) notes.push('主圖讀不出來，請手動放照片');
+    if (fill && !caption) notes.push('沒抓到圖說');
+    if (!fill) notes.push('小編文已改過，沒有覆蓋（只更新【標題】那一行）');
+    hint(`已帶入：${done.join('、') || '（沒有可帶入的內容）'}` + (notes.length ? `；${notes.join('；')}` : ''), imgFail || !art.title ? 'bad' : 'ok');
+    updateCommentPreview();
+  } finally { filling = false; $('fillBtn').disabled = false; skelNodes().forEach((n) => skel(n, false)); }
+}
+$('url').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); quickFill(); } });
+$('url').addEventListener('input', updateCommentPreview);
+$('fillBtn').addEventListener('click', quickFill);
+// 貼上網址就直接帶入（等貼上的值寫進欄位後再讀）
+$('url').addEventListener('paste', () => setTimeout(() => { if (/^https?:\/\/\S+$/i.test($('url').value.trim())) quickFill(); }, 0));
 
-// 粉專：每個粉專一列（勾選＋立即／排程＋時間），各自獨立。
-// 列只建一次、之後重用（重新整理粉專清單也保留每列的設定）；只有「清空」會重設。
-const rows = new Map();   // 粉專ID → { id, root, cb, ctrls, when, seg, date, time, hint }
-const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const toTimeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-function defaultDate() {
-  const d = new Date(Date.now() + 60 * 60 * 1000);
-  d.setMinutes(Math.ceil(d.getMinutes() / 10) * 10, 0, 0);
-  return d;
+// ---------- 粉專晶片：點名稱勾選；▾ 選立即／排程（排程才開時間視窗）----------
+const chips = new Map();   // 粉專ID → { id, on, sched, at, status('' | sending | ok | fail), result, els }
+const menu = $('modeMenu'), pop = $('timePop');
+let popFor = null;
+function place(node, anchor) {
+  const mr = modal.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+  node.hidden = false;
+  node.style.left = Math.max(8, Math.min(ar.left - mr.left, mr.width - node.offsetWidth - 8)) + 'px';
+  const above = ar.top - mr.top - node.offsetHeight - 8;
+  node.style.top = (above >= 8 ? above : ar.bottom - mr.top + 8) + 'px';
 }
-function readRowTime(r) {
-  const m = /^(\d{1,2}):?(\d{2})$/.exec(r.time.value.trim());
-  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date.value);
-  if (!m || !dm || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
-  return new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(m[1]), Number(m[2]));
-}
-// 回傳 { at } 或 { error }；同時更新該列提示
-function checkRow(r) {
-  if (r.when === 'now') { r.hint.textContent = ''; r.hint.classList.remove('bad'); return { at: null }; }
-  const d = readRowTime(r);
-  let error = '';
-  if (!d) error = '時間格式：4 碼，例如 2130';
-  else {
-    const ahead = (d.getTime() - Date.now()) / 1000;
-    if (ahead < MIN_AHEAD) error = '排程要在 10 分鐘以後';
-    else if (ahead > MAX_AHEAD) error = '排程最多 30 天內';
-  }
-  r.hint.textContent = error || '將於 ' + fmtTime(Math.floor(d.getTime() / 1000)) + ' 發布';
-  r.hint.classList.toggle('bad', !!error);
-  return error ? { error } : { at: Math.floor(d.getTime() / 1000) };
-}
-function setRowTime(r, d) { r.date.value = toDateStr(d); r.time.value = toTimeStr(d); checkRow(r); }
-function setRowWhen(r, w) {
-  r.when = w;
-  for (const b of r.seg.children) { const on = b.dataset.when === w; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on)); }
-  r.timeBox.hidden = w !== 'sched';
-  if (w === 'sched' && !readRowTime(r)) {
-    // 帶入其他已排程粉專的時間，省得重打；沒有就用一小時後
-    const other = checkedRows().find((x) => x !== r && x.when === 'sched' && readRowTime(x));
-    setRowTime(r, other ? readRowTime(other) : defaultDate());
-  }
-  checkRow(r);
-  updateSendLabel();
-}
-function makeRow(p) {
-  const r = { id: p.id, when: 'now' };
-  r.cb = el('input', { type: 'checkbox' });
-  r.seg = el('div', { className: 'seg sm' },
-    el('button', { type: 'button', textContent: '立即', dataset: { when: 'now' } }),
-    el('button', { type: 'button', textContent: '排程', dataset: { when: 'sched' } }));
-  r.seg.setAttribute('role', 'group');
-  r.seg.setAttribute('aria-label', p.name + ' 發布時間');
-  r.date = el('input', { type: 'date', ariaLabel: p.name + ' 日期' });
-  r.time = el('input', { type: 'text', inputMode: 'numeric', maxLength: 5, autocomplete: 'off', placeholder: '2130', className: 'tp-time', ariaLabel: p.name + ' 時間（4 碼，2130＝21:30）' });
-  r.hint = el('span', { className: 'hint' });
-  const chips = el('span', { className: 'chips' }, ...[['30', '+30 分'], ['60', '+1 小時'], ['1440', '明天']].map(([m, t]) => el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: t, dataset: { add: m } })));
-  r.timeBox = el('span', { className: 'pg-time', hidden: true }, r.date, r.time, chips);
-  r.ctrls = el('span', { className: 'pg-ctrls', hidden: true }, r.seg, r.timeBox, r.hint);
-  r.root = el('div', { className: 'pg-row', dataset: { page: p.id } }, el('label', { className: 'pg' }, r.cb, el('span', { textContent: p.name })), r.ctrls);
-  r.cb.addEventListener('change', () => { r.ctrls.hidden = !r.cb.checked; if (r.cb.checked) checkRow(r); updateSendLabel(); });
-  r.seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRowWhen(r, b.dataset.when); });
-  r.time.addEventListener('input', () => {
-    const v = r.time.value.replace(/\D/g, '');
-    if (v.length === 4) r.time.value = v.slice(0, 2) + ':' + v.slice(2);
-    checkRow(r);
-  });
-  r.date.addEventListener('change', () => checkRow(r));
-  chips.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-add]');
-    if (b) setRowTime(r, new Date((readRowTime(r) || new Date()).getTime() + Number(b.dataset.add) * 60000));
-  });
-  setRowWhen(r, 'now');
-  return r;
-}
-const checkedRows = () => pages.map((p) => rows.get(p.id)).filter((r) => r && r.cb.checked);
-function renderPageChecks() {
-  for (const p of pages) if (!rows.has(p.id)) rows.set(p.id, makeRow(p));
-  $('pages').replaceChildren(...(pages.length ? pages.map((p) => rows.get(p.id).root) : [el('span', { className: 'hint', textContent: '沒有可發的粉專' })]));
-  $('applyAll').hidden = !pages.length;
-  updateSendLabel();
-}
-function resetRows() {
-  for (const r of rows.values()) { r.cb.checked = false; r.ctrls.hidden = true; r.date.value = r.time.value = ''; setRowWhen(r, 'now'); }
-  updateSendLabel();
-}
-function updateSendLabel() {
-  const list = checkedRows();
-  const now = list.filter((r) => r.when === 'now').length;
-  $('sendBtn').textContent = list.length ? `送出 ${list.length} 個粉專（${now} 立即、${list.length - now} 排程）` : '送出';
-}
-// 把第一個勾選粉專的設定套用到其他勾選的粉專
-$('applyAll').addEventListener('click', () => {
-  const [first, ...rest] = checkedRows();
-  if (!first) { $('sendMsg').textContent = '請先勾選要發的粉專'; return; }
-  for (const r of rest) { r.date.value = first.date.value; r.time.value = first.time.value; setRowWhen(r, first.when); }
-});
+function closePops() { menu.hidden = true; pop.hidden = true; popFor = null; }
+const checkedChips = () => pages.map((p) => chips.get(p.id)).filter((c) => c && c.on);
+const pendingChips = () => checkedChips().filter((c) => c.status !== 'ok');
 
-// 送出：先組好「要送的內容」（同一張圖給每個粉專），再逐一送
+function renderChip(id) {
+  const c = chips.get(id), p = pages.find((x) => x.id === id);
+  if (!c || !p) return;
+  const e = c.els, done = c.status === 'ok', fail = c.status === 'fail', busy = c.status === 'sending';
+  e.root.classList.toggle('on', c.on && !done && !fail);
+  e.root.classList.toggle('done', done); e.root.classList.toggle('fail', fail); e.root.classList.toggle('busy', busy);
+  e.main.setAttribute('aria-pressed', String(c.on));
+  e.main.disabled = done || busy;
+  e.box.textContent = c.on ? '✓' : '';
+  e.mode.hidden = !c.on;
+  e.mode.disabled = busy || done;
+  e.retry.hidden = !fail;
+  e.mode.title = fail && c.result ? c.result.error : '';
+  if (done) e.mode.textContent = c.result && c.result.schedule ? `✓ 排程 ${Sched.fmtWhen(c.at, now())}` : '✓ 已發布';
+  else if (fail) e.mode.textContent = '✗ 失敗 ▾';
+  else if (busy) e.mode.textContent = '送出中…';
+  else e.mode.textContent = (c.sched && c.at ? `排程 ${Sched.fmtWhen(c.at, now())}` : '立即') + ' ▾';
+}
+function updateSendBtn() {
+  const n = pendingChips().length;
+  $('sendBtn').textContent = n ? `全部送出（${n} 台）` : '全部送出';
+  $('sendBtn').disabled = !n || sending;
+  $('sendTip').hidden = n > 0 || checkedChips().length > 0;
+  updateCommentPreview();
+}
+function makeChip(p) {
+  const c = { id: p.id, on: false, sched: false, at: null, status: '', result: null };
+  const root = el('div', { className: 'pg', dataset: { page: p.id } });
+  const main = el('button', { type: 'button', className: 'pg-main' });
+  const box = el('span', { className: 'box' });
+  main.append(box, pageLabel(p));
+  main.title = p.name;
+  const mode = el('button', { type: 'button', className: 'pg-mode', hidden: true });
+  mode.setAttribute('aria-haspopup', 'menu');
+  const retry = el('button', { type: 'button', className: 'retry', hidden: true, textContent: '↻ 重送' });
+  retry.setAttribute('aria-label', `重送${pageLabel(p)}`);
+  root.append(main, mode, retry);
+  c.els = { root, main, box, mode, retry };
+  main.addEventListener('click', () => {
+    c.on = !c.on; c.status = ''; c.result = null;
+    closePops(); renderChip(p.id); updateSendBtn();
+  });
+  mode.addEventListener('click', (e) => { e.stopPropagation(); if (c.status === 'ok') return; openMenu(p.id); });
+  retry.addEventListener('click', () => send([p.id]));
+  return c;
+}
+function renderPageChips() {
+  const ids = new Set(pages.map((p) => p.id));
+  for (const id of [...chips.keys()]) if (!ids.has(id)) chips.delete(id);
+  for (const p of pages) if (!chips.has(p.id)) chips.set(p.id, makeChip(p));
+  $('pages').replaceChildren(...(pages.length ? pages.map((p) => { renderChip(p.id); return chips.get(p.id).els.root; }) : [el('span', { className: 'hint', textContent: '沒有可發的粉專' })]));
+  updateSendBtn();
+}
+
+function openMenu(id) {
+  popFor = id; pop.hidden = true;
+  const c = chips.get(id);
+  menu.querySelectorAll('button').forEach((b) => b.classList.toggle('cur', (b.dataset.m === 'sched') === c.sched));
+  place(menu, c.els.mode);
+  menu.querySelector('button').focus();
+}
+menu.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-m]');
+  if (!b || !popFor) return;
+  const id = popFor, c = chips.get(id);
+  if (b.dataset.m === 'now') { c.sched = false; closePops(); renderChip(id); c.els.mode.focus(); return; }
+  c.sched = true;
+  if (!c.at || Sched.validate(c.at, now())) c.at = Sched.defaultAt(now());   // 預填 現在＋30 分
+  renderChip(id); menu.hidden = true; openPop(id);
+});
+// 時間視窗：日期預設今天；時間直接打 4 碼（2130→21:30），↑↓ ±10 分；快捷鈕 +30 分／+1 小時／明天
+const popEd = createTimeEditor({
+  onChange: (at) => { const c = chips.get(popFor); if (c) { c.at = at; renderChip(popFor); } },
+  onEnter: () => { const id = popFor; closePops(); if (chips.get(id)) chips.get(id).els.mode.focus(); },
+});
+pop.append(el('h3', { textContent: '排程時間' }), popEd.root);
+function openPop(id) {
+  const c = chips.get(id);
+  popEd.set(c.at);
+  place(pop, c.els.mode);
+  popEd.focus();
+}
+modal.addEventListener('mousedown', (e) => { if ((!menu.hidden || !pop.hidden) && !e.target.closest('.menu,.timepop,.pg-mode')) closePops(); });
+
+// ---------- 送出 ----------
+// 先組好「要送的內容」（同一張圖給每個粉專），再逐台送；每台各自的時間與留言
 async function buildPayload() {
   const caption = $('caption').value;
   const p = { message: caption, image: null, textPreset: '' };
+  const lines = getLines();
   if (mode === 'frame') {
     await editorReady;
     if (!editor || !editor.hasImage()) throw new Error('請先放照片');
-    const lines = titleLines();
     if (lines.length > TITLE_LINES || lines.some((l) => [...l].length > TITLE_MAX)) throw new Error(`標題每行最多 ${TITLE_MAX} 字、最多 ${TITLE_LINES} 行`);
     p.image = await editor.exportBlob('image/jpeg', 0.92);
   } else if (textStyle === 'card') {
-    if (!$('cardText').value.trim()) throw new Error('請輸入底圖文字');
-    drawTextCard($('textCanvas'), { text: $('cardText').value, swatch });
+    if (!lines.length) throw new Error('請輸入標題（底圖文字）');
+    drawTextCard($('textCanvas'), { text: lines.join('\n'), swatch, fontLoaded: state.fontLoaded });
     p.image = await new Promise((r) => $('textCanvas').toBlob(r, 'image/jpeg', 0.92));
     renderCard();
   } else {
@@ -417,74 +679,121 @@ async function buildPayload() {
   }
   return p;
 }
-async function sendOne(pageId, p, at) {
+async function sendOne(page, p, at) {
   const fd = new FormData();
-  fd.append('page', pageId);
+  fd.append('page', page.id);
   fd.append('message', p.message);
   if (p.image) fd.append('image', p.image, 'post.jpg');
   if (p.textPreset) fd.append('textPreset', p.textPreset);
   if (at) fd.append('scheduledAt', String(at));
+  fd.append('comment', commentFor(page));
   return tb.api.call('/fb/post', { method: 'POST', body: fd });
 }
+const sendMsg = (text, cls) => { const m = $('sendMsg'); m.textContent = text || ''; m.className = 'hint' + (cls ? ' ' + cls : ''); };
 
-let sending = false;
-function resultRow(pageId) {
-  let li = $('results').querySelector(`[data-page="${pageId}"]`);
-  if (!li) { li = el('li', { dataset: { page: pageId } }); $('results').append(li); }
-  return li;
-}
-function showResult(pageId, state, text, retry) {
-  const li = resultRow(pageId);
-  li.className = 'r-' + state;
-  li.replaceChildren(el('b', { textContent: pageName(pageId) }), el('span', { textContent: text }));
-  if (retry) {
-    const b = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '重送' });
-    b.addEventListener('click', () => send([pageId]));
-    li.append(b);
-  }
-}
 async function send(ids) {
   if (sending) return;
-  const msg = $('sendMsg');
-  if (!ids.length) { msg.textContent = '請先勾選要發的粉專'; return; }
+  if (!ids.length) { sendMsg('請先勾選要發的粉專', 'bad'); return; }
   sending = true;   // 在任何 await 之前就鎖上，避免連點兩下重複發文
   $('sendBtn').disabled = true;
   try {
-    let p;
-    try { p = await buildPayload(); } catch (e) { msg.textContent = errText(e); return; }
-    if (ids.length > 1 || !$('results').querySelector(`[data-page="${ids[0]}"]`)) $('results').replaceChildren();
-    let okN = 0, schedN = 0;
-    for (const [i, id] of ids.entries()) {
-      msg.textContent = `送出中 ${i + 1}/${ids.length}…`;
-      const t = checkRow(rows.get(id));   // 每個粉專用自己的時間
-      if (t.error) { showResult(id, 'bad', '排程時間不正確：' + t.error, true); continue; }
-      showResult(id, 'wait', '送出中…');
-      try {
-        await sendOne(id, p, t.at);
-        okN++;
-        if (t.at) schedN++;
-        showResult(id, 'ok', t.at ? '已排程 ' + fmtTime(t.at) : '已發布');
-      } catch (e) { showResult(id, 'bad', errText(e), true); }
+    let payload;
+    try { payload = await buildPayload(); } catch (e) { sendMsg(errText(e), 'bad'); return; }
+    // 排程時間先全部檢查：有一台不合法就整批不送（同網新）
+    for (const id of ids) {
+      const c = chips.get(id);
+      const err = c.sched ? Sched.validate(c.at, now()) : null;
+      if (err) { sendMsg(`${pageLabel(pages.find((p) => p.id === id))}：${err.msg}`, 'bad'); return; }
     }
-    msg.textContent = okN === ids.length ? `完成：${okN} 個粉專都成功` : `成功 ${okN}、失敗 ${ids.length - okN}（失敗的可修改後按「重送」）`;
+    ids.forEach((id) => { chips.get(id).status = 'sending'; renderChip(id); });
+    let schedN = 0, nowN = 0, commentBad = 0;
+    const failed = [];
+    for (const [i, id] of ids.entries()) {
+      const c = chips.get(id), page = pages.find((p) => p.id === id);
+      sendMsg(`送出 ${pageLabel(page)}…（${i + 1}/${ids.length}）`);
+      try {
+        const r = await sendOne(page, payload, c.sched ? Math.floor(c.at.getTime() / 1000) : null);
+        c.status = 'ok'; c.result = { schedule: c.sched };
+        if (c.sched) schedN++; else nowN++;
+        if (r && r.comment && r.comment.status === 'failed') commentBad++;
+      } catch (e) {
+        c.status = 'fail'; c.result = { error: errText(e) };
+        failed.push(`${pageLabel(page)} ${errText(e)}`);
+      }
+      renderChip(id);
+    }
+    const sum = [nowN ? `已發布 ${nowN} 台` : '', schedN ? `已排程 ${schedN} 台` : ''].filter(Boolean).join('、');
+    const extra = commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '';
+    if (failed.length) sendMsg(`${sum ? sum + '；' : ''}失敗 ${failed.length} 台：${failed.join('；')}（可按晶片上的「↻ 重送」）${extra}`, 'bad');
+    else sendMsg(sum + extra, commentBad ? 'bad' : 'ok');
     if (schedN) loadSched();
+    pollFailed();
+    if (!pendingChips().length && checkedChips().length) showDone((sum || '全部完成') + extra);
   } finally {
     sending = false;
-    $('sendBtn').disabled = false;
+    updateSendBtn();
   }
 }
-$('sendBtn').addEventListener('click', () => send(checkedRows().map((r) => r.id)));
+$('sendBtn').addEventListener('click', () => send(pendingChips().map((c) => c.id)));
 
-// 清空：唯一會刪內容的地方
-$('clearBtn').addEventListener('click', async () => {
-  if (!(await confirmBox('清空新增發文？', '照片、標題、小編文、底圖文字、粉專勾選與時間、送出結果都會清掉。', '清空'))) return;
-  for (const id of ['url', 'title', 'caption', 'cardText', 'presetId']) $(id).value = '';
-  $('urlHint').textContent = $('sendMsg').textContent = '';
-  $('results').replaceChildren();
+// ---------- 完成、關閉、清空 ----------
+function showDone(body) {
+  closePops();
+  $('dnBody').textContent = body;
+  $('doneDlg').showModal();
+  $('dnAgain').focus();
+}
+const isDirty = () => !!($('url').value.trim() || $('title').value.trim() || $('caption').value.trim() || $('comment').value.trim() || $('presetId').value.trim() || (editor && editor.hasImage()));
+const allSent = () => [...chips.values()].some((c) => c.on && c.status === 'ok') && !pendingChips().length;
+
+// 清空全部（同網新 resetAll）：唯一會刪內容的地方只有「確認關閉」「清空」「再發一篇」
+function resetAll() {
+  for (const id of ['url', 'title', 'caption', 'comment', 'presetId']) $(id).value = '';
+  hint(''); sendMsg('');
+  state.articleUrl = ''; cap.auto = ''; cap.title = null;
+  learnSeps('', []);
   if (editor) { editor.clearAll(); frameCtl.set(editor.getFrame()); }
+  closeFx();
+  mode = 'frame'; textStyle = 'card';
   modeSeg.set('frame'); textSeg.set('card');
-  resetRows();
-  renderTitleCounts(); renderCard(); updateCount();
+  pickSwatch(TEXT_SWATCHES.find((s) => s.key === DEFAULT_SWATCH) || TEXT_SWATCHES[0]);
+  for (const c of chips.values()) { c.on = false; c.sched = false; c.at = null; c.status = ''; c.result = null; renderChip(c.id); }
+  closePops(); updateCounters(); updateCount(); updateSendBtn();
+}
+let ourClose = false;
+function closeModal() {
+  ourClose = true;
+  $('doneDlg').open && $('doneDlg').close();
+  modal.close();
+  resetAll();
+}
+async function requestClose() {
+  if (sending) { sendMsg('送出中，請等全部送完', 'bad'); return; }
+  if (!isDirty() || allSent()) { closeModal(); return; }
+  const some = [...chips.values()].some((c) => c.status);
+  if (await confirmBox('關閉新增發文？', some ? '還有沒送出或失敗的粉專，關閉後內容會全部清掉。' : '目前填的內容還沒送出，關閉後會清掉。', '放棄並關閉')) closeModal();
+}
+$('newPost').addEventListener('click', () => { modal.showModal(); $('url').focus(); });
+$('mClose').addEventListener('click', requestClose);
+modal.addEventListener('cancel', (e) => { e.preventDefault(); requestClose(); });   // Esc 走同一條路
+// 瀏覽器偶爾會略過 cancel 直接關（連按兩次 Esc）：內容還沒送就原地重開，再問一次
+modal.addEventListener('close', () => {
+  if (ourClose) { ourClose = false; return; }
+  if (isDirty() && !allSent()) { modal.showModal(); requestClose(); } else resetAll();
 });
+$('clearBtn').addEventListener('click', async () => {
+  if (sending) return;
+  if (isDirty() || checkedChips().length) {
+    if (!(await confirmBox('清空新增發文？', '照片、標題、小編文、留言、粉專勾選與時間、送出結果都會清掉。', '清空'))) return;
+  }
+  resetAll();
+  $('url').focus();
+});
+$('dnList').addEventListener('click', () => closeModal());
+$('dnAgain').addEventListener('click', () => { $('doneDlg').close(); resetAll(); $('url').focus(); });
 
+pickSwatch(swatch);
+updateCounters();
+updateCount();
 loadPages();
+pollFailed();

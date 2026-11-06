@@ -40,10 +40,14 @@ function loadImg(url) {
 // ---- 版面常數（同 pattern）----
 const RIBBON_W = 230, RIBBON_H = 215;
 const LOGO_W = 170, LOGO_H = 100, LOGO_X = 455, LOGO_Y = 955;
-const BOX_CENTER = 880;
-const LINE_HEIGHT_RATIO = 93 / 67;
-const TITLE_FONT_PX = 50 * (67 / 50);   // 圖片背景固定 Canva 字級 50 → 67px
+// 標題（照網新後端實測）：66px、行距 93，最後一行的中線固定在 y≈931，往上排（不是整塊置中）
+const LAST_LINE_Y = 931;
+const LINE_HEIGHT = 93;
+const TITLE_FONT_PX = 66;
+const TITLE_PAD_X = 30, TITLE_BOX_PAD_Y = 12;   // 標題左右留白；預覽上改標題的輸入框上下內距
 const MAX_TITLE_LINES = 3;
+// 漸層（照網新）：y → 黑色 alpha（/255），共七個點
+const GRADIENT_STOPS = [[0, 0], [300, 16], [486, 39], [600, 60], [756, 96], [900, 138], [1079, 204]];
 
 const GEN_COLORS = [
   { name: '墨黑', hex: '#202124' }, { name: '海軍藍', hex: '#1f3a5f' }, { name: '磚紅', hex: '#b03a2e' },
@@ -62,7 +66,7 @@ const STICKER_W = 300, MOSAIC_W = 320, MOSAIC_H = 240;
 const MIN_SIZE = 40, MAX_SIZE = SIZE * 1.4, MAX_ITEMS = 30;
 const BLOCK_DIV = 5, BLOCK_MIN = 14;
 
-export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
+export function createPhotoEditor({ canvas, wrap, fxBar, assets = {}, titleOverlay = null, onEmptyClick = null }) {
   const company = !!assets.company;
   const ctx = canvas.getContext('2d');
   canvas.width = SIZE;
@@ -77,6 +81,8 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
   let image = null, view = newView();
   let frame = company ? 'news' : 'generic';
   let titleLines = [];
+  let titleRaw = '';     // 標題框的原文（預覽上改標題的輸入框顯示用）
+  let onTitleInput = () => {};
   let items = [];        // 貼圖／馬賽克
   let selectedId = null;
   let nextId = 1;
@@ -120,10 +126,7 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
 
   function drawGradient(c) {
     const grad = c.createLinearGradient(0, 0, 0, SIZE);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.45, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.7, 'rgba(0,0,0,0.35)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.75)');
+    for (const [y, a] of GRADIENT_STOPS) grad.addColorStop(Math.min(1, y / SIZE), `rgba(0,0,0,${(a / 255).toFixed(4)})`);
     c.fillStyle = grad;
     c.fillRect(0, 0, SIZE, SIZE);
   }
@@ -137,17 +140,57 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
     if (imgs.logo) c.drawImage(imgs.logo, LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
   }
 
-  // 公司框標題：置中、固定垂直中心 880，最多 3 行
+  // 公司框標題：置中、最後一行固定在 y 931、往上排，最多 3 行
   function drawTitle(c) {
     if (!titleLines.length) return;
-    const fontSize = fitFontSize(c, titleLines, SIZE - 120, TITLE_FONT_PX);
-    const lh = fontSize * LINE_HEIGHT_RATIO;
+    const fontSize = fitFontSize(c, titleLines, SIZE - TITLE_PAD_X * 2, TITLE_FONT_PX);
+    const lh = LINE_HEIGHT * fontSize / TITLE_FONT_PX;
     const n = titleLines.length;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.font = titleFont(fontSize);
     c.fillStyle = '#ffffff';
-    titleLines.forEach((line, i) => c.fillText(line, SIZE / 2, BOX_CENTER - (n - 1) * lh / 2 + i * lh));
+    titleLines.forEach((line, i) => c.fillText(line, SIZE / 2, LAST_LINE_Y - (n - 1 - i) * lh));
+  }
+
+  // ---- 預覽上直接改標題（網新：透明輸入框疊在畫布標題上，點兩下才進入編輯；打的字經 onTitleInput 寫回標題框）----
+  // 只在公司框（新聞／娛樂）有照片時啟用；通用框的標題排法不同，不疊輸入框。它是 DOM，不會被匯出。
+  const overlayOn = () => !!titleOverlay && !!image && (frame === 'news' || frame === 'ent');
+  function layoutTitleOverlay() {
+    if (!titleOverlay) return;
+    titleOverlay.hidden = !overlayOn();
+    if (document.activeElement !== titleOverlay) titleOverlay.value = titleRaw;
+    const k = canvas.clientWidth / SIZE;
+    if (!k || titleOverlay.hidden) return;
+    ctx.save();
+    const fontSize = fitFontSize(ctx, titleLines.length ? titleLines : ['點兩下輸入標題'], SIZE - TITLE_PAD_X * 2, TITLE_FONT_PX);
+    ctx.restore();
+    const lineHeight = LINE_HEIGHT * fontSize / TITLE_FONT_PX;
+    // 畫布只畫有字的行、最後一行固定在 LAST_LINE_Y：輸入框讓最後一行有字的那一行對準它，前面往上、結尾的空行往下長
+    const rs = titleOverlay.value.replace(/\r/g, '').split('\n');
+    let last = rs.length - 1;
+    while (last > 0 && !rs[last].trim()) last--;
+    const top = LAST_LINE_Y - last * lineHeight - lineHeight / 2 - TITLE_BOX_PAD_Y, border = 2;
+    const st = titleOverlay.style;
+    st.left = `${canvas.offsetLeft + TITLE_PAD_X * k}px`;
+    st.top = `${canvas.offsetTop + top * k}px`;
+    st.width = `${(SIZE - TITLE_PAD_X * 2) * k}px`;
+    st.height = `${(rs.length * lineHeight + TITLE_BOX_PAD_Y * 2) * k}px`;
+    st.paddingTop = st.paddingBottom = `${Math.max(0, TITLE_BOX_PAD_Y * k - border)}px`;
+    st.fontSize = `${fontSize * k}px`;
+    st.lineHeight = `${lineHeight * k}px`;
+  }
+  if (titleOverlay) {
+    canvas.addEventListener('dblclick', () => {
+      if (titleOverlay.hidden) return;
+      titleOverlay.classList.add('editing');
+      titleOverlay.focus();
+      titleOverlay.setSelectionRange(titleOverlay.value.length, titleOverlay.value.length);
+    });
+    titleOverlay.addEventListener('blur', () => { titleOverlay.classList.remove('editing'); layoutTitleOverlay(); });
+    // Esc：焦點交回預覽框，不要關掉新增發文彈窗
+    titleOverlay.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); wrap.focus(); } });
+    titleOverlay.addEventListener('input', () => onTitleInput(titleOverlay.value));
   }
 
   // 通用框 C：底部黑漸層＋左上角標＋左側主色直條標題
@@ -283,6 +326,8 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
     return { x: (cx - r.left) * k, y: (cy - r.top) * k, k };
   };
   canvas.style.touchAction = 'none';
+  canvas.style.cursor = 'pointer';
+  canvas.addEventListener('click', () => { if (!image && onEmptyClick) onEmptyClick(); });   // 沒照片時點畫布開選檔
   canvas.addEventListener('wheel', e => {
     if (!image) return;
     e.preventDefault();
@@ -345,7 +390,7 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
       const rest = [...touches.entries()][0];
       drag = rest ? { id: rest[0], sx: rest[1].x, sy: rest[1].y, vx: view.x, vy: view.y } : null;
     } else if (drag && e.pointerId === drag.id) drag = null;
-    if (!drag) canvas.style.cursor = image ? 'grab' : '';
+    if (!drag) canvas.style.cursor = image ? 'grab' : 'pointer';
   };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
@@ -359,6 +404,7 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
   const boxEl = id => layer.querySelector(`[data-id="${id}"]`);
 
   function layoutBoxes() {
+    layoutTitleOverlay();
     const k = canvas.clientWidth / SIZE;
     layer.hidden = !image || !items.length;
     if (!k) return;
@@ -555,12 +601,13 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
     clearImage() {
       image = null; view = newView(); items = []; selectedId = null;
       rebuildBoxes();
-      canvas.style.cursor = '';
+      canvas.style.cursor = 'pointer';
       changed();
     },
     clearAll() {
       api.clearImage();
       titleLines = [];
+      titleRaw = '';
       frame = company ? 'news' : 'generic';
       changed();
     },
@@ -573,7 +620,9 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {} }) {
     },
     getFrame: () => frame,
     frames: () => (company ? ['news', 'ent', 'none'] : ['generic', 'none']),
+    onTitleInput(fn) { onTitleInput = fn; },
     setTitle(text) {
+      titleRaw = String(text || '');
       titleLines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean).slice(0, MAX_TITLE_LINES);
       changed();
     },

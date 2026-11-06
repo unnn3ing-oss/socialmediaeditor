@@ -21,11 +21,15 @@
   </header>
 
   <div class="seg" role="tablist" aria-label="分頁" id="tabs">
-    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
+    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程<span class="dot-badge" id="schedBadge" hidden aria-label="有留言失敗"></span></button>
     <button type="button" role="tab" aria-selected="false" data-tab="stats">成效</button>
   </div>
 
   <section id="tab-sched" class="tab">
+    <div class="fail-box" id="failBox" hidden>
+      <h2>留言失敗（<span id="failCount">0</span>）</h2>
+      <ul class="list" id="failList"></ul>
+    </div>
     <div class="bar">
       <label class="inline">粉專 <select id="schedPage"></select></label>
       <button type="button" class="btn btn-secondary btn-sm" id="schedReload">重新整理</button>
@@ -45,7 +49,7 @@
   </section>
 </main>
 
-<!-- 新增發文（彈窗）：關閉不會清內容，只有「清空」會清 -->
+<!-- 新增發文（彈窗，照網新排程）：關閉要確認，確認後清空；切換模式、分頁都不清內容 -->
 <dialog class="fp-modal" id="modal" aria-labelledby="mTitle">
   <header class="m-head">
     <h2 id="mTitle">新增發文</h2>
@@ -54,14 +58,14 @@
       <button type="button" data-mode="text">純文字</button>
     </div>
     <span class="grow"></span>
-    <button type="button" class="x" id="mClose" aria-label="關閉（內容會保留）" title="關閉（內容會保留）">✕</button>
+    <button type="button" class="x" id="mClose" aria-label="關閉" title="關閉">✕</button>
   </header>
 
   <div class="m-body">
     <div class="url-block">
-      <label for="url">文章網址</label>
+      <label for="url">⚡ 文章網址</label>
       <div class="urlrow">
-        <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://news.tvbs.com.tw/…">
+        <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://news.tvbs.com.tw/life/3012345">
         <button type="button" class="btn btn-secondary btn-sm" id="fillBtn">帶入</button>
       </div>
       <p class="hint" id="urlHint" role="status"></p>
@@ -70,16 +74,17 @@
     <div class="m-left">
       <!-- 作圖框 -->
       <div id="framePane">
-        <div class="canvas-wrap" id="canvasWrap" tabindex="0" aria-label="照片：點選、拖曳或貼上">
+        <div class="canvas-wrap" id="canvasWrap" tabindex="0" aria-label="照片：點選、拖曳或貼上；點兩下改標題">
           <canvas id="editorCanvas" width="1080" height="1080"></canvas>
+          <textarea class="title-overlay" id="titleOverlay" placeholder="點兩下輸入標題" spellcheck="false" tabindex="-1" aria-label="在預覽上編輯標題" hidden></textarea>
         </div>
         <div class="under">
           <div class="seg sm" role="group" aria-label="版型" id="frameSeg"></div>
-          <button type="button" class="btn btn-secondary btn-sm" id="pickImg">選照片</button>
           <button type="button" class="btn btn-secondary btn-sm" id="clearImg" hidden>移除照片</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="fxBtn" hidden aria-controls="fxBar" aria-expanded="false" title="加 T寶貼圖或馬賽克">😊 T寶／馬賽克</button>
         </div>
-        <div class="fx-bar" id="fxBar" role="group" aria-label="T寶貼圖與馬賽克"></div>
-        <p class="hint">預覽就是實際送出的圖（照片＋框＋標題＋貼圖）。滾輪或雙指縮放、拖曳移動照片。</p>
+        <div class="fx-bar" id="fxBar" role="group" aria-label="T寶貼圖與馬賽克" hidden></div>
+        <p class="hint">預覽就是實際送出的圖。點選或拖曳放照片、滾輪或雙指縮放；點兩下預覽可直接改標題。</p>
       </div>
 
       <!-- 純文字 -->
@@ -92,10 +97,7 @@
         <div id="cardPane">
           <div class="canvas-wrap text"><canvas id="textCanvas" width="1080" height="1080"></canvas></div>
           <div class="swatches" id="swatches" role="radiogroup" aria-label="底色"></div>
-          <label class="field">底圖文字
-            <textarea id="cardText" rows="4" placeholder="要畫在底圖上的文字（Enter 換行）"></textarea>
-          </label>
-          <p class="hint">以圖片貼文送出（1080×1080），小編文會放在圖片說明。</p>
+          <p class="hint">底圖文字就是右邊的「標題」（Enter 換行）。以圖片貼文送出（1080×1080），小編文放在圖片說明。</p>
         </div>
         <div id="nativePane" hidden>
           <label class="field">背景代碼（text_format_preset_id）
@@ -113,27 +115,67 @@
       <div id="titleBlock">
         <label for="title">標題 <small class="muted">每行 15 字、最多 3 行</small></label>
         <div class="title-box">
-          <textarea id="title" rows="3" wrap="off" spellcheck="false" placeholder="一行一句（Enter 換行，最多 3 行）"></textarea>
+          <textarea id="title" rows="3" wrap="off" spellcheck="false" placeholder="一行一句（Enter 換行，最多 3 行）&#10;例如：颱風假最新！北北基桃&#10;明天照常上班上課"></textarea>
           <div class="t-cnts" id="titleCnts" aria-hidden="true"></div>
         </div>
       </div>
       <label class="field">小編文 <small class="muted" id="capCount"></small>
-        <textarea id="caption" rows="8" placeholder="小編文（含 hashtag、文章連結）"></textarea>
+        <textarea id="caption" rows="7" placeholder="小編文（含 hashtag）"></textarea>
       </label>
-
+      <label class="field">留言小編文 <small class="muted">發文後第一則留言</small>
+        <textarea id="comment" rows="2" placeholder="不填就自動帶：看更多新聞內容＋各粉專 utm 連結"></textarea>
+      </label>
+      <p class="hint pre" id="commentPrev" role="status"></p>
+      <div class="rd-panel">
+        <div class="rd-head">
+          <label class="rd-sw"><input type="checkbox" id="rdOn" disabled> 排入 Rundown</label>
+          <span class="pill pill-warn">尚未連接</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="rdSet" disabled aria-label="Rundown 設定">⚙</button>
+        </div>
+        <p class="hint">送出成功後自動寫進 FB RUNDOWN（主粉、娛樂粉、少康粉、國際＋粉）。之後連接。</p>
+        <div class="slug-row"><label for="slug">SLUG</label><input id="slug" type="text" disabled placeholder="空白＝標題前 4 字"></div>
+      </div>
     </div>
   </div>
 
   <footer class="m-foot">
-    <div class="pages" id="pages" role="group" aria-label="要發的粉專（各自設定立即或排程）"></div>
-    <div><button type="button" class="btn btn-secondary btn-sm" id="applyAll" hidden>把第一個勾選粉專的時間套用到全部</button></div>
-    <ul class="results" id="results" aria-live="polite"></ul>
+    <div class="pages" id="pages" role="group" aria-label="要發的粉專（點名稱勾選，▾ 選立即或排程）"></div>
     <div class="send">
+      <span class="hint" id="sendTip">請先勾選要發的粉專</span>
       <span class="hint" id="sendMsg" role="status"></span>
       <button type="button" class="btn btn-secondary" id="clearBtn">清空</button>
-      <button type="button" class="btn btn-primary" id="sendBtn">送出</button>
+      <button type="button" class="btn btn-primary" id="sendBtn" disabled>全部送出</button>
     </div>
   </footer>
+
+  <!-- 立即／排程選單、時間視窗（放在彈窗裡才看得到） -->
+  <div class="menu" id="modeMenu" role="menu" hidden>
+    <button type="button" role="menuitem" data-m="now">立即發布</button>
+    <button type="button" role="menuitem" data-m="sched">排程發布…</button>
+  </div>
+  <div class="timepop" id="timePop" role="dialog" aria-label="排程時間" hidden></div>
+</dialog>
+
+<!-- 已排程：改時間 -->
+<dialog class="dialog" id="rsDlg" aria-labelledby="rsTitle">
+  <h2 id="rsTitle">改排程時間</h2>
+  <p class="muted" id="rsWhat"></p>
+  <div id="rsEditor"></div>
+  <p class="hint bad" id="rsErr" role="alert"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="rsNo">取消</button>
+    <button type="button" class="btn btn-primary" id="rsYes">確定</button>
+  </div>
+</dialog>
+
+<!-- 全部送出成功 -->
+<dialog class="dialog" id="doneDlg" aria-labelledby="dnTitle">
+  <h2 id="dnTitle">送出成功</h2>
+  <p class="muted" id="dnBody"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="dnList">回到列表</button>
+    <button type="button" class="btn btn-primary" id="dnAgain">再發一篇</button>
+  </div>
 </dialog>
 
 <dialog class="dialog" id="confirmDlg" aria-labelledby="cfTitle">
