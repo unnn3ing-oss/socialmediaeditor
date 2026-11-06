@@ -54,7 +54,7 @@
 | 測試 | 用戶 token 換粉專、發文用換出的 token、KV／回應都不含任何 token、混放與重複 | ✅ |
 | deploy.md 6-2 | 改成「貼用戶 token 或粉專 token 都可以」 | ✅ |
 
-> B 版實作備註：快取鍵改為 `fb:pages:<FB_TOKEN 的 SHA-256 前 16 碼>`；`/me/accounts` 用 `after` 游標翻頁（不跟 `paging.next`，網址裡有 token）；`/me/accounts` 回空陣列是正常結果（管理頁顯示「沒有授權任何粉專」）；**這版不改 `server/wrangler.toml`**（使用者 Mac 上有填 ID 的未提交改動）。測試 24 項，全部 220 項通過。
+> B 版實作備註：快取鍵改為 `fb:pages:<FB_TOKEN 的 SHA-256 前 16 碼>`；`/me/accounts` 用 `after` 游標翻頁（不跟 `paging.next`，網址裡有 token）；`/me/accounts` 回空陣列是正常結果（管理頁顯示「沒有授權任何粉專」）；**這版不改 `server/wrangler.toml`**（使用者 Mac 上有填 ID 的未提交改動）。測試 24 項，全部 220 項通過。獨立審查（token 外洩、去重、快取鍵、管理頁 XSS）通過，無需修改。下一步：使用者 `git pull` → `secret put FB_TOKEN`（用戶 token）→ 部署 → 檢查臉書連線。
 
 ## 下一步
 - [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞
