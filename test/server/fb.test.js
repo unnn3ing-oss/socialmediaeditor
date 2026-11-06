@@ -469,3 +469,24 @@ test('查授權範圍被限流：不快取，下次重問', async () => {
   assert.ok(!hasPagesCache(env));
   assert.deepEqual((await getJ(env, '/fb/pages')).body.data.map((p) => p.id), ['555']);
 });
+
+test('授權範圍備援：單一粉專遇到臉書暫時錯誤（code 1）整組失敗、不快取，下次重問', async () => {
+  accounts = [[]];
+  let n = 0;
+  routes.push([/\/debug_token$/, () => reply({ data: { granular_scopes: [{ scope: 'pages_manage_posts', target_ids: ['555'] }] } })]);
+  routes.push([/^\/v26\.0\/555$/, () => (n++ === 0 ? fbErr(1, 'temporary') : reply({ id: '555', name: 'x', access_token: GP['555'] }))]);
+  const env = userEnv();
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data, []);
+  assert.ok(!hasPagesCache(env));
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data.map((p) => p.id), ['555']);
+});
+
+test('授權範圍備援：單一粉專一直出錯（code 803）只略過它，其他粉專照常並可快取', async () => {
+  accounts = [[]];
+  routes.push([/\/debug_token$/, () => reply({ data: { granular_scopes: [{ scope: 'pages_manage_posts', target_ids: ['555', '666'] }] } })]);
+  routes.push([/^\/v26\.0\/666$/, () => fbErr(803, 'Some of the aliases you requested do not exist')]);
+  routes.push([/^\/v26\.0\/555$/, () => reply({ id: '555', name: 'x', access_token: GP['555'] })]);
+  const env = userEnv();
+  assert.deepEqual((await getJ(env, '/fb/pages')).body.data.map((p) => p.id), ['555']);
+  assert.ok(hasPagesCache(env));
+});

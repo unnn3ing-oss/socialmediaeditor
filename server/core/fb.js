@@ -88,8 +88,11 @@ async function fetchAccounts(env, userToken) {
   return out;
 }
 
-// 這些錯誤代表整組 token 不能用或暫時連不上；其餘（單一粉專沒權限、查不到）只略過那一項
-const isFatal = (e) => !(e instanceof GraphError) || ['fb_token_invalid', 'fb_rate_limited', 'fb_unreachable'].includes(e.code);
+// 整組 token 失敗（不快取、下次重問）：token 失效、限流、連不上、臉書暫時錯誤（code 1／2，或 5xx 沒有錯誤代碼）。
+// 其餘（單一粉專沒權限、物件不存在 803 等會一直出現的錯誤）只略過那一項，免得一個粉專拖垮整份清單。
+const isFatal = (e) => !(e instanceof GraphError)
+  || ['fb_token_invalid', 'fb_rate_limited', 'fb_unreachable'].includes(e.code)
+  || (e.code === 'fb_error' && (e.fbCode === 1 || e.fbCode === 2 || e.fbCode === null));
 
 // 用戶 token 授權了哪些粉專（debug_token 的 granular_scopes）。
 // 回 { ok, ids, post, insights }：post／insights 是有該權限的粉專 ID Set，null 代表沒限定粉專（全部）。

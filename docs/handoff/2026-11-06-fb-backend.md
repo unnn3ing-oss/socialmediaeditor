@@ -68,7 +68,7 @@
 | 測試、deploy.md | 假 `debug_token`（含 granular_scopes）、假 `/<id>`；發文用換出的 token | ✅ |
 | 不動 | `wrangler.toml`、外掛、網站 | — |
 
-> 版本 1 實作備註：`derivePages()` 回 `{ pages, hint, skipped }`；`tokenFor` 記憶體沒有時重跑 `derivePages`。單一粉專換不到 token（權限不足等）只略過並計入 `skipped`；token 失效、限流、連不上才算整組失敗（`isFatal`）。測試 31 項。
+> 版本 1 實作備註：`derivePages()` 回 `{ pages, hint, skipped }`；`tokenFor` 記憶體沒有時重跑 `derivePages`。單一粉專換不到 token（權限不足等）只略過並計入 `skipped`；token 失效、限流、連不上、臉書暫時錯誤（code 1／2、5xx）才算整組失敗（`isFatal`），會一直出現的錯誤（如 803）只略過該粉專。獨立審查通過（補了暫時錯誤不快取）。測試 33 項，全部 229 項。下一步：使用者 `git pull` → `npx wrangler deploy` → 管理頁檢查應看到 6 個粉專 → 實測排程一篇再刪掉 → 說「推」併入 main（同時更新 CLAUDE.md 目前進度，版本 2 列入待辦）。
 
 ## 下一步
 - [x] 改 `http.js`、`index.js`，跑 `npm test` 確認既有測試沒壞
