@@ -5,7 +5,7 @@ import { tb } from '../../sdk/toolbox.js';
 tb.init('linepush');
 
 // ---------------------------------------------------------------------------
-// 素材與模式：有公司素材 → 公司模式（新聞黃條＋娛樂拍立得，另可選通用四格 A）；
+// 素材與模式：有公司素材 → 公司模式（新聞黃條＋娛樂拍立得，只有「新聞／娛樂」兩個版型，不出現四格 A）；
 // 沒有 → 通用模式（六宮格＋四格 A），畫面不出現任何公司字樣。
 // ---------------------------------------------------------------------------
 const STICKER_IDS = ['smile', 'shock', 'cry', 'angry', 'kiss', 'laugh', 'meh'];
@@ -2545,9 +2545,9 @@ STICKER_DEFS.forEach(def => {
 // ---------------------------------------------------------------------------
 // 新聞 / 娛樂 mode switch
 // ---------------------------------------------------------------------------
-// 版面頁籤：公司模式＝新聞／娛樂／四格 A；通用模式＝六宮格／四格 A（公司版面與字樣都不出現）。
+// 版面頁籤：公司模式＝新聞／娛樂（不提供四格 A）；通用模式＝六宮格／四格 A（公司版面與字樣都不出現）。
 const modeTabsEl = document.querySelector('.mode-tabs');
-(COMPANY ? ['news', 'ent', 'grid4'] : ['news', 'grid4']).forEach((m, i) => {
+(COMPANY ? ['news', 'ent'] : ['news', 'grid4']).forEach((m, i) => {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'mode-tab' + (i === 0 ? ' active' : '');
@@ -2556,6 +2556,8 @@ const modeTabsEl = document.querySelector('.mode-tabs');
   modeTabsEl.appendChild(b);
 });
 const modeTabs = Array.from(document.querySelectorAll('.mode-tab'));
+// 說明文字裡的「四格 A」只在通用模式出現
+document.getElementById('helpGrid4').hidden = COMPANY;
 const newsHeaderBox = document.getElementById('newsHeaderBox');
 const modeSubEl = document.getElementById('modeSub');
 

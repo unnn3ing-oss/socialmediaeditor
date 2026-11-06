@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=59a5657f99"
+      "entry": "tools/pattern/index.html?v=69d49e5967"
     },
     {
       "id": "linepush",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=4f92852008"
+      "entry": "tools/linepush/index.html?v=7e6191d058"
     },
     {
       "id": "collage",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=d4c106d440"
+      "entry": "tools/collage/index.html?v=bfb7cb5933"
     },
     {
       "id": "watermark",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=9167f372a9"
+      "entry": "tools/watermark/index.html?v=9e3dfbcf12"
     },
     {
       "id": "resize",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=7209d1b386"
+      "entry": "tools/resize/index.html?v=ff9a6adfd6"
     },
     {
       "id": "design",
@@ -75,7 +75,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=2346e595a3"
+      "entry": "tools/design/index.html?v=293681c41b"
     },
     {
       "id": "fbpost",
@@ -86,7 +86,7 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=bd5c2c6a4a"
+      "entry": "tools/fbpost/index.html?v=bcddee6ee3"
     }
   ]
 }

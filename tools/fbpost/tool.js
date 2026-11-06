@@ -234,6 +234,7 @@ function renderFails() {
   const n = fails.items.length;
   $('schedBadge').hidden = !n;
   $('schedBadge').textContent = n ? String(n) : '';
+  $('schedBadge').setAttribute('aria-label', n ? `留言失敗 ${n} 則` : '');
   $('failBox').hidden = !n;
   $('failCount').textContent = String(n);
   $('failList').replaceChildren(...fails.items.map((c) => {

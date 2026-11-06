@@ -20,8 +20,9 @@
     <button type="button" class="btn btn-primary" id="newPost">＋ 新增發文</button>
   </header>
 
+  <div class="fp-card">
   <div class="seg" role="tablist" aria-label="分頁" id="tabs">
-    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程<span class="dot-badge" id="schedBadge" hidden aria-label="有留言失敗"></span></button>
+    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程<span class="dot-badge" id="schedBadge" hidden></span></button>
     <button type="button" role="tab" aria-selected="false" data-tab="stats">成效</button>
   </div>
 
@@ -47,6 +48,7 @@
     <ul class="list" id="statsList"></ul>
     <div class="more"><button type="button" class="btn btn-secondary btn-sm" id="statsMore" hidden>載入更多</button></div>
   </section>
+  </div>
 </main>
 
 <!-- 新增發文（彈窗，照網新排程）：關閉要確認，確認後清空；切換模式、分頁都不清內容 -->

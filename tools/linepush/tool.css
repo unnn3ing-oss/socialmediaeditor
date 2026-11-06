@@ -1,40 +1,27 @@
 :root {
-    --stage: #e9ebf0;
-    --step-soft: #e6effa;
-    --track: #dcdfe5;   /* filled capsule behind a segmented control, like a toggle's track */
-    --knob: #ffffff;    /* the raised pill for the current item */
-    --bg: #f4f5f7;
+    --stage: #f4f7fd;
+    --stage-glow: radial-gradient(900px 500px at 8% -10%, #dce8ff, transparent 60%), radial-gradient(800px 500px at 100% 0, #e4eeff, transparent 60%);
+    --step-soft: #e8f0fc;
+    --track: rgba(0, 74, 173, .07);   /* 淡藍膠囊底 */
+    --knob: #ffffff;    /* 目前選中的白色膠囊 */
+    --bg: #f4f7fd;
     --card-bg: #ffffff;
-    --text: #1f2328;
-    --muted: #6b7280;
-    --border: #e2e4e9;
+    --text: #1f2a3d;
+    --muted: #5f6b82;
+    --border: rgba(0, 74, 173, .12);
     --accent: #004aad;
     --accent-dark: #003a87;
     --success: #16a34a;
+    --shadow: 0 24px 60px -30px rgba(0, 43, 102, .35);
+    --shadow-btn: 0 10px 24px -10px rgba(0, 74, 173, .7);
+    --radius-card: 18px;
   }
-@media (prefers-color-scheme: dark) {
-:root {
-      --stage: #0f1115;
-      --step-soft: #1b2a44;
-      --track: #2b2f38;
-      --knob: #4a505c;
-      --bg: #16181d;
-      --card-bg: #21242b;
-      --text: #e6e8eb;
-      --muted: #9aa0aa;
-      --border: #333844;
-      --accent: #3d7fe0;
-      --accent-dark: #004aad;
-      --success: #4ade80;
-    }
-
-  
-}
 * { box-sizing: border-box; }
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-    background: var(--stage);
+    font-family: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--stage-glow), var(--stage);
+    background-attachment: fixed;
     color: var(--text);
     min-height: 100vh;
   }
@@ -57,14 +44,14 @@ p.sub { margin: 0; color: var(--muted); font-size: 13px; }
 .tb-tools {
     display: flex; align-items: center; gap: 2px;
     background: var(--track); border: none; border-radius: 99px; padding: 3px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+    
   }
 .seg-track { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
 .seg-track > button { position: relative; z-index: 1; transition: color .2s ease; }
 .seg-track > button.hot,
 .seg-track.dragging > button.hot:hover { color: var(--accent); }
 .seg-track.dragging > button.active:not(.hot) { color: var(--muted); }
-.seg-knob { position: absolute; z-index: 0; left: 0; top: 3px; bottom: 3px; width: 0; border-radius: 99px; background: var(--knob); box-shadow: 0 1px 3px rgba(0, 0, 0, .22), 0 0 0 .5px rgba(0, 0, 0, .06); pointer-events: none; opacity: 0; }
+.seg-knob { position: absolute; z-index: 0; left: 0; top: 3px; bottom: 3px; width: 0; border-radius: 99px; background: var(--knob); box-shadow: 0 1px 3px rgba(0, 43, 102, .15); pointer-events: none; opacity: 0; }
 .seg-track.ready .seg-knob { opacity: 1; transition: transform .3s cubic-bezier(.3, .9, .3, 1), width .3s cubic-bezier(.3, .9, .3, 1); }
 .seg-track.dragging .seg-knob { transition: none; }
 .seg-track.dragging { cursor: grabbing; }
@@ -144,8 +131,9 @@ p.sub { margin: 0; color: var(--muted); font-size: 13px; }
 .card {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
     padding: 18px;
+    box-shadow: var(--shadow);
   }
 label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 input[type="text"],
@@ -198,9 +186,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .mode-tab:hover { color: var(--text); }
 .mode-tab.active,
 .mode-tab.active:hover { color: var(--accent); }
-.seg { display: flex; gap: 4px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
-.seg button { flex: 1; border: none; background: transparent; border-radius: 6px; padding: 6px 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
-.seg button.active { background: var(--accent); color: #fff; }
+.seg { display: flex; gap: 4px; background: var(--track); border: none; border-radius: 999px; padding: 4px; }
+.seg button { flex: 1; border: none; background: transparent; border-radius: 999px; padding: 6px 8px; font-size: 14px; color: var(--muted); font-weight: 700; }
+.seg button.active { background: var(--knob); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 43, 102, .15); }
 .seg-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .seg-row .swatch-label { width: 78px; flex-shrink: 0; }
 .seg-row .seg { flex: 1; }
@@ -210,18 +198,18 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px 14px;
     width: max-content;
     max-width: calc(100vw - 32px);
-    background: #1f2328; color: #fff;
-    padding: 10px 18px; border-radius: 36px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+    background: var(--card-bg); color: var(--text); border: 1px solid var(--border);
+    padding: 10px 18px; border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
   }
 .dock-stickers { display: flex; align-items: center; gap: 12px; }
 .dock-stickers[hidden],
 .dock-sep[hidden] { display: none; }
-.dock-label { font-size: 12px; opacity: .75; white-space: nowrap; }
-.dock-sep { width: 1px; height: 32px; background: #3a414b; }
+.dock-label { font-size: 13px; font-weight: 800; color: var(--text); white-space: nowrap; }
+.dock-sep { width: 1px; height: 32px; background: var(--border); }
 .dock .sticker-palette { margin: 0; gap: 8px; flex-wrap: nowrap; }
-.dock .sticker-btn { width: 46px; height: 46px; padding: 3px; border-radius: 10px; background: #fff; border-color: transparent; }
-.dock .sticker-btn:hover { border-color: #2f7bff; }
+.dock .sticker-btn { width: 46px; height: 46px; padding: 3px; border-radius: 10px; background: #fff; border-color: var(--border); }
+.dock .sticker-btn:hover { border-color: var(--accent); }
 @media (min-width: 901px) and (max-height: 820px) {
     .dock { bottom: 12px; padding: 8px 16px; }
     .dock .sticker-btn { width: 40px; height: 40px; }
@@ -229,27 +217,27 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #downloadRow { position: relative; display: flex; align-items: center; gap: 10px; }
 #downloadRow button {
     position: relative; white-space: nowrap;
-    background: #2d333b; border-color: #3a414b; color: #fff;
-    padding: 9px 18px; font-weight: 600; border-radius: 99px;
+    background: #fff; border-color: var(--border); color: var(--text);
+    padding: 9px 18px; font-weight: 700; border-radius: 99px;
   }
-#downloadRow button:hover { background: #3a414b; }
-#downloadRow button.primary { background: #2f7bff; border-color: #2f7bff; }
-#downloadRow button.primary:hover { background: #4a8cff; border-color: #4a8cff; }
-#downloadRow button.ghost { background: #4b5563; border-color: #4b5563; color: #f3f4f6; font-weight: 600; }
-#downloadRow button.ghost:hover { background: #5d6877; border-color: #5d6877; color: #fff; }
-#downloadRow button.light { background: #fff; border-color: #fff; color: #1f2328; }
-#downloadRow button.light:hover { background: #e6e8eb; border-color: #e6e8eb; }
+#downloadRow button:hover { border-color: var(--accent); color: var(--accent); }
+#downloadRow button.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: var(--shadow-btn); }
+#downloadRow button.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
+#downloadRow button.ghost { background: var(--track); border-color: transparent; color: var(--muted); }
+#downloadRow button.ghost:hover { background: var(--step-soft); border-color: transparent; color: var(--accent); }
+#downloadRow button.light { background: #fff; border-color: var(--border); color: var(--text); }
+#downloadRow button.light:hover { background: var(--step-soft); border-color: var(--accent); }
 #downloadRow button[hidden] { display: none; }
-#downloadRow #backStepBtn { background: transparent; border-color: transparent; color: #c9d1d9; font-weight: 600; padding-left: 8px; padding-right: 8px; }
-#downloadRow #backStepBtn:hover { background: transparent; border-color: transparent; color: #fff; text-decoration: underline; }
-.dock.checking #downloadRow #downloadJpgBtn { background: transparent; border-color: #6b7280; color: #fff; }
-.dock.checking #downloadRow #downloadJpgBtn:hover { background: #2d333b; border-color: #9ca3af; }
+#downloadRow #backStepBtn { background: transparent; border-color: transparent; color: var(--muted); font-weight: 700; padding-left: 8px; padding-right: 8px; box-shadow: none; }
+#downloadRow #backStepBtn:hover { background: transparent; border-color: transparent; color: var(--accent); text-decoration: underline; }
+.dock.checking #downloadRow #downloadJpgBtn { background: transparent; border-color: var(--border); color: var(--text); }
+.dock.checking #downloadRow #downloadJpgBtn:hover { background: var(--step-soft); border-color: var(--accent); }
 .dock .sticker-palette.need-cell .sticker-btn { opacity: .4; }
-#downloadRow #downloadAllBtn:not(.is-disabled) { background: #16a34a; border-color: #16a34a; color: #fff; }
-#downloadRow #downloadAllBtn:not(.is-disabled):hover { background: #22b858; border-color: #22b858; }
+#downloadRow #downloadAllBtn:not(.is-disabled) { background: #15803d; border-color: #15803d; color: #fff; }
+#downloadRow #downloadAllBtn:not(.is-disabled):hover { background: #166534; border-color: #166534; color: #fff; }
 #downloadRow button.is-disabled,
 #downloadRow button.is-disabled:hover {
-    background: #2d333b; border-color: #3a414b; color: #6b7280; cursor: not-allowed;
+    background: #eef1f6; border-color: var(--border); color: #6b7280; box-shadow: none; cursor: not-allowed;
   }
 #downloadRow button.is-disabled:hover::after {
     content: attr(data-tip);
@@ -261,11 +249,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .dock-switch { display: inline-flex; margin: 0; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .dock-switch[hidden] { display: none; }
 .dock-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-.sw-track { position: relative; flex: none; width: 42px; height: 24px; border-radius: 99px; background: #4b5563; transition: background .2s ease; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .3); }
+.sw-track { position: relative; flex: none; width: 42px; height: 24px; border-radius: 99px; background: #9aa5b8; transition: background .2s ease; }
 .sw-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); transition: transform .2s ease; }
 .dock-switch input:checked + .sw-track { background: #34c759; }
 .dock-switch input:checked + .sw-track .sw-knob { transform: translateX(18px); }
-.dock-switch input:focus-visible + .sw-track { outline: 2px solid #2f7bff; outline-offset: 2px; }
+.dock-switch input:focus-visible + .sw-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gap-tip { position: fixed; z-index: 70; max-width: 260px; background: #1f2328; color: #fff; border-radius: 18px; padding: 10px 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); font-size: 13px; line-height: 1.5; pointer-events: none; opacity: 0; transition: opacity .3s ease; }
 .gap-tip.show { opacity: 1; }
 #uiTip { z-index: 400; }
@@ -284,8 +272,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     z-index: 30;
     background: var(--card-bg); color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 22px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
     padding: 16px 18px 18px;
   }
 .dl-confirm::after {
@@ -332,8 +320,8 @@ canvas {
     font-size: 14px;
     line-height: 1.55;
     padding: 10px 20px;
-    border-radius: 22px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
     opacity: 0;
     cursor: pointer;
     transition: opacity .5s ease, transform .5s ease;
@@ -367,7 +355,7 @@ canvas {
 .tb-tools { gap: 10px; }
 .tb-tools[hidden],
 .tb-tools button[hidden] { display: none; }
-.tb-tools button { white-space: nowrap; background: var(--knob); border: none; border-radius: 99px; padding: 6px 16px; color: var(--accent); font-weight: 700; font-size: 15px; box-shadow: 0 1px 3px rgba(0, 0, 0, .22), 0 0 0 .5px rgba(0, 0, 0, .06); }
+.tb-tools button { white-space: nowrap; background: var(--knob); border: none; border-radius: 99px; padding: 6px 16px; color: var(--accent); font-weight: 700; font-size: 15px; box-shadow: 0 1px 3px rgba(0, 43, 102, .15); }
 .tb-tools button:hover { background: var(--card-bg); filter: brightness(.97); }
 .check-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 15px; font-weight: 700; }
 .check-head small { font-size: 12px; font-weight: 700; }
@@ -553,4 +541,4 @@ canvas {
 [hidden] { display: none !important; }
 .dock-colors { display: inline-flex; align-items: center; gap: 14px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .dock-colors label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
-.dock-colors input[type=color] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: transparent; cursor: pointer; }
+.dock-colors input[type=color] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: transparent; cursor: pointer; }

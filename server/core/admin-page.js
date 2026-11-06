@@ -8,44 +8,54 @@ export const ADMIN_HTML = `<!doctype html>
 <meta name="robots" content="noindex">
 <title>小編工具箱 素材管理</title>
 <style>
-:root{--ink:#1c1f23;--sub:#3c4046;--mute:#6b7077;--line:#c4c7cc;--bg:#f6f7f9;--card:#fff;--brand:#1d4fb8;--brand-line:#163d8f;--danger:#b3261e;--dis-bg:#eceef0}
+:root{--ink:#1f2a3d;--sub:#3c4a63;--mute:#5f6b82;--line:#c9d3e6;--edge:rgba(0,74,173,.12);--bg:#f4f7fd;--card:#fff;--brand:#004aad;--brand-line:#004aad;--brand-strong:#003a87;--soft:#e8f0fc;--danger:#9b1c1c;--dis-bg:#eef1f6}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+body{margin:0;background:radial-gradient(900px 500px at 8% -10%,#dce8ff,transparent 60%),radial-gradient(800px 500px at 100% 0,#e4eeff,transparent 60%),var(--bg);background-attachment:fixed;color:var(--ink);font:16px/1.6 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+.top{display:flex;align-items:center;gap:10px;background:#fff;border-bottom:1px solid var(--edge);padding:12px 28px}
+.top .logo{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#2f7bff,#004aad);color:#fff;font-weight:900;font-size:16px;line-height:1}
+.top .word{font-size:18px;font-weight:800}
+.top .word b{color:var(--brand);font-weight:800}
+.top .sub{font-size:14px;font-weight:700;color:var(--mute);margin-left:4px}
 main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
-h1{font-size:22px;margin:0 0 4px}
-h2{font-size:18px;margin:0 0 12px}
+h1{font-size:22px;font-weight:800;margin:0 0 4px}
+h2{font-size:18px;font-weight:800;margin:0 0 12px}
 p{margin:0 0 12px;color:var(--sub)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
-label{display:block;font-weight:600;margin:12px 0 4px}
-input[type=text],input[type=password],input[type=number],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font:inherit}
+code{background:var(--soft);color:var(--brand);padding:1px 7px;border-radius:7px;font-size:.9em}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 24px 60px -30px rgba(0,43,102,.35)}
+label{display:block;font-weight:700;margin:12px 0 4px}
+input[type=text],input[type=password],input[type=number],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit}
 input[type=file]{width:100%;min-height:44px;padding:8px 0;font:inherit}
-button{min-height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-weight:600;cursor:pointer}
-button.primary{background:var(--brand);border-color:var(--brand-line);color:#fff}
-button.danger{border-color:var(--danger);color:var(--danger)}
-button.danger.solid{background:var(--danger);color:#fff}
+button{min-height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-weight:700;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--brand);color:var(--brand)}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 10px 24px -10px rgba(0,74,173,.7)}
+button.primary:hover:not(:disabled){background:var(--brand-strong);color:#fff}
+button.danger{background:#fff6f6;border-color:#f3c4c4;color:var(--danger)}
+button.danger.solid{background:var(--danger);border-color:var(--danger);color:#fff}
 button:active:not(:disabled){box-shadow:inset 0 2px 5px rgba(0,0,0,.28)}
-button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--line);cursor:not-allowed}
+button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--edge);cursor:not-allowed;box-shadow:none}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .msg{min-height:24px;margin:8px 0 0;font-weight:600}
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
-.msg.good{color:#1a6b3a}
+.msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e3e5e8;vertical-align:middle}
-th{font-size:14px;color:var(--mute);font-weight:600}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e6ecf6;vertical-align:middle}
+th{font-size:14px;color:var(--mute);font-weight:700}
 td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
-.tag{display:inline-block;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:14px;line-height:24px}
-.tag.company{border-color:var(--brand-line);color:var(--brand)}
+.tag{display:inline-block;padding:0 10px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:700;line-height:24px;color:var(--mute)}
+.tag.company{border-color:transparent;background:var(--soft);color:var(--brand)}
 .scroll{overflow-x:auto}
-.sk{height:20px;border-radius:6px;background:linear-gradient(90deg,#e6e8eb 25%,#f1f2f4 50%,#e6e8eb 75%);background-size:200% 100%;animation:sk 1.2s linear infinite;margin:10px 0}
+.sk{height:20px;border-radius:6px;background:linear-gradient(90deg,#e6ecf6 25%,#f1f5fb 50%,#e6ecf6 75%);background-size:200% 100%;animation:sk 1.2s linear infinite;margin:10px 0}
 @keyframes sk{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.sk{animation:none}}
-.confirm{border:1px solid var(--danger);border-radius:12px;padding:16px;margin-top:16px;background:#fff6f5}
+.confirm{border:1px solid #f3c4c4;border-radius:18px;padding:16px;margin-top:16px;background:#fff6f6}
 [hidden]{display:none!important}
+@media (max-width:600px){.top{padding:10px 16px}}
 </style>
 </head>
 <body>
+<header class="top"><span class="logo" aria-hidden="true">編</span><span class="word">小編<b>工具箱</b></span><span class="sub">後台</span></header>
 <main>
   <h1>素材管理</h1>
   <p>小編工具箱的公開與公司素材都在這裡上傳、替換、刪除，不用改程式也不用重新部署。</p>

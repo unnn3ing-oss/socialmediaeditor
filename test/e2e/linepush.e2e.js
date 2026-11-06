@@ -136,16 +136,17 @@ test('工具內切換不清空內容（版面、頁面、說明、照片）', as
   assert.deepEqual(t.errors, []);
 });
 
-test('有密碼：要求黃色標題條與娛樂四格素材，公司版面出現，四格 A 仍可用', async () => {
+test('有密碼：要求黃色標題條與娛樂四格素材，公司版面出現，沒有四格 A', async () => {
   const t = await open({ company: true });
-  await t.frame.waitForFunction(() => document.querySelectorAll('.mode-tab').length === 3);
+  await t.frame.waitForFunction(() => document.querySelectorAll('.mode-tab').length === 2);
   assert.ok(t.requested.includes('line-header') || t.requested.includes('line-grid4-ent'), `requested=${t.requested}`);
   assert.ok(t.requested.includes('line-header'));
   assert.ok(t.requested.includes('line-grid4-ent'));
   assert.ok(t.requested.includes('font-taipei-sans-bold'), `requested=${t.requested}`);
   assert.ok(t.requested.some((k) => k.startsWith('tbao-')), '貼圖走公司素材');
   const tabs = await t.frame.$$eval('.mode-tab', (els) => els.map((e) => e.textContent));
-  assert.deepEqual(tabs, ['新聞', '娛樂', '四格 A']);
+  assert.deepEqual(tabs, ['新聞', '娛樂']);
+  assert.ok(!tabs.includes('四格 A'), '公司模式不出現四格 A');
   // 新聞與娛樂切換不清空
   await setLine(t.frame, 0, '新聞一', 0);
   await clickTab(t.frame, '娛樂');
