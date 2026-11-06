@@ -509,3 +509,23 @@ test('手機寬（390）：彈窗與時間視窗不會橫向捲動', async () =>
   assert.ok(w.pop <= w.win, '時間視窗不超出畫面');
   assert.deepEqual(errors, []);
 });
+
+test('標題最多 4 行：4 行可送出、5 行擋下；半形算 0.5；空白預覽有提示、放照片後消失', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  assert.equal(await page.isVisible('#ph'), true);
+  assert.match(await page.textContent('label[for=title]'), /最多 4 行/);
+  await photo(page);
+  assert.equal(await page.isVisible('#ph'), false);
+  await pick(page, '111');
+  await page.fill('#title', '一\n二\n三\n四\n五');
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => /最多 4 行/.test(document.getElementById('sendMsg').textContent));
+  assert.equal(api.posts.length, 0);
+  await page.fill('#title', 'abcdefghij\n二\n三\n四');
+  assert.equal((await page.textContent('#titleCnts span')).trim(), '5/15', '半形 10 字＝5');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 1);
+  assert.deepEqual(errors, []);
+});

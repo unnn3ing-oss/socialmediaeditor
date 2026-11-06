@@ -45,7 +45,7 @@ const LAST_LINE_Y = 931;
 const LINE_HEIGHT = 93;
 const TITLE_FONT_PX = 66;
 const TITLE_PAD_X = 30, TITLE_BOX_PAD_Y = 12;   // 標題左右留白；預覽上改標題的輸入框上下內距
-const MAX_TITLE_LINES = 3;
+const MAX_TITLE_LINES = 4;
 // 漸層（照網新）：y → 黑色 alpha（/255），共七個點
 const GRADIENT_STOPS = [[0, 0], [300, 16], [486, 39], [600, 60], [756, 96], [900, 138], [1079, 204]];
 
@@ -140,7 +140,7 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {}, titleOverl
     if (imgs.logo) c.drawImage(imgs.logo, LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
   }
 
-  // 公司框標題：置中、最後一行固定在 y 931、往上排，最多 3 行
+  // 公司框標題：置中、最後一行固定在 y 931、往上排，最多 4 行
   function drawTitle(c) {
     if (!titleLines.length) return;
     const fontSize = fitFontSize(c, titleLines, SIZE - TITLE_PAD_X * 2, TITLE_FONT_PX);
@@ -271,14 +271,12 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {}, titleOverl
   function render(c, preview) {
     c.clearRect(0, 0, SIZE, SIZE);
     if (!image) {
+      // 同網新：沒照片時淺底＋已套上的框（漸層、緞帶、標題），提示文字由 HTML 的 .ph 疊在上面
       if (preview) {
         c.fillStyle = '#d9e2f2';
         c.fillRect(0, 0, SIZE, SIZE);
-        c.fillStyle = '#6b7a99';
-        c.font = '600 44px "Noto Sans TC", "Microsoft JhengHei", sans-serif';
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText('點選、拖曳或貼上照片', SIZE / 2, SIZE / 2);
+        if (frame === 'news' || frame === 'ent') { drawGradient(c); drawRibbon(c); drawTitle(c); }
+        else if (frame === 'generic') { drawGenericGradient(c); drawGenericTag(c); drawGenericTitle(c); }
       }
       return;
     }
@@ -619,7 +617,7 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {}, titleOverl
       changed();
     },
     getFrame: () => frame,
-    frames: () => (company ? ['news', 'ent', 'none'] : ['generic', 'none']),
+    frames: () => (company ? ['news', 'ent'] : ['generic']),   // 同網新：只有新聞（藍框）／娛樂（粉框）；沒公司素材時只有通用框
     onTitleInput(fn) { onTitleInput = fn; },
     setTitle(text) {
       titleRaw = String(text || '');

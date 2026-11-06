@@ -5,7 +5,7 @@
 // 後端：/fb/pages、/fb/post（multipart）、/fb/scheduled、/fb/cancel、/fb/reschedule、/fb/comments、/fb/comment/retry、/fb/comment/dismiss、
 //       /fb/posts、/fb/insights、/fetch/article、/fetch/image。
 import { tb } from '../../sdk/toolbox.js';
-import { autoLines, buildLink, frameForUrl } from '../../sdk/news-rules.js';
+import { autoLines, buildLink, frameForUrl, charWidth } from '../../sdk/news-rules.js';
 import { parseArticle, formatCopy, mainCaption, overrideOneLine, bindTitle, learnSeps, titleAsOneLine, replaceTitleLine } from '../../sdk/news-article.js';
 import * as Sched from '../../sdk/news-sched.js';
 import { createPhotoEditor } from './editor.js';
@@ -20,7 +20,7 @@ const el = (tag, { dataset, ...props } = {}, ...kids) => {
   for (const k of kids) if (k != null) n.append(k);
   return n;
 };
-const TITLE_MAX = 15, TITLE_LINES = 3, NATIVE_MAX = 130;
+const TITLE_MAX = 15, TITLE_LINES = 4, NATIVE_MAX = 130;
 const DEFAULT_COMMENT = '看更多新聞內容';
 const FRAME_NAMES = { news: '新聞（藍框）', ent: '娛樂（粉框）', generic: '通用框', none: '無框' };
 const errText = (e) => (e && e.message) || '發生錯誤';
@@ -354,7 +354,7 @@ const editorReady = loadAssets().then((assets) => {
   frameSeg.replaceChildren(...editor.frames().map((k) => el('button', { type: 'button', textContent: FRAME_NAMES[k] || k, dataset: { frame: k } })));
   frameCtl = segment(frameSeg, 'frame', (k) => editor.setFrame(k));
   frameCtl.set(editor.getFrame());
-  editor.onChange(() => { const has = editor.hasImage(); $('clearImg').hidden = !has; $('fxBtn').hidden = !has; if (!has) closeFx(); });
+  editor.onChange(() => { const has = editor.hasImage(); $('canvasWrap').classList.toggle('has-image', has); $('clearImg').hidden = !has; $('fxBtn').hidden = !has; if (!has) closeFx(); });
   // 預覽上點兩下改的標題寫回標題框，走標題框自己的 input（計數、【標題】同步都同一條路）
   editor.onTitleInput((v) => { $('title').value = v; $('title').dispatchEvent(new Event('input')); });
   editor.setTitle($('title').value);
@@ -408,7 +408,7 @@ function updateCounters() {
   $('titleCnts').replaceChildren(...rs.map((r) => {
     const s = el('span');
     if (!r.trim()) return s;
-    const len = [...r.trim()].length;
+    const len = charWidth(r.trim());   // 同網新：全形 1、半形 0.5
     s.textContent = `${len}/${TITLE_MAX}`;
     s.className = len > TITLE_MAX || n >= TITLE_LINES ? 'bad' : '';
     n++;
@@ -663,7 +663,7 @@ async function buildPayload() {
   if (mode === 'frame') {
     await editorReady;
     if (!editor || !editor.hasImage()) throw new Error('請先放照片');
-    if (lines.length > TITLE_LINES || lines.some((l) => [...l].length > TITLE_MAX)) throw new Error(`標題每行最多 ${TITLE_MAX} 字、最多 ${TITLE_LINES} 行`);
+    if (lines.length > TITLE_LINES || lines.some((l) => charWidth(l) > TITLE_MAX)) throw new Error(`標題每行最多 ${TITLE_MAX} 字、最多 ${TITLE_LINES} 行`);
     p.image = await editor.exportBlob('image/jpeg', 0.92);
   } else if (textStyle === 'card') {
     if (!lines.length) throw new Error('請輸入標題（底圖文字）');
