@@ -30,15 +30,28 @@ select { min-height: 36px; }
 
 /* 清單 */
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.item { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.item, .sk-row { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
 .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; flex: none; background: var(--fill); }
-.item .body { flex: 1; min-width: 0; }
+.item .body, .sk-row .body { flex: 1; min-width: 0; }
 .item .meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 14px; }
 .item .msg { margin: 4px 0 0; font-size: 14px; white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.item .act { display: flex; flex-direction: column; gap: 6px; }
+.item .act, .sk-row .act { display: flex; flex-direction: column; gap: 6px; }
 .item .act a { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .ins { margin-top: 6px; font-size: 13px; color: var(--accent-strong); background: var(--accent-soft); border-radius: 6px; padding: 6px 8px; }
 .more { display: flex; justify-content: center; margin-top: 10px; }
+
+/* 讀取中骨架列（尺寸同真的一列，資料進來不跳版） */
+@keyframes sk-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sk, .sk-line, .sk-btn { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--fill) 25%, var(--surface) 50%, var(--fill) 75%) 0 0 / 200% 100%; animation: sk-shimmer 1.5s linear infinite; }
+.sk-line { height: 14px; margin: 5px 0 9px; }
+.sk-line.w40 { width: 40%; } .sk-line.w70 { width: 70%; }
+.sk-btn { width: 76px; height: 32px; }
+.ins .sk-line { height: 12px; margin: 3px 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .sk, .sk-line, .sk-btn { animation: none; } }
+
+/* 會跳動的數字用等寬數字，變動時旁邊的字不左右抖 */
+.item .meta, .ins, .hint, #capCount, #failCount, .dot-badge, .tp-time, .tp-date, .fp-modal .pg { font-variant-numeric: tabular-nums; }
 
 /* 已排程：紅點、留言狀態、留言失敗清單 */
 .dot-badge { display: inline-block; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--bad); color: #fff; font: 700 12px/18px var(--font); text-align: center; vertical-align: middle; }

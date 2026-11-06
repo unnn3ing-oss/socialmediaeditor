@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=1fc2dab2cb"
+      "entry": "tools/collage/index.html?v=cc1c35e352"
     },
     {
       "id": "watermark",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=5ad8c214c1"
+      "entry": "tools/watermark/index.html?v=6699d18746"
     },
     {
       "id": "resize",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=95418266c5"
+      "entry": "tools/resize/index.html?v=55ccb85db9"
     },
     {
       "id": "design",
@@ -86,7 +86,7 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=e6830b9761"
+      "entry": "tools/fbpost/index.html?v=2f50986d31"
     }
   ]
 }

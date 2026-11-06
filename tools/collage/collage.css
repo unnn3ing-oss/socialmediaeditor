@@ -22,3 +22,6 @@
   border-radius: 6px; box-shadow: 0 20px 40px -24px rgba(0, 30, 70, 0.55);
   touch-action: none; cursor: default;
 }
+
+/* 會跳動的數字用等寬數字 */
+#collageApp output, #cgStatus { font-variant-numeric: tabular-nums; }

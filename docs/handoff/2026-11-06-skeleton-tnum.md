@@ -13,12 +13,13 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/tool.js`、`tool.css` | 骨架屏＋等寬 | ⬜ |
-| `tools/watermark/*.css`、`tools/collage/*.css`、`tools/resize/*.css` | 等寬 | ⬜ |
-| `test/e2e/fbpost.e2e.js` | 讀取時有占位、讀完消失 | ⬜ |
+| `tools/fbpost/tool.js`、`tool.css` | 骨架屏＋等寬 | ✅ |
+| `tools/watermark/*.css`、`tools/collage/*.css`、`tools/resize/*.css` | 等寬 | ✅ |
+| `test/e2e/fbpost.e2e.js` | 讀取時有占位、讀完消失 | ✅ |
 
 ## 下一步
-- [ ] 實作 A、B → `node build.js` → 相關測試 → 截圖 → 獨立審查 → 使用者說「推」併 main（同 commit 更新 CLAUDE.md）
+- [x] 實作 A、B、build、相關測試（unit 299、fbpost 19、collage／watermark／resize／shell 18）、截圖
+- [ ] 獨立審查 → 使用者說「推」併 main（同 commit 更新 CLAUDE.md）
 
 ## 注意事項
 - 改完 tools/ 任何檔都要重跑 `node build.js`（catalog `?v=` 雜湊）。

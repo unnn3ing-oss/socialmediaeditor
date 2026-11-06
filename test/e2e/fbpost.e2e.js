@@ -64,6 +64,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 } }
     const bad = (code, error, status = 400) => r.fulfill({ status, headers: CORS, json: { ok: false, code, error } });
     if (/^\/assets\//.test(u.pathname)) return company ? r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([30, 60, 120]) }) : r.fulfill({ status: 404, headers: CORS, body: '' });
     if (u.pathname === '/fb/pages') return okJ(PAGES);
+    if (api.hold && /^\/fb\/(scheduled|insights)$/.test(u.pathname)) await api.hold;   // 測骨架屏：先卡住回應
     if (u.pathname === '/fb/scheduled') return okJ({ items: api.scheduled[u.searchParams.get('page')] || [] });
     if (u.pathname === '/fb/posts') return okJ({ items: [{ id: '111_1', message: '舊貼文', created: new Date().toISOString(), url: 'https://facebook.com/1', picture: '', reactions: 5, comments: 2, shares: 1 }], next: null });
     if (u.pathname === '/fb/insights') return okJ({ post: '111_1', metrics: { post_media_view: 1234, post_clicks: 56 }, missing: [] });
@@ -200,6 +201,31 @@ test('留言失敗：紅點＋數字、補留言、知道了、新失敗跳通�
   await page.click('#failList [data-act=dismiss]');
   await page.waitForFunction(() => document.getElementById('failBox').hidden);
   assert.deepEqual(api.dismisses, ['c2']);
+  assert.deepEqual(errors, []);
+});
+
+test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完換成真資料；看成效也有占位', async () => {
+  const { page, api, errors } = await open();
+  await page.waitForSelector('#schedList .item');
+  let release; api.hold = new Promise((r) => { release = r; });
+  await page.click('#schedReload');
+  await page.waitForFunction(() => document.querySelectorAll('#schedList .sk-row[aria-hidden=true]').length === 3);
+  assert.equal(await page.getAttribute('#schedList', 'aria-busy'), '');
+  const h = await page.evaluate(() => document.querySelector('#schedList .sk-row').getBoundingClientRect().height);
+  release(); api.hold = null;
+  await page.waitForSelector('#schedList .item');
+  assert.equal(await page.locator('#schedList .sk-row').count(), 0);
+  assert.equal(await page.getAttribute('#schedList', 'aria-busy'), null);
+  const real = await page.evaluate(() => document.querySelector('#schedList .item').getBoundingClientRect().height);
+  assert.ok(Math.abs(real - h) <= 24, `骨架列 ${h}px、真的一列 ${real}px，高度差太多會跳版`);
+  await page.click('#tabs [data-tab=stats]');
+  await page.waitForSelector('#statsList .item');
+  api.hold = new Promise((r) => { release = r; });
+  await page.click('#statsList .item button');
+  await page.waitForSelector('#statsList .ins[aria-busy=true] .sk-line');
+  release(); api.hold = null;
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent) && !document.querySelector('#statsList .ins[aria-busy]'));
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#statsList .meta')).fontVariantNumeric), 'tabular-nums');
   assert.deepEqual(errors, []);
 });
 

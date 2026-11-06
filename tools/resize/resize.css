@@ -20,3 +20,6 @@
 #rsCanvas[hidden] { display: none; }
 #rsCanvas.can-drag { cursor: grab; }
 #rsCanvas.dragging { cursor: grabbing; }
+
+/* 會跳動的數字用等寬數字 */
+#rsStatus { font-variant-numeric: tabular-nums; }

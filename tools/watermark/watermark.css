@@ -39,3 +39,6 @@
   background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); pointer-events: none;
 }
 
+
+/* 會跳動的數字用等寬數字 */
+#watermarkApp output, #wmStatus { font-variant-numeric: tabular-nums; }

@@ -146,18 +146,34 @@ function commentLine(c) {
   if (c.status === 'failed') return el('p', { className: 'cm bad', textContent: '留言失敗' + (c.error ? '：' + c.error : '') });
   return el('p', { className: 'cm' + (c.status === 'done' ? ' ok' : ''), textContent: COMMENT_TEXT[c.status] || c.status });
 }
+// 讀取中的骨架列：形狀同真的一列（縮圖＋時間＋內文＋按鈕），讀完整批換掉，畫面不跳
+function skelRow() {
+  const li = el('li', { className: 'sk-row' },
+    el('div', { className: 'thumb sk' }),
+    el('div', { className: 'body' }, el('span', { className: 'sk-line w40' }), el('span', { className: 'sk-line' }), el('span', { className: 'sk-line w70' })),
+    el('div', { className: 'act' }, el('span', { className: 'sk-btn' })));
+  li.setAttribute('aria-hidden', 'true');
+  return li;
+}
+function setBusy(list, on) {
+  list.querySelectorAll(':scope > .sk-row').forEach((n) => n.remove());
+  if (on) list.append(skelRow(), skelRow(), skelRow());
+  list.toggleAttribute('aria-busy', on);
+}
 async function loadSched() {
   const list = $('schedList'), hint = $('schedHint');
   const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
   list.replaceChildren();
   if (!ids.length) { hint.textContent = '沒有粉專'; return; }
   hint.textContent = '讀取中…';
+  setBusy(list, true);
   const items = [], errs = [];
   await Promise.all(ids.map(async (id) => {
     try { for (const it of (await tb.api.call('/fb/scheduled?page=' + id)).items) items.push({ ...it, page: id }); }
     catch (e) { errs.push(`${pageName(id)}：${errText(e)}`); }
   }));
   items.sort((a, b) => (a.at || 0) - (b.at || 0));
+  setBusy(list, false);
   hint.textContent = (items.length ? `共 ${items.length} 篇` : '目前沒有排程') + (errs.length ? `；${errs.join('；')}` : '');
   list.replaceChildren(...items.map((it) => {
     const cancel = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '取消排程' });
@@ -280,14 +296,16 @@ async function loadStats(reset) {
   if (!page) { hint.textContent = '沒有粉專'; return; }
   statsLoaded = true;
   hint.textContent = '讀取中…';
+  setBusy(list, true);
   try {
     const r = await tb.api.call(`/fb/posts?page=${page}&limit=10` + (statsNext ? '&after=' + encodeURIComponent(statsNext) : ''));
+    setBusy(list, false);
     statsNext = r.next;
     $('statsMore').hidden = !statsNext;
     hint.textContent = '';
     list.append(...r.items.map(statRow));
     if (!list.children.length) hint.textContent = '沒有貼文';
-  } catch (e) { hint.textContent = '讀取失敗：' + errText(e); }
+  } catch (e) { setBusy(list, false); hint.textContent = '讀取失敗：' + errText(e); }
 }
 function statRow(p) {
   const out = el('div', { className: 'ins', hidden: true });
@@ -296,16 +314,18 @@ function statRow(p) {
     if (!out.hidden) { out.hidden = true; return; }
     out.hidden = false;
     if (out.dataset.done) return;
-    out.textContent = '讀取中…';
+    out.replaceChildren(el('span', { className: 'sk-line w70' }), el('span', { className: 'sr-only', textContent: '讀取中…' }));
+    out.setAttribute('aria-busy', 'true');
     try {
       const r = await tb.api.call('/fb/insights?post=' + encodeURIComponent(p.id));
       const m = r.metrics || {};
       const parts = Object.entries(METRIC_NAMES).filter(([k]) => m[k] != null).map(([k, n]) => `${n} ${Number(m[k]).toLocaleString()}`);
       const rx = m.post_reactions_by_type_total;
       if (rx && typeof rx === 'object') parts.push('心情 ' + Object.values(rx).reduce((a, b) => a + Number(b || 0), 0).toLocaleString());
+      out.removeAttribute('aria-busy');
       out.textContent = parts.length ? parts.join('｜') : '臉書沒有回傳成效（可能太新或權限不足）';
       out.dataset.done = '1';
-    } catch (e) { out.textContent = '讀取失敗：' + errText(e); }
+    } catch (e) { out.removeAttribute('aria-busy'); out.textContent = '讀取失敗：' + errText(e); }
   });
   return el('li', { className: 'item' },
     p.picture ? el('img', { className: 'thumb', src: p.picture, alt: '', loading: 'lazy' }) : el('div', { className: 'thumb ph' }),
