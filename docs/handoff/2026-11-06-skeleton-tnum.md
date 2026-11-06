@@ -1,5 +1,5 @@
 # v4：排程發布列表骨架屏＋跳動數字等寬
-- 狀態：進行中　- 分支：`claude/fb-backend`（從 main 3e68c3d 起）　- 最後更新：2026-11-06
+- 狀態：審查通過、待使用者確認　- 分支：`claude/fb-backend`（從 main 3e68c3d 起）　- 最後更新：2026-11-06
 - 使用者原話：上傳「前端現代工程架構與 AI 開發工作流規範」「動態數字防抖指南」→「幫我用這兩個規則提出修改計劃」→「先做 A＋B」
 - 不做：網格（首頁已是 auto-fill，其他是兩欄版面需斷點）；Logo（計畫 C，之後另開對話）
 
@@ -19,7 +19,8 @@
 
 ## 下一步
 - [x] 實作 A、B、build、相關測試（unit 299、fbpost 19、collage／watermark／resize／shell 18）、截圖
-- [ ] 獨立審查 → 使用者說「推」併 main（同 commit 更新 CLAUDE.md）
+- [x] 獨立審查有條件通過，已修 aria-busy 值與手機版骨架列（a243f38）
+- [ ] 使用者說「推」 併 main（同 commit 更新 CLAUDE.md）
 
 ## 注意事項
 - 改完 tools/ 任何檔都要重跑 `node build.js`（catalog `?v=` 雜湊）。
