@@ -140,3 +140,44 @@ test('圖片代理：超過 10 MB 回 too_large（不管有沒有 content-length
   res = await getImg(mkEnv(), 'https://tvbs.com.tw/b.jpg');
   assert.equal((await res.json()).code, 'too_large');
 });
+
+// ---- /fetch/article ----
+async function getArticle(env, target) {
+  const w = await load();
+  const res = await w.fetch(new Request('https://api.test/fetch/article?url=' + encodeURIComponent(target), { headers: { origin: ORIGIN } }), env, { waitUntil() {} });
+  return { res, body: await res.json() };
+}
+
+test('article：白名單網域回 HTML 文字與最後網址', async () => {
+  const { res, body } = await getArticle(mkEnv(), 'https://news.tvbs.com.tw/a/1');
+  assert.equal(res.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.data.url, 'https://news.tvbs.com.tw/a/1');
+  assert.ok(body.data.html.includes('颱風來襲'));
+});
+
+test('article：轉址逐跳檢查，回最後網址；轉到白名單外拒絕', async () => {
+  handler = (u) => (u.endsWith('/old')
+    ? new Response(null, { status: 301, headers: { location: 'https://tvbs.com.tw/new' } })
+    : new Response('<html>新的</html>', { headers: { 'content-type': 'text/html' } }));
+  const a = await getArticle(mkEnv(), 'https://news.tvbs.com.tw/old');
+  assert.equal(a.body.data.url, 'https://tvbs.com.tw/new');
+  handler = () => new Response(null, { status: 302, headers: { location: 'https://evil.com/x' } });
+  const b = await getArticle(mkEnv(), 'https://news.tvbs.com.tw/old');
+  assert.equal(b.res.status, 400);
+  assert.equal(b.body.ok, false);
+});
+
+test('article：不在白名單不打上游；非 HTML 與超過 2 MB 拒絕', async () => {
+  const env = mkEnv();
+  const n = calls.length;
+  assert.equal((await getArticle(env, 'https://evil.com/a')).res.status, 400);
+  assert.equal((await getArticle(env, 'http://news.tvbs.com.tw/a')).res.status, 400);
+  assert.equal(calls.length, n);
+  handler = () => new Response('{}', { headers: { 'content-type': 'application/json' } });
+  assert.equal((await getArticle(env, 'https://news.tvbs.com.tw/a')).res.status, 400);
+  handler = () => new Response('a'.repeat(2 * 1024 * 1024 + 10), { headers: { 'content-type': 'text/html' } });
+  const big = await getArticle(env, 'https://news.tvbs.com.tw/a');
+  assert.equal(big.res.status, 413);
+  assert.equal(big.body.code, 'too_large');
+});

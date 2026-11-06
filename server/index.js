@@ -6,9 +6,12 @@ import { handleAssets } from './core/assets.js';
 import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
-import { handleFb, adminFb } from './core/fb.js';
+import { handleFb, adminFb, adminPageMap } from './core/fb.js';
+import { syncScheduled, cleanupComments } from './core/fbqueue.js';
 
-adminExtras.push(adminLogs, adminFb);
+export { CommentHub } from './core/fbqueue.js';
+
+adminExtras.push(adminLogs, adminFb, adminPageMap);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -46,6 +49,13 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(cleanup(env, Date.now()));
+    // 每天 03:17（UTC 19:17）清理；其他排程（每分鐘）做留言對時
+    if (event && event.cron === '17 19 * * *') {
+      ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupComments(env, Date.now()).catch(() => {})]));
+    } else if (event && event.cron) {
+      ctx.waitUntil(syncScheduled(env, Date.now()));
+    } else {
+      ctx.waitUntil(cleanup(env, Date.now()));
+    }
   }
 };

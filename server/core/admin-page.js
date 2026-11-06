@@ -17,7 +17,7 @@ h2{font-size:18px;margin:0 0 12px}
 p{margin:0 0 12px;color:var(--sub)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:16px 0}
 label{display:block;font-weight:600;margin:12px 0 4px}
-input[type=text],input[type=password],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font:inherit}
+input[type=text],input[type=password],input[type=number],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font:inherit}
 input[type=file]{width:100%;min-height:44px;padding:8px 0;font:inherit}
 button{min-height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-weight:600;cursor:pointer}
 button.primary{background:var(--brand);border-color:var(--brand-line);color:#fff}
@@ -99,6 +99,16 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <p class="msg" id="fbMsg" role="status"></p>
       <div class="scroll" id="fbWrap" hidden>
         <table><thead><tr><th>#</th><th>粉專</th><th>狀態</th><th>類型</th><th>到期</th><th>缺少的權限</th></tr></thead><tbody id="fbRows"></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>粉專對應</h2>
+      <p>排程發布工具用的粉專簡稱、文章連結的 utm 參數與排序（數字小的排前面）。沒有存過的粉專會依名稱套用預設值。</p>
+      <div class="row"><button id="pmLoad" type="button">讀取粉專對應</button><button id="pmSave" class="primary" type="button" hidden>儲存</button></div>
+      <p class="msg" id="pmMsg" role="status"></p>
+      <div class="scroll" id="pmWrap" hidden>
+        <table><thead><tr><th>粉專名稱</th><th>簡稱</th><th>utm</th><th>排序</th></tr></thead><tbody id="pmRows"></tbody></table>
       </div>
     </section>
 
@@ -274,6 +284,43 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       say($('fbMsg'), bad ? bad + ' 組 token 有問題。' + note : '全部正常。' + note, bad ? 'err' : 'good');
     }).catch(function (e) { say($('fbMsg'), '檢查失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbBtn').disabled = false; });
+  };
+
+  var pmItems = [];
+  $('pmLoad').onclick = function () {
+    $('pmLoad').disabled = true; say($('pmMsg'), '讀取中');
+    api('/admin/fb/pagemap').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      pmItems = res.data.items; var tb = $('pmRows'); tb.textContent = '';
+      pmItems.forEach(function (it, i) {
+        var tr = document.createElement('tr');
+        var n = document.createElement('td'); n.textContent = it.name + (it.saved ? '' : '（預設值）'); tr.appendChild(n);
+        function cell(type, val, label, id) {
+          var c = document.createElement('td'), inp = document.createElement('input');
+          inp.type = type; inp.value = val; inp.id = id; inp.setAttribute('aria-label', it.name + ' ' + label);
+          if (type === 'text') inp.maxLength = label === 'utm' ? 300 : 20;
+          if (type === 'number') { inp.min = 0; inp.max = 999; inp.step = 1; inp.style.width = '90px'; }
+          c.appendChild(inp); tr.appendChild(c);
+        }
+        cell('text', it.label, '簡稱', 'pmL' + i); cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
+        tb.appendChild(tr);
+      });
+      $('pmWrap').hidden = !pmItems.length; $('pmSave').hidden = !pmItems.length;
+      say($('pmMsg'), pmItems.length ? '' : '還沒有任何粉專（請先設定 FB_TOKEN）。', pmItems.length ? '' : 'err');
+    }).catch(function (e) { say($('pmMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('pmLoad').disabled = false; });
+  };
+  $('pmSave').onclick = function () {
+    var items = pmItems.map(function (it, i) {
+      return { id: it.id, label: $('pmL' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
+    });
+    $('pmSave').disabled = true; say($('pmMsg'), '儲存中');
+    api('/admin/fb/pagemap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
+      if (res.ok) { say($('pmMsg'), '已儲存。', 'good'); $('pmLoad').click(); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('pmMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('pmMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('pmSave').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };

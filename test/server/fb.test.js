@@ -101,7 +101,7 @@ test('粉專清單：每組 token 對應一個粉專，回應不含 token，第�
   const env = fbEnv();
   const { res, body, text } = await getJ(env, '/fb/pages');
   assert.equal(res.status, 200);
-  assert.deepEqual(body.data.map((p) => [p.id, p.name, p.followers]), [['111', '新聞粉專', 1000], ['222', '娛樂粉專', 1000]]);
+  assert.deepEqual(body.data.map((p) => [p.id, p.name, p.followers]), [['222', '娛樂粉專', 1000], ['111', '新聞粉專', 1000]]);
   assert.ok(!('idx' in body.data[0]));
   noToken(text);
   for (const v of env.CACHE.store.values()) noToken(v.value);
@@ -162,7 +162,7 @@ test('發文（文字＋連結）走 /feed，token 放本文不放網址', async
   routes.push([/\/111\/feed$/, () => reply({ id: '111_55' })]);
   const { res, body, text } = await postJ(env, { page: '111', message: '新聞來了', link: 'https://news.tvbs.com.tw/x' });
   assert.equal(res.status, 200);
-  assert.deepEqual(body.data, { id: '111_55', scheduled: false, at: null });
+  assert.deepEqual(body.data, { id: '111_55', scheduled: false, at: null, comment: { status: 'none' } });
   noToken(text);
   const c = calls.find((x) => x.path.endsWith('/feed'));
   assert.equal(c.init.method, 'POST');
@@ -179,7 +179,7 @@ test('排程發圖（網址）走 /photos，帶 published=false 與排程時間'
   routes.push([/\/222\/photos$/, () => reply({ id: '9', post_id: '222_9' })]);
   const at = nowSec() + 3600;
   const { body } = await postJ(env, { page: '222', message: '圖說', imageUrl: 'https://example.com/a.jpg', scheduledAt: at });
-  assert.deepEqual(body.data, { id: '222_9', scheduled: true, at });
+  assert.deepEqual(body.data, { id: '222_9', scheduled: true, at, comment: { status: 'none' } });
   const fd = calls.find((x) => x.path.endsWith('/photos')).init.body;
   assert.equal(fd.get('caption'), '圖說');
   assert.equal(fd.get('url'), 'https://example.com/a.jpg');
@@ -251,7 +251,7 @@ test('管理頁：列出每組 token 的狀態與缺少的權限，不含 token�
   noToken(text);
   assert.equal(body.data.version, 'v26.0');
   assert.deepEqual(body.data.tokens.map((t) => [t.pages[0].name, t.valid, t.type, t.expiresAt, t.missingScopes.length]),
-    [['新聞粉專', true, 'PAGE', 0, 0], ['娛樂粉專', true, 'PAGE', 0, 3]]);
+    [['新聞粉專', true, 'PAGE', 0, 1], ['娛樂粉專', true, 'PAGE', 0, 4]]);
 });
 
 test('scrub 會抹掉 token 與 access_token 參數', async () => {
@@ -281,7 +281,7 @@ test('用戶 token：用 /me/accounts 換出粉專（after 游標翻頁，不跟
   const env = userEnv();
   const { res, body, text } = await getJ(env, '/fb/pages');
   assert.equal(res.status, 200);
-  assert.deepEqual(body.data.map((p) => [p.id, p.name]), [['333', '用戶粉專甲'], ['444', '用戶粉專乙']]);
+  assert.deepEqual(body.data.map((p) => [p.id, p.name]), [['444', '用戶粉專乙'], ['333', '用戶粉專甲']]);
   noToken(text);
   noToken(dumpStores(env));
   const acc = calls.filter((c) => c.path.endsWith('/me/accounts'));
@@ -339,7 +339,7 @@ test('快取鍵跟著 FB_TOKEN 變：換 token 不會讀到舊的對應', async 
   await getJ(env, '/fb/pages');
   env.FB_TOKEN = TOKEN_U;
   const { body } = await getJ(env, '/fb/pages');
-  assert.deepEqual(body.data.map((p) => p.id), ['333', '444']);
+  assert.deepEqual(body.data.map((p) => p.id).sort(), ['333', '444']);
 });
 
 test('管理頁：用戶 token 列出所有粉專、權限不足標記、資料存取到期，不含任何 token', async () => {
@@ -411,7 +411,7 @@ test('授權範圍備援：排程發文用換出的粉專 token；記憶體清�
   const at = nowSec() + 7200;
   const r = await postJ(env, { page: '555', message: '排程測試', scheduledAt: at });
   assert.equal(r.res.status, 200);
-  assert.deepEqual(r.body.data, { id: '555_1', scheduled: true, at });
+  assert.deepEqual(r.body.data, { id: '555_1', scheduled: true, at, comment: { status: 'none' } });
   const feed = calls.find((c) => c.path.endsWith('/555/feed'));
   assert.equal(feed.tok, GP['555']);
   assert.equal(feed.init.body.get('published'), 'false');

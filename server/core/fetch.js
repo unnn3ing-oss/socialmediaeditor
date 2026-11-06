@@ -126,7 +126,25 @@ async function handleImage(request, env) {
   return new Response(buf, { status: 200, headers: { ...corsHeaders(request, env), 'content-type': type, 'cache-control': 'private, max-age=600', 'x-content-type-options': 'nosniff' } });
 }
 
+// GET /fetch/article?url=：白名單網域的文章 HTML（只收 text/html、≤2 MB；給前端自己解析標題與內文）
+async function handleArticle(request, env) {
+  const raw = new URL(request.url).searchParams.get('url') || '';
+  if (raw.length > 1000) return fail(request, env, 'bad_request');
+  const start = parseAllowed(raw, env);
+  if (!start) return fail(request, env, 'bad_request', '只能讀取白名單內的 https 網址。');
+  const r = await follow(start, env, 'text/html,application/xhtml+xml');
+  if (r.error) return fail(request, env, 'bad_request', r.error);
+  if (!r.res.ok) return fail(request, env, 'bad_request', '網頁讀取失敗（' + r.res.status + '）。');
+  const type = (r.res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'text/html') return fail(request, env, 'bad_request', '只支援 HTML 網頁。');
+  if (Number(r.res.headers.get('content-length')) > MAX_BYTES) return fail(request, env, 'too_large');
+  const buf = await readCapped(r.res, MAX_BYTES);
+  if (!buf) return fail(request, env, 'too_large');
+  return ok(request, env, { url: r.u.href, html: new TextDecoder('utf-8').decode(buf) });
+}
+
 export async function handleFetch(request, env, path) {
+  if (path === '/fetch/article' && request.method === 'GET') return handleArticle(request, env);
   if (path === '/fetch/image' && request.method === 'GET') return handleImage(request, env);
   if (path !== '/fetch' || request.method !== 'GET') return null;
   const raw = new URL(request.url).searchParams.get('url') || '';

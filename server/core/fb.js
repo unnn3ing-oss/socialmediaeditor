@@ -3,13 +3,15 @@
 // 原則：token 只在後端；網頁只能呼叫這裡寫好的動作，不能指定任意 Graph 路徑。
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
-import { run } from './db.js';
+import { run, all } from './db.js';
+import { ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
-export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts'];
+export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
 export const POST_METRICS = ['post_media_view', 'post_total_media_view_unique', 'post_clicks', 'post_reactions_by_type_total'];
 export const MAX_IMAGE = 10 * 1024 * 1024;
 export const MAX_MESSAGE = 63206;
+const MAX_COMMENT = 8000;
 const MIN_SCHEDULE = 10 * 60, MAX_SCHEDULE = 30 * 86400;
 const PAGES_TTL = 600, POSTS_TTL = 60, INSIGHTS_TTL = 600;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -185,7 +187,7 @@ export async function loadPages(env, { fresh = false } = {}) {
   return pages;
 }
 
-async function tokenFor(env, pageId) {
+export async function tokenFor(env, pageId) {
   const pages = await loadPages(env);
   const p = pages.find((x) => x.id === pageId);
   if (!p) return null;
@@ -199,7 +201,88 @@ async function tokenFor(env, pageId) {
   return hit ? hit.token : null;   // 已不在授權範圍 → fb_unknown_page
 }
 
+// ---- 粉專對應表（D1 fb_page_map；沒有列就用預設，依粉專名稱比對） ----
+const normName = (s) => String(s || '').replace(/\s+/g, '').replace(/＋/g, '+').toLowerCase();
+export const DEFAULT_PAGEMAP = [
+  { code: 'news', label: '新聞', name: 'TVBS新聞', utm: 'utm_source=facebook&utm_medium=fbarticlepic' },
+  { code: 'ent', label: '娛樂', name: 'TVBS娛樂', utm: 'utm_source=facebook&utm_medium=tvbsteatimenewspic' },
+  { code: 'shaokang', label: '少康', name: '少康戰情室', utm: 'utm_source=facebook&utm_medium=2100roompic' },
+  { code: 'jkk', label: '擠看看', name: '擠看看', utm: 'utm_source=facebook&utm_medium=gkkcomments' },
+  { code: 'intl', label: '國際＋', name: 'TVBS國際+', utm: 'utm_source=facebook&utm_medium=tvbspluspic' },
+  { code: 'weather', label: '氣象', name: 'TVBS氣象', utm: 'utm_source=Facebook&utm_medium=18weather' }
+].map((d, i) => ({ ...d, sort: i + 1, key: normName(d.name) }));
+
+function defaultMap(name) {
+  const d = DEFAULT_PAGEMAP.find((x) => x.key === normName(name));
+  return d ? { code: d.code, label: d.label, utm: d.utm, sort: d.sort } : { code: '', label: name, utm: '', sort: 100 };
+}
+async function pageMapRows(env) {
+  const m = new Map();
+  if (!env.DB) return m;
+  try {
+    await ensureTables(env);
+    for (const r of await all(env, 'SELECT page_id, code, label, utm, sort FROM fb_page_map')) m.set(r.page_id, r);
+  } catch (e) { /* D1 壞了就用預設，不能讓 /fb/pages 壞掉 */ }
+  return m;
+}
+// 回 { code, label, utm, sort, saved }
+const mapFor = (rows, p) => {
+  const r = rows.get(p.id);
+  return r ? { code: r.code || '', label: r.label || p.name, utm: r.utm || '', sort: Number.isInteger(r.sort) ? r.sort : 100, saved: true } : { ...defaultMap(p.name), saved: false };
+};
+
 const publicPage = ({ id, name, link, picture, followers }) => ({ id, name, link, picture, followers });
+async function pagesWithMap(env, pages) {
+  const rows = await pageMapRows(env);
+  return pages.map((p) => { const m = mapFor(rows, p); return { ...publicPage(p), code: m.code, label: m.label, utm: m.utm, sort: m.sort }; })
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
+}
+
+// 管理頁：GET /admin/fb/pagemap、POST /admin/fb/pagemap（已通過 admin 驗證）
+const UTM_RE = /^[A-Za-z0-9_.~=&%+-]*$/;
+export async function adminPageMap(request, env, path) {
+  if (path !== '/admin/fb/pagemap') return null;
+  if (request.method === 'GET') {
+    let pages = [];
+    try { pages = await loadPages(env); } catch (e) { pages = []; }
+    const rows = await pageMapRows(env);
+    const items = pages.map((p) => { const m = mapFor(rows, p); return { id: p.id, name: p.name, code: m.code, label: m.label, utm: m.utm, sort: m.sort, saved: m.saved }; })
+      .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
+    return ok(request, env, { items });
+  }
+  if (request.method !== 'POST') return null;
+  const buf = await readBody(request, 64 * 1024);
+  if (!buf) return fail(request, env, 'too_large');
+  let b;
+  try { b = JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return fail(request, env, 'bad_request'); }
+  const list = b && Array.isArray(b.items) ? b.items : null;
+  if (!list || list.length > 100) return fail(request, env, 'bad_request', '資料格式不正確。');
+  const clean = [];
+  for (const it of list) {
+    const id = it && typeof it.id === 'string' ? it.id : '';
+    const label = it && typeof it.label === 'string' ? it.label.trim() : '';
+    const utm = it && typeof it.utm === 'string' ? it.utm.trim() : '';
+    const sort = it ? Number(it.sort) : NaN;
+    if (!isId(id)) return fail(request, env, 'bad_request', '粉專 ID 格式不正確。');
+    if (label.length < 1 || label.length > 20) return fail(request, env, 'bad_request', '簡稱要 1 到 20 個字。');
+    if (utm.length > 300 || !UTM_RE.test(utm)) return fail(request, env, 'bad_request', 'utm 只能用英數字與 _ . ~ = & % + - ，最長 300 字。');
+    if (!Number.isInteger(sort) || sort < 0 || sort > 999) return fail(request, env, 'bad_request', '排序要是 0 到 999 的整數。');
+    clean.push({ id, label, utm, sort });
+  }
+  if (!env.DB) return fail(request, env, 'misconfigured');
+  await ensureTables(env);
+  const now = Date.now();
+  const old = await pageMapRows(env);
+  let pages = [];
+  try { pages = await loadPages(env); } catch (e) { pages = []; }
+  for (const c of clean) {
+    const name = (pages.find((p) => p.id === c.id) || {}).name || '';
+    const code = old.has(c.id) ? old.get(c.id).code || '' : defaultMap(name).code;
+    await run(env, `INSERT INTO fb_page_map (page_id, code, label, utm, sort, updated) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(page_id) DO UPDATE SET label=excluded.label, utm=excluded.utm, sort=excluded.sort, updated=excluded.updated`, c.id, code, c.label, c.utm, c.sort, now);
+  }
+  return ok(request, env, { saved: clean.length });
+}
 
 // ---- 讀取 ----
 async function listPosts(request, env, q) {
@@ -238,11 +321,17 @@ async function listScheduled(request, env, q) {
   const token = await tokenFor(env, page);
   if (!token) return fail(request, env, 'fb_unknown_page');
   const r = await graphGet(env, token, `/${page}/scheduled_posts`, { fields: 'id,message,scheduled_publish_time,created_time,full_picture', limit: 50 });
+  let cm = new Map();
+  try { cm = env.DB ? await commentsForPosts(env, (r.data || []).map((p) => p.id).filter(isPostId)) : cm; } catch (e) { /* 留言狀態讀不到不影響清單 */ }
   return ok(request, env, {
-    items: (r.data || []).map((p) => ({
-      id: p.id, message: p.message || '', created: p.created_time || '', picture: p.full_picture || '',
-      at: typeof p.scheduled_publish_time === 'number' ? p.scheduled_publish_time : Number(p.scheduled_publish_time) || null
-    }))
+    items: (r.data || []).map((p) => {
+      const c = cm.get(p.id);
+      return {
+        id: p.id, message: p.message || '', created: p.created_time || '', picture: p.full_picture || '',
+        at: typeof p.scheduled_publish_time === 'number' ? p.scheduled_publish_time : Number(p.scheduled_publish_time) || null,
+        comment: c ? { id: c.id, status: c.status, error: c.error, message: c.message } : null
+      };
+    })
   });
 }
 
@@ -294,7 +383,7 @@ async function readPostInput(request) {
     try { fd = await new Response(buf, { headers: { 'content-type': request.headers.get('content-type') } }).formData(); }
     catch (e) { return { error: 'bad_request' }; }
     const body = {};
-    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
+    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset', 'comment']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
     const img = fd.get('image');
     if (img && typeof img === 'object') body.image = img;
     return { body };
@@ -327,13 +416,41 @@ export function checkPost(b, now = nowSec()) {
     if (link || image || imageUrl) return '彩色背景只能用在純文字貼文。';
     if (!message.trim()) return '彩色背景需要內文。';
   }
+  const comment = typeof b.comment === 'string' ? b.comment.trim() : '';
+  if (b.comment !== undefined && b.comment !== null && typeof b.comment !== 'string') return '留言格式不正確。';
+  if (comment.length > MAX_COMMENT) return '留言太長（上限 8000 字）。';
   let at = null;
   if (b.scheduledAt !== undefined && b.scheduledAt !== null && b.scheduledAt !== '') {
     at = Number(b.scheduledAt);
     if (!Number.isInteger(at)) return '排程時間格式不正確（Unix 秒數）。';
     if (at < now + MIN_SCHEDULE || at > now + MAX_SCHEDULE) return '排程時間要在 10 分鐘後到 30 天內。';
   }
-  return { page, message, link, imageUrl, image, at, textPreset };
+  return { page, message, link, imageUrl, image, at, textPreset, comment };
+}
+
+// 發文時留言（文章連結等）。立即發布：馬上留，失敗就入列交給總管重試；排程：入列等發布。
+// 圖片貼文 /photos 回的是照片 ID：沒有 post_id 時用 page_story_id 換貼文 ID，換不到就在佇列記 photo_id 之後再換。
+// 需使用者實測確認：照片 ID 換貼文 ID、排程中的照片是否查得到 page_story_id、留言要掛在哪個 ID。
+async function attachComment(env, token, v, r) {
+  const isPhoto = !!(v.image || v.imageUrl);
+  const photo = isPhoto ? r.id : null;
+  let post = r.post_id || (isPhoto ? null : r.id);
+  if (!post && photo) post = await photoToPost(env, token, photo);
+  if (!v.at && post) {
+    try {
+      const c = await graphPost(env, token, `/${post}/comments`, { message: v.comment });
+      return { status: 'done', id: c && c.id ? String(c.id) : '' };
+    } catch (e) { /* 失敗不影響發文：入列重試 */ }
+  }
+  const now = Date.now();
+  try {
+    await enqueueComment(env, {
+      page: v.page, post, photo, message: v.comment,
+      due: v.at || Math.floor(now / 1000), nextCheck: v.at ? (v.at + 1) * 1000 : now, nowMs: now
+    });
+    await kickHub(env);
+    return { status: 'queued' };
+  } catch (e) { return { status: 'failed' }; }
 }
 
 async function createPost(request, env) {
@@ -355,7 +472,8 @@ async function createPost(request, env) {
       r = await graphPost(env, token, `/${v.page}/feed`, { message: v.message, link: v.link, text_format_preset_id: v.textPreset || undefined, ...sched });
     }
     await audit(env, v.at ? 'post-scheduled' : 'post-published');
-    return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at });
+    const comment = v.comment ? await attachComment(env, token, v, r) : { status: 'none' };
+    return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at, comment });
   } catch (e) {
     await audit(env, 'post-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;
@@ -377,11 +495,43 @@ async function cancelPost(request, env) {
   try {
     await graphDelete(env, token, `/${post}`);
     await audit(env, 'post-canceled');
+    try { await cancelForPost(env, post); await kickHub(env); } catch (e) { /* 佇列更新失敗不影響取消 */ }
     return ok(request, env, { post, canceled: true });
   } catch (e) {
     await audit(env, 'cancel-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;
   }
+}
+
+async function readJson(request, max = 4 * 1024) {
+  const buf = await readBody(request, max);
+  if (!buf) return { error: 'too_large' };
+  try { const b = JSON.parse(new TextDecoder().decode(buf)); return { body: b && typeof b === 'object' ? b : {} }; }
+  catch (e) { return { error: 'bad_request' }; }
+}
+
+// 改排程時間：只改還沒發布的；同時更新佇列裡該貼文待留言項目的時間
+async function reschedulePost(request, env) {
+  const { body: b, error } = await readJson(request);
+  if (error) return fail(request, env, error);
+  const post = typeof b.post === 'string' ? b.post : '';
+  if (!isPostId(post)) return fail(request, env, 'bad_request', '貼文 ID 格式不正確（應為 粉專ID_貼文ID）。');
+  const time = Number(b.time), now = nowSec();
+  if (!Number.isInteger(time)) return fail(request, env, 'bad_request', '排程時間格式不正確（Unix 秒數）。');
+  if (time < now + MIN_SCHEDULE || time > now + MAX_SCHEDULE) return fail(request, env, 'bad_request', '排程時間要在 10 分鐘後到 30 天內。');
+  const token = await tokenFor(env, post.split('_')[0]);
+  if (!token) return fail(request, env, 'fb_unknown_page');
+  const info = await graphGet(env, token, `/${post}`, { fields: 'is_published' });
+  if (info.is_published !== false) return fail(request, env, 'already_published', '這篇已經發布，不能改排程時間。');
+  try {
+    await graphPost(env, token, `/${post}`, { scheduled_publish_time: String(time) });
+    await audit(env, 'post-rescheduled');
+  } catch (e) {
+    await audit(env, 'reschedule-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
+    throw e;
+  }
+  try { await rescheduleComments(env, post, time); await kickHub(env); } catch (e) { /* 佇列更新失敗，下一分鐘 cron 對時會補上 */ }
+  return ok(request, env, { post, time });
 }
 
 export async function handleFb(request, env, path) {
@@ -391,13 +541,31 @@ export async function handleFb(request, env, path) {
   const q = new URL(request.url).searchParams;
   try {
     if (path === '/fb/pages' && request.method === 'GET') {
-      return ok(request, env, (await loadPages(env, { fresh: q.get('refresh') === '1' })).map(publicPage));
+      return ok(request, env, await pagesWithMap(env, await loadPages(env, { fresh: q.get('refresh') === '1' })));
     }
     if (path === '/fb/posts' && request.method === 'GET') return await listPosts(request, env, q);
     if (path === '/fb/scheduled' && request.method === 'GET') return await listScheduled(request, env, q);
     if (path === '/fb/insights' && request.method === 'GET') return await insights(request, env, q);
     if (path === '/fb/post' && request.method === 'POST') return await createPost(request, env);
     if (path === '/fb/cancel' && request.method === 'POST') return await cancelPost(request, env);
+    if (path === '/fb/reschedule' && request.method === 'POST') return await reschedulePost(request, env);
+    if (path === '/fb/comments' && request.method === 'GET') {
+      if (!env.DB) return fail(request, env, 'misconfigured');
+      const st = q.get('status') || 'all', pg = q.get('page') || '';
+      if (!['failed', 'pending', 'all'].includes(st) || (pg && !isId(pg))) return fail(request, env, 'bad_request');
+      return ok(request, env, { items: await listComments(env, { status: st, page: pg }) });
+    }
+    if ((path === '/fb/comment/retry' || path === '/fb/comment/dismiss') && request.method === 'POST') {
+      if (!env.DB) return fail(request, env, 'misconfigured');
+      const { body: b, error } = await readJson(request);
+      if (error) return fail(request, env, error);
+      const id = Number(b.id);
+      if (!Number.isInteger(id) || id < 1) return fail(request, env, 'bad_request');
+      if (path === '/fb/comment/dismiss') return ok(request, env, { id, dismissed: await dismissComment(env, id) });
+      if (!(await retryComment(env, id))) return fail(request, env, 'bad_request', '只有失敗的留言可以重試。');
+      await kickHub(env);
+      return ok(request, env, { status: 'pending' });
+    }
   } catch (e) {
     if (e instanceof GraphError && e.code === 'fb_token_invalid') await cacheDel(env, await pagesKey(env));
     return graphFail(request, env, e);
