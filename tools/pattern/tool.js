@@ -5,7 +5,10 @@
 //   stickers    { smile: url, ... }
 //   fontLoaded  公司標題字型（WHZ-Heavy）載入成功；否則畫布用 Noto Sans TC 粗體
 //   tb          SDK（下載、檔名）
+//   parseArticle／autoLines／frameForUrl   新聞規則（快速填入）
 import { tb } from '../../sdk/toolbox.js';
+import { autoLines, frameForUrl } from '../../sdk/news-rules.js';
+import { parseArticle } from '../../sdk/news-article.js';
 
 tb.init('pattern');
 
@@ -50,6 +53,7 @@ STICKER_IDS.forEach((id, i) => { if (stickerUrls[i]) stickers[id] = stickerUrls[
 window.PATTERN = {
   company: Boolean(ribbonEnt || ribbonNews),
   ribbonEnt, ribbonNews, logo, stickers, fontLoaded, tb,
+  parseArticle, autoLines, frameForUrl,   // 快速填入（quickfill.js）用
 };
 
 function loadScript(src) {
@@ -65,6 +69,7 @@ function loadScript(src) {
 try {
   await loadScript('app.js');
   await loadScript('stickers.js');
+  await loadScript('quickfill.js');
 } catch (e) {
   tb.log.error('pattern-load-failed');
   throw e;

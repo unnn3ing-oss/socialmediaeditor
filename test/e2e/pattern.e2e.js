@@ -175,3 +175,94 @@ test('有密碼：要了公司素材，公司框選項出現，切換框不清�
   assert.equal(await frame.inputValue('.batch-item-block textarea'), '公司版標題');
   await waitPx(frame, 1000, 100, (p) => near(p, [255, 0, 255], 8), '娛樂緞帶');
 });
+
+// ---- 快速填入（貼文章網址）----
+const { fakeAsset, API_BASE } = require('../helpers/tool-page.js');
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
+const ART_TITLE = '台北捷運驚傳亂象乘客嚇壞，市府緊急回應「全面檢討」改善措施';
+
+// 假後端：/fetch/article 回類似 TVBS 的 HTML；網域不在 news.tvbs.com.tw 就回白名單錯誤；圖片回洋橙色小 png
+async function fakeBackend(page, calls = []) {
+  await page.route(API_BASE + '/fetch/**', async (r) => {
+    const u = new URL(r.request().url());
+    calls.push(u.pathname);
+    if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
+    if (u.pathname === '/fetch/article') {
+      const target = u.searchParams.get('url') || '';
+      if (!/^https:\/\/news\.tvbs\.com\.tw\//.test(target)) {
+        return r.fulfill({ status: 400, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ ok: false, code: 'bad_request', error: '只能讀取白名單內的 https 網址。' }) });
+      }
+      const html = `<html><head><meta property="og:image" content="https://img.example/a.jpg"></head><body>
+        <h1>${ART_TITLE}</h1><div class="tags"><a href="/tag/a">#捷運</a><a href="/tag/b">#台北</a></div></body></html>`;
+      return r.fulfill({ headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ ok: true, data: { url: target, html } }) });
+    }
+    if (u.pathname === '/fetch/image') return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([60, 160, 220]) });
+    return r.fulfill({ status: 404, headers: CORS, body: '' });
+  });
+}
+
+test('快速填入：貼網址 → 標題斷行、主圖載入、通用框保留', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  const errors = watchErrors(page);
+  const calls = [];
+  await fakeBackend(page, calls);
+  await frame.waitForSelector('.batch-item-block');
+  const { autoLines } = await import(path.join(ROOT, 'sdk', 'news-rules.js'));
+  await frame.click('#qfUrl');
+  await frame.fill('#qfUrl', 'https://news.tvbs.com.tw/local/123456');
+  await frame.press('#qfUrl', 'Enter');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent), null, { timeout: 8000 });
+  const v = await frame.inputValue('.batch-item-block textarea');
+  assert.equal(v, autoLines(ART_TITLE).join('\n'));
+  assert.ok(v.split('\n').length >= 1);
+  assert.match(await frame.textContent('#qfHint'), /主圖/);
+  assert.ok(calls.includes('/fetch/image'));
+  // 主圖已載入：照片區變成藍色（60,160,220）→ 上半部像素
+  await waitPx(frame, 700, 300, (p) => near(p, [60, 160, 220], 12), '主圖載入');
+  assert.equal(await frame.isVisible('.gen-tag'), true, '沒密碼維持通用框');
+  assert.deepEqual(errors, []);
+});
+
+test('快速填入：已有內容要確認；取消不動內容；確認才覆蓋', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await fakeBackend(page);
+  await setupItem(page, frame, '我自己打的標題');
+  await frame.fill('#qfUrl', 'https://news.tvbs.com.tw/local/1');
+  await frame.click('#qfBtn');
+  await frame.waitForSelector('#confirmOverlay.open');
+  await frame.click('#confirmCancelBtn');
+  await frame.waitForFunction(() => /已取消/.test(document.getElementById('qfHint').textContent));
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '我自己打的標題');
+  await frame.click('#qfBtn');
+  await frame.waitForSelector('#confirmOverlay.open');
+  await frame.click('#confirmOkBtn');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent), null, { timeout: 8000 });
+  assert.notEqual(await frame.inputValue('.batch-item-block textarea'), '我自己打的標題');
+});
+
+test('快速填入：網址不在白名單 → 顯示原因、原內容保留', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await fakeBackend(page);
+  await setupItem(page, frame, '原本的標題');
+  await frame.fill('#qfUrl', 'https://evil.example.com/news/1');
+  await frame.press('#qfUrl', 'Enter');
+  await frame.waitForFunction(() => /帶入失敗/.test(document.getElementById('qfHint').textContent));
+  assert.match(await frame.textContent('#qfHint'), /白名單/);
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '原本的標題');
+  await waitPx(frame, 40, 100, (p) => near(p, hex('#202124'), 2), '預覽仍在');
+});
+
+test('快速填入：有密碼時娛樂網址選粉框、新聞網址選藍框', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', { company: true });
+  await fakeBackend(page);
+  await frame.waitForSelector('.batch-item-block');
+  await frame.fill('#qfUrl', 'https://news.tvbs.com.tw/entertainment/2999999');
+  await frame.press('#qfUrl', 'Enter');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent), null, { timeout: 8000 });
+  assert.equal(await frame.getAttribute('.batch-item-block [data-frame="entertainment"]', 'class').then((c) => /active/.test(c)), true);
+  // 新增一組、直接貼新聞網址（新組是空的，不需確認）
+  await frame.click('#addBatchItemBtn');
+  await frame.fill('#qfUrl', 'https://news.tvbs.com.tw/local/1');
+  await frame.press('#qfUrl', 'Enter');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent) && document.querySelector('.batch-item-block [data-frame="news"].active'), null, { timeout: 8000 });
+});

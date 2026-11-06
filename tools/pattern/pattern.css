@@ -683,3 +683,10 @@
 
 /* 讓 hidden 屬性一定生效（不載入 tokens.css） */
 [hidden] { display: none !important; }
+
+/* 快速填入 */
+.quickfill { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.quickfill label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.quickfill .qf-row { display: flex; gap: 8px; }
+.quickfill input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); font: inherit; background: var(--bg); color: var(--text); }
+.quickfill .hint.qf-error { color: #dc2626; }

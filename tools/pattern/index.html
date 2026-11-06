@@ -12,6 +12,14 @@
 <div class="wrap">
   <div class="layout" id="layoutApp">
     <div class="card">
+      <div class="quickfill" id="quickfill">
+        <label for="qfUrl">文章網址（貼上自動帶入標題與主圖）</label>
+        <div class="qf-row">
+          <input type="url" id="qfUrl" placeholder="https://news.tvbs.com.tw/…" autocomplete="off" spellcheck="false">
+          <button type="button" id="qfBtn">帶入</button>
+        </div>
+        <div class="hint" id="qfHint">帶入到目前展開的那一組；已有內容會先問你要不要覆蓋。</div>
+      </div>
       <div id="batchFields">
         <div class="btn-row batch-actions" id="batchActions" style="margin-top:0; margin-bottom:20px">
           <button class="primary" id="batchGenerateBtn" style="flex:1">全部完成</button>
