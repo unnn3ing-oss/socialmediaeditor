@@ -121,35 +121,17 @@
         <textarea id="caption" rows="8" placeholder="小編文（含 hashtag、文章連結）"></textarea>
       </label>
 
-      <fieldset class="when">
-        <legend>發布時間</legend>
-        <div class="seg sm" role="group" aria-label="發布時間" id="whenSeg">
-          <button type="button" class="is-on" data-when="now">立即發布</button>
-          <button type="button" data-when="sched">排程發布</button>
-        </div>
-        <div class="tp" id="timeRow" hidden>
-          <div class="tp-row">
-            <input id="tpDate" type="date" aria-label="日期">
-            <input id="tpTime" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="2130" aria-label="時間（直接打 4 碼，2130＝21:30）">
-          </div>
-          <div class="chips">
-            <button type="button" class="btn btn-secondary btn-sm" data-add="30">+30 分</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-add="60">+1 小時</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-add="1440">明天</button>
-          </div>
-          <p class="hint" id="tpHint" role="status"></p>
-        </div>
-      </fieldset>
     </div>
   </div>
 
   <footer class="m-foot">
-    <div class="pages" id="pages" role="group" aria-label="要發的粉專"></div>
+    <div class="pages" id="pages" role="group" aria-label="要發的粉專（各自設定立即或排程）"></div>
+    <div><button type="button" class="btn btn-secondary btn-sm" id="applyAll" hidden>把第一個勾選粉專的時間套用到全部</button></div>
     <ul class="results" id="results" aria-live="polite"></ul>
     <div class="send">
       <span class="hint" id="sendMsg" role="status"></span>
       <button type="button" class="btn btn-secondary" id="clearBtn">清空</button>
-      <button type="button" class="btn btn-primary" id="sendBtn">全部送出</button>
+      <button type="button" class="btn btn-primary" id="sendBtn">送出</button>
     </div>
   </footer>
 </dialog>

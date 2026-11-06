@@ -197,7 +197,7 @@ const editorReady = loadAssets().then((assets) => {
   editor.setTitle($('title').value);
 }).catch(() => { tb.log.error('fbpost-editor-failed'); });
 
-let mode = 'frame', textStyle = 'card', when = 'now';
+let mode = 'frame', textStyle = 'card';
 const modeSeg = segment($('modeSeg'), 'mode', (m) => {
   mode = m;
   $('framePane').hidden = m !== 'frame';
@@ -296,67 +296,107 @@ $('fillBtn').addEventListener('click', async () => {
   } catch (e) { hint.textContent = '帶入失敗：' + errText(e); }
 });
 
-// 發布時間
-function defaultTime() {
+// 粉專：每個粉專一列（勾選＋立即／排程＋時間），各自獨立。
+// 列只建一次、之後重用（重新整理粉專清單也保留每列的設定）；只有「清空」會重設。
+const rows = new Map();   // 粉專ID → { id, root, cb, ctrls, when, seg, date, time, hint }
+const toDateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toTimeStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function defaultDate() {
   const d = new Date(Date.now() + 60 * 60 * 1000);
   d.setMinutes(Math.ceil(d.getMinutes() / 10) * 10, 0, 0);
-  setTime(d);
+  return d;
 }
-function setTime(d) {
-  $('tpDate').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  $('tpTime').value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  checkTime();
-}
-function readTime() {
-  const m = /^(\d{1,2}):?(\d{2})$/.exec($('tpTime').value.trim());
-  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec($('tpDate').value);
+function readRowTime(r) {
+  const m = /^(\d{1,2}):?(\d{2})$/.exec(r.time.value.trim());
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date.value);
   if (!m || !dm || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
   return new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(m[1]), Number(m[2]));
 }
-function checkTime() {
-  const d = readTime(), hint = $('tpHint');
-  if (!d) { hint.textContent = '時間格式：4 碼，例如 2130'; return null; }
-  const ahead = (d.getTime() - Date.now()) / 1000;
-  if (ahead < MIN_AHEAD) { hint.textContent = '排程要在 10 分鐘以後'; return null; }
-  if (ahead > MAX_AHEAD) { hint.textContent = '排程最多 30 天內'; return null; }
-  hint.textContent = '將於 ' + fmtTime(Math.floor(d.getTime() / 1000)) + ' 發布';
-  return Math.floor(d.getTime() / 1000);
+// 回傳 { at } 或 { error }；同時更新該列提示
+function checkRow(r) {
+  if (r.when === 'now') { r.hint.textContent = ''; r.hint.classList.remove('bad'); return { at: null }; }
+  const d = readRowTime(r);
+  let error = '';
+  if (!d) error = '時間格式：4 碼，例如 2130';
+  else {
+    const ahead = (d.getTime() - Date.now()) / 1000;
+    if (ahead < MIN_AHEAD) error = '排程要在 10 分鐘以後';
+    else if (ahead > MAX_AHEAD) error = '排程最多 30 天內';
+  }
+  r.hint.textContent = error || '將於 ' + fmtTime(Math.floor(d.getTime() / 1000)) + ' 發布';
+  r.hint.classList.toggle('bad', !!error);
+  return error ? { error } : { at: Math.floor(d.getTime() / 1000) };
 }
-$('tpTime').addEventListener('input', () => {
-  const v = $('tpTime').value.replace(/\D/g, '');
-  if (v.length === 4) $('tpTime').value = v.slice(0, 2) + ':' + v.slice(2);
-  checkTime();
-});
-$('tpDate').addEventListener('change', checkTime);
-$('timeRow').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-add]');
-  if (!b) return;
-  const base = readTime() || new Date();
-  setTime(new Date(base.getTime() + Number(b.dataset.add) * 60000));
-});
-const whenSeg = segment($('whenSeg'), 'when', (w) => {
-  when = w;
-  $('timeRow').hidden = w !== 'sched';
-  if (w === 'sched' && !readTime()) defaultTime();
-  $('sendBtn').textContent = w === 'sched' ? '全部排程' : '全部送出';
-});
-
-// 粉專勾選
-const picked = new Set();
+function setRowTime(r, d) { r.date.value = toDateStr(d); r.time.value = toTimeStr(d); checkRow(r); }
+function setRowWhen(r, w) {
+  r.when = w;
+  for (const b of r.seg.children) { const on = b.dataset.when === w; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on)); }
+  r.timeBox.hidden = w !== 'sched';
+  if (w === 'sched' && !readRowTime(r)) {
+    // 帶入其他已排程粉專的時間，省得重打；沒有就用一小時後
+    const other = checkedRows().find((x) => x !== r && x.when === 'sched' && readRowTime(x));
+    setRowTime(r, other ? readRowTime(other) : defaultDate());
+  }
+  checkRow(r);
+  updateSendLabel();
+}
+function makeRow(p) {
+  const r = { id: p.id, when: 'now' };
+  r.cb = el('input', { type: 'checkbox' });
+  r.seg = el('div', { className: 'seg sm' },
+    el('button', { type: 'button', textContent: '立即', dataset: { when: 'now' } }),
+    el('button', { type: 'button', textContent: '排程', dataset: { when: 'sched' } }));
+  r.seg.setAttribute('role', 'group');
+  r.seg.setAttribute('aria-label', p.name + ' 發布時間');
+  r.date = el('input', { type: 'date', ariaLabel: p.name + ' 日期' });
+  r.time = el('input', { type: 'text', inputMode: 'numeric', maxLength: 5, autocomplete: 'off', placeholder: '2130', className: 'tp-time', ariaLabel: p.name + ' 時間（4 碼，2130＝21:30）' });
+  r.hint = el('span', { className: 'hint' });
+  const chips = el('span', { className: 'chips' }, ...[['30', '+30 分'], ['60', '+1 小時'], ['1440', '明天']].map(([m, t]) => el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: t, dataset: { add: m } })));
+  r.timeBox = el('span', { className: 'pg-time', hidden: true }, r.date, r.time, chips);
+  r.ctrls = el('span', { className: 'pg-ctrls', hidden: true }, r.seg, r.timeBox, r.hint);
+  r.root = el('div', { className: 'pg-row', dataset: { page: p.id } }, el('label', { className: 'pg' }, r.cb, el('span', { textContent: p.name })), r.ctrls);
+  r.cb.addEventListener('change', () => { r.ctrls.hidden = !r.cb.checked; if (r.cb.checked) checkRow(r); updateSendLabel(); });
+  r.seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRowWhen(r, b.dataset.when); });
+  r.time.addEventListener('input', () => {
+    const v = r.time.value.replace(/\D/g, '');
+    if (v.length === 4) r.time.value = v.slice(0, 2) + ':' + v.slice(2);
+    checkRow(r);
+  });
+  r.date.addEventListener('change', () => checkRow(r));
+  chips.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-add]');
+    if (b) setRowTime(r, new Date((readRowTime(r) || new Date()).getTime() + Number(b.dataset.add) * 60000));
+  });
+  setRowWhen(r, 'now');
+  return r;
+}
+const checkedRows = () => pages.map((p) => rows.get(p.id)).filter((r) => r && r.cb.checked);
 function renderPageChecks() {
-  for (const id of [...picked]) if (!pages.some((p) => p.id === id)) picked.delete(id);
-  $('pages').replaceChildren(...(pages.length ? pages.map((p) => {
-    const cb = el('input', { type: 'checkbox', checked: picked.has(p.id) });
-    cb.addEventListener('change', () => { if (cb.checked) picked.add(p.id); else picked.delete(p.id); });
-    return el('label', { className: 'pg' }, cb, el('span', { textContent: p.name }));
-  }) : [el('span', { className: 'hint', textContent: '沒有可發的粉專' })]));
+  for (const p of pages) if (!rows.has(p.id)) rows.set(p.id, makeRow(p));
+  $('pages').replaceChildren(...(pages.length ? pages.map((p) => rows.get(p.id).root) : [el('span', { className: 'hint', textContent: '沒有可發的粉專' })]));
+  $('applyAll').hidden = !pages.length;
+  updateSendLabel();
 }
+function resetRows() {
+  for (const r of rows.values()) { r.cb.checked = false; r.ctrls.hidden = true; r.date.value = r.time.value = ''; setRowWhen(r, 'now'); }
+  updateSendLabel();
+}
+function updateSendLabel() {
+  const list = checkedRows();
+  const now = list.filter((r) => r.when === 'now').length;
+  $('sendBtn').textContent = list.length ? `送出 ${list.length} 個粉專（${now} 立即、${list.length - now} 排程）` : '送出';
+}
+// 把第一個勾選粉專的設定套用到其他勾選的粉專
+$('applyAll').addEventListener('click', () => {
+  const [first, ...rest] = checkedRows();
+  if (!first) { $('sendMsg').textContent = '請先勾選要發的粉專'; return; }
+  for (const r of rest) { r.date.value = first.date.value; r.time.value = first.time.value; setRowWhen(r, first.when); }
+});
 
 // 送出：先組好「要送的內容」（同一張圖給每個粉專），再逐一送
 async function buildPayload() {
   const caption = $('caption').value;
-  const p = { message: caption, image: null, textPreset: '', at: null };
-  if (when === 'sched') { p.at = checkTime(); if (!p.at) throw new Error('排程時間不正確：' + $('tpHint').textContent); }
+  const p = { message: caption, image: null, textPreset: '' };
   if (mode === 'frame') {
     await editorReady;
     if (!editor || !editor.hasImage()) throw new Error('請先放照片');
@@ -377,13 +417,13 @@ async function buildPayload() {
   }
   return p;
 }
-async function sendOne(pageId, p) {
+async function sendOne(pageId, p, at) {
   const fd = new FormData();
   fd.append('page', pageId);
   fd.append('message', p.message);
   if (p.image) fd.append('image', p.image, 'post.jpg');
   if (p.textPreset) fd.append('textPreset', p.textPreset);
-  if (p.at) fd.append('scheduledAt', String(p.at));
+  if (at) fd.append('scheduledAt', String(at));
   return tb.api.call('/fb/post', { method: 'POST', body: fd });
 }
 
@@ -413,34 +453,37 @@ async function send(ids) {
     let p;
     try { p = await buildPayload(); } catch (e) { msg.textContent = errText(e); return; }
     if (ids.length > 1 || !$('results').querySelector(`[data-page="${ids[0]}"]`)) $('results').replaceChildren();
-    let okN = 0;
+    let okN = 0, schedN = 0;
     for (const [i, id] of ids.entries()) {
       msg.textContent = `送出中 ${i + 1}/${ids.length}…`;
+      const t = checkRow(rows.get(id));   // 每個粉專用自己的時間
+      if (t.error) { showResult(id, 'bad', '排程時間不正確：' + t.error, true); continue; }
       showResult(id, 'wait', '送出中…');
       try {
-        await sendOne(id, p);
+        await sendOne(id, p, t.at);
         okN++;
-        showResult(id, 'ok', p.at ? '已排程 ' + fmtTime(p.at) : '已發布');
+        if (t.at) schedN++;
+        showResult(id, 'ok', t.at ? '已排程 ' + fmtTime(t.at) : '已發布');
       } catch (e) { showResult(id, 'bad', errText(e), true); }
     }
-    msg.textContent = okN === ids.length ? `完成：${okN} 個粉專都成功` : `成功 ${okN}、失敗 ${ids.length - okN}（失敗的可按「重送」）`;
-    if (okN && p.at) loadSched();
+    msg.textContent = okN === ids.length ? `完成：${okN} 個粉專都成功` : `成功 ${okN}、失敗 ${ids.length - okN}（失敗的可修改後按「重送」）`;
+    if (schedN) loadSched();
   } finally {
     sending = false;
     $('sendBtn').disabled = false;
   }
 }
-$('sendBtn').addEventListener('click', () => send(pages.filter((x) => picked.has(x.id)).map((x) => x.id)));
+$('sendBtn').addEventListener('click', () => send(checkedRows().map((r) => r.id)));
 
 // 清空：唯一會刪內容的地方
 $('clearBtn').addEventListener('click', async () => {
-  if (!(await confirmBox('清空新增發文？', '照片、標題、小編文、底圖文字和送出結果都會清掉。', '清空'))) return;
+  if (!(await confirmBox('清空新增發文？', '照片、標題、小編文、底圖文字、粉專勾選與時間、送出結果都會清掉。', '清空'))) return;
   for (const id of ['url', 'title', 'caption', 'cardText', 'presetId']) $(id).value = '';
   $('urlHint').textContent = $('sendMsg').textContent = '';
   $('results').replaceChildren();
   if (editor) { editor.clearAll(); frameCtl.set(editor.getFrame()); }
-  modeSeg.set('frame'); textSeg.set('card'); whenSeg.set('now');
-  picked.clear(); renderPageChecks();
+  modeSeg.set('frame'); textSeg.set('card');
+  resetRows();
   renderTitleCounts(); renderCard(); updateCount();
 });
 

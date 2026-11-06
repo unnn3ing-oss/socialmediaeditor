@@ -96,8 +96,10 @@ test('作圖框：多粉專排程，一個失敗後單獨重送', async () => {
   await page.fill('#title', '颱風假最新\n北北基照常上班');
   await page.fill('#caption', '小編文 #颱風');
   for (const b of await page.$$('#pages .pg input')) await b.check();
-  await page.click('#whenSeg [data-when=sched]');
-  await page.click('#timeRow [data-add="60"]');
+  for (const id of ['111', '222']) {
+    await page.click(`.pg-row[data-page="${id}"] [data-when=sched]`);
+    await page.click(`.pg-row[data-page="${id}"] [data-add="60"]`);
+  }
   await page.click('#sendBtn');
   await page.waitForSelector('#results .r-bad button');
   assert.equal(api.posts.length, 2);
@@ -192,5 +194,65 @@ test('連點送出只會發一次', async () => {
   await page.evaluate(() => { const b = document.getElementById('sendBtn'); b.click(); b.click(); });
   await page.waitForFunction(() => document.querySelector('#sendMsg').textContent.startsWith('完成'));
   assert.equal(api.posts.length, 1);
+  assert.deepEqual(errors, []);
+});
+
+test('每個粉專各自設定立即／排程；套用到全部；關閉再開還在；清空才重設', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await photo(page);
+  const row = (id) => `.pg-row[data-page="${id}"]`;
+  await page.check(`${row('111')} input[type=checkbox]`);
+  await page.check(`${row('222')} input[type=checkbox]`);
+  assert.equal(await page.isVisible(`${row('111')} .pg-time`), false);
+  // 111 排程（帶一小時後），222 先立即
+  await page.click(`${row('111')} [data-when=sched]`);
+  assert.equal(await page.isVisible(`${row('111')} .pg-time`), true);
+  await page.fill(`${row('111')} .tp-time`, '');
+  await page.click(`${row('111')} [data-add="1440"]`);
+  assert.match(await page.textContent('#sendBtn'), /送出 2 個粉專（1 立即、1 排程）/);
+  // 222 切排程 → 自動帶入 111 的時間
+  await page.click(`${row('222')} [data-when=sched]`);
+  assert.equal(await page.inputValue(`${row('222')} .tp-time`), await page.inputValue(`${row('111')} .tp-time`));
+  await page.click(`${row('222')} [data-when=now]`);
+  // 關閉再開：設定還在
+  await page.click('#mClose');
+  await page.click('#newPost');
+  assert.equal(await page.isChecked(`${row('111')} input[type=checkbox]`), true);
+  assert.equal(await page.isVisible(`${row('111')} .pg-time`), true);
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => document.querySelector('#sendMsg').textContent.startsWith('完成'));
+  const by = Object.fromEntries(api.posts.map((p) => [p.page, p]));
+  assert.ok(Number(by['111'].scheduledAt) > Date.now() / 1000 + 20 * 3600);
+  assert.equal(by['222'].scheduledAt, null);
+  // 套用到全部：222 跟著 111 變成排程同時間
+  await page.click('#applyAll');
+  assert.equal(await page.isVisible(`${row('222')} .pg-time`), true);
+  assert.equal(await page.inputValue(`${row('222')} .tp-time`), await page.inputValue(`${row('111')} .tp-time`));
+  assert.match(await page.textContent('#sendBtn'), /（0 立即、2 排程）/);
+  // 清空：勾選與時間都重設
+  await page.click('#clearBtn');
+  await page.click('#cfYes');
+  assert.equal(await page.isChecked(`${row('111')} input[type=checkbox]`), false);
+  assert.equal(await page.textContent('#sendBtn'), '送出');
+  assert.deepEqual(errors, []);
+});
+
+test('排程時間不正確的粉專不送出、標示可重送，其他粉專照送', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await photo(page);
+  await page.check('.pg-row[data-page="111"] input[type=checkbox]');
+  await page.check('.pg-row[data-page="222"] input[type=checkbox]');
+  await page.click('.pg-row[data-page="222"] [data-when=sched]');
+  await page.fill('.pg-row[data-page="222"] .tp-time', '99');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#results .r-bad button');
+  assert.deepEqual(api.posts.map((p) => p.page), ['111']);
+  assert.match(await page.textContent('#results .r-bad'), /排程時間不正確/);
+  await page.click('.pg-row[data-page="222"] [data-add="60"]');
+  await page.click('#results .r-bad button');
+  await page.waitForFunction(() => document.querySelectorAll('#results .r-ok').length === 2);
+  assert.ok(api.posts[1].page === '222' && api.posts[1].scheduledAt);
   assert.deepEqual(errors, []);
 });
