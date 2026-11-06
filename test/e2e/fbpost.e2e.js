@@ -165,7 +165,7 @@ test('已排程分頁：改時間（成功更新列表、已發布顯示錯誤�
   assert.equal(api.reschedules[1].post, '111_7');
   const expect = Math.floor(Date.now() / 1000) + 7200 + 3600;
   assert.ok(Math.abs(api.reschedules[1].time - expect) < 120, '時間＝原排程＋1 小時');
-  await page.waitForFunction((b) => document.querySelector('#schedList .item:first-child .meta b').textContent !== b, before);
+  await page.waitForFunction((b) => { const el = document.querySelector('#schedList .item:first-child .meta b'); return !!el && el.textContent !== b; }, before);   // 列表重畫中可能暫時是空的
   assert.deepEqual(errors, []);
 });
 
