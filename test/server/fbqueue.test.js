@@ -192,6 +192,16 @@ test('processDue：已發布 → 留言成功 done', async () => {
   assert.equal(calls.filter((c) => c.path === '/v26.0/').length, 1);
 });
 
+test('processDue：兩個處理者同時跑同一筆只留言一次（搶租約）', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env);
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
+  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cm1' })]);
+  await Promise.all([q.processDue(env, Date.now()), q.processDue(env, Date.now())]);
+  assert.equal(calls.filter((c) => c.path === '/111_5/comments' || /\/111_5\/comments$/.test(c.path)).length, 1);
+  assert.equal(rows(env)[0].status, 'done');
+});
+
 test('processDue：同粉專多篇合併成一次 ids 查詢；不同粉專各一次', async () => {
   const env = mk(); const q = await Q();
   await enqueue(env, { post: '111_1' }); await enqueue(env, { post: '111_2' }); await enqueue(env, { page: '222', post: '222_1' });

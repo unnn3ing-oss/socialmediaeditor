@@ -10,6 +10,7 @@ import { tokenFor } from './fb.js';
 export const OFFSETS = [1, 3, 5, 7, 10, 15, 30, 60, 90, 120, 150, 180];
 const DEADLINE_MS = OFFSETS[OFFSETS.length - 1] * 1000;
 const DAY = 86400000;
+const LEASE_MS = 60000;
 export const COMMENT_KEEP_DAYS = 30;
 const NOT_PUBLISHED = '3 分鐘內沒偵測到貼文發布';
 const STATE_FIELDS = 'id,is_published,scheduled_publish_time';
@@ -151,7 +152,13 @@ export { photoToPost };
 export async function processDue(env, nowMs) {
   if (!env.DB) return { handled: 0 };
   await ensureTables(env);
-  const rows = await all(env, `SELECT * FROM fb_comments WHERE status='pending' AND next_check <= ? ORDER BY next_check LIMIT 200`, nowMs);
+  const due = await all(env, `SELECT * FROM fb_comments WHERE status='pending' AND next_check <= ? ORDER BY next_check LIMIT 200`, nowMs);
+  // 防重複留言：DO 鬧鐘與 cron 可能同時撿到同一筆，先用條件 UPDATE 搶租約（next_check 推到 60 秒後），搶到才處理
+  const rows = [];
+  for (const r of due) {
+    const c = await run(env, `UPDATE fb_comments SET next_check=? WHERE id=? AND status='pending' AND next_check=?`, nowMs + LEASE_MS, r.id, r.next_check);
+    if (c && c.meta && c.meta.changes === 1) rows.push(r);
+  }
   const byPage = new Map();
   for (const r of rows) { if (!byPage.has(r.page_id)) byPage.set(r.page_id, []); byPage.get(r.page_id).push(r); }
   for (const [page, items] of byPage) {
