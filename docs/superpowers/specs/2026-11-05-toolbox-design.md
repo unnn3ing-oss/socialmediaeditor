@@ -414,3 +414,4 @@ socialmediaeditor/
 | 1 | 網址 | `https://unnn3ing-oss.github.io/socialmediaeditor/` |
 | 2 | 外掛名稱 | 小編工具箱 |
 | 3 | 同事安裝方式 | ✅ 已定：比照網新快速排程（第 8.1 節） |
+| 4 | FB 粉專權杖取得與續期 | 方案保存於 `2026-11-06-fb-page-token.md`；待確認走 A（系統使用者）或 B（半自動續期） |
