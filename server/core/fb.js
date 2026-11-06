@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run } from './db.js';
-import { pageTokens, graphGet, graphPost, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
+import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts'];
 export const POST_METRICS = ['post_media_view', 'post_total_media_view_unique', 'post_clicks', 'post_reactions_by_type_total'];
@@ -13,6 +13,7 @@ export const MAX_MESSAGE = 63206;
 const MIN_SCHEDULE = 10 * 60, MAX_SCHEDULE = 30 * 86400;
 const PAGES_TTL = 600, POSTS_TTL = 60, INSIGHTS_TTL = 600;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const isPreset = (s) => typeof s === 'string' && /^\d{5,20}$/.test(s);
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 const isId = (s) => typeof s === 'string' && /^\d{1,30}$/.test(s);
@@ -293,7 +294,7 @@ async function readPostInput(request) {
     try { fd = await new Response(buf, { headers: { 'content-type': request.headers.get('content-type') } }).formData(); }
     catch (e) { return { error: 'bad_request' }; }
     const body = {};
-    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
+    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
     const img = fd.get('image');
     if (img && typeof img === 'object') body.image = img;
     return { body };
@@ -319,13 +320,20 @@ export function checkPost(b, now = nowSec()) {
     if (!IMAGE_TYPES.includes(String(image.type).toLowerCase())) return '圖片只支援 JPG、PNG、GIF、WebP。';
   }
   if (!message.trim() && !link && !image && !imageUrl) return '內文、連結、圖片至少要有一項。';
+  // 臉書原生彩色背景（text_format_preset_id，非官方）：只能用在純文字貼文
+  const textPreset = b.textPreset === undefined || b.textPreset === null || b.textPreset === '' ? '' : String(b.textPreset).trim();
+  if (textPreset) {
+    if (!isPreset(textPreset)) return '背景代碼格式不正確（應為數字）。';
+    if (link || image || imageUrl) return '彩色背景只能用在純文字貼文。';
+    if (!message.trim()) return '彩色背景需要內文。';
+  }
   let at = null;
   if (b.scheduledAt !== undefined && b.scheduledAt !== null && b.scheduledAt !== '') {
     at = Number(b.scheduledAt);
     if (!Number.isInteger(at)) return '排程時間格式不正確（Unix 秒數）。';
     if (at < now + MIN_SCHEDULE || at > now + MAX_SCHEDULE) return '排程時間要在 10 分鐘後到 30 天內。';
   }
-  return { page, message, link, imageUrl, image, at };
+  return { page, message, link, imageUrl, image, at, textPreset };
 }
 
 async function createPost(request, env) {
@@ -344,12 +352,34 @@ async function createPost(request, env) {
         source: v.image ? [v.image, v.image.name || 'image'] : undefined, ...sched
       });
     } else {
-      r = await graphPost(env, token, `/${v.page}/feed`, { message: v.message, link: v.link, ...sched });
+      r = await graphPost(env, token, `/${v.page}/feed`, { message: v.message, link: v.link, text_format_preset_id: v.textPreset || undefined, ...sched });
     }
     await audit(env, v.at ? 'post-scheduled' : 'post-published');
     return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at });
   } catch (e) {
     await audit(env, 'post-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
+    throw e;
+  }
+}
+
+// 取消排程：只刪「還沒發布」的貼文（先問臉書 is_published，已發布就拒絕，避免誤刪）
+async function cancelPost(request, env) {
+  const buf = await readBody(request, 4 * 1024);
+  if (!buf) return fail(request, env, 'too_large');
+  let b;
+  try { b = JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return fail(request, env, 'bad_request'); }
+  const post = b && typeof b.post === 'string' ? b.post : '';
+  if (!isPostId(post)) return fail(request, env, 'bad_request', '貼文 ID 格式不正確（應為 粉專ID_貼文ID）。');
+  const token = await tokenFor(env, post.split('_')[0]);
+  if (!token) return fail(request, env, 'fb_unknown_page');
+  const info = await graphGet(env, token, `/${post}`, { fields: 'is_published' });
+  if (info.is_published !== false) return fail(request, env, 'bad_request', '這篇已經發布，不能在這裡刪除。');
+  try {
+    await graphDelete(env, token, `/${post}`);
+    await audit(env, 'post-canceled');
+    return ok(request, env, { post, canceled: true });
+  } catch (e) {
+    await audit(env, 'cancel-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;
   }
 }
@@ -367,6 +397,7 @@ export async function handleFb(request, env, path) {
     if (path === '/fb/scheduled' && request.method === 'GET') return await listScheduled(request, env, q);
     if (path === '/fb/insights' && request.method === 'GET') return await insights(request, env, q);
     if (path === '/fb/post' && request.method === 'POST') return await createPost(request, env);
+    if (path === '/fb/cancel' && request.method === 'POST') return await cancelPost(request, env);
   } catch (e) {
     if (e instanceof GraphError && e.code === 'fb_token_invalid') await cacheDel(env, await pagesKey(env));
     return graphFail(request, env, e);

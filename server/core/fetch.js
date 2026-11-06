@@ -1,4 +1,4 @@
-import { ok, fail } from './http.js';
+import { ok, fail, corsHeaders } from './http.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
@@ -69,12 +69,70 @@ async function readText(res) {
   try { return new TextDecoder(charset).decode(buf); } catch (e) { return new TextDecoder().decode(buf); }
 }
 
+// 手動跟隨轉址，每一跳都重新檢查白名單；回 { res, u } 或 { error }
+async function follow(u, env, accept) {
+  for (let hop = 0; ; hop++) {
+    let res;
+    try {
+      res = await fetch(u.href, { redirect: 'manual', headers: { accept, 'user-agent': 'toolbox-api/1.0' } });
+    } catch (e) { return { error: '讀取失敗。' }; }
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      if (hop >= MAX_REDIRECTS) return { error: '轉址次數太多。' };
+      let next;
+      try { next = new URL(res.headers.get('location'), u); } catch (e) { return { error: '轉址網址不正確。' }; }
+      u = parseAllowed(next.href, env);
+      if (!u) return { error: '轉址到不允許的網址。' };
+      continue;
+    }
+    return { res, u };
+  }
+}
+
+// GET /fetch/image?url=：白名單網域的圖片代理（讓網頁能把文章主圖畫進 canvas 再匯出）
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+async function readCapped(res, max) {
+  const reader = res.body ? res.body.getReader() : null;
+  if (!reader) return new Uint8Array(0);
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) { try { await reader.cancel(); } catch (e) { /* 忽略 */ } return null; }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return buf;
+}
+
+async function handleImage(request, env) {
+  const raw = new URL(request.url).searchParams.get('url') || '';
+  if (raw.length > 1000) return fail(request, env, 'bad_request');
+  const start = parseAllowed(raw, env);
+  if (!start) return fail(request, env, 'bad_request', '只能讀取白名單內的 https 網址。');
+  const r = await follow(start, env, 'image/jpeg,image/png,image/gif,image/webp');
+  if (r.error) return fail(request, env, 'bad_request', r.error);
+  if (!r.res.ok) return fail(request, env, 'bad_request', '圖片讀取失敗（' + r.res.status + '）。');
+  const type = (r.res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!IMAGE_TYPES.includes(type)) return fail(request, env, 'bad_request', '只支援 JPG、PNG、GIF、WebP 圖片。');
+  const len = Number(r.res.headers.get('content-length'));
+  if (len > MAX_IMAGE_BYTES) return fail(request, env, 'too_large');
+  const buf = await readCapped(r.res, MAX_IMAGE_BYTES);
+  if (!buf) return fail(request, env, 'too_large');
+  return new Response(buf, { status: 200, headers: { ...corsHeaders(request, env), 'content-type': type, 'cache-control': 'private, max-age=600', 'x-content-type-options': 'nosniff' } });
+}
+
 export async function handleFetch(request, env, path) {
+  if (path === '/fetch/image' && request.method === 'GET') return handleImage(request, env);
   if (path !== '/fetch' || request.method !== 'GET') return null;
   const raw = new URL(request.url).searchParams.get('url') || '';
   if (raw.length > 500) return fail(request, env, 'bad_request');
-  let u = parseAllowed(raw, env);
-  if (!u) return fail(request, env, 'bad_request', '只能讀取白名單內的 https 網址。');
+  const start = parseAllowed(raw, env);
+  if (!start) return fail(request, env, 'bad_request', '只能讀取白名單內的 https 網址。');
 
   const cacheKey = 'fetch:' + raw;
   if (env.CACHE) {
@@ -82,22 +140,9 @@ export async function handleFetch(request, env, path) {
     if (hit) { try { return ok(request, env, JSON.parse(hit)); } catch (e) { /* 壞掉的快取，重抓 */ } }
   }
 
-  // 手動跟隨轉址，每一跳都重新檢查白名單
-  let res;
-  for (let hop = 0; ; hop++) {
-    try {
-      res = await fetch(u.href, { redirect: 'manual', headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': 'toolbox-api/1.0' } });
-    } catch (e) { return fail(request, env, 'bad_request', '讀取網頁失敗。'); }
-    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-      if (hop >= MAX_REDIRECTS) return fail(request, env, 'bad_request', '轉址次數太多。');
-      let next;
-      try { next = new URL(res.headers.get('location'), u); } catch (e) { return fail(request, env, 'bad_request'); }
-      u = parseAllowed(next.href, env);
-      if (!u) return fail(request, env, 'bad_request', '轉址到不允許的網址。');
-      continue;
-    }
-    break;
-  }
+  const r = await follow(start, env, 'text/html,application/xhtml+xml');
+  if (r.error) return fail(request, env, 'bad_request', r.error === '讀取失敗。' ? '讀取網頁失敗。' : r.error);
+  const { res, u } = r;
   if (!res.ok) return fail(request, env, 'bad_request', '網頁讀取失敗（' + res.status + '）。');
 
   const meta = parseMeta(await readText(res));

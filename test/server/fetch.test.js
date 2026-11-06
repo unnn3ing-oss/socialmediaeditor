@@ -101,3 +101,42 @@ test('最多只讀 2 MB', async () => {
   assert.equal(body.data.title, '前面的標題');
   assert.equal(body.data.image, '');
 });
+
+// ---- /fetch/image：白名單圖片代理 ----
+async function getImg(env, target) {
+  const w = await load();
+  return w.fetch(new Request('https://api.test/fetch/image?url=' + encodeURIComponent(target), { headers: { origin: ORIGIN } }), env, { waitUntil() {} });
+}
+const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+
+test('圖片代理：白名單圖片原樣回傳，帶 CORS 與圖片類型', async () => {
+  handler = () => new Response(PNG, { headers: { 'content-type': 'image/png' } });
+  const res = await getImg(mkEnv(), 'https://cc.tvbs.com.tw/img/a.png');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
+  assert.deepEqual(new Uint8Array(await res.arrayBuffer()), PNG);
+});
+
+test('圖片代理：白名單外、不是圖片、轉址到白名單外都拒絕', async () => {
+  let res = await getImg(mkEnv(), 'https://evil.com/a.png');
+  assert.equal(res.status, 400);
+  assert.equal(calls.length, 0);
+  handler = () => new Response('<html>', { headers: { 'content-type': 'text/html' } });
+  res = await getImg(mkEnv(), 'https://tvbs.com.tw/a.png');
+  assert.equal((await res.json()).code, 'bad_request');
+  handler = () => new Response(null, { status: 302, headers: { location: 'https://evil.com/x.png' } });
+  res = await getImg(mkEnv(), 'https://tvbs.com.tw/a.png');
+  assert.equal(res.status, 400);
+  assert.equal(calls.length, 2);
+});
+
+test('圖片代理：超過 10 MB 回 too_large（不管有沒有 content-length）', async () => {
+  handler = () => new Response(new Uint8Array(10), { headers: { 'content-type': 'image/jpeg', 'content-length': String(11 * 1024 * 1024) } });
+  let res = await getImg(mkEnv(), 'https://tvbs.com.tw/a.jpg');
+  assert.equal((await res.json()).code, 'too_large');
+  const big = new Uint8Array(1024 * 1024);
+  handler = () => new Response(new ReadableStream({ start(c) { for (let i = 0; i < 11; i++) c.enqueue(big); c.close(); } }), { headers: { 'content-type': 'image/jpeg' } });
+  res = await getImg(mkEnv(), 'https://tvbs.com.tw/b.jpg');
+  assert.equal((await res.json()).code, 'too_large');
+});

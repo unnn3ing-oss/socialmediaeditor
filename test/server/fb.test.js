@@ -490,3 +490,70 @@ test('授權範圍備援：單一粉專一直出錯（code 803）只略過它，
   assert.deepEqual((await getJ(env, '/fb/pages')).body.data.map((p) => p.id), ['555']);
   assert.ok(hasPagesCache(env));
 });
+
+// ---- 取消排程、原生彩色背景 ----
+async function cancelJ(env, body) {
+  const res = await call('/fb/cancel', { method: 'POST', headers: { ...(await auth(env)), 'content-type': 'application/json' }, body: JSON.stringify(body) }, env);
+  const text = await res.text();
+  return { res, text, body: JSON.parse(text) };
+}
+
+test('取消排程：未發布 → DELETE、稽核 post-canceled；回應不含 token', async () => {
+  const env = fbEnv();
+  routes.push([/\/111_9$/, (url, init) => (init.method === 'DELETE' ? reply({ success: true }) : reply({ id: '111_9', is_published: false }))]);
+  const { res, body, text } = await cancelJ(env, { post: '111_9' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.data, { post: '111_9', canceled: true });
+  const del = calls.find((c) => c.init.method === 'DELETE');
+  assert.ok(del && del.path.endsWith('/111_9'));
+  assert.equal(del.tok, TOKEN_A);
+  noToken(text);
+  assert.ok(env.DB.raw.prepare('SELECT code FROM logs').all().some((r) => r.code === 'post-canceled'));
+});
+
+test('取消排程：已發布的貼文拒絕，不會 DELETE', async () => {
+  const env = fbEnv();
+  routes.push([/\/111_9$/, () => reply({ id: '111_9', is_published: true })]);
+  const { res, body } = await cancelJ(env, { post: '111_9' });
+  assert.equal(res.status, 400);
+  assert.match(body.error, /已經發布/);
+  assert.ok(!calls.some((c) => c.init.method === 'DELETE'));
+});
+
+test('取消排程：ID 格式錯、未知粉專', async () => {
+  const env = fbEnv();
+  assert.equal((await cancelJ(env, { post: '111' })).body.code, 'bad_request');
+  assert.equal((await cancelJ(env, { post: '../me' })).body.code, 'bad_request');
+  assert.equal((await cancelJ(env, { post: '999_1' })).body.code, 'fb_unknown_page');
+  assert.ok(!calls.some((c) => c.init.method === 'DELETE'));
+});
+
+test('取消排程：臉書刪除失敗 → 錯誤碼對應、稽核 cancel-failed', async () => {
+  const env = fbEnv();
+  routes.push([/\/111_9$/, (url, init) => (init.method === 'DELETE' ? fbErr(200, 'Permissions error ' + TOKEN_A, 403) : reply({ is_published: false }))]);
+  const { res, body, text } = await cancelJ(env, { post: '111_9' });
+  assert.equal(res.status, 403);
+  assert.equal(body.code, 'fb_permission');
+  noToken(text);
+  assert.ok(env.DB.raw.prepare('SELECT code FROM logs').all().some((r) => r.code === 'cancel-failed-200'));
+});
+
+test('原生彩色背景：純文字帶 text_format_preset_id；有圖或連結就拒絕', async () => {
+  const env = fbEnv();
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_5' })]);
+  const okR = await postJ(env, { page: '111', message: '今天天氣好', textPreset: '106018623298955' });
+  assert.equal(okR.res.status, 200);
+  const sent = calls.find((c) => c.path.endsWith('/111/feed'));
+  assert.equal(sent.init.body.get('text_format_preset_id'), '106018623298955');
+  assert.match((await postJ(env, { page: '111', message: 'x', textPreset: 'abc' })).body.error, /背景代碼/);
+  assert.match((await postJ(env, { page: '111', message: 'x', link: 'https://a.tw', textPreset: '12345' })).body.error, /純文字/);
+  assert.match((await postJ(env, { page: '111', message: ' ', textPreset: '12345' })).body.error, /至少|需要內文/);
+});
+
+test('一般文字貼文不帶 text_format_preset_id', async () => {
+  const env = fbEnv();
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_6' })]);
+  await postJ(env, { page: '111', message: '一般' });
+  const sent = calls.find((c) => c.path.endsWith('/111/feed'));
+  assert.equal(sent.init.body.get('text_format_preset_id'), null);
+});

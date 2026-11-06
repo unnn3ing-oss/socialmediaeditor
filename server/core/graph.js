@@ -68,6 +68,18 @@ export async function graphGet(env, token, path, params = {}) {
   return parse(env, res);
 }
 
+// DELETE：token 放在查詢字串（同 GET）
+export async function graphDelete(env, token, path) {
+  const u = new URL(graphBase(env) + path);
+  u.searchParams.set('access_token', token);
+  const proof = await appsecretProof(env, token);
+  if (proof) u.searchParams.set('appsecret_proof', proof);
+  let res;
+  try { res = await fetch(u.toString(), { method: 'DELETE' }); }
+  catch (e) { throw new GraphError('fb_unreachable', '連不到臉書。', null); }
+  return parse(env, res);
+}
+
 // POST：一律用 multipart，token 放在本文；fields 的值可以是字串或 Blob（附檔名用 [blob, name]）
 export async function graphPost(env, token, path, fields = {}) {
   const fd = new FormData();
