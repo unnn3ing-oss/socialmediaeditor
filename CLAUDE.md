@@ -64,10 +64,10 @@
 ## 目前進度
 > 只寫狀態，細節一律看規格 §〇，不在這裡重複。每版推上 main 時更新（見「作業流程」第 5 條）。
 
-- **目前在哪**：P1 通用做圖工具已併入 main（見規格 §9）。P2 第一段已併入 main：臉書後端 `/fb/*`（`FB_TOKEN` 可放用戶或粉專 token；`/me/accounts` 查不到時改用授權範圍換粉專 token）＋「排程發布」工具（`tools/fbpost`，公司專屬：作圖框／純文字底圖／原生背景／無底色、多粉專且每個粉專各自立即或排程、已排程取消、成效）。交接檔：`docs/handoff/2026-11-06-fb-backend.md`、`docs/handoff/2026-11-06-fbpost-tool.md`。
-- **下一步**：使用者部署後端並實測排程發布；有問題開新版修。之後 P2 其餘項目（§9）。
+- **目前在哪**：P1 通用做圖工具已併入 main（見規格 §9）。P2 第一段已併入 main：臉書後端 `/fb/*` ＋「排程發布」（`tools/fbpost`）。**排程發布 v2 已併入 main**：新增發文照網新快速排程重做（貼網址自動帶入、網新標題斷行與小編文格式，共用 `sdk/news-*.js`）、留言小編文＋發文後自動留言（D1 `fb_comments`＋Durable Object `CommentHub` 鬧鐘＋每分鐘 cron 對時，3 分鐘上限工具內通知）、已排程改時間、後台粉專對應（簡稱／utm）；圖片套版補回快速填入。交接檔：`docs/handoff/2026-11-06-fbpost-v2.md`（前版：`2026-11-06-fb-backend.md`、`2026-11-06-fbpost-tool.md`）。
+- **下一步**：使用者改 `server/wrangler.toml`（crons 加 `"* * * * *"`、`COMMENT_HUB` Durable Object binding＋migration `new_sqlite_classes = ["CommentHub"]`）→ 部署後端 → 實測；有問題開新版修。之後 P2 其餘項目（§9）。
 - **待辦**：
-  - [ ] 使用者部署後端（`cd server && npx wrangler deploy`）並實測：排程一篇 → 已排程分頁取消；臉書原生背景代碼需實測
+  - [ ] 使用者部署後端並實測：排程一篇有圖片貼文 → 發出後 10 秒內留言、留在正確貼文（照片 ID 換貼文 ID 需實測）；臉書後台改時間留言跟隨；工具內改時間／取消；token 需有 `pages_manage_engagement`；臉書原生背景代碼需實測
   - [ ] 使用者在後端管理頁上傳公司素材 16 個檔（代號見 `assets-public/README.md`），上傳後實測有密碼畫面（§5.3）
   - [ ] fb 版本 2：OAuth 半自動續期（2027-01 前，token 存 KV＋AES-GCM、`FB_TOKEN_KEY`；提醒管道未定，見 `docs/superpowers/specs/2026-11-06-fb-page-token.md`）
   - [ ] P2：網新排程（最後再考慮，搬入時管理頁保留「發文方式」切換）、YT 下載、外掛模組（§9）
