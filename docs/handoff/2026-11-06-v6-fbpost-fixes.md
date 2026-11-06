@@ -14,13 +14,13 @@
 ## 做法（改哪裡）
 | # | 檔案 | 狀態 |
 |---|---|---|
-| 1 | ui/tokens.css、shell/shell.css、shell/install.css、server/core/admin-page.js、tools/{fbpost,design,pattern,linepush}/*.css、collage/resize/watermark 的 base.css、segmented.css | ⬜ |
-| 2–3 | tools/fbpost/index.html、tool.js、tool.css | ⬜ |
-| 4 | tools/fbpost/tool.js、server/core/fb.js、test | ⬜ |
+| 1 | ui/tokens.css、shell/shell.css、shell/install.css、server/core/admin-page.js、tools/{fbpost,design,pattern,linepush}/*.css、collage/resize/watermark 的 base.css、segmented.css | ✅ |
+| 2–3 | tools/fbpost/index.html、tool.js、tool.css | ✅ |
+| 4 | tools/fbpost/tool.js、server/core/fb.js、test | ✅ |
 
 ## 下一步
-- [ ] 1 字重　- [ ] 2 排序　- [ ] 3 文字預覽　- [ ] 4 載入更多＋測試
-- [ ] build／npm test／全部 e2e　- [ ] 審查　- [ ] 截圖給使用者　- [ ] 使用者說「推」才併 main（同 commit 更新 CLAUDE.md）
+- [x] 1–4 完成（b380153）
+- [x] unit 300、e2e 79；審查有條件通過，修 loadStats 競態（40a0c2a）；截圖已給使用者　- [ ] 使用者說「推」才併 main（同 commit 更新 CLAUDE.md）
 
 ## 注意事項
 - 改 tools/ 後跑 `node build.js`。不動畫布繪製、extension/。
