@@ -302,15 +302,16 @@ setInterval(() => { if (document.visibilityState === 'visible') pollFailed(); },
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pollFailed(); });
 
 // ---------- 成效 ----------
-let statsLoaded = false, statsNext = null, statsBusy = false;
+let statsLoaded = false, statsNext = null, statsBusy = false, statsSeq = 0;
 const METRIC_NAMES = { post_media_view: '瀏覽', post_total_media_view_unique: '觸及人數', post_clicks: '點擊' };
 async function loadStats(reset) {
   const page = $('statsPage').value;
   const list = $('statsList'), hint = $('statsHint'), more = $('statsMore'), moreHint = $('statsMoreHint');
   if (statsBusy && !reset) return;
+  const seq = ++statsSeq; // 切換粉專（reset）時，舊請求回來要丟掉
   if (reset) { list.replaceChildren(); statsNext = null; more.hidden = true; }
   moreHint.textContent = '';
-  if (!page) { hint.textContent = '沒有粉專'; return; }
+  if (!page) { statsBusy = false; more.disabled = false; more.textContent = '載入更多'; hint.textContent = '沒有粉專'; return; }
   statsLoaded = true;
   statsBusy = true;
   if (reset) hint.textContent = '讀取中…';
@@ -318,6 +319,7 @@ async function loadStats(reset) {
   setBusy(list, true);
   try {
     const r = await tb.api.call(`/fb/posts?page=${page}&limit=10` + (statsNext ? '&after=' + encodeURIComponent(statsNext) : ''));
+    if (seq !== statsSeq) return;
     setBusy(list, false);
     statsNext = r.next;
     more.hidden = !statsNext;
@@ -325,13 +327,13 @@ async function loadStats(reset) {
     list.append(...r.items.map(statRow));
     if (!list.children.length) hint.textContent = '沒有貼文';
   } catch (e) {
+    if (seq !== statsSeq) return;
     setBusy(list, false);
     // 第一頁失敗寫在上方；「載入更多」失敗寫在按鈕旁，按鈕留著可以再按
     if (reset || !list.children.length) hint.textContent = '讀取失敗：' + errText(e);
     else moreHint.textContent = '讀取失敗：' + errText(e);
   } finally {
-    statsBusy = false;
-    more.disabled = false; more.textContent = '載入更多';
+    if (seq === statsSeq) { statsBusy = false; more.disabled = false; more.textContent = '載入更多'; }
   }
 }
 function statRow(p) {
