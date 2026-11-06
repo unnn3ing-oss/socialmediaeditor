@@ -13,7 +13,8 @@
 3. 使用者明確說「**推**」才併入 `main`。Stop hook 提醒「有未提交變更」時，回「Not committing until you say OK」並列出檔案。
 4. 沒有使用者要求不開 PR。
 5. **每版推上 main 時，同一個 commit 一起更新本檔最後的「目前進度」**（目前在哪、下一步、待辦），下一個對話才接得上。
-6. commit 結尾兩行：`Co-Authored-By: <實際模型> <noreply@anthropic.com>` 與 `Claude-Session: <本次 session 連結>`。
+6. **交接檔（handoff）**：使用者確認「開始」後、動手改程式前，先寫 `docs/handoff/<日期>-<主題>.md`（格式見 `docs/handoff/README.md`），commit 並推到開發分支。做到一個段落（或用量快用完）就更新同一份再推。目的是任一邊用量用完時，另一個 AI 讀這份就能接著做。新對話開頭若給了 handoff 路徑和分支，先 `git fetch` 那個分支讀它。
+7. commit 結尾兩行：`Co-Authored-By: <實際模型> <noreply@anthropic.com>` 與 `Claude-Session: <本次 session 連結>`。
 
 ## 省 token 規則
 1. **一個版本一個對話**：版本併入 main 後就開新對話。開頭只寫「接著做 X.YZ：〇〇」，不貼歷史脈絡（流程看本檔，設計看 spec）。
