@@ -40,6 +40,7 @@ QuickPatterntool、LinePushPatternTool、-schedulenewnet、videodownload 的網�
 | 做圖 | 浮水印 | QuickPatterntool `watermark.*` | 通用（公司 Logo 另外解鎖） | — |
 | 做圖 | 尺寸 | QuickPatterntool `resize.*` | 通用 | — |
 | 做圖 | 設計 | QuickPatterntool `design-*` | 通用 | — |
+| 發文與素材 | 排程發布 | 新做（介面參照網新排程 `#modal`） | **公司專屬** | 後端 `/fb/*`（Graph API） |
 | 發文與素材 | 網新排程 | -schedulenewnet `web/` | **公司專屬** | 外掛、網新登入 |
 | 發文與素材 | YT 批量下載 | videodownload `web/` | 通用 | 外掛、本機下載助手 |
 
@@ -288,8 +289,8 @@ socialmediaeditor/
 | assets | `GET /assets/manifest`、`GET /assets/<key>` | 依憑證回傳公司版或通用版清單與檔案 | R2＋D1 |
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
-| fetch | `GET /fetch?url=` | 代抓公開網頁的標題與 OG 圖；只允許白名單網域 | KV 快取 |
-| fb | `GET /fb/pages`、`/fb/posts`、`/fb/scheduled`、`/fb/insights`、`POST /fb/post`、`GET /admin/fb` | 臉書粉專：清單、貼文成效、發文／排程（需公司憑證）；管理頁檢查 token 狀態。只放行這些動作，不做萬用代理 | 粉專 token 放 Secrets（`FB_TOKEN`），KV 快取 |
+| fetch | `GET /fetch?url=`、`GET /fetch/image?url=` | 代抓公開網頁的標題與 OG 圖；圖片代理（只收 JPG／PNG／GIF／WebP、≤10 MB，讓網頁能把主圖畫進畫布）；只允許白名單網域、轉址逐跳檢查 | KV 快取（網頁資訊） |
+| fb | `GET /fb/pages`、`/fb/posts`、`/fb/scheduled`、`/fb/insights`、`POST /fb/post`、`POST /fb/cancel`、`GET /admin/fb` | 臉書粉專：清單、貼文成效、發文／排程、取消排程（只刪未發布；需公司憑證）；管理頁檢查 token 狀態。只放行這些動作，不做萬用代理 | 粉專 token 放 Secrets（`FB_TOKEN`），KV 快取 |
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
 | rundown | `/t/sched/rundown` | 轉送 Rundown 到 Apps Script（從 `snn-images` 複製） | Secrets |
 | cron | 每日 | 清理過期圖床檔案、日誌 | — |

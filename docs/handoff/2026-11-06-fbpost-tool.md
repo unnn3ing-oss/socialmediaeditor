@@ -34,14 +34,14 @@
 | `tools/fbpost/TOOL.md`、`icon.svg`、`thumb.svg` | 說明與圖示 | ✅ |
 | `tools/registry.json` → `node build.js` | 加 `fbpost` | ✅ |
 | `test/e2e/fbpost.e2e.js` | 假後端：送出（單／多粉專、一個失敗再重送）、取消排程、彈窗關閉再開內容還在、清空、分頁切換保留 | ✅ |
-| 規格 §1 表、§6 fb 列 | 加「排程發布」一列、新路由 | ⬜ |
+| 規格 §1 表、§6 fb 列 | 加「排程發布」一列、新路由 | ✅ |
 
 ## 下一步
 - [x] 後端：graphDelete、/fb/cancel、textPreset、/fetch/image ＋ 單元測試（`npm test` 239 過）
 - [x] 前端：editor.js、textcard.js
 - [x] 前端：index.html、tool.css、tool.js、tool.json、TOOL.md、registry、build；SDK `tb.api.call` 的 body 可傳 FormData
 - [x] e2e（`test/e2e/fbpost.e2e.js` 7 過）＋截圖給使用者
-- [ ] 規格 §1、§6 補排程發布與新路由
+- [x] 規格 §1、§6 補排程發布與新路由
 - [ ] 獨立代理審查（sonnet）
 - [ ] 使用者部署（`git pull origin claude/fb-backend` → `cd server && npx wrangler deploy`）＋網站測試；說「推」才併 main，同 commit 更新 CLAUDE.md 目前進度
 
