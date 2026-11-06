@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=7e6191d058"
+      "entry": "tools/linepush/index.html?v=a8e2f3e166"
     },
     {
       "id": "collage",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=9e3dfbcf12"
+      "entry": "tools/watermark/index.html?v=edf43a56fe"
     },
     {
       "id": "resize",
