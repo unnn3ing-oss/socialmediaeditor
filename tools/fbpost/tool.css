@@ -9,6 +9,7 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 .grow { flex: 1; }
 .hint { margin: 0; font-size: 13px; color: var(--muted); }
 .hint.warn { color: var(--warn-text); }
+.hint.ok { color: var(--ok-text); }
 .muted { color: var(--muted); font-weight: 400; }
 .bad { color: var(--bad) !important; }
 
