@@ -65,8 +65,15 @@ test('側邊欄：版面同網新快速排程，發文頁在側邊欄解鎖後�
   await p.setViewportSize({ width: 400, height: 760 });
   await p.goto(`chrome-extension://${EXT_ID}/core/sidepanel.html`);
 
-  // 頂列只有「網頁版」，沒有網新「舊版」
-  assert.deepEqual(await p.$$eval('.top-btns .btn', (b) => b.map((x) => x.textContent.trim())), ['網頁版']);
+  // 頂列：分頁右邊一顆圓形「網頁版」圖示（游標移上去才顯示文字），沒有網新「舊版」
+  assert.equal(await p.locator('.top button:not([role=tab])').count(), 1);
+  assert.equal(await p.getAttribute('#openSite', 'data-tip'), '網頁版');
+  const tipOpacity = () => p.$eval('#openSite', (b) => getComputedStyle(b, '::after').opacity);
+  assert.equal(await tipOpacity(), '0');
+  await p.hover('#openSite');
+  await p.waitForFunction(() => getComputedStyle(document.getElementById('openSite'), '::after').opacity === '1');
+  await p.screenshot({ path: process.env.SHOT_DIR ? path.join(process.env.SHOT_DIR, 'sp-0-tip.png') : path.join(dir, 'z.png'), clip: { x: 0, y: 0, width: 400, height: 120 } });
+  await p.mouse.move(200, 400);
   assert.equal(await p.getAttribute('#tabPost', 'aria-selected'), 'true');
 
   // 發文頁：沒憑證 → 解鎖卡片；輸入密碼後才載入工具

@@ -8,13 +8,15 @@
 </head>
 <body class="sp">
 <header class="top">
-  <div class="top-btns">
-    <button type="button" class="btn btn-primary" id="openSite" title="在新分頁開啟小編工具箱">網頁版</button>
+  <div class="top-row">
+    <nav class="tabs" role="tablist" aria-label="側邊欄">
+      <button type="button" role="tab" id="tabPost" aria-controls="panePost" aria-selected="true">發文</button>
+      <button type="button" role="tab" id="tabInfo" aria-controls="paneInfo" aria-selected="false">狀態與更新<span class="dot" id="infoDot" hidden>新</span></button>
+    </nav>
+    <button type="button" class="icon-btn" id="openSite" aria-label="網頁版（在新分頁開啟小編工具箱）" data-tip="網頁版">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+    </button>
   </div>
-  <nav class="tabs" role="tablist" aria-label="側邊欄">
-    <button type="button" role="tab" id="tabPost" aria-controls="panePost" aria-selected="true">發文</button>
-    <button type="button" role="tab" id="tabInfo" aria-controls="paneInfo" aria-selected="false">狀態與更新<span class="dot" id="infoDot" hidden>新</span></button>
-  </nav>
 </header>
 
 <!-- 發文：嵌入網站的單一工具外殼（panel.html），流程和網頁版的「排程發布」相同 -->

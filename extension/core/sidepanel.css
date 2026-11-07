@@ -52,9 +52,19 @@ h1{margin:0;font-size:18px;font-weight:700}h2{margin:0 0 8px;font-size:15px;font
 
 /* 版面（照網新快速排程）：頂列＋分頁；發文分頁是整塊 iframe */
 body.sp{height:100vh;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.top{flex:none;padding:12px 12px 0;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);background:var(--surface)}
-.top-btns{display:flex;gap:8px}.top-btns .btn{flex:1 1 0;white-space:nowrap}
-.tabs{display:flex;gap:4px}
+.top{flex:none;padding:4px 8px 0 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.top-row{display:flex;align-items:center;gap:8px}
+.tabs{display:flex;gap:4px;flex:1 1 auto;min-width:0}
+/* 「網頁版」：圓形圖示鈕，游標移上去（或鍵盤聚焦）才顯示文字 */
+.icon-btn{position:relative;flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface);color:var(--btn-text);
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .08s ease,border-color .08s ease,color .08s ease}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+.icon-btn:active{transform:scale(.95);background:var(--accent-soft)}
+.icon-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.icon-btn::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:0;z-index:5;padding:4px 10px;border-radius:8px;background:#202124;color:#fff;
+  font-size:12px;font-weight:500;white-space:nowrap;pointer-events:none;opacity:0;transform:translateY(-2px);transition:opacity .12s ease,transform .12s ease}
+.icon-btn:hover::after,.icon-btn:focus-visible::after{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.icon-btn,.icon-btn::after{transition:none}}
 .tabs button{flex:1 1 0;min-height:44px;border:0;background:none;padding:0;font:inherit;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
 .tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
 .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
