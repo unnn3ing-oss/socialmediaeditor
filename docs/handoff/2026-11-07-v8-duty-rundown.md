@@ -1,5 +1,5 @@
 # v8：值班粉專＋排入 Rundown（排程發布 fbpost）
-- 狀態：進行中　- 分支：`claude/modest-dirac-cblt5b`（從 main ae1abd9 起）　- 最後更新：2026-11-07
+- 狀態：**已完成**（2026-11-07 併入 main）　- 分支：`claude/modest-dirac-cblt5b`（從 main ae1abd9 起）　- 最後更新：2026-11-07
 - 使用者原話：「在當前瀏覽器初次點入排程發布功能時，會跳出值班負責粉專，讓新增發文、已排程、成效都預設選擇或顯示都為該選擇的粉專（其他的不會優先顯示但是還在）」；「把原本網新快速排程我做的『排入RD』搬過來」。Microsoft OAuth：使用者說「放棄」。
 
 ## 已定案的決定
@@ -34,7 +34,7 @@
 - [x] 依上表 1→6（unit 316 過；fbpost e2e 新增 4 支：值班×2、Rundown×2，舊「Rundown 尚未連接」測試換掉；舊測試用 open() 預設按「先不選」）
 - [x] 全部 e2e 85 過（sidepanel 測試加上值班視窗操作）、build --check 過
 - [x] 審查代理：有條件通過，已修 2 處（localStorage 被擋時不會整個掛掉、過期改用記憶體中的 exp 判斷）
-- [ ] 截圖給使用者 → 等「推」（推時同 commit 更新 CLAUDE.md 目前進度）
+- [x] 截圖給使用者；使用者說「推」併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試
 `npm test`、`npm run e2e`（沙盒 chromium `/opt/pw-browsers/chromium`）、`node build.js --check`
