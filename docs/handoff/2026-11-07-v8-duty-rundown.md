@@ -23,16 +23,16 @@
 ## 做法（改哪裡）
 | # | 檔案 | 狀態 |
 |---|---|---|
-| 1 | `server/core/rundown.js`（新）、`server/index.js` 掛路由、`test/server/rundown.test.js` | ⬜ |
-| 2 | `tools/fbpost/rundown.js`（純函式＋開關）、`test/` 單元測試（照搬 rundown.test.js 相關部分） | ⬜ |
-| 3 | `tools/fbpost/index.html`／`tool.js`／`tool.css`：Rundown 開關、SLUG、⚙ 視窗、送出後寫入 | ⬜ |
-| 4 | `tools/fbpost/*`：值班粉專（頂列按鈕、選擇視窗、排序／預勾／下拉預設、05:00 到期） | ⬜ |
-| 5 | e2e：值班＋Rundown | ⬜ |
-| 6 | 文件：`tools/fbpost/TOOL.md`、後端部署說明加 Secrets | ⬜ |
+| 1 | `server/core/rundown.js`（新）、`server/index.js` 掛路由、`test/server/rundown.test.js` | ✅ |
+| 2 | `tools/fbpost/rundown.js`（純函式＋開關）、`test/` 單元測試（照搬 rundown.test.js 相關部分） | ✅ |
+| 3 | `tools/fbpost/index.html`／`tool.js`／`tool.css`：Rundown 開關、SLUG、⚙ 視窗、送出後寫入 | ✅ |
+| 4 | `tools/fbpost/*`：值班粉專（頂列按鈕、選擇視窗、排序／預勾／下拉預設、05:00 到期） | ✅ |
+| 5 | e2e：值班＋Rundown | ✅ |
+| 6 | 文件：`tools/fbpost/TOOL.md`、後端部署說明加 Secrets | ✅ |
 
 ## 下一步
-- [ ] 依上表 1→6
-- [ ] 跑 `npm test`、`npm run e2e`、`node build.js --check`
+- [x] 依上表 1→6（unit 316 過；fbpost e2e 新增 4 支：值班×2、Rundown×2，舊「Rundown 尚未連接」測試換掉；舊測試用 open() 預設按「先不選」）
+- [ ] 全部 e2e、`node build.js --check`
 - [ ] 審查代理 → 截圖給使用者 → 等「推」
 
 ## 測試

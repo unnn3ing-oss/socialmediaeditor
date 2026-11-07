@@ -5,10 +5,12 @@
 // 後端：/fb/pages、/fb/post（multipart）、/fb/scheduled、/fb/cancel、/fb/reschedule、/fb/comments、/fb/comment/retry、/fb/comment/dismiss、
 //       /fb/posts、/fb/insights、/fetch/article、/fetch/image。
 import { tb } from '../../sdk/toolbox.js';
-import { autoLines, buildLink, frameForUrl, charWidth } from '../../sdk/news-rules.js';
+import { autoLines, buildLink, frameForUrl, charWidth, articleId } from '../../sdk/news-rules.js';
 import { parseArticle, formatCopy, mainCaption, overrideOneLine, bindTitle, learnSeps, titleAsOneLine, replaceTitleLine } from '../../sdk/news-article.js';
 import * as Sched from '../../sdk/news-sched.js';
 import { createPhotoEditor } from './editor.js';
+import * as Duty from './duty.js';
+import * as RD from './rundown.js';
 import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
 
 tb.init('fbpost');
@@ -126,17 +128,106 @@ async function loadPages(refresh = false) {
     st.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : e.code === 'fb_not_configured' ? '後端還沒設定臉書 token' : '粉專讀取失敗：' + errText(e);
   }
   renderPageChips();
+  fillSelects(!selInit);
+  selInit = true;
+  loadSched();
+  statsLoaded = false;
+  if (!$('tab-stats').hidden) loadStats(true);
+  renderDutyBtn();
+  if (pages.length && !duty && !dutyAsked) openDuty();
+}
+$('pagesRefresh').addEventListener('click', () => loadPages(true));
+
+// ---------- 值班粉專（1～3 個，★主要）：只影響預設，其他粉專照樣可選；到下一個 05:00 失效 ----------
+let duty = Duty.loadDuty();
+let dutyAsked = false;   // 這次開頁面已經問過（按了「先不選」）就不再自動跳
+let selInit = false;
+const ordered = () => Duty.orderPages(pages, duty);
+const mainId = () => Duty.mainOf(pages, duty);
+// 下拉：值班粉專排前面；useDuty＝改成主要粉專（第一次載入、值班換了）
+function fillSelects(useDuty) {
+  const list = ordered(), main = mainId();
   for (const sel of [$('schedPage'), $('statsPage')]) {
     const keep = sel.value;
     sel.replaceChildren(...(sel.id === 'schedPage' ? [el('option', { value: '', textContent: '全部粉專' })] : []),
-      ...pages.map((p) => el('option', { value: p.id, textContent: p.name })));
-    if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+      ...list.map((p) => el('option', { value: p.id, textContent: p.name })));
+    if (useDuty && main) sel.value = main;
+    else if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
   }
+}
+function renderDutyBtn() {
+  const b = $('dutyBtn');
+  b.hidden = !pages.length;
+  const list = duty ? ordered().filter((p) => duty.ids.includes(p.id)) : [];
+  b.classList.toggle('unset', !list.length);
+  b.textContent = list.length ? '值班：' + list.map((p) => (p.id === duty.main ? '★' : '') + pageLabel(p)).join('、') + ' ▾' : '值班：未選 ▾';
+  b.title = list.length ? '每天 05:00 後要重選；點這裡修改' : '選擇今天負責的粉專';
+}
+// 值班換了：重排晶片、下拉改成主要粉專、沒在發文中的晶片改成只預勾主要
+function onDutyChanged() {
+  renderDutyBtn();
+  if (!modal.open) for (const c of chips.values()) if (!c.status) { c.on = c.id === mainId(); c.sched = false; c.at = null; }
+  renderPageChips();
+  fillSelects(true);
   loadSched();
   statsLoaded = false;
   if (!$('tab-stats').hidden) loadStats(true);
 }
-$('pagesRefresh').addEventListener('click', () => loadPages(true));
+// 過期就清掉（全部空白重選）；回傳是否過期
+function dutyExpired() {
+  if (!duty || Duty.loadDuty()) return false;
+  duty = null; dutyAsked = false;
+  onDutyChanged();
+  return true;
+}
+let dutyResolve = null;
+function openDuty() {
+  const dlg = $('dutyDlg');
+  if (dlg.open) return new Promise((r) => { const prev = dutyResolve; dutyResolve = (v) => { prev && prev(v); r(v); }; });
+  const pick = duty ? { ids: duty.ids.filter((id) => pages.some((p) => p.id === id)), main: duty.main } : { ids: [], main: '' };   // 過期或沒選＝空白
+  const list = $('dutyList');
+  function render() {
+    if (!pick.ids.includes(pick.main)) pick.main = pick.ids[0] || '';
+    list.replaceChildren(...pages.map((p) => {
+      const on = pick.ids.includes(p.id), isMain = on && pick.main === p.id, full = !on && pick.ids.length >= Duty.MAX_DUTY;
+      const item = el('div', { className: 'duty-item' + (on ? ' on' : '') + (isMain ? ' main' : ''), dataset: { page: p.id } });
+      const name = el('button', { type: 'button', className: 'duty-pick', disabled: full, title: full ? `最多 ${Duty.MAX_DUTY} 個` : p.name },
+        el('span', { className: 'box', textContent: on ? '✓' : '' }), el('span', { className: 'duty-name', textContent: pageLabel(p) }));
+      name.setAttribute('aria-pressed', String(on));
+      name.addEventListener('click', () => { if (on) pick.ids = pick.ids.filter((x) => x !== p.id); else pick.ids.push(p.id); render(); list.querySelector(`[data-page="${p.id}"] .duty-pick`).focus(); });
+      item.append(name);
+      if (on) {
+        const star = el('button', { type: 'button', className: 'duty-star', textContent: isMain ? '★' : '☆' });
+        star.setAttribute('aria-label', isMain ? `${pageLabel(p)}是主要粉專` : `把${pageLabel(p)}設成主要`);
+        star.setAttribute('aria-pressed', String(isMain));
+        star.addEventListener('click', () => { pick.main = p.id; render(); list.querySelector(`[data-page="${p.id}"] .duty-star`).focus(); });
+        item.append(star);
+      }
+      return item;
+    }));
+    $('dutyOk').disabled = !pick.ids.length;
+    $('dutyHint').textContent = pick.ids.length ? `已選 ${pick.ids.length}／${Duty.MAX_DUTY} 個，主要：${pageLabel(pages.find((p) => p.id === pick.main))}` : `請選 1～${Duty.MAX_DUTY} 個`;
+  }
+  render();
+  return new Promise((resolve) => {
+    dutyResolve = resolve;
+    const done = (save) => {
+      if (save) { duty = Duty.saveDuty(pick.ids, pick.main); onDutyChanged(); }
+      dutyAsked = true;
+      dlg.close();
+      const r = dutyResolve; dutyResolve = null; r && r(save);
+    };
+    $('dutyOk').onclick = () => done(true);
+    $('dutySkip').onclick = () => done(false);
+    dlg.oncancel = (e) => { e.preventDefault(); done(false); };
+    dlg.showModal();
+  });
+}
+$('dutyBtn').addEventListener('click', () => { dutyExpired(); openDuty(); });
+// 頁面一直開著跨過 05:00：回到這個分頁時檢查（發文中不打斷，等下次按「新增發文」）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && dutyExpired() && pages.length && !modal.open && !$('dutyDlg').open) openDuty();
+});
 const pageName = (id) => (pages.find((p) => p.id === id) || {}).name || id;
 
 // ---------- 已排程 ----------
@@ -452,6 +543,7 @@ bindTitle(titleEl);   // sdk 的 titleAsOneLine 讀這個標題框
 const titleRows = () => titleEl.value.replace(/\r/g, '').split('\n');
 const getLines = () => titleRows().map((l) => l.trim()).filter(Boolean);   // 送出／畫圖用：去掉空行
 function updateCounters() {
+  updateSlugHint();
   const rs = titleRows();
   let n = 0;
   $('titleCnts').replaceChildren(...rs.map((r) => {
@@ -616,7 +708,7 @@ function place(node, anchor) {
   node.style.top = (above >= 8 ? above : ar.bottom - mr.top + 8) + 'px';
 }
 function closePops() { menu.hidden = true; pop.hidden = true; popFor = null; }
-const checkedChips = () => pages.map((p) => chips.get(p.id)).filter((c) => c && c.on);
+const checkedChips = () => ordered().map((p) => chips.get(p.id)).filter((c) => c && c.on);
 const pendingChips = () => checkedChips().filter((c) => c.status !== 'ok');
 
 function renderChip(id) {
@@ -645,7 +737,7 @@ function updateSendBtn() {
   updateCommentPreview();
 }
 function makeChip(p) {
-  const c = { id: p.id, on: false, sched: false, at: null, status: '', result: null };
+  const c = { id: p.id, on: p.id === mainId(), sched: false, at: null, status: '', result: null };   // 只預勾主要值班粉專
   const root = el('div', { className: 'pg', dataset: { page: p.id } });
   const main = el('button', { type: 'button', className: 'pg-main' });
   const box = el('span', { className: 'box' });
@@ -669,7 +761,7 @@ function renderPageChips() {
   const ids = new Set(pages.map((p) => p.id));
   for (const id of [...chips.keys()]) if (!ids.has(id)) chips.delete(id);
   for (const p of pages) if (!chips.has(p.id)) chips.set(p.id, makeChip(p));
-  $('pages').replaceChildren(...(pages.length ? pages.map((p) => { renderChip(p.id); return chips.get(p.id).els.root; }) : [el('span', { className: 'hint', textContent: '沒有可發的粉專' })]));
+  $('pages').replaceChildren(...(pages.length ? ordered().map((p) => { renderChip(p.id); return chips.get(p.id).els.root; }) : [el('span', { className: 'hint', textContent: '沒有可發的粉專' })]));
   updateSendBtn();
 }
 
@@ -756,13 +848,15 @@ async function send(ids) {
     }
     ids.forEach((id) => { chips.get(id).status = 'sending'; renderChip(id); });
     let schedN = 0, nowN = 0, commentBad = 0;
-    const failed = [];
+    const failed = [], sent = [];
+    const rdInfo = { articleId: articleId($('url').value.trim()), slug: $('slug').value, lines: getLines(), type: RD.typeOf(mode, textStyle) };
     for (const [i, id] of ids.entries()) {
       const c = chips.get(id), page = pages.find((p) => p.id === id);
       sendMsg(`送出 ${pageLabel(page)}…（${i + 1}/${ids.length}）`);
       try {
         const r = await sendOne(page, payload, c.sched ? Math.floor(c.at.getTime() / 1000) : null);
         c.status = 'ok'; c.result = { schedule: c.sched };
+        sent.push({ code: page.code, at: c.sched ? Math.floor(c.at.getTime() / 1000) : new Date() });
         if (c.sched) schedN++; else nowN++;
         if (r && r.comment && r.comment.status === 'failed') commentBad++;
       } catch (e) {
@@ -772,9 +866,10 @@ async function send(ids) {
       renderChip(id);
     }
     const sum = [nowN ? `已發布 ${nowN} 台` : '', schedN ? `已排程 ${schedN} 台` : ''].filter(Boolean).join('、');
-    const extra = commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '';
+    const rd = await toRundown(rdInfo, sent);
+    const extra = (commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '') + (rd.msg ? '；' + rd.msg : '');
     if (failed.length) sendMsg(`${sum ? sum + '；' : ''}失敗 ${failed.length} 台：${failed.join('；')}（可按晶片上的「↻ 重送」）${extra}`, 'bad');
-    else sendMsg(sum + extra, commentBad ? 'bad' : 'ok');
+    else sendMsg(sum + extra, commentBad || rd.bad ? 'bad' : 'ok');
     if (schedN) loadSched();
     pollFailed();
     if (!pendingChips().length && checkedChips().length) showDone((sum || '全部完成') + extra);
@@ -784,6 +879,44 @@ async function send(ids) {
   }
 }
 $('sendBtn').addEventListener('click', () => send(pendingChips().map((c) => c.id)));
+
+// ---------- 排入 Rundown（開關打開才做；這次送成功的台各寫一筆，排程用排程時間、立即用送出當下）----------
+const rdLabel = (code) => { const p = pages.find((x) => x.code === code); return p ? pageLabel(p) : RD.PAGES[code]; };
+async function toRundown(info, sent) {
+  if (!$('rdOn').checked || !sent.length) return { msg: '' };
+  const { entries } = RD.entries(info, sent);
+  if (!entries.length) return { msg: '' };
+  sendMsg('寫入 Rundown…');
+  let res;
+  try { res = await tb.api.call('/rundown', { method: 'POST', body: { action: 'add', entries } }); } catch (e) {
+    return { msg: 'Rundown 沒寫入：' + errText(e), bad: true };
+  }
+  const list = Array.isArray(res && res.results) ? res.results : [];
+  return { msg: 'Rundown：' + entries.map((en, i) => RD.describe(list[i], rdLabel(en.page))).join('；'), bad: entries.some((en, i) => !(list[i] && list[i].ok)) };
+}
+function syncRd() {
+  const on = $('rdOn').checked;
+  $('slug').disabled = !on;
+  $('rdBox').classList.toggle('off', !on);
+}
+function updateSlugHint() {
+  const ds = RD.defaultSlug(getLines());
+  $('slug').placeholder = ds ? `空白＝${ds}（標題前 4 字）` : '空白＝標題前 4 字';
+}
+$('rdOn').checked = RD.rundownOn();
+syncRd();
+$('rdOn').addEventListener('change', () => { RD.setRundownOn($('rdOn').checked); syncRd(); });
+$('rdSetBtn').addEventListener('click', () => { $('rdHint').textContent = ''; $('rdHint').className = 'hint'; $('rdDlg').showModal(); });
+$('rdClose').addEventListener('click', () => $('rdDlg').close());
+$('rdTest').addEventListener('click', async () => {
+  const h = $('rdHint');
+  $('rdTest').disabled = true; h.className = 'hint'; h.textContent = '測試中…';
+  try {
+    const j = await tb.api.call('/rundown', { method: 'POST', body: { action: 'ping' } });
+    h.className = 'hint ok'; h.textContent = `連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).slice(0, 3).join('、')}…）`;
+  } catch (e) { h.className = 'hint bad'; h.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : errText(e); }
+  finally { $('rdTest').disabled = false; }
+});
 
 // ---------- 完成、關閉、清空 ----------
 function showDone(body) {
@@ -806,7 +939,8 @@ function resetAll() {
   mode = 'frame'; textStyle = 'card';
   modeSeg.set('frame'); textSeg.set('card');
   pickSwatch(TEXT_SWATCHES.find((s) => s.key === DEFAULT_SWATCH) || TEXT_SWATCHES[0]);
-  for (const c of chips.values()) { c.on = false; c.sched = false; c.at = null; c.status = ''; c.result = null; renderChip(c.id); }
+  $('slug').value = ''; updateSlugHint();
+  for (const c of chips.values()) { c.on = c.id === mainId(); c.sched = false; c.at = null; c.status = ''; c.result = null; renderChip(c.id); }
   closePops(); updateCounters(); updateCount(); updateSendBtn();
 }
 let ourClose = false;
@@ -822,7 +956,10 @@ async function requestClose() {
   const some = [...chips.values()].some((c) => c.status);
   if (await confirmBox('關閉新增發文？', some ? '還有沒送出或失敗的粉專，關閉後內容會全部清掉。' : '目前填的內容還沒送出，關閉後會清掉。', '放棄並關閉')) closeModal();
 }
-$('newPost').addEventListener('click', () => { modal.showModal(); $('url').focus(); });
+$('newPost').addEventListener('click', async () => {
+  if (dutyExpired() || (!duty && !dutyAsked && pages.length)) { await openDuty(); resetAll(); }
+  modal.showModal(); $('url').focus();
+});
 $('mClose').addEventListener('click', requestClose);
 modal.addEventListener('cancel', (e) => { e.preventDefault(); requestClose(); });   // Esc 走同一條路
 // 瀏覽器偶爾會略過 cancel 直接關（連按兩次 Esc）：內容還沒送就原地重開，再問一次

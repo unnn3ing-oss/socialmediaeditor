@@ -15,6 +15,7 @@
   <header class="fp-head">
     <h1>排程發布</h1>
     <span class="pill" id="pagesState">讀取粉專中…</span>
+    <button type="button" class="btn btn-secondary btn-sm duty-btn" id="dutyBtn" hidden>值班：未選 ▾</button>
     <button type="button" class="btn btn-secondary btn-sm" id="pagesRefresh">重新整理粉專</button>
     <span class="grow"></span>
     <button type="button" class="btn btn-primary" id="newPost">＋ 新增發文</button>
@@ -130,10 +131,10 @@
       <div class="cap-head"><label for="comment">留言小編文 <small class="muted">發文後第一則留言</small></label></div>
       <textarea id="comment" rows="2" placeholder="不填就自動帶：看更多新聞內容＋各粉專 utm 連結"></textarea>
       <p class="hint pre" id="commentPrev" role="status"></p>
-      <div class="rd-panel off" id="rdBox" title="尚未連接，之後接上自己的 Rundown">
-        <div class="rd-head"><label class="rd-sw"><input type="checkbox" role="switch" id="rdOn" disabled><span>排入 Rundown</span></label>
-          <span class="muted rd-map">尚未連接｜主粉（新聞粉）、娛樂粉、少康粉、國際＋粉</span>
-          <button class="btn sm ghost" id="rdSetBtn" type="button" disabled aria-label="Rundown 設定" title="Rundown 設定">⚙</button></div>
+      <div class="rd-panel off" id="rdBox">
+        <div class="rd-head"><label class="rd-sw" title="送出成功後自動寫進 FB RUNDOWN"><input type="checkbox" role="switch" id="rdOn"><span>排入 Rundown</span></label>
+          <span class="muted rd-map" title="只排入這四個粉專；擠看看、氣象略過">主粉（新聞粉）、娛樂粉、少康粉、國際＋粉</span>
+          <button class="btn sm ghost" id="rdSetBtn" type="button" aria-label="Rundown 設定" title="Rundown 設定">⚙</button></div>
         <div class="slug-row" id="slugRow"><label for="slug">SLUG</label><input id="slug" type="text" maxlength="20" autocomplete="off" disabled placeholder="空白＝標題前 4 字"></div>
       </div>
     </div>
@@ -176,6 +177,31 @@
   <div class="actions">
     <button type="button" class="btn btn-secondary" id="dnList">回到列表</button>
     <button type="button" class="btn btn-primary" id="dnAgain">再發一篇</button>
+  </div>
+</dialog>
+
+<!-- 值班粉專：1～3 個，★＝主要；到下一個 05:00 失效 -->
+<dialog class="dialog duty-dlg" id="dutyDlg" aria-labelledby="dtTitle">
+  <h2 id="dtTitle">選擇值班粉專</h2>
+  <p class="muted">選 1～3 個你今天負責的粉專，點 ☆ 設成主要。主要粉專會預設勾選、在已排程和成效預設顯示；其他粉專照樣可以選。每天 05:00 後要重選。</p>
+  <div class="duty-list" id="dutyList" role="group" aria-label="值班粉專"></div>
+  <p class="hint" id="dutyHint" role="status"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="dutySkip">先不選</button>
+    <button type="button" class="btn btn-primary" id="dutyOk" disabled>確定</button>
+  </div>
+</dialog>
+
+<!-- Rundown 設定 -->
+<dialog class="dialog" id="rdDlg" aria-labelledby="rdTitle">
+  <h2 id="rdTitle">Rundown 自動排入</h2>
+  <p class="muted">送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段；有勾選並送成功的粉專各寫一筆到對應區段：新聞＝主粉（新聞粉）、娛樂粉、少康粉、國際＋粉（擠看看、氣象沒有區段，略過）。</p>
+  <p class="hint">純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。</p>
+  <p class="hint">照時間順序排進去：格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。Apps Script 網址與金鑰放在後端 Secrets，這裡不用填。</p>
+  <p class="hint" id="rdHint" role="status"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="rdTest">測試連線</button>
+    <button type="button" class="btn btn-primary" id="rdClose">關閉</button>
   </div>
 </dialog>
 

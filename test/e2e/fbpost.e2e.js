@@ -34,13 +34,20 @@ const URL_ENT = 'https://news.tvbs.com.tw/entertainment/3012346';
 
 // api.failPage：送到這個粉專就失敗一次；api.posts：收到的發文（multipart 欄位）
 const LONG_CURSOR = 'QVFI' + 'x'.repeat(700) + '.%3D';
-async function open({ company = false, viewport = { width: 1280, height: 900 } } = {}) {
+// duty：'skip'＝跳出值班視窗就按「先不選」（舊測試照舊）；'ask'＝留著讓測試操作；物件＝預先存好的值班 { ids, main, exp }
+// rundown：預先打開 Rundown 開關
+async function skipDuty(page) {
+  await page.waitForSelector('#dutyDlg[open]');
+  await page.click('#dutySkip');
+  await page.waitForSelector('#dutyDlg:not([open])', { state: 'attached' });
+}
+async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES } = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const now = Math.floor(Date.now() / 1000);
   const api = {
-    failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0,
+    failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0, rundown: [], rundownFail: null,
     scheduled: {
       111: [
         { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' } },
@@ -50,13 +57,17 @@ async function open({ company = false, viewport = { width: 1280, height: 900 } }
     },
     failedComments: [{ id: 'c1', page: '111', post: '111_8', message: '看更多新聞內容\nhttps://news.tvbs.com.tw/life/1', status: 'failed', error: '貼文沒有出現', due: now - 60, updated: now - 30, dismissed: false }],
   };
-  await page.addInitScript(() => {
+  await page.addInitScript(({ duty, rundown }) => {
+    try {
+      if (duty && typeof duty === 'object') localStorage.setItem('tbx.fbpost.duty.v1', JSON.stringify(duty));
+      if (rundown) localStorage.setItem('tbx.fbpost.rundown.v1', JSON.stringify({ on: true }));
+    } catch {}
     try { localStorage.setItem('tbx.company', JSON.stringify({ token: 'test', exp: Math.floor(Date.now() / 1000) + 3600 })); } catch {}
     window.__notes = [];
     class FakeNotification { constructor(t, o) { window.__notes.push({ t, o }); } static async requestPermission() { FakeNotification.permission = 'granted'; return 'granted'; } }
     FakeNotification.permission = 'default';
     window.Notification = FakeNotification;
-  });
+  }, { duty, rundown });
   await page.route(API_BASE + '/**', async (r) => {
     const req = r.request();
     if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
@@ -64,7 +75,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 } }
     const okJ = (data) => r.fulfill({ headers: CORS, json: { ok: true, data } });
     const bad = (code, error, status = 400) => r.fulfill({ status, headers: CORS, json: { ok: false, code, error } });
     if (/^\/assets\//.test(u.pathname)) return company ? r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([30, 60, 120]) }) : r.fulfill({ status: 404, headers: CORS, body: '' });
-    if (u.pathname === '/fb/pages') return okJ(PAGES);
+    if (u.pathname === '/fb/pages') return okJ(pages);
     if (api.hold && /^\/fb\/(scheduled|insights)$/.test(u.pathname)) await api.hold;   // 測骨架屏：先卡住回應
     if (u.pathname === '/fb/scheduled') return okJ({ items: api.scheduled[u.searchParams.get('page')] || [] });
     if (u.pathname === '/fb/posts') {
@@ -102,6 +113,13 @@ async function open({ company = false, viewport = { width: 1280, height: 900 } }
       if (api.failPage === rec.page) { api.failPage = null; return bad('fb_permission', '沒有這個粉專的發文權限。', 403); }
       return okJ({ id: rec.page + '_99', scheduled: !!rec.scheduledAt, at: Number(rec.scheduledAt) || null, comment: { status: rec.comment ? (rec.scheduledAt ? 'queued' : 'done') : 'none' } });
     }
+    if (u.pathname === '/rundown') {
+      const b = JSON.parse(req.postData());
+      api.rundown.push(b);
+      if (api.rundownFail) return bad('rundown_failed', api.rundownFail, 502);
+      if (b.action === 'ping') return okJ({ title: 'FB RUNDOWN(2026)', sheets: ['2026/11', '2026/10'] });
+      return okJ({ results: b.entries.map((e, i) => ({ ok: true, status: i ? 'insert' : 'write', cell: '2026/11!AE' + (100 + i), time: e.time })) });
+    }
     if (u.pathname === '/fetch/article') { api.articleReq++; return okJ({ url: u.searchParams.get('url'), html: ARTICLE }); }
     if (u.pathname === '/fetch/image') {
       if (api.imageFail > 0) { api.imageFail--; return bad('bad_request', '圖片讀不到', 502); }
@@ -114,10 +132,12 @@ async function open({ company = false, viewport = { width: 1280, height: 900 } }
     const fr = await (await page.waitForSelector('iframe[name=tool]')).contentFrame();
     await fr.waitForLoadState('load');
     await fr.waitForSelector('#pages .pg', { state: 'attached' });
+    if (duty === 'skip') await skipDuty(fr);
     return { page: fr, api, errors };
   }
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await page.waitForSelector('#pages .pg', { state: 'attached' });
+  if (duty === 'skip') await skipDuty(page);
   return { page, api, errors };
 }
 
@@ -545,11 +565,128 @@ test('沒照片會擋下；連點送出只會發一次', async () => {
   assert.deepEqual(errors, []);
 });
 
-test('Rundown 區塊：停用並標示尚未連接', async () => {
-  const { page } = await open();
+const MORE = [...PAGES,
+  { id: '333', name: '少康戰情室', code: 'shaokang', label: '少康', utm: 'a=1', sort: 3, link: '', picture: '', followers: 1 },
+  { id: '444', name: '擠看看', code: 'jkk', label: '擠看看', utm: 'a=2', sort: 4, link: '', picture: '', followers: 1 },
+  { id: '555', name: 'TVBS氣象', code: 'weather', label: '氣象', utm: 'a=3', sort: 6, link: '', picture: '', followers: 1 }];
+const chipOrder = (page) => page.$$eval('#pages .pg', (els) => els.map((e) => e.dataset.page));
+const checked = (page) => page.$$eval('#pages .pg', (els) => els.filter((e) => e.querySelector('.pg-main').getAttribute('aria-pressed') === 'true').map((e) => e.dataset.page));
+const opts = (page, sel) => page.$$eval(sel + ' option', (els) => els.map((e) => e.value));
+const dutyPick = (page, id) => page.click(`#dutyList [data-page="${id}"] .duty-pick`);
+
+test('值班粉專：第一次跳視窗、1～3 個、★主要；新增發文只預勾主要、排前面；已排程／成效預設主要；重新整理不再問', async () => {
+  const { page, errors } = await open({ duty: 'ask', pages: MORE });
+  await page.waitForSelector('#dutyDlg[open]');
+  assert.equal(await page.isDisabled('#dutyOk'), true, '沒選不能確定');
+  await dutyPick(page, '444'); await dutyPick(page, '222'); await dutyPick(page, '333');
+  assert.equal(await page.isDisabled('#dutyList [data-page="555"] .duty-pick'), true, '最多 3 個');
+  assert.match(await page.textContent('#dutyHint'), /3／3.*主要：擠看看/);
+  await page.click('#dutyList [data-page="222"] .duty-star');
+  assert.match(await page.textContent('#dutyHint'), /主要：娛樂/);
+  await page.click('#dutyOk');
+  assert.match(await page.textContent('#dutyBtn'), /值班：★娛樂、擠看看、少康/);
+  assert.deepEqual(await chipOrder(page), ['222', '444', '333', '111', '555']);
+  assert.equal(await page.inputValue('#schedPage'), '222');
+  assert.deepEqual(await opts(page, '#schedPage'), ['', '222', '444', '333', '111', '555'], '全部粉專與其他粉專都還在');
+  assert.equal(await page.inputValue('#statsPage'), '222');
   await page.click('#newPost');
-  assert.equal(await page.isDisabled('#rdOn'), true);
-  assert.match(await page.textContent('.rd-panel'), /尚未連接/);
+  assert.deepEqual(await checked(page), ['222'], '只預勾主要');
+  await pick(page, '111');
+  assert.deepEqual((await checked(page)).sort(), ['111', '222'], '其他粉專照樣可勾');
+  // 清空後回到只勾主要
+  await page.click('#clearBtn'); await page.click('#cfYes');
+  assert.deepEqual(await checked(page), ['222']);
+  // 重新整理：不再跳，設定還在
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('#dutyDlg'), false);
+  assert.equal(await page.inputValue('#schedPage'), '222');
+  assert.deepEqual(errors, []);
+});
+
+test('值班粉專：先不選＝照原本預設；過了 05:00 失效就全部空白重選（按新增發文時檢查）', async () => {
+  const { page, errors } = await open({ duty: { ids: ['222', '111'], main: '222', exp: Date.now() + 1500 } });
+  assert.equal(await page.isVisible('#dutyDlg'), false, '還沒過期不跳');
+  assert.deepEqual(await chipOrder(page), ['222', '111']);
+  await page.waitForTimeout(1700);
+  await page.click('#newPost');
+  await page.waitForSelector('#dutyDlg[open]');
+  assert.equal(await page.$$eval('#dutyList .duty-item.on', (e) => e.length), 0, '失效後不預選上次的');
+  await page.click('#dutySkip');
+  await page.waitForSelector('#modal[open]');
+  assert.deepEqual(await chipOrder(page), ['111', '222'], '先不選＝原順序');
+  assert.deepEqual(await checked(page), [], '先不選＝不預勾');
+  assert.match(await page.textContent('#dutyBtn'), /未選/);
+  assert.deepEqual(errors, []);
+});
+
+test('Rundown：開關記住、SLUG 預設標題前 4 字；送出成功的台各寫一筆（擠看看略過），結果顯示在訊息', async () => {
+  const pages = [...PAGES, MORE[3]];
+  const { page, api, errors } = await open({ pages });
+  await page.click('#newPost');
+  assert.equal(await page.isChecked('#rdOn'), false);
+  assert.equal(await page.isDisabled('#slug'), true);
+  await page.click('#rdOn');
+  assert.equal(await page.isDisabled('#slug'), false);
+  await fillUrl(page, URL1);
+  assert.match(await page.getAttribute('#slug', 'placeholder'), /空白＝颱風假最/);
+  await pick(page, '111'); await pick(page, '444');
+  await pick(page, '222');
+  await page.click(`${chip('222')} .pg-mode`);
+  await page.click('#modeMenu [data-m=sched]');
+  await page.waitForSelector('#timePop:not([hidden])');
+  await page.keyboard.press('Enter');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  const add = api.rundown.find((b) => b.action === 'add');
+  assert.deepEqual(add.entries.map((e) => [e.page, e.text]), [['news', '3012345/圖文/颱風假最'], ['ent', '3012345/圖文/颱風假最']]);
+  const sched = api.posts.find((p) => p.page === '222').scheduledAt;
+  const d = new Date(Number(sched) * 1000), pad = (n) => String(n).padStart(2, '0');
+  assert.equal(add.entries[1].time, `${pad(d.getHours())}:${pad(d.getMinutes())}`, '排程用排程時間');
+  assert.match(await page.textContent('#dnBody'), /Rundown：新聞 \d\d:\d\d → AE100；娛樂 \d\d:\d\d → AE101（插入）/);
+  // 純文字＋無底色 → /文字/；手填 SLUG
+  await page.click('#dnAgain');
+  await page.click('#modeSeg [data-mode=text]');
+  await page.click('#textSeg [data-text=plain]');
+  await page.fill('#url', URL1);
+  await page.fill('#caption', '只有文字');
+  await page.fill('#slug', '自訂！');
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.rundown.at(-1).entries[0].text, '3012345/文字/自訂');
+  // 重新整理：開關還開著
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+  assert.equal(await page.isChecked('#rdOn'), true);
+  assert.deepEqual(errors, []);
+});
+
+test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 測試連線', async () => {
+  const { page, api, errors } = await open({ rundown: true });
+  await page.click('#newPost');
+  await page.click('#rdSetBtn');
+  await page.click('#rdTest');
+  await page.waitForFunction(() => /連線成功/.test(document.getElementById('rdHint').textContent));
+  assert.match(await page.textContent('#rdHint'), /FB RUNDOWN\(2026\)/);
+  await page.click('#rdClose');
+  api.rundownFail = 'Rundown：08:00 時段已滿';
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.match(await page.textContent('#dnBody'), /已發布 1 台；Rundown 沒寫入：Rundown：08:00 時段已滿/);
+  await page.click('#dnAgain');
+  await page.click('#rdOn');
+  const n = api.rundown.length;
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.rundown.length, n, '關掉就不寫');
+  assert.deepEqual(errors, []);
 });
 
 test('手機寬（390）：彈窗與時間視窗不會橫向捲動', async () => {

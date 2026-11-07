@@ -15,11 +15,13 @@ export const MESSAGES = {
   fb_bad_request: '臉書拒絕這個請求。',
   fb_error: '臉書回傳錯誤。',
   fb_unreachable: '連不到臉書。',
-  fb_unknown_page: '這個粉專不在後端設定的 token 裡。'
+  fb_unknown_page: '這個粉專不在後端設定的 token 裡。',
+  rundown_off: '後端還沒設定 Rundown（RUNDOWN_URL／RUNDOWN_TOKEN）。',
+  rundown_failed: 'Rundown 寫入失敗。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
   fb_not_configured: 503, fb_token_invalid: 502, fb_permission: 403, fb_rate_limited: 429, fb_bad_request: 400,
-  fb_error: 502, fb_unreachable: 502, fb_unknown_page: 404 };
+  fb_error: 502, fb_unreachable: 502, fb_unknown_page: 404, rundown_off: 503, rundown_failed: 502 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

@@ -7,6 +7,7 @@ import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb, adminPageMap } from './core/fb.js';
+import { handleRundown } from './core/rundown.js';
 import { syncScheduled, cleanupComments } from './core/fbqueue.js';
 
 export { CommentHub } from './core/fbqueue.js';
@@ -22,6 +23,7 @@ const modules = [
   (req, env, ctx, path) => handleLogs(req, env, path),
   (req, env, ctx, path) => handleFetch(req, env, path),
   (req, env, ctx, path) => handleFb(req, env, path),
+  (req, env, ctx, path) => handleRundown(req, env, path),
   (req, env, ctx, path) => handleAdmin(req, env, path)
 ];
 

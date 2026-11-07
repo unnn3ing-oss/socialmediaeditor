@@ -197,6 +197,26 @@ npx wrangler deploy
 
 ---
 
+## 步驟 6-3：連接 Rundown（選做）
+
+「排程發布」的「排入 Rundown」會把 `文章ID/圖文/SLUG`（純文字底圖選「無底色」或「臉書原生背景」時寫 `/文字/`）寫進 FB RUNDOWN 試算表。寫入由網新快速排程那份 Apps Script（`-schedulenewnet` 的 `gas/rundown.gs`）處理，**沿用已部署的那一份，不用重新部署**。
+
+1. 在 `server/` 資料夾執行，填入跟舊圖床 Worker 一樣的值：
+   ```
+   npx wrangler secret put RUNDOWN_URL
+   ```
+   貼上 Apps Script 網頁應用程式的 `/exec` 網址（`https://script.google.com/macros/s/…/exec`）。
+   ```
+   npx wrangler secret put RUNDOWN_TOKEN
+   ```
+   貼上 Apps Script 指令碼屬性 `TOKEN` 的值（至少 12 字）。
+2. 重新部署：`npx wrangler deploy`
+3. 打開排程發布 →「＋ 新增發文」→ Rundown 區塊的 ⚙ →「測試連線」。
+
+   **成功的樣子：** 顯示「連線成功：FB RUNDOWN…（分頁 2026/11…）」。顯示「後端還沒設定 Rundown」＝第 1 步沒設好；顯示「沒有回 JSON」＝Apps Script 部署的「誰可以存取」要選「所有人」。
+
+---
+
 ## 步驟 7：開啟網站（併入 main 之後才做）
 
 這一步等程式併入 `main` 之後再做：
