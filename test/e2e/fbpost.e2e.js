@@ -78,18 +78,29 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     if (/^\/assets\//.test(u.pathname)) return company ? r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([30, 60, 120]) }) : r.fulfill({ status: 404, headers: CORS, body: '' });
     if (u.pathname === '/fb/pages') return okJ(pages);
     if (api.hold && /^\/fb\/(scheduled|insights)$/.test(u.pathname)) await api.hold;   // 測骨架屏：先卡住回應
-    if (u.pathname === '/fb/scheduled') return okJ({ items: api.scheduled[u.searchParams.get('page')] || [] });
+    if (u.pathname === '/fb/scheduled') {
+      if (api.schedError) return bad('fb_error', '排程刷新失敗', 502);
+      return okJ({ items: api.scheduled[u.searchParams.get('page')] || [] });
+    }
     if (u.pathname === '/fb/posts') {
+      if (api.postsError) return bad('fb_error', '貼文刷新失敗', 502);
       // 第一頁帶一個很長的游標（臉書真的會給這種），第二頁沒有下一頁
       const after = u.searchParams.get('after');
       if (!after) return okJ({ items: [{ id: '111_1', message: '舊貼文', created: new Date().toISOString(), url: 'https://facebook.com/1', picture: '', reactions: 5, comments: 2, shares: 1 }], next: LONG_CURSOR });
       api.afters.push(after);
-      return okJ({ items: [{ id: '111_2', message: '更舊的貼文', created: new Date().toISOString(), url: 'https://facebook.com/2', picture: '', reactions: 1, comments: 0, shares: 0 }], next: null });
+      return okJ({ items: [
+        ...(api.moreDuplicate ? [{ id: '111_1', message: '舊貼文更新', created: new Date().toISOString(), url: 'https://facebook.com/1', picture: '', reactions: 6, comments: 2, shares: 1 }] : []),
+        { id: '111_2', message: '更舊的貼文', created: new Date().toISOString(), url: 'https://facebook.com/2', picture: '', reactions: 1, comments: 0, shares: 0 }
+      ], next: null });
     }
-    if (u.pathname === '/fb/insights') return okJ({ post: '111_1', metrics: { post_media_view: 1234, post_clicks: 56 }, missing: [] });
+    if (u.pathname === '/fb/insights') {
+      if (api.insightsError) return bad('fb_error', '成效讀取失敗', 502);
+      return okJ({ post: u.searchParams.get('post'), metrics: { post_media_view: 1234, post_clicks: 56 }, missing: [] });
+    }
     if (u.pathname === '/fb/cancel') {
       const b = JSON.parse(req.postData());
       api.cancels.push(b.post);
+      for (const [id, items] of Object.entries(api.scheduled)) api.scheduled[id] = items.filter(it => it.id !== b.post);
       return okJ({ post: b.post, canceled: true });
     }
     if (u.pathname === '/fb/reschedule') {
@@ -144,8 +155,9 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
   return { page, api, errors };
 }
 
-async function querySched(page) {
+async function querySched(page, pageId) {
   await page.click('#tabs [data-tab=sched]');
+  if (pageId !== undefined) await page.selectOption('#schedPage', pageId);
   await page.click('#schedReload');
 }
 async function queryStats(page) {
@@ -173,6 +185,153 @@ async function fillUrl(page, url, via = 'enter') {
 }
 
 const automaticReads = (api) => api.requestPaths.filter((p) => /^\/fb\/(scheduled|posts|insights)$/.test(p));
+const readsOf = (api, path) => api.requestPaths.filter(p => p === path).length;
+
+async function reopen(page) {
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+}
+
+test('查詢快取：已發布更名，排程切換粉專及重開還原，空列表也保存', async () => {
+  const { page, api, errors } = await open();
+  assert.equal(await page.textContent('#tabs [data-tab=stats]'), '已發布');
+  assert.equal(await page.textContent('#schedReload'), '刷新');
+  assert.equal(await page.textContent('#statsReload'), '刷新');
+  await querySched(page, '111');
+  await page.waitForFunction(() => document.querySelectorAll('#schedList .item').length === 2);
+  assert.match(await page.textContent('#schedHint'), /上次查詢/);
+  await page.selectOption('#schedPage', '222');
+  assert.equal(await page.locator('#schedList .item').count(), 0);
+  await page.click('#schedReload');
+  await page.waitForFunction(() => !document.getElementById('schedReload').disabled);
+  assert.match(await page.textContent('#schedHint'), /上次查詢/);
+  assert.equal(readsOf(api, '/fb/scheduled'), 2);
+  await page.selectOption('#schedPage', '111');
+  await page.waitForFunction(() => document.querySelectorAll('#schedList .item').length === 2);
+  await reopen(page);
+  await page.click('#tabs [data-tab=sched]');
+  assert.equal(await page.locator('#schedList .item').count(), 2);
+  await page.selectOption('#schedPage', '222');
+  assert.equal(await page.locator('#schedList .item').count(), 0);
+  assert.match(await page.textContent('#schedHint'), /上次查詢/);
+  assert.equal(readsOf(api, '/fb/scheduled'), 2, '重開與還原空列表都不讀 Facebook');
+  assert.deepEqual(errors, []);
+});
+
+test('查詢快取：刷新失敗保留排程與已發布舊資料，成功才替換', async () => {
+  const { page, api, errors } = await open();
+  await querySched(page);
+  await page.waitForSelector('#schedList .item');
+  api.schedError = true;
+  await page.click('#schedReload');
+  await page.waitForFunction(() => /排程刷新失敗/.test(document.getElementById('schedHint').textContent));
+  assert.equal(await page.locator('#schedList .item').count(), 2);
+  await queryStats(page);
+  await page.waitForSelector('#statsList .item');
+  await page.click('#statsList .item button');
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  api.postsError = true;
+  await page.click('#statsReload');
+  await page.waitForFunction(() => /貼文刷新失敗/.test(document.getElementById('statsHint').textContent));
+  assert.match(await page.textContent('#statsList'), /舊貼文/);
+  // 失敗的刷新不能使已保存的成效失效。
+  await reopen(page);
+  await page.click('#tabs [data-tab=stats]');
+  await page.click('#statsList .item button');
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  assert.equal(readsOf(api, '/fb/insights'), 1);
+  assert.equal(readsOf(api, '/fb/posts'), 2);
+  api.postsError = false;
+  await page.click('#statsReload');
+  await page.waitForFunction(() => !document.getElementById('statsReload').disabled && !document.getElementById('statsList').hasAttribute('aria-busy'));
+  await page.click('#statsList .item button');
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  assert.equal(readsOf(api, '/fb/insights'), 2, '成功刷新後才重新讀取成效');
+  assert.deepEqual(errors, []);
+});
+
+test('查詢快取：已發布分頁與成效跨重開保存，刷新重設分頁', async () => {
+  const { page, api, errors } = await open();
+  await queryStats(page);
+  await page.waitForSelector('#statsList .item');
+  await page.click('#statsList .item button');
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  await page.selectOption('#statsPage', '222');
+  await page.selectOption('#statsPage', '111');
+  assert.match(await page.textContent('#statsList'), /舊貼文/);
+  assert.equal(readsOf(api, '/fb/posts'), 1);
+  api.moreDuplicate = true;
+  await page.click('#statsMore');
+  await page.waitForFunction(() => document.querySelectorAll('#statsList .item').length === 2);
+  assert.equal(api.afters[0], LONG_CURSOR);
+  await reopen(page);
+  await page.click('#tabs [data-tab=stats]');
+  assert.equal(await page.locator('#statsList .item').count(), 2);
+  assert.equal(await page.isHidden('#statsMore'), true);
+  assert.match(await page.textContent('#statsHint'), /上次查詢/);
+  await page.locator('#statsList .item').first().getByRole('button', { name: '看成效' }).click();
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  assert.equal(readsOf(api, '/fb/posts'), 2);
+  assert.equal(readsOf(api, '/fb/insights'), 1);
+  await page.click('#statsReload');
+  await page.waitForFunction(() => document.querySelectorAll('#statsList .item').length === 1 && !document.getElementById('statsReload').disabled);
+  assert.equal(await page.isVisible('#statsMore'), true);
+  assert.equal(readsOf(api, '/fb/posts'), 3);
+  assert.deepEqual(errors, []);
+});
+
+for (const pending of [false, true]) test(`查詢快取：其他分頁更新列表後，${pending ? '進行中的' : '尚未開始的'}成效讀取不留下舊結果或忙碌狀態`, async () => {
+  const { page, api, errors } = await open();
+  await queryStats(page);
+  await page.waitForSelector('#statsList .item');
+  let release = () => {};
+  if (pending) {
+    api.hold = new Promise((r) => { release = r; });
+    await page.click('#statsList .item button');
+    await page.waitForSelector('#statsList .ins[aria-busy=true]');
+  }
+  try {
+    await page.evaluate(() => {
+      const key = 'tbx.fbpost.query-cache.v1:published:111';
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.generation = 'newer-generation-from-other-tab';
+      localStorage.setItem(key, JSON.stringify(saved));
+    });
+    if (pending) { release(); api.hold = null; }
+    else await page.click('#statsList .item button');
+    await page.waitForFunction(() => /列表已更新，請按刷新/.test(document.querySelector('#statsList .ins').textContent));
+    assert.equal(await page.getAttribute('#statsList .ins', 'aria-busy'), null);
+    assert.equal(await page.isDisabled('#statsList .item button'), false);
+    assert.equal(readsOf(api, '/fb/insights'), pending ? 1 : 0, '過期列表不得開始新查詢');
+    const saved = await page.evaluate(() => localStorage.getItem('tbx.fbpost.query-cache.v1:insights:111%2F111_1'));
+    assert.equal(saved, null, '過期 generation 的成效不寫入快取');
+    assert.deepEqual(errors, []);
+  } finally { release(); api.hold = null; }
+});
+
+test('查詢快取：取消與改時間成功會更新本機，重開不還原舊排程', async () => {
+  const { page, api, errors } = await open();
+  await querySched(page, '111');
+  await page.waitForSelector('#schedList .item');
+  await page.locator('#schedList .item').first().getByRole('button', { name: '取消排程' }).click();
+  await page.click('#cfYes');
+  await page.waitForFunction(() => document.querySelectorAll('#schedList .item').length === 1);
+  const before = await page.locator('#schedList .item').getAttribute('data-at');
+  await page.click('#schedList .item [data-act=resched]');
+  await page.click('#rsEditor [data-add="60"]');
+  await page.click('#rsYes');
+  await page.waitForFunction(() => /已改成/.test(document.getElementById('schedHint').textContent));
+  const after = await page.locator('#schedList .item').getAttribute('data-at');
+  assert.notEqual(after, before);
+  await reopen(page);
+  await page.click('#tabs [data-tab=sched]');
+  assert.equal(await page.locator('#schedList .item').count(), 1);
+  assert.equal(await page.locator('#schedList .item').getAttribute('data-post'), '111_8');
+  assert.equal(await page.locator('#schedList .item').getAttribute('data-at'), after);
+  assert.equal(readsOf(api, '/fb/scheduled'), 1);
+  assert.deepEqual(errors, []);
+});
 
 test('排程與成效：進入、切頁、切粉專及值班不查詢，按查詢才讀 Facebook', async () => {
   const { page, api, errors } = await open();
@@ -358,7 +517,7 @@ test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完
   assert.equal(await page.getAttribute('#schedList', 'aria-busy'), 'true');
   const h = await page.evaluate(() => document.querySelector('#schedList .sk-row').getBoundingClientRect().height);
   release(); api.hold = null;
-  await page.waitForSelector('#schedList .item');
+  await page.waitForFunction(() => !document.getElementById('schedList').hasAttribute('aria-busy') && document.querySelector('#schedList .item'));
   assert.equal(await page.locator('#schedList .sk-row').count(), 0);
   assert.equal(await page.getAttribute('#schedList', 'aria-busy'), null);
   const real = await page.evaluate(() => document.querySelector('#schedList .item').getBoundingClientRect().height);

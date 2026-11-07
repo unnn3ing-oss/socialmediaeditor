@@ -12,6 +12,7 @@ import { createPhotoEditor } from './editor.js';
 import * as Duty from './duty.js';
 import * as RD from './rundown.js';
 import { createStore } from './records.js';
+import { createQueryCache } from './query-cache.js';
 import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
 
 tb.init('fbpost');
@@ -31,6 +32,9 @@ const pad = (n) => String(n).padStart(2, '0');
 const fmtTime = (sec) => { const d = new Date(sec * 1000); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const fmtIso = (s) => { const t = Date.parse(s); return Number.isNaN(t) ? '' : fmtTime(Math.floor(t / 1000)); };
 const now = () => new Date();
+const queryCache = createQueryCache();
+const cacheStamp = (at) => at ? '上次查詢 ' + new Date(at).toLocaleString('zh-TW', { hour12: false }) : '';
+const cacheWarning = () => queryCache.persistent ? '' : '；無法保存快取，僅保留本次頁面';
 
 // ---------- 確認框 ----------
 function confirmBox(title, body, yes = '確定') {
@@ -289,7 +293,12 @@ function resetSchedQuery() {
   $('schedList').replaceChildren();
   setBusy($('schedList'), false);
   $('schedReload').disabled = false;
-  $('schedHint').textContent = '按「查詢」讀取 Facebook 排程';
+  const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
+  const cached = ids.map((id) => ({ id, value: queryCache.get('scheduled', id) }));
+  const saved = cached.filter((c) => c.value);
+  const items = saved.flatMap((c) => c.value.items.map((it) => ({ ...it, page: c.id })));
+  const stamp = saved.length ? cacheStamp(Math.min(...saved.map((c) => c.value.at))) : '';
+  renderScheduled(items, (saved.length ? `本機快取｜${stamp}${saved.length < ids.length ? '；部分粉專尚未查詢' : ''}` : '按「刷新」讀取 Facebook 排程') + cacheWarning());
 }
 function resetStatsQuery() {
   statsSeq++;
@@ -297,7 +306,9 @@ function resetStatsQuery() {
   $('statsList').replaceChildren(); setBusy($('statsList'), false);
   $('statsMore').hidden = true;
   $('statsMoreHint').textContent = '';
-  $('statsHint').textContent = '按「查詢」讀取 Facebook 貼文';
+  $('statsReload').disabled = false;
+  $('statsMore').disabled = false; $('statsMore').textContent = '載入更多';
+  renderStats(queryCache.get('published', $('statsPage').value));
 }
 function resetQueries() { resetSchedQuery(); resetStatsQuery(); }
 const COMMENT_TEXT = { pending: '等待留言', done: '已留言', canceled: '已取消留言' };
@@ -344,27 +355,38 @@ async function loadSched() {
   const seq = ++schedSeq;
   const list = $('schedList'), hint = $('schedHint');
   const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
-  list.replaceChildren();
   if (!ids.length) { hint.textContent = '沒有粉專'; return; }
   $('schedReload').disabled = true;
   hint.textContent = '讀取中…';
   setBusy(list, true);
-  const items = [], errs = [];
+  const errs = [];
   await Promise.all(ids.map(async (id) => {
-    try { for (const it of (await tb.api.call('/fb/scheduled?page=' + id)).items) items.push({ ...it, page: id }); }
+    try {
+      const r = await tb.api.call('/fb/scheduled?page=' + id);
+      if (seq === schedSeq) queryCache.set('scheduled', id, { items: r.items });
+    }
     catch (e) { errs.push(`${pageName(id)}：${errText(e)}`); }
   }));
   if (seq !== schedSeq) return;
   $('schedReload').disabled = false;
-  items.sort((a, b) => (a.at || 0) - (b.at || 0));
+  resetSchedQuery();
+  if (errs.length) hint.textContent += '；刷新失敗：' + errs.join('；');
+}
+function updateScheduledCache(pageId, postId, patch) {
+  const cached = queryCache.get('scheduled', pageId);
+  if (cached) queryCache.set('scheduled', pageId, { ...cached, items: patch ? cached.items.map((p) => p.id === postId ? { ...p, ...patch } : p) : cached.items.filter((p) => p.id !== postId) });
+  resetSchedQuery(); // 同時作廢尚未完成的刷新，避免取消或改時間被舊回應覆蓋。
+}
+function renderScheduled(items, text) {
+  const list = $('schedList'), hint = $('schedHint');
   setBusy(list, false);
-  hint.textContent = (items.length ? `共 ${items.length} 篇` : '目前沒有排程') + (errs.length ? `；${errs.join('；')}` : '');
+  hint.textContent = (items.length ? `共 ${items.length} 篇｜` : '') + text;
   list.replaceChildren(...items.map((it) => {
     const cancel = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '取消排程' });
     cancel.addEventListener('click', async () => {
       if (!(await confirmBox('取消這篇排程？', `${pageName(it.page)}｜${it.at ? fmtTime(it.at) : ''}\n取消後臉書上這篇排程會被刪除，無法復原。`, '取消排程'))) return;
       cancel.disabled = true;
-      try { await tb.api.call('/fb/cancel', { method: 'POST', body: { post: it.id } }); updateRecordedPost(it.id, { status: 'canceled' }); li.remove(); hint.textContent = '已取消一篇排程'; }
+      try { await tb.api.call('/fb/cancel', { method: 'POST', body: { post: it.id } }); updateRecordedPost(it.id, { status: 'canceled' }); updateScheduledCache(it.page, it.id, null); hint.textContent += '；已取消一篇排程'; }
       catch (e) { cancel.disabled = false; hint.textContent = '取消失敗：' + errText(e); }
     });
     const move = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '改時間', dataset: { act: 'resched' } });
@@ -407,12 +429,8 @@ $('rsYes').addEventListener('click', async () => {
     const secs = Math.floor(at.getTime() / 1000);
     rsTarget.at = secs;
     updateRecordedPost(rsTarget.id, { scheduledAt: secs });
-    for (const row of $('schedList').querySelectorAll('li.item')) if (row.dataset.post === rsTarget.id) {
-      row.dataset.at = String(secs);
-      row.querySelector('.meta b').textContent = fmtTime(secs);
-    }
-    applySort();
-    $('schedHint').textContent = `已改成 ${Sched.fmtWhen(at, now())}`;
+    updateScheduledCache(rsTarget.page, rsTarget.id, { at: secs });
+    $('schedHint').textContent += `；已改成 ${Sched.fmtWhen(at, now())}`;
   } catch (e) {
     $('rsErr').textContent = e.code === 'already_published' ? '這篇已經發布了，不能再改時間。' : errText(e);
   } finally { btn.disabled = false; }
@@ -481,39 +499,50 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ---------- 成效 ----------
 let statsLoaded = false, statsNext = null, statsBusy = false, statsSeq = 0;
 const METRIC_NAMES = { post_media_view: '瀏覽', post_total_media_view_unique: '觸及人數', post_clicks: '點擊' };
+function renderStats(cached) {
+  const pageId = $('statsPage').value;
+  statsNext = cached?.next || null;
+  $('statsList').replaceChildren(...(cached?.items || []).map((p) => statRow(p, pageId, cached.generation)));
+  $('statsMore').hidden = !statsNext;
+  $('statsHint').textContent = (cached ? `${cached.items.length ? `共 ${cached.items.length} 篇` : '沒有貼文'}｜本機快取｜${cacheStamp(cached.at)}` : '按「刷新」讀取 Facebook 貼文') + cacheWarning();
+}
 async function loadStats(reset) {
   const page = $('statsPage').value;
   const list = $('statsList'), hint = $('statsHint'), more = $('statsMore'), moreHint = $('statsMoreHint');
-  if (statsBusy && !reset) return;
-  const seq = ++statsSeq; // 切換粉專（reset）時，舊請求回來要丟掉
-  if (reset) { list.replaceChildren(); statsNext = null; more.hidden = true; }
+  if (statsBusy) return;
+  const previous = queryCache.get('published', page);
+  if (!reset && !previous?.next) return;
+  const seq = ++statsSeq;
   moreHint.textContent = '';
-  if (!page) { statsBusy = false; more.disabled = false; more.textContent = '載入更多'; hint.textContent = '沒有粉專'; return; }
-  statsLoaded = true;
-  statsBusy = true;
+  if (!page) { hint.textContent = '沒有粉專'; return; }
+  statsLoaded = true; statsBusy = true;
+  $('statsReload').disabled = true; more.disabled = true;
   if (reset) hint.textContent = '讀取中…';
-  else { more.disabled = true; more.textContent = '載入中…'; }
+  else more.textContent = '載入中…';
   setBusy(list, true);
   try {
-    const r = await tb.api.call(`/fb/posts?page=${page}&limit=10` + (statsNext ? '&after=' + encodeURIComponent(statsNext) : ''));
+    const r = await tb.api.call(`/fb/posts?page=${page}&limit=10` + (!reset ? '&after=' + encodeURIComponent(previous.next) : ''));
     if (seq !== statsSeq) return;
-    setBusy(list, false);
-    statsNext = r.next;
-    more.hidden = !statsNext;
-    hint.textContent = '';
-    list.append(...r.items.map(statRow));
-    if (!list.children.length) hint.textContent = '沒有貼文';
+    if (!reset && queryCache.get('published', page)?.generation !== previous.generation) {
+      renderStats(queryCache.get('published', page));
+      moreHint.textContent = '列表已更新，請重新載入更多';
+      return;
+    }
+    const items = [...new Map((reset ? r.items : [...previous.items, ...r.items]).map((p) => [p.id, p])).values()];
+    queryCache.set('published', page, { items, next: r.next, generation: reset ? crypto.randomUUID() : previous.generation });
+    renderStats(queryCache.get('published', page));
   } catch (e) {
     if (seq !== statsSeq) return;
-    setBusy(list, false);
-    // 第一頁失敗寫在上方；「載入更多」失敗寫在按鈕旁，按鈕留著可以再按
-    if (reset || !list.children.length) hint.textContent = '讀取失敗：' + errText(e);
+    if (reset || !list.querySelector('.item')) hint.textContent = (previous ? cacheStamp(previous.at) + '；' : '') + '刷新失敗：' + errText(e) + cacheWarning();
     else moreHint.textContent = '讀取失敗：' + errText(e);
   } finally {
-    if (seq === statsSeq) { statsBusy = false; more.disabled = false; more.textContent = '載入更多'; }
+    if (seq === statsSeq) {
+      setBusy(list, false); statsBusy = false;
+      $('statsReload').disabled = false; more.disabled = false; more.textContent = '載入更多';
+    }
   }
 }
-function statRow(p) {
+function statRow(p, pageId, generation) {
   const out = el('div', { className: 'ins', hidden: true });
   const btn = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '看成效' });
   btn.addEventListener('click', async () => {
@@ -522,16 +551,29 @@ function statRow(p) {
     if (out.dataset.done) return;
     out.replaceChildren(el('span', { className: 'sk-line w70' }), el('span', { className: 'sr-only', textContent: '讀取中…' }));
     out.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
     try {
-      const r = await tb.api.call('/fb/insights?post=' + encodeURIComponent(p.id));
+      const key = pageId + '/' + p.id;
+      if (queryCache.get('published', pageId)?.generation !== generation) {
+        out.textContent = '列表已更新，請按刷新';
+        return;
+      }
+      const saved = queryCache.get('insights', key);
+      const r = saved?.generation === generation ? saved.data : await tb.api.call('/fb/insights?post=' + encodeURIComponent(p.id));
+      if (queryCache.get('published', pageId)?.generation !== generation) {
+        out.textContent = '列表已更新，請按刷新';
+        return;
+      }
+      if (saved?.generation !== generation) queryCache.set('insights', key, { data: r, generation });
       const m = r.metrics || {};
       const parts = Object.entries(METRIC_NAMES).filter(([k]) => m[k] != null).map(([k, n]) => `${n} ${Number(m[k]).toLocaleString()}`);
       const rx = m.post_reactions_by_type_total;
       if (rx && typeof rx === 'object') parts.push('心情 ' + Object.values(rx).reduce((a, b) => a + Number(b || 0), 0).toLocaleString());
       out.removeAttribute('aria-busy');
-      out.textContent = parts.length ? parts.join('｜') : '臉書沒有回傳成效（可能太新或權限不足）';
+      out.textContent = (parts.length ? parts.join('｜') : '臉書沒有回傳成效（可能太新或權限不足）') + '｜' + cacheStamp(queryCache.get('insights', key)?.at) + cacheWarning();
       out.dataset.done = '1';
-    } catch (e) { out.removeAttribute('aria-busy'); out.textContent = '讀取失敗：' + errText(e); }
+    } catch (e) { out.textContent = '讀取失敗：' + errText(e); }
+    finally { out.removeAttribute('aria-busy'); btn.disabled = false; }
   });
   return el('li', { className: 'item' },
     p.picture ? el('img', { className: 'thumb', src: p.picture, alt: '', loading: 'lazy' }) : el('div', { className: 'thumb ph' }),
