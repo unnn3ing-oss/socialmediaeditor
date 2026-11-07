@@ -13,6 +13,7 @@
 - server/gas/rundown-format.gs、部署說明及測試：對應既有 /tmp/rd-reference-schedulenewnet/gas/rundown.gs 的 rdAddOne。
 
 ## 下一步
+- 本分支另已完成五分鐘刷新間隔，接手時一併讀`2026-11-08-refresh-cooldown.md`，之後併main須包含兩項。
 - [x] RD預設開啟，忽略舊localStorage；session cookie共用同工作階段，儲存被拒時保留本頁並提示。
 - [x] 按鈕上方固定高度提醒，送出中鎖定開關與快照；focus／visible／新增發文重讀偏好但不干擾送出。
 - [x] 新增GAS替換片段與部署說明，保留既有規劃與樣式、只格式化實際寫入格子。

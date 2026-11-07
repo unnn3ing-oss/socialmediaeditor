@@ -13,6 +13,7 @@ import * as Duty from './duty.js';
 import * as RD from './rundown.js';
 import { createStore } from './records.js';
 import { createQueryCache } from './query-cache.js';
+import { createRefreshCooldown } from './refresh-cooldown.js';
 import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
 
 tb.init('fbpost');
@@ -33,6 +34,7 @@ const fmtTime = (sec) => { const d = new Date(sec * 1000); return `${d.getMonth(
 const fmtIso = (s) => { const t = Date.parse(s); return Number.isNaN(t) ? '' : fmtTime(Math.floor(t / 1000)); };
 const now = () => new Date();
 const queryCache = createQueryCache();
+const refreshCooldown = createRefreshCooldown();
 const cacheStamp = (at) => at ? '上次查詢 ' + new Date(at).toLocaleString('zh-TW', { hour12: false }) : '';
 const cacheWarning = () => queryCache.persistent ? '' : '；無法保存快取，僅保留本次頁面';
 
@@ -287,9 +289,24 @@ renderRecords();
 window.addEventListener('storage', () => renderRecords());
 
 // ---------- 已排程：僅按「查詢」讀取 ----------
-let schedSeq = 0;
+let schedSeq = 0, schedBusy = false;
+const selectedSchedIds = () => $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
+function updateRefreshButtons() {
+  const schedIds = selectedSchedIds(), pageId = $('statsPage').value;
+  for (const [id, kind, ids, busy] of [
+    ['schedReload', 'scheduled', schedIds, schedBusy],
+    ['statsReload', 'published', pageId ? [pageId] : [], statsBusy],
+  ]) {
+    const remaining = Math.ceil(refreshCooldown.remaining(kind, ids) / 1000);
+    const button = $(id);
+    button.textContent = remaining > 0 ? `刷新（${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}）` : '刷新';
+    button.disabled = !ids.length || busy || remaining > 0;
+    button.title = (remaining > 0 ? '五分鐘內不可重複刷新' : '讀取最新資料') + (!refreshCooldown.persistent ? '（計時僅保留本頁）' : '');
+  }
+}
 function resetSchedQuery() {
   schedSeq++;
+  schedBusy = false;
   $('schedList').replaceChildren();
   setBusy($('schedList'), false);
   $('schedReload').disabled = false;
@@ -299,6 +316,7 @@ function resetSchedQuery() {
   const items = saved.flatMap((c) => c.value.items.map((it) => ({ ...it, page: c.id })));
   const stamp = saved.length ? cacheStamp(Math.min(...saved.map((c) => c.value.at))) : '';
   renderScheduled(items, (saved.length ? `本機快取｜${stamp}${saved.length < ids.length ? '；部分粉專尚未查詢' : ''}` : '按「刷新」讀取 Facebook 排程') + cacheWarning());
+  updateRefreshButtons();
 }
 function resetStatsQuery() {
   statsSeq++;
@@ -309,6 +327,7 @@ function resetStatsQuery() {
   $('statsReload').disabled = false;
   $('statsMore').disabled = false; $('statsMore').textContent = '載入更多';
   renderStats(queryCache.get('published', $('statsPage').value));
+  updateRefreshButtons();
 }
 function resetQueries() { resetSchedQuery(); resetStatsQuery(); }
 const COMMENT_TEXT = { pending: '等待留言', done: '已留言', canceled: '已取消留言' };
@@ -352,11 +371,17 @@ $('schedSort').addEventListener('change', () => {
   applySort();
 });
 async function loadSched() {
+  if (schedBusy) return;
   const seq = ++schedSeq;
   const list = $('schedList'), hint = $('schedHint');
-  const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
+  const ids = selectedSchedIds();
   if (!ids.length) { hint.textContent = '沒有粉專'; return; }
-  $('schedReload').disabled = true;
+  schedBusy = true;
+  updateRefreshButtons();
+  const attempt = await refreshCooldown.start('scheduled', ids);
+  if (seq !== schedSeq) return;
+  if (!attempt.ok) { schedBusy = false; updateRefreshButtons(); return; }
+  updateRefreshButtons();
   hint.textContent = '讀取中…';
   setBusy(list, true);
   const errs = [];
@@ -368,7 +393,6 @@ async function loadSched() {
     catch (e) { errs.push(`${pageName(id)}：${errText(e)}`); }
   }));
   if (seq !== schedSeq) return;
-  $('schedReload').disabled = false;
   resetSchedQuery();
   if (errs.length) hint.textContent += '；刷新失敗：' + errs.join('；');
 }
@@ -516,7 +540,14 @@ async function loadStats(reset) {
   moreHint.textContent = '';
   if (!page) { hint.textContent = '沒有粉專'; return; }
   statsLoaded = true; statsBusy = true;
-  $('statsReload').disabled = true; more.disabled = true;
+  updateRefreshButtons();
+  if (reset) {
+    const attempt = await refreshCooldown.start('published', [page]);
+    if (seq !== statsSeq) return;
+    if (!attempt.ok) { statsBusy = false; updateRefreshButtons(); return; }
+    updateRefreshButtons();
+  }
+  more.disabled = true;
   if (reset) hint.textContent = '讀取中…';
   else more.textContent = '載入中…';
   setBusy(list, true);
@@ -538,7 +569,7 @@ async function loadStats(reset) {
   } finally {
     if (seq === statsSeq) {
       setBusy(list, false); statsBusy = false;
-      $('statsReload').disabled = false; more.disabled = false; more.textContent = '載入更多';
+      updateRefreshButtons(); more.disabled = false; more.textContent = '載入更多';
     }
   }
 }
@@ -1168,5 +1199,9 @@ $('dnAgain').addEventListener('click', () => { $('doneDlg').close(); resetAll();
 pickSwatch(swatch);
 updateCounters();
 updateCount();
+setInterval(updateRefreshButtons, 1000);
+window.addEventListener('focus', updateRefreshButtons);
+window.addEventListener('storage', updateRefreshButtons);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') updateRefreshButtons(); });
 loadPages();
 pollFailed();

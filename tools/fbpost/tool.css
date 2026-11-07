@@ -23,6 +23,7 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 #tabs { margin-bottom: 12px; }
 
 .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+#schedReload, #statsReload { min-width: 112px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 select, .fp-modal input[type=text], .fp-modal input[type=url], .fp-modal input[type=date], .fp-modal textarea {
   font: 400 15px/1.5 var(--font); color: var(--text); background: var(--surface);

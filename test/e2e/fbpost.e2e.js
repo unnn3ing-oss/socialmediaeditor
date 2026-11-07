@@ -166,6 +166,13 @@ async function queryStats(page) {
   await page.click('#statsReload');
 }
 
+// 舊功能的第二次手動刷新明確推進假時間；查詢 helper 本身不繞過冷卻。
+async function advanceCooldown(page, ms = 300001) {
+  const current = await page.evaluate(() => Date.now());
+  await page.clock.setFixedTime(new Date(current + ms));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+}
+
 async function photo(page) {
   await page.evaluate(async () => {
     const c = document.createElement('canvas'); c.width = 1200; c.height = 900;
@@ -194,6 +201,113 @@ async function reopen(page) {
   await skipDuty(page);
 }
 
+test('刷新冷卻：首次可查詢、重新開啟與同瀏覽器新分頁不重設，五分鐘到期才可再查', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  try {
+    const { page, api, errors } = await open({ context });
+    const current = await page.evaluate(() => Date.now());
+    await page.clock.setFixedTime(new Date(current));
+    await page.click('#tabs [data-tab=sched]');
+    await page.selectOption('#schedPage', '111');
+    assert.equal(await page.isDisabled('#schedReload'), false);
+    await page.click('#schedReload');
+    await page.waitForSelector('#schedList .item');
+    assert.equal(await page.isDisabled('#schedReload'), true);
+    assert.match(await page.textContent('#schedReload'), /5:00/);
+    await page.evaluate(() => {
+      const button = document.getElementById('schedReload');
+      button.dispatchEvent(new Event('click', { bubbles: true }));
+      button.dispatchEvent(new Event('click', { bubbles: true }));
+    });
+    await page.waitForTimeout(60);
+    assert.equal(readsOf(api, '/fb/scheduled'), 1, '程式觸發也不可繞過冷卻');
+    await reopen(page);
+    await page.click('#tabs [data-tab=sched]');
+    await page.selectOption('#schedPage', '111');
+    assert.equal(await page.isDisabled('#schedReload'), true);
+    assert.equal(await page.locator('#schedList .item').count(), 2, '等待時仍可讀快取');
+    const second = await open({ context });
+    await second.page.click('#tabs [data-tab=sched]');
+    await second.page.selectOption('#schedPage', '111');
+    assert.equal(await second.page.isDisabled('#schedReload'), true);
+    assert.equal(readsOf(second.api, '/fb/scheduled'), 0);
+    await page.clock.setFixedTime(new Date(current + 299000));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    assert.equal(await page.isDisabled('#schedReload'), true);
+    assert.match(await page.textContent('#schedReload'), /0:01/);
+    await page.clock.setFixedTime(new Date(current + 300000));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    assert.equal(await page.isDisabled('#schedReload'), false);
+    assert.equal(await page.textContent('#schedReload'), '刷新');
+    await Promise.all([
+      page.waitForResponse(r => new URL(r.url()).pathname === '/fb/scheduled'),
+      page.click('#schedReload'),
+    ]);
+    await page.waitForFunction(() => !document.getElementById('schedList').hasAttribute('aria-busy') && /上次查詢/.test(document.getElementById('schedHint').textContent));
+    assert.equal(readsOf(api, '/fb/scheduled'), 2);
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
+
+test('刷新冷卻：粉專與列表分開計時，全部粉專等最久者；載入更多與成效不受影響', async () => {
+  const { page, api, errors } = await open();
+  const current = await page.evaluate(() => Date.now());
+  await page.clock.setFixedTime(new Date(current));
+  await querySched(page, '111');
+  await page.waitForSelector('#schedList .item');
+  await page.clock.setFixedTime(new Date(current + 60000));
+  await page.selectOption('#schedPage', '222');
+  assert.equal(await page.isDisabled('#schedReload'), false);
+  await page.click('#schedReload');
+  await page.waitForFunction(() => /上次查詢/.test(document.getElementById('schedHint').textContent) && !document.getElementById('schedList').hasAttribute('aria-busy'));
+  await page.selectOption('#schedPage', '111');
+  assert.match(await page.textContent('#schedReload'), /4:00/);
+  await page.selectOption('#schedPage', '');
+  assert.equal(await page.isDisabled('#schedReload'), true);
+  assert.match(await page.textContent('#schedReload'), /5:00/);
+  assert.equal(readsOf(api, '/fb/scheduled'), 2);
+  await page.click('#tabs [data-tab=stats]');
+  await page.selectOption('#statsPage', '111');
+  assert.equal(await page.isDisabled('#statsReload'), false, '已發布不共用排程的冷卻');
+  await page.click('#statsReload');
+  await page.waitForSelector('#statsList .item');
+  assert.equal(await page.isDisabled('#statsReload'), true);
+  await page.click('#statsMore');
+  await page.waitForFunction(() => document.querySelectorAll('#statsList .item').length === 2);
+  assert.equal(readsOf(api, '/fb/posts'), 2, '冷卻期間可載入更多');
+  await page.locator('#statsList .item').first().getByRole('button', { name: '看成效' }).click();
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  assert.equal(readsOf(api, '/fb/insights'), 1);
+  await page.selectOption('#statsPage', '222');
+  assert.equal(await page.isDisabled('#statsReload'), false);
+  assert.deepEqual(errors, []);
+});
+
+test('刷新冷卻：失敗也等待五分鐘，保留舊資料且倒數結束不自動查詢', async () => {
+  const { page, api, errors } = await open();
+  api.postsError = true;
+  await queryStats(page);
+  await page.waitForFunction(() => /貼文刷新失敗/.test(document.getElementById('statsHint').textContent));
+  assert.equal(await page.isDisabled('#statsReload'), true);
+  assert.match(await page.textContent('#statsReload'), /[45]:\d\d/);
+  api.postsError = false;
+  await page.evaluate(() => document.getElementById('statsReload').dispatchEvent(new Event('click', { bubbles: true })));
+  await page.waitForTimeout(60);
+  assert.equal(readsOf(api, '/fb/posts'), 1);
+  await advanceCooldown(page);
+  assert.equal(await page.isDisabled('#statsReload'), false);
+  assert.equal(readsOf(api, '/fb/posts'), 1, '到期只解鎖按鈕，不自動取資料');
+  await page.click('#statsReload');
+  await page.waitForSelector('#statsList .item');
+  assert.equal(readsOf(api, '/fb/posts'), 2);
+  api.schedError = true;
+  await querySched(page, '111');
+  await page.waitForFunction(() => /排程刷新失敗/.test(document.getElementById('schedHint').textContent));
+  assert.equal(await page.isDisabled('#schedReload'), true);
+  assert.equal(readsOf(api, '/fb/scheduled'), 1);
+  assert.deepEqual(errors, []);
+});
+
 test('查詢快取：已發布更名，排程切換粉專及重開還原，空列表也保存', async () => {
   const { page, api, errors } = await open();
   assert.equal(await page.textContent('#tabs [data-tab=stats]'), '已發布');
@@ -205,7 +319,7 @@ test('查詢快取：已發布更名，排程切換粉專及重開還原，空�
   await page.selectOption('#schedPage', '222');
   assert.equal(await page.locator('#schedList .item').count(), 0);
   await page.click('#schedReload');
-  await page.waitForFunction(() => !document.getElementById('schedReload').disabled);
+  await page.waitForFunction(() => /上次查詢/.test(document.getElementById('schedHint').textContent) && !document.getElementById('schedList').hasAttribute('aria-busy'));
   assert.match(await page.textContent('#schedHint'), /上次查詢/);
   assert.equal(readsOf(api, '/fb/scheduled'), 2);
   await page.selectOption('#schedPage', '111');
@@ -225,6 +339,7 @@ test('查詢快取：刷新失敗保留排程與已發布舊資料，成功才�
   await querySched(page);
   await page.waitForSelector('#schedList .item');
   api.schedError = true;
+  await advanceCooldown(page);
   await page.click('#schedReload');
   await page.waitForFunction(() => /排程刷新失敗/.test(document.getElementById('schedHint').textContent));
   assert.equal(await page.locator('#schedList .item').count(), 2);
@@ -233,6 +348,7 @@ test('查詢快取：刷新失敗保留排程與已發布舊資料，成功才�
   await page.click('#statsList .item button');
   await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
   api.postsError = true;
+  await advanceCooldown(page);
   await page.click('#statsReload');
   await page.waitForFunction(() => /貼文刷新失敗/.test(document.getElementById('statsHint').textContent));
   assert.match(await page.textContent('#statsList'), /舊貼文/);
@@ -244,8 +360,9 @@ test('查詢快取：刷新失敗保留排程與已發布舊資料，成功才�
   assert.equal(readsOf(api, '/fb/insights'), 1);
   assert.equal(readsOf(api, '/fb/posts'), 2);
   api.postsError = false;
+  await advanceCooldown(page);
   await page.click('#statsReload');
-  await page.waitForFunction(() => !document.getElementById('statsReload').disabled && !document.getElementById('statsList').hasAttribute('aria-busy'));
+  await page.waitForFunction(() => !document.getElementById('statsList').hasAttribute('aria-busy'));
   await page.click('#statsList .item button');
   await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
   assert.equal(readsOf(api, '/fb/insights'), 2, '成功刷新後才重新讀取成效');
@@ -275,8 +392,9 @@ test('查詢快取：已發布分頁與成效跨重開保存，刷新重設分�
   await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
   assert.equal(readsOf(api, '/fb/posts'), 2);
   assert.equal(readsOf(api, '/fb/insights'), 1);
+  await advanceCooldown(page);
   await page.click('#statsReload');
-  await page.waitForFunction(() => document.querySelectorAll('#statsList .item').length === 1 && !document.getElementById('statsReload').disabled);
+  await page.waitForFunction(() => document.querySelectorAll('#statsList .item').length === 1 && !document.getElementById('statsList').hasAttribute('aria-busy'));
   assert.equal(await page.isVisible('#statsMore'), true);
   assert.equal(readsOf(api, '/fb/posts'), 3);
   assert.deepEqual(errors, []);
@@ -513,6 +631,7 @@ test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完
   await querySched(page);
   await page.waitForSelector('#schedList .item');
   let release; api.hold = new Promise((r) => { release = r; });
+  await advanceCooldown(page);
   await page.click('#schedReload');
   await page.waitForFunction(() => document.querySelectorAll('#schedList .sk-row[aria-hidden=true]').length === 3);
   assert.equal(await page.getAttribute('#schedList', 'aria-busy'), 'true');
@@ -544,6 +663,7 @@ test('已排程：純文字顯示「文字」；排序可切換時間最近／�
   await page.selectOption('#schedSort', 'far');
   assert.deepEqual(await order(), ['111_8', '111_7']);
   assert.equal(await page.evaluate(() => localStorage.getItem('fbpost.schedSort')), 'far');
+  await advanceCooldown(page);
   await page.click('#schedReload');
   await page.waitForFunction(() => document.querySelectorAll('#schedList .item').length === 2);
   assert.deepEqual(await order(), ['111_8', '111_7']);
