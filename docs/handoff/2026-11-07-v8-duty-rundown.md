@@ -32,7 +32,7 @@
 
 ## 下一步
 - [x] 依上表 1→6（unit 316 過；fbpost e2e 新增 4 支：值班×2、Rundown×2，舊「Rundown 尚未連接」測試換掉；舊測試用 open() 預設按「先不選」）
-- [ ] 全部 e2e、`node build.js --check`
+- [x] 全部 e2e 85 過（sidepanel 測試加上值班視窗操作）、build --check 過
 - [ ] 審查代理 → 截圖給使用者 → 等「推」
 
 ## 測試

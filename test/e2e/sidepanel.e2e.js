@@ -87,6 +87,11 @@ test('側邊欄：版面同網新快速排程，發文頁在側邊欄解鎖後�
   const tool = panel.frameLocator('#panelHost iframe');
   await tool.locator('#newPost').waitFor();
   await tool.locator('#pagesState', { hasText: '已連線 1 個粉專' }).waitFor();
+  // 第一次進來跳值班粉專視窗（側邊欄寬也能選）
+  await tool.locator('#dutyDlg[open]').waitFor();
+  await tool.locator('#dutyList .duty-pick').first().click();
+  await tool.locator('#dutyOk').click();
+  await tool.locator('#dutyBtn', { hasText: '★' }).waitFor();
   assert.deepEqual(api.passwords, ['pw']);
   assert.ok(await panel.locator('#panelLock').isHidden());
   await p.screenshot({ path: process.env.SHOT_DIR ? path.join(process.env.SHOT_DIR, 'sp-2-post.png') : path.join(dir, 'b.png') });
