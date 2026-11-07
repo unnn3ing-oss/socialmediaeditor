@@ -689,6 +689,37 @@ test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 
   assert.deepEqual(errors, []);
 });
 
+// 時間視窗欄位：日期欄要夠寬看得到完整日期、時間欄固定 96px、兩欄都在視窗內（曾被 .fp-modal input { width:100% } 蓋掉，日期欄剩 22px）
+async function assertTimeFields(page, root) {
+  const m = await page.evaluate((sel) => {
+    const r = (q) => document.querySelector(sel + ' ' + q).getBoundingClientRect();
+    const box = document.querySelector(sel).getBoundingClientRect(), d = r('.tp-date'), t = r('.tp-time');
+    return { boxL: box.left, boxR: box.right, dL: d.left, dW: d.width, tW: t.width, tR: t.right };
+  }, root);
+  assert.ok(m.dW >= 140, `${root} 日期欄太窄 ${m.dW}px`);
+  assert.ok(Math.abs(m.tW - 96) < 1, `${root} 時間欄應 96px，實際 ${m.tW}px`);
+  assert.ok(m.dL >= m.boxL && m.tR <= m.boxR, `${root} 欄位超出視窗`);
+}
+
+for (const [w, h] of [[1280, 900], [400, 800]]) {
+  test(`時間視窗與改時間（${w} 寬）：日期欄完整、時間欄 96px，不超出`, async () => {
+    const { page, errors } = await open({ viewport: { width: w, height: h } });
+    await page.waitForSelector('#schedList .item');
+    await page.click('#schedList .item:first-child [data-act=resched]');
+    await page.waitForSelector('#rsDlg[open]');
+    await assertTimeFields(page, '#rsDlg');
+    await page.click('#rsNo');
+    await page.click('#newPost');
+    await pick(page, '111');
+    await page.click(`${chip('111')} .pg-mode`);
+    await page.click('#modeMenu [data-m=sched]');
+    await page.waitForSelector('#timePop:not([hidden])');
+    await assertTimeFields(page, '#timePop');
+    assert.ok(await page.evaluate(() => document.getElementById('timePop').getBoundingClientRect().right <= innerWidth), '時間視窗不超出畫面');
+    assert.deepEqual(errors, []);
+  });
+}
+
 test('手機寬（390）：彈窗與時間視窗不會橫向捲動', async () => {
   const { page, errors } = await open({ viewport: { width: 390, height: 800 } });
   await page.click('#newPost');
@@ -705,6 +736,7 @@ test('手機寬（390）：彈窗與時間視窗不會橫向捲動', async () =>
   assert.ok(w.doc <= w.win, `頁面橫向捲動 ${w.doc} > ${w.win}`);
   assert.ok(w.body <= w.bodyC, `彈窗內容橫向捲動 ${w.body} > ${w.bodyC}`);
   assert.ok(w.pop <= w.win, '時間視窗不超出畫面');
+  await assertTimeFields(page, '#timePop');
   assert.deepEqual(errors, []);
 });
 
