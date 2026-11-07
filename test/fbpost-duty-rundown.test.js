@@ -81,7 +81,36 @@ test('Rundown：結果文字、開關', async () => {
   assert.equal(W.describe({ ok: true, status: 'write', cell: '2026/10!AE256', time: '15:55', addedRow: true }, '新聞'), '新聞 15:55 → AE256（新增一列）');
   assert.equal(W.describe({ ok: true, status: 'exists', cell: '2026/10!AB109' }, '新聞'), '新聞：已在 AB109（不重複寫）');
   assert.equal(W.describe({ ok: false, error: '時段已滿' }, '娛樂'), '娛樂：時段已滿');
-  const s = mem();
-  assert.equal(W.rundownOn(s), false);
-  W.setRundownOn(true, s); assert.equal(W.rundownOn(s), true);
+
+});
+
+function cookieDoc() {
+  let value = '', last = '';
+  return { get cookie() { return value; }, set cookie(v) { last = v; value = v.includes('Max-Age=0') ? '' : v.split(';')[0]; }, get last() { return last; } };
+}
+test('Rundown：預設開啟，session cookie保留關閉，重開工作階段恢復預設', async () => {
+  await load();
+  const doc = cookieDoc(), pref = W.createRundownSession(doc, 'https:');
+  assert.equal(pref.on(), true);
+  assert.equal(pref.set(false), true);
+  assert.equal(pref.on(), false);
+  assert.match(doc.last, /Secure; SameSite=None; Partitioned/);
+  assert.ok(!/Expires|Max-Age/i.test(doc.last), '關閉狀態不可持久保存');
+  assert.equal(W.createRundownSession(doc).on(), false, '同一工作階段重新開頁仍關閉');
+  assert.equal(W.createRundownSession(cookieDoc()).on(), true, '新工作階段預設開啟');
+  pref.set(true); assert.equal(pref.on(), true);
+  assert.match(doc.last, /Max-Age=0/);
+});
+test('Rundown：cookie被拒絕時保留本頁選擇，不影響發文', async () => {
+  await load();
+  const blocked = { get cookie() { return ''; }, set cookie(v) {} };
+  const pref = W.createRundownSession(blocked, 'http:');
+  assert.equal(pref.on(), true);
+  assert.equal(pref.set(false), false);
+  assert.equal(pref.on(), false);
+  assert.equal(pref.persistent, false);
+  pref.set(true); assert.equal(pref.on(), true);
+  const denied = W.createRundownSession({ get cookie() { throw Error('denied'); } });
+  assert.equal(denied.on(), true);
+  denied.set(false); assert.equal(denied.on(), false);
 });

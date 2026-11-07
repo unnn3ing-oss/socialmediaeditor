@@ -35,14 +35,14 @@ const URL_ENT = 'https://news.tvbs.com.tw/entertainment/3012346';
 // api.failPage：送到這個粉專就失敗一次；api.posts：收到的發文（multipart 欄位）
 const LONG_CURSOR = 'QVFI' + 'x'.repeat(700) + '.%3D';
 // duty：'skip'＝跳出值班視窗就按「先不選」（舊測試照舊）；'ask'＝留著讓測試操作；物件＝預先存好的值班 { ids, main, exp }
-// rundown：預先打開 Rundown 開關
+// rundown：測試可明確關閉；null不種偏好，驗證實際預設開啟
 async function skipDuty(page) {
   await page.waitForSelector('#dutyDlg[open]');
   await page.click('#dutySkip');
   await page.waitForSelector('#dutyDlg:not([open])', { state: 'attached' });
 }
-async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES } = {}) {
-  const page = await browser.newPage({ viewport });
+async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES, blockedCookies = false, context = null } = {}) {
+  const page = context ? await context.newPage() : await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const now = Math.floor(Date.now() / 1000);
@@ -57,17 +57,18 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     },
     failedComments: [{ id: 'c1', page: '111', post: '111_8', message: '看更多新聞內容\nhttps://news.tvbs.com.tw/life/1', status: 'failed', error: '貼文沒有出現', due: now - 60, updated: now - 30, dismissed: false }],
   };
-  await page.addInitScript(({ duty, rundown }) => {
+  await page.addInitScript(({ duty, rundown, blockedCookies }) => {
+    if (blockedCookies) Object.defineProperty(document, 'cookie', { configurable: true, get: () => '', set() {} });
     try {
       if (duty && typeof duty === 'object') localStorage.setItem('tbx.fbpost.duty.v1', JSON.stringify(duty));
-      if (rundown) localStorage.setItem('tbx.fbpost.rundown.v1', JSON.stringify({ on: true }));
+      if (rundown === false && !sessionStorage.getItem('rd.fixture.seeded')) { document.cookie = 'tbx.fbpost.rd-off.v1=1; Path=/; SameSite=Lax'; sessionStorage.setItem('rd.fixture.seeded', '1'); }
     } catch {}
     try { localStorage.setItem('tbx.company', JSON.stringify({ token: 'test', exp: Math.floor(Date.now() / 1000) + 3600 })); } catch {}
     window.__notes = [];
     class FakeNotification { constructor(t, o) { window.__notes.push({ t, o }); } static async requestPermission() { FakeNotification.permission = 'granted'; return 'granted'; } }
     FakeNotification.permission = 'default';
     window.Notification = FakeNotification;
-  }, { duty, rundown });
+  }, { duty, rundown, blockedCookies });
   await page.route(API_BASE + '/**', async (r) => {
     const req = r.request();
     if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
@@ -942,6 +943,61 @@ test('值班粉專：先不選＝照原本預設；過了 05:00 失效就全部�
   assert.deepEqual(errors, []);
 });
 
+test('Rundown：預設開啟、忽略舊永久設定，關閉跨重開分頁而新工作階段還原', async () => {
+  const context = await browser.newContext();
+  const { page, api } = await open({ rundown: null, context });
+  await page.evaluate(() => localStorage.setItem('tbx.fbpost.rundown.v1', JSON.stringify({ on: false })));
+  await reopen(page);
+  await page.click('#newPost');
+  assert.equal(await page.isChecked('#rdOn'), true);
+  assert.equal(await page.textContent('#rdSendNotice'), '將寫入 Rundown');
+  await page.click('#rdOn');
+  assert.equal(await page.textContent('#rdSendNotice'), '本次不寫入 Rundown');
+  const cookie = (await page.context().cookies()).find(c => c.name === 'tbx.fbpost.rd-off.v1');
+  assert.equal(cookie.expires, -1);
+  await reopen(page);
+  assert.equal(await page.isChecked('#rdOn'), false);
+  await page.context().route(API_BASE + '/**', r => r.fulfill({ headers: CORS, json: { ok: true, data: new URL(r.request().url()).pathname === '/fb/pages' ? PAGES : { items: [] } } }));
+  const tab = await page.context().newPage();
+  await tab.goto(srv.url + 'tools/fbpost/index.html');
+  await tab.waitForFunction(() => document.getElementById('rdSendNotice').textContent === '本次不寫入 Rundown');
+  assert.equal(await tab.isChecked('#rdOn'), false, '同工作階段重開分頁仍保留關閉');
+  await tab.close();
+  // 模擬另一頁已更改偏好，原頁按新增發文時也須重讀工作階段cookie。
+  await page.context().clearCookies();
+  await page.click('#newPost');
+  assert.equal(await page.isChecked('#rdOn'), true);
+  const next = await open({ rundown: null });
+  assert.equal(await next.page.isChecked('#rdOn'), true, '新瀏覽器工作階段預設開啟');
+  assert.equal(api.rundown.length, 0, '讀取偏好不會寫RD');
+  await context.close();
+});
+
+test('Rundown：400寬提醒正上方，開關不移動按鈕，cookie拒絕仍可關閉本頁', async () => {
+  const { page } = await open({ rundown: null, viewport: { width: 400, height: 900 } });
+  await page.click('#newPost');
+  const before = await page.locator('#sendBtn').boundingBox();
+  const notice = await page.locator('#rdSendNotice').boundingBox();
+  assert.ok(notice.y + notice.height <= before.y);
+  await page.screenshot({ path: '/tmp/rd-notice-on-400.png' });
+  await page.click('#rdOn');
+  const after = await page.locator('#sendBtn').boundingBox();
+  assert.deepEqual(after, before);
+  assert.equal(await page.textContent('#rdSendNotice'), '本次不寫入 Rundown');
+  await page.screenshot({ path: '/tmp/rd-notice-off-400.png' });
+  const blocked = await open({ rundown: null, blockedCookies: true });
+  await blocked.page.click('#newPost');
+  await blocked.page.click('#rdOn');
+  assert.equal(await blocked.page.isChecked('#rdOn'), false);
+  assert.match(await blocked.page.textContent('#rdSendNotice'), /本次不寫入 Rundown.*設定只保留本頁/);
+  await fillUrl(blocked.page, URL1);
+  await pick(blocked.page, '111');
+  await blocked.page.click('#sendBtn');
+  await blocked.page.waitForSelector('#doneDlg[open]');
+  assert.equal(blocked.api.posts.length, 1, 'cookie拒絕不能阻止發文');
+  assert.equal(blocked.api.rundown.length, 0, '本頁已關閉RD，不能誤寫入');
+});
+
 test('Rundown：開關記住、SLUG 預設標題前 4 字；送出成功的台各寫一筆（擠看看略過），結果顯示在訊息', async () => {
   const pages = [...PAGES, MORE[3]];
   const { page, api, errors } = await open({ pages });
@@ -1051,6 +1107,8 @@ for (const width of [1100, 400]) test(`Rundown：按鈕階段與請求順序，�
     await page.waitForFunction(() => document.getElementById('sendBtn').textContent === '正在排程到 新聞');
     assert.equal(api.rundown.length, 0, '臉書未回覆前不能寫 RD');
     assert.equal(await page.isDisabled('#sendBtn'), true);
+    assert.equal(await page.isDisabled('#rdOn'), true);
+    assert.equal(await page.textContent('#rdSendNotice'), '將寫入 Rundown');
     releasePost();
     await page.waitForFunction(() => document.getElementById('sendBtn').textContent === '寫入 RD');
     assert.equal(api.posts.length, 1);

@@ -199,7 +199,7 @@ npx wrangler deploy
 
 ## 步驟 6-3：連接 Rundown（選做）
 
-「排程發布」的「排入 Rundown」會把 `文章ID/圖文/SLUG`（純文字底圖選「無底色」或「臉書原生背景」時寫 `/文字/`）寫進 FB RUNDOWN 試算表。寫入由網新快速排程那份 Apps Script（`-schedulenewnet` 的 `gas/rundown.gs`）處理，**沿用已部署的那一份，不用重新部署**。
+「排程發布」的「排入 Rundown」會把 `文章ID/圖文/SLUG`（純文字底圖選「無底色」或「臉書原生背景」時寫 `/文字/`）寫進 FB RUNDOWN 試算表。寫入由網新快速排程那份 Apps Script（`-schedulenewnet` 的 `gas/rundown.gs`）處理，基本連線沿用已部署的那一份。若要套用「稿件置中、時間碼藍色粗體」，請依[更新 Rundown 寫入格式](rundown-format.md)替換指定函式，並更新原 Apps Script 部署版本；只推網站不會改變儲存格格式。
 
 1. 在 `server/` 資料夾執行，填入跟舊圖床 Worker 一樣的值：
    ```

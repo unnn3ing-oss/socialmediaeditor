@@ -49,12 +49,31 @@ export function describe(r, label) {
   return `${label} ${r.time || ''} → ${cell}${r.status === 'insert' ? '（插入）' : ''}${r.addedRow ? '（新增一列）' : ''}`;
 }
 
-// 開關（只存開或關，不存內容）
-const KEY = 'tbx.fbpost.rundown.v1';
-const ls = () => { try { return globalThis.localStorage; } catch (e) { return null; } };
-export function rundownOn(store = ls()) {
-  try { return JSON.parse(store.getItem(KEY) || 'null')?.on === true; } catch (e) { return false; }
+// 關閉只保留在瀏覽器工作階段；不讀取舊的永久 localStorage 偏好。
+export const SESSION_COOKIE = 'tbx.fbpost.rd-off.v1';
+const browserDocument = () => { try { return globalThis.document || null; } catch { return null; } };
+export function createRundownSession(doc = browserDocument(), protocol = doc?.location?.protocol || 'https:') {
+  let memoryOn = true, persistent = !!doc;
+  const attributes = '; Path=/' + (protocol === 'https:' ? '; Secure; SameSite=None; Partitioned' : '; SameSite=Lax');
+  const cookieOff = () => String(doc.cookie || '').split(';').some((part) => part.trim() === SESSION_COOKIE + '=1');
+  return {
+    get persistent() { return persistent; },
+    on() {
+      if (!persistent) return memoryOn;
+      try { memoryOn = !cookieOff(); return memoryOn; } catch { persistent = false; return memoryOn; }
+    },
+    set(on) {
+      memoryOn = !!on;
+      try {
+        if (!doc) throw new Error('Cookie unavailable');
+        doc.cookie = SESSION_COOKIE + (memoryOn ? '=; Max-Age=0' : '=1') + attributes;
+        persistent = cookieOff() === !memoryOn;
+      } catch { persistent = false; }
+      return persistent;
+    }
+  };
 }
-export function setRundownOn(on, store = ls()) {
-  try { store.setItem(KEY, JSON.stringify({ on: !!on })); } catch (e) { /* 被停用：這次分頁內照常 */ }
-}
+const preference = createRundownSession();
+export const rundownOn = () => preference.on();
+export const setRundownOn = (on) => preference.set(on);
+export const rundownPreferencePersistent = () => preference.persistent;

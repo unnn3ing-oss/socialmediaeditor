@@ -978,6 +978,8 @@ async function send(ids) {
   if (!ids.length) { sendMsg('請先勾選要發的粉專', 'bad'); return; }
   sending = true;   // 在任何 await 之前就鎖上，避免連點兩下重複發文
   const rdOn = $('rdOn').checked;
+  $('rdOn').disabled = true;
+  syncRd(rdOn);
   sendMsg('');
   sendStage('準備中');
   $('sendBtn').disabled = true;
@@ -1040,6 +1042,8 @@ async function send(ids) {
   } finally {
     sending = false;
     $('clearBtn').disabled = false;
+    $('rdOn').disabled = false;
+    refreshRdPreference();
     updateSendBtn();
     if (finalStage) sendStage(finalStage);
   }
@@ -1065,8 +1069,10 @@ async function toRundown(info, sent, enabled) {
   entries.forEach((en, i) => { results[en.page] = { ok: list[i]?.ok === true, msg: 'RD：' + RD.describe(list[i], rdLabel(en.page)) }; });
   return { msg: ['Rundown：' + entries.map((en, i) => RD.describe(list[i], rdLabel(en.page))).join('；'), skipMsg].filter(Boolean).join('；'), bad: skipped.length > 0 || entries.some((en, i) => !(list[i] && list[i].ok)), results };
 }
-function syncRd() {
-  const on = $('rdOn').checked;
+function syncRd(on = $('rdOn').checked) {
+  const notice = (on ? '將寫入 Rundown' : '本次不寫入 Rundown') + (!RD.rundownPreferencePersistent() ? '（設定只保留本頁）' : '');
+  $('rdSendNotice').textContent = notice;
+  $('rdSendNotice').title = notice;
   $('slug').disabled = !on;
   $('rdBox').classList.toggle('off', !on);
 }
@@ -1074,8 +1080,14 @@ function updateSlugHint() {
   const ds = RD.defaultSlug(getLines());
   $('slug').placeholder = ds ? `空白＝${ds}（標題前 4 字）` : '空白＝標題前 4 字';
 }
-$('rdOn').checked = RD.rundownOn();
-syncRd();
+function refreshRdPreference() {
+  if (sending) return;
+  $('rdOn').checked = RD.rundownOn();
+  syncRd();
+}
+refreshRdPreference();
+window.addEventListener('focus', refreshRdPreference);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshRdPreference(); });
 $('rdOn').addEventListener('change', () => { RD.setRundownOn($('rdOn').checked); syncRd(); });
 $('rdSetBtn').addEventListener('click', () => { $('rdHint').textContent = ''; $('rdHint').className = 'hint'; $('rdDlg').showModal(); });
 $('rdClose').addEventListener('click', () => $('rdDlg').close());
@@ -1131,6 +1143,7 @@ async function requestClose() {
   if (await confirmBox('關閉新增發文？', some ? '還有沒送出或失敗的粉專，關閉後內容會全部清掉。' : '目前填的內容還沒送出，關閉後會清掉。', '放棄並關閉')) closeModal();
 }
 $('newPost').addEventListener('click', async () => {
+  refreshRdPreference();
   if (dutyExpired() || (!duty && !dutyAsked && pages.length)) { await openDuty(); resetAll(); }
   modal.showModal(); $('url').focus();
 });
