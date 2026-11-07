@@ -60,6 +60,57 @@ test('drag to right splits', async () => {
   assert.equal(await page.isVisible('#dropzones'), false);
 });
 
+async function assertCloseLayout(page) {
+  const layouts = await page.$$eval('#work .pane[data-side]', (panes) => panes.map((pane) => {
+    const frame = pane.querySelector('iframe'), close = pane.querySelector('.pane-close');
+    const p = pane.getBoundingClientRect(), f = frame.getBoundingClientRect(), c = close.getBoundingClientRect();
+    return { titleBars: pane.querySelectorAll('.pane-bar').length, topGap: f.top - p.top,
+      gap: c.left - f.right, closeWidth: c.width, closeHeight: c.height,
+      radius: getComputedStyle(close).borderRadius, label: close.getAttribute('aria-label'), frameTitle: frame.title };
+  }));
+  for (const layout of layouts) {
+    assert.equal(layout.titleBars, 0, '不留下標題框或空白標題列');
+    assert.ok(Math.abs(layout.topGap) < 1, '工具內容從窗格頂端開始');
+    assert.ok(layout.gap >= 0, '關閉鈕不可遮住 iframe 內的工具控制');
+    assert.equal(layout.closeWidth, layout.closeHeight);
+    assert.equal(layout.radius, '50%');
+    assert.ok(layout.closeWidth >= 44, '保持觸控可點範圍');
+    assert.ok(layout.label.startsWith('關閉'));
+    assert.ok(layout.frameTitle);
+  }
+}
+
+test('窗格不顯示標題列，單工具與左右並排保留不遮內容的圓形關閉鈕', async () => {
+  const page = await open();
+  await page.click('#showcase .card[data-tool=alpha]');
+  await assertCloseLayout(page);
+  await drag(page, 'beta', 'right');
+  await assertCloseLayout(page);
+  await page.setViewportSize({ width: 390, height: 820 });
+  await assertCloseLayout(page);
+  await page.click('.pane[data-tool=beta] .pane-close');
+  assert.deepEqual(await ids(page), ['alpha']);
+  await assertCloseLayout(page);
+});
+
+test('移除標題列後鎖定層覆蓋工具內容，圓形關閉鈕仍可操作', async () => {
+  const page = await open();
+  await page.click('#showcase .card[data-tool=alpha]');
+  await page.evaluate(() => window.tbxShell._internal.panes.setLocked('alpha', true));
+  const state = await page.$eval('.pane[data-tool=alpha]', (pane) => {
+    const p = pane.getBoundingClientRect(), lock = pane.querySelector('.pane-lock').getBoundingClientRect();
+    const close = pane.querySelector('.pane-close'), c = close.getBoundingClientRect();
+    return { top: lock.top - p.top, height: lock.height - p.height,
+      closeAvailable: document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2) === close };
+  });
+  assert.ok(Math.abs(state.top) < 1);
+  assert.ok(Math.abs(state.height) < 1);
+  assert.equal(state.closeAvailable, true);
+  await page.click('.pane[data-tool=alpha] .pane-close');
+  assert.equal(await page.isVisible('#showcase'), true);
+  assert.equal(await page.locator('.pane[data-tool=alpha] iframe').count(), 1);
+});
+
 test('third tool replaces last-operated', async () => {
   const page = await open();
   await page.click('#showcase .card[data-tool=alpha]');

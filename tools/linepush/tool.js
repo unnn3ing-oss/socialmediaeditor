@@ -146,6 +146,9 @@ let quickfillOpen = true;
 // 步驟 1 option: show the photo-edge check right on the preview (check range + yellow "!").
 let edgeCheckOn = false;
 let chromeReady = false;     // syncChrome() waits until every element it touches exists
+const cellCopyBtn = document.getElementById('cellCopyBtn');
+let copyBtnCell = -1, hoverCell = -1, copyContext = 0;
+let copyViaHover = false, copyArmTimer = null, copyFeedbackTimer = null;
 function isLocked() { return step === 2; }
 // Mode-dependent values the rest of the code reads as plain globals.
 let CELL_COUNT, CELL_LABELS, LINE_COLORS, TAG_COLORS, STICKER_BASE_SIZE;
@@ -2684,6 +2687,79 @@ function hideLockReminder() {
 }
 document.getElementById('lockToastBtn').addEventListener('click', () => { hideLockReminder(); goStep(1); });
 
+// 步驟 2 複製推播連結：沿用 LinePushPatternTool 的文章網址與 UTM 規則。
+function pushLink(url) {
+  if (!url) return '';
+  const base = String(url).split(/[?&#]/)[0];
+  try { if (!/^https?:$/.test(new URL(base).protocol)) return ''; } catch { return ''; }
+  return `${base}?utm_source=LineNewsPush&utm_medium=${mode === 'news' ? 'push' : 'enewsline'}`;
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* 使用舊版複製方式 */ }
+  const input = document.createElement('textarea');
+  input.value = text;
+  input.style.cssText = 'position:fixed;left:-9999px;top:0';
+  document.body.appendChild(input);
+  input.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* 瀏覽器拒絕複製 */ }
+  input.remove();
+  return ok;
+}
+function showCellCopy(i) {
+  if (!isLocked() || i < 0 || i >= CELL_COUNT) { hideCellCopy(); return; }
+  if (copyBtnCell !== i || cellCopyBtn.hidden) {
+    copyContext++;
+    clearTimeout(copyArmTimer); clearTimeout(copyFeedbackTimer);
+    copyBtnCell = i;
+    const hasLink = !!pushLink(activePage().cards[i].url);
+    cellCopyBtn.textContent = hasLink ? '複製推播連結' : '這格沒有連結';
+    cellCopyBtn.classList.toggle('no-link', !hasLink);
+    // 第一次觸控只選格子，不讓合成 click 順手複製。
+    cellCopyBtn.style.pointerEvents = copyViaHover ? '' : 'none';
+    if (!copyViaHover) copyArmTimer = setTimeout(() => { cellCopyBtn.style.pointerEvents = ''; }, 350);
+  }
+  const rc = stepTwoCellRect(i, activePage().showHeader), r = canvas.getBoundingClientRect();
+  cellCopyBtn.style.left = `${r.left + (rc.x + rc.w / 2) * r.width / CANVAS_W}px`;
+  cellCopyBtn.style.top = `${r.top + (rc.y + rc.h / 2) * r.height / CANVAS_H}px`;
+  cellCopyBtn.hidden = false;
+}
+function hideCellCopy() {
+  copyContext++;
+  copyBtnCell = hoverCell = -1;
+  clearTimeout(copyArmTimer); clearTimeout(copyFeedbackTimer);
+  cellCopyBtn.hidden = true;
+}
+cellCopyBtn.addEventListener('click', async () => {
+  if (!isLocked() || copyBtnCell < 0) return;
+  const i = copyBtnCell, context = copyContext;
+  const link = pushLink(activePage().cards[i].url);
+  if (!link) { statusEl.show(`第 ${i + 1} 格沒有連結可以複製（請先用快速填入帶入文章網址）`, 'error'); return; }
+  const ok = await copyText(link);
+  statusEl.show(ok ? `已複製第 ${i + 1} 格推播連結（含 UTM）` : '這個瀏覽器無法複製，請改用手動複製', ok ? 'success' : 'error');
+  if (ok && context === copyContext) {
+    cellCopyBtn.textContent = '已複製 ✓';
+    copyFeedbackTimer = setTimeout(() => { if (context === copyContext) cellCopyBtn.textContent = '複製推播連結'; }, 1500);
+  }
+});
+function hoverCellUpdate(i) {
+  if (!isLocked()) return;
+  if (i === hoverCell) return;
+  hoverCell = i;
+  if (i >= 0) { copyViaHover = true; try { setActiveCard(i, true); } finally { copyViaHover = false; } }
+  else clearSelection();
+}
+const touchMouseEvent = (e) => e.sourceCapabilities?.firesTouchEvents || !matchMedia('(any-hover: hover)').matches;
+canvas.addEventListener('mousemove', (e) => {
+  if (touchMouseEvent(e)) return;
+  if (isLocked() && !drag && !lockProbe) { const p = getCanvasPos(e); hoverCellUpdate(cellIndexAt(p.x, p.y)); }
+});
+canvas.addEventListener('mouseleave', (e) => { if (!touchMouseEvent(e) && e.relatedTarget !== cellCopyBtn) hoverCellUpdate(-1); });
+cellCopyBtn.addEventListener('mouseleave', (e) => { if (!touchMouseEvent(e) && e.relatedTarget !== canvas) hoverCellUpdate(-1); });
+document.addEventListener('mouseout', (e) => { if (!touchMouseEvent(e) && !e.relatedTarget) hoverCellUpdate(-1); });
+window.addEventListener('resize', () => { if (copyBtnCell >= 0) requestAnimationFrame(() => showCellCopy(copyBtnCell)); });
+window.addEventListener('scroll', () => { if (copyBtnCell >= 0) showCellCopy(copyBtnCell); }, { passive: true, capture: true });
+
 // >>> 原檔 5186-5482
 function renderCheckPanel() {
   const panel = document.getElementById('checkPanel');
@@ -2899,6 +2975,7 @@ function syncChrome() {
   updateDownloadState();
   alignFloatStack();
   fitPreviewSize();   // the page tabs / dock buttons just changed what is above and below the preview
+  if (checking && cellSelected) showCellCopy(activeCard); else hideCellCopy();
 }
 
 // ---- sliding knob for the 新聞/娛樂/拼圖 and 頁數 capsules (also draggable) ----------------

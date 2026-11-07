@@ -860,7 +860,7 @@ function renderChip(id) {
 function updateSendBtn() {
   if (sending) return;
   const n = pendingChips().length;
-  $('sendBtn').textContent = n ? `全部送出（${n} 台）` : '全部送出';
+  sendStage(n ? `全部送出（${n} 個粉專）` : '全部送出');
   $('sendBtn').disabled = !n || sending;
   $('sendTip').hidden = n > 0 || checkedChips().length > 0;
   updateCommentPreview();
@@ -959,8 +959,14 @@ async function sendOne(page, p, at) {
   fd.append('comment', commentFor(page));
   return tb.api.call('/fb/post', { method: 'POST', body: fd });
 }
-const sendMsg = (text, cls) => { const m = $('sendMsg'); m.textContent = text || ''; m.className = 'hint' + (cls ? ' ' + cls : ''); };
-const sendStage = (text) => { $('sendBtn').textContent = text; };
+const sendMsg = (text, cls) => { const m = $('sendMsg'); m.textContent = text || ''; m.className = 'hint' + (cls ? ' ' + cls : ''); m.hidden = !text; };
+const sendStage = (text, name = '') => {
+  const button = $('sendBtn'), label = text + (name ? ' ' + name : '');
+  button.replaceChildren(el('span', { className: 'send-state', textContent: text + (name ? ' ' : '') }),
+    ...(name ? [el('span', { className: 'send-name', textContent: name })] : []));
+  button.title = label;
+  button.setAttribute('aria-label', label);
+};
 const paintStage = () => new Promise((resolve) => {
   // 背景分頁可能不繪圖，不能因此卡住 RD 寫入。
   const fallback = setTimeout(resolve, 50);
@@ -972,10 +978,10 @@ async function send(ids) {
   if (!ids.length) { sendMsg('請先勾選要發的粉專', 'bad'); return; }
   sending = true;   // 在任何 await 之前就鎖上，避免連點兩下重複發文
   const rdOn = $('rdOn').checked;
-  const width = $('sendBtn').getBoundingClientRect().width + 'px';
-  $('sendBtn').style.minWidth = width;
-  $('sendBtn').style.maxWidth = width;
+  sendMsg('');
+  sendStage('準備中');
   $('sendBtn').disabled = true;
+  $('clearBtn').disabled = true;
   let finalStage = '';
   try {
     let payload;
@@ -989,14 +995,13 @@ async function send(ids) {
     const submission = { title: getLines().join('\n'), caption: payload.message, url: $('url').value.trim() };
     if (!currentRecord) currentRecord = { id: crypto.randomUUID(), at: Date.now(), updatedAt: Date.now(), ...submission, pages: [] };
     ids.forEach((id) => { chips.get(id).status = 'sending'; renderChip(id); });
-    sendStage('送出臉書');
     let schedN = 0, nowN = 0, commentBad = 0;
     const failed = [], sent = [];
     const rdInfo = { articleId: articleId($('url').value.trim()), slug: $('slug').value, lines: getLines(), type: RD.typeOf(mode, textStyle) };
-    for (const [i, id] of ids.entries()) {
+    for (const id of ids) {
       const c = chips.get(id), page = pages.find((p) => p.id === id);
       const localPage = { page: id, label: pageLabel(page), ...submission, scheduledAt: c.sched ? Math.floor(c.at.getTime() / 1000) : null, sentAt: Date.now(), status: 'fail', error: '' };
-      sendMsg(`送出 ${pageLabel(page)}…（${i + 1}/${ids.length}）`);
+      sendStage(c.sched ? '正在排程到' : '正在發送到', pageLabel(page));
       try {
         const r = await sendOne(page, payload, c.sched ? Math.floor(c.at.getTime() / 1000) : null);
         c.status = 'ok'; c.result = { schedule: c.sched };
@@ -1014,7 +1019,7 @@ async function send(ids) {
       saveRecord();
       renderChip(id);
     }
-    const sum = [nowN ? `已發布 ${nowN} 台` : '', schedN ? `已排程 ${schedN} 台` : ''].filter(Boolean).join('、');
+    const sum = [nowN ? `已發布 ${nowN} 個粉專` : '', schedN ? `已排程 ${schedN} 個粉專` : ''].filter(Boolean).join('、');
     if (sent.length) {
       sendStage(failed.length ? '部分送出' : schedN && !nowN ? '排程完成' : '送出完成');
       await paintStage();
@@ -1027,13 +1032,14 @@ async function send(ids) {
     saveRecord();
     finalStage = failed.length ? '發文未完成' : rd.bad ? 'RD 未完成' : commentBad ? '留言未完成' : '完成';
     sendStage(finalStage);
-    const extra = (commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '') + (rd.msg ? '；' + rd.msg : '') + (!records.persistent ? '；本地紀錄無法儲存，關閉頁面後會遺失' : '');
-    if (failed.length) sendMsg(`${sum ? sum + '；' : ''}失敗 ${failed.length} 台：${failed.join('；')}（可按晶片上的「↻ 重送」）${extra}`, 'bad');
+    const extra = (commentBad ? `；${commentBad} 個粉專留言沒排成功，請到「已排程」分頁處理` : '') + (rd.msg ? '；' + rd.msg : '') + (!records.persistent ? '；本地紀錄無法儲存，關閉頁面後會遺失' : '');
+    if (failed.length) sendMsg(`${sum ? sum + '；' : ''}失敗 ${failed.length} 個粉專：${failed.join('；')}（可按晶片上的「↻ 重送」）${extra}`, 'bad');
     else sendMsg(sum + extra, commentBad || rd.bad ? 'bad' : 'ok');
     pollFailed();
     if (!pendingChips().length && checkedChips().length) showDone((sum || '全部完成') + extra);
   } finally {
     sending = false;
+    $('clearBtn').disabled = false;
     updateSendBtn();
     if (finalStage) sendStage(finalStage);
   }
@@ -1050,7 +1056,6 @@ async function toRundown(info, sent, enabled) {
   const skipMsg = skipped.length ? '未寫入 RD：' + skipped.map((code) => rdLabel(code) || '粉專對應缺漏').join('、') + '（請檢查粉專對應；僅支援新聞、娛樂、少康、國際＋）' : '';
   if (!entries.length) return { msg: skipMsg, bad: true, results };
   sendStage('寫入 RD');
-  sendMsg('寫入 Rundown…');
   let res;
   try { res = await tb.api.call('/rundown', { method: 'POST', body: { action: 'add', entries } }); } catch (e) {
     for (const en of entries) results[en.page] = { ok: false, msg: 'RD 未寫入：' + errText(e) };
@@ -1120,7 +1125,7 @@ function closeModal() {
   resetAll();
 }
 async function requestClose() {
-  if (sending) { sendMsg('送出中，請等全部送完', 'bad'); return; }
+  if (sending) return;   // 保留按鈕上的當前進度，不另外插入訊息讓操作列移動。
   if (!isDirty() || allSent()) { closeModal(); return; }
   const some = [...chips.values()].some((c) => c.status);
   if (await confirmBox('關閉新增發文？', some ? '還有沒送出或失敗的粉專，關閉後內容會全部清掉。' : '目前填的內容還沒送出，關閉後會清掉。', '放棄並關閉')) closeModal();

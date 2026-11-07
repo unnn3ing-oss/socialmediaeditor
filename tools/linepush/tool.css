@@ -17,6 +17,9 @@
     --radius-card: 18px;
   }
 * { box-sizing: border-box; }
+.cell-copy { position: fixed; z-index: 60; transform: translate(-50%, -50%); padding: 10px 22px; border-radius: 99px; font-size: 14px; font-weight: 700; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.cell-copy[hidden] { display: none; }
+.cell-copy.no-link { background: #8a8f98; border-color: #8a8f98; cursor: default; }
 body {
     margin: 0;
     font-family: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;

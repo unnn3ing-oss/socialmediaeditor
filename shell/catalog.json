@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=94ba81e889"
+      "entry": "tools/linepush/index.html?v=194b700551"
     },
     {
       "id": "collage",
@@ -86,7 +86,7 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=b328f0361c"
+      "entry": "tools/fbpost/index.html?v=ebd4a63328"
     }
   ]
 }

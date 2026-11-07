@@ -30,7 +30,13 @@ async function clickTab(frame, text) {
   await frame.locator('.mode-tab', { hasText: text }).click();
 }
 async function open(opts = {}) {
-  const t = await openTool(browser, srv.url, 'linepush', { viewport: { width: 1280, height: 860 }, ...opts });
+  const { touch = false, ...toolOpts } = opts;
+  let target = browser;
+  if (touch) {
+    const context = await browser.newContext({ hasTouch: true, viewport: toolOpts.viewport || { width: 400, height: 900 } });
+    target = { newPage: () => context.newPage() };
+  }
+  const t = await openTool(target, srv.url, 'linepush', { viewport: { width: 1280, height: 860 }, ...toolOpts });
   await t.frame.waitForSelector('.mode-tab');
   await t.frame.evaluate(() => document.fonts.ready);
   const errors = [];
@@ -158,4 +164,145 @@ test('有密碼：要求黃色標題條與娛樂四格素材，公司版面出�
   // 新聞第 1 頁有頂部標籤（公司版）
   await clickTab(t.frame, '新聞');
   assert.ok(t.errors.length === 0, t.errors.join('|'));
+});
+
+
+async function useClipboard(t, { fail = false, fallback = false } = {}) {
+  await t.frame.evaluate(({ fail, fallback }) => {
+    window.__copied = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => {
+      if (fail) throw new Error('blocked');
+      window.__copied.push(text);
+    } } });
+    document.execCommand = () => {
+      if (!fallback) return false;
+      window.__copied.push(document.querySelector('textarea[style*="-9999px"]').value);
+      return true;
+    };
+  }, { fail, fallback });
+}
+async function fillLink(t, url, title = '第一則標題') {
+  await t.page.route('https://og-image-proxy.19jpz-3.workers.dev**', r => r.fulfill({ contentType: 'image/png', body: RED }));
+  await t.frame.fill('#quickfillText', '★' + title + '\n' + url);
+  await t.frame.click('#quickfillBtn');
+  await t.frame.waitForFunction(() => /圖片抓取完成/.test(document.getElementById('statusToast').textContent));
+}
+async function cellPoint(t, index = 0, cols = 3) {
+  const b = await t.frame.locator('#canvas').boundingBox();
+  return { x: b.x + b.width * ((index % cols) + .5) / cols, y: b.y + b.height * (Math.floor(index / cols) + .5) / 2 };
+}
+async function hoverCell(t, index = 0, cols = 3) {
+  const p = await cellPoint(t, index, cols);
+  await t.page.mouse.move(p.x, p.y);
+  await t.frame.waitForSelector('#cellCopyBtn:not([hidden])');
+}
+
+test('複製推播連結：最後一步 hover、只複製網址並清除舊參數，切頁／返回編輯清掉按鈕', async () => {
+  const t = await open();
+  await useClipboard(t);
+  await fillLink(t, 'https://news.tvbs.com.tw/world/7654321?other=old#top', '第一則標題\nhttps://news.tvbs.com.tw/life/1234567?utm_source=old&x=1#top\n★第二則\n★第三則\n★第四則\n★第五則\n★第六則\n★第二頁標題');
+  assert.equal(await t.frame.isHidden('#cellCopyBtn'), true);
+  await t.frame.click('#nextStepBtn');
+  await hoverCell(t);
+  assert.equal(await t.frame.textContent('#cellCopyBtn'), '複製推播連結');
+  const p = await cellPoint(t);
+  const shade = await t.frame.evaluate(() => {
+    const c = document.getElementById('canvas');
+    return [...c.getContext('2d').getImageData(100, 100, 1, 1).data];
+  });
+  assert.ok(shade[0] < 200 && shade[0] > 170, '選取格以黑色10%反灰');
+  await t.frame.click('#cellCopyBtn');
+  assert.deepEqual(await t.frame.evaluate(() => window.__copied), ['https://news.tvbs.com.tw/life/1234567?utm_source=LineNewsPush&utm_medium=push']);
+  assert.equal(await t.frame.textContent('#cellCopyBtn'), '已複製 ✓');
+  await t.page.screenshot({ path: '/tmp/linepush-copy-hover.png', fullPage: false });
+  await t.frame.click('.page-tab[data-page="1"]');
+  assert.equal(await t.frame.isHidden('#cellCopyBtn'), true);
+  await hoverCell(t);
+  assert.equal(await t.frame.textContent('#cellCopyBtn'), '複製推播連結', '第二頁同index不可殘留已複製提示');
+  await t.frame.click('#cellCopyBtn');
+  assert.equal((await t.frame.evaluate(() => window.__copied))[1], 'https://news.tvbs.com.tw/world/7654321?utm_source=LineNewsPush&utm_medium=push');
+  await hoverCell(t, 1);
+  assert.equal(await t.frame.textContent('#cellCopyBtn'), '這格沒有連結');
+  await t.frame.click('#cellCopyBtn');
+  assert.equal((await t.frame.evaluate(() => window.__copied)).length, 2);
+  assert.match(await t.frame.textContent('#statusToast'), /沒有連結/);
+  await t.frame.click('#backStepBtn');
+  assert.equal(await t.frame.isHidden('#cellCopyBtn'), true);
+  await t.page.mouse.move(p.x, p.y);
+  assert.equal(await t.frame.isHidden('#cellCopyBtn'), true);
+  assert.deepEqual(t.errors, []);
+});
+
+test('複製推播連結：公司新聞與娛樂各用正確UTM，版面切換清掉舊狀態', async () => {
+  const t = await open({ company: true });
+  await useClipboard(t);
+  await fillLink(t, 'https://news.tvbs.com.tw/life/1234567?old=1');
+  await t.frame.click('#nextStepBtn');
+  await hoverCell(t);
+  await t.frame.click('#cellCopyBtn');
+  await clickTab(t.frame, '娛樂');
+  assert.equal(await t.frame.isHidden('#cellCopyBtn'), true);
+  await fillLink(t, 'https://news.tvbs.com.tw/entertainment/7654321?old=1#x', '娛樂標題');
+  await t.frame.click('#nextStepBtn');
+  await hoverCell(t, 0, 2);
+  assert.equal(await t.frame.textContent('#cellCopyBtn'), '複製推播連結');
+  await t.frame.click('#cellCopyBtn');
+  assert.deepEqual(await t.frame.evaluate(() => window.__copied), [
+    'https://news.tvbs.com.tw/life/1234567?utm_source=LineNewsPush&utm_medium=push',
+    'https://news.tvbs.com.tw/entertainment/7654321?utm_source=LineNewsPush&utm_medium=enewsline'
+  ]);
+  assert.deepEqual(t.errors, []);
+});
+
+test('複製推播連結：觸控第一次只選格子、第二次點按鈕才複製', async () => {
+  const t = await open({ touch: true, viewport: { width: 400, height: 900 } });
+  await useClipboard(t);
+  await fillLink(t, 'https://news.tvbs.com.tw/life/1234567?old=1');
+  await t.frame.click('#nextStepBtn');
+  const p = await cellPoint(t);
+  await t.page.touchscreen.tap(p.x, p.y);
+  await t.frame.waitForSelector('#cellCopyBtn:not([hidden])');
+  assert.deepEqual(await t.frame.evaluate(() => window.__copied), []);
+  await t.frame.waitForFunction(() => getComputedStyle(document.getElementById('cellCopyBtn')).pointerEvents !== 'none');
+  const button = await t.frame.locator('#cellCopyBtn').boundingBox();
+  assert.ok(button.x >= 0 && button.x + button.width <= 400, '複製按鈕不超出窄版視窗');
+  await t.frame.tap('#cellCopyBtn');
+  assert.equal((await t.frame.evaluate(() => window.__copied)).length, 1);
+  assert.deepEqual(t.errors, []);
+});
+
+test('複製推播連結：clipboard備援成功與全部拒絕時有正確回饋', async () => {
+  const t = await open();
+  await fillLink(t, 'https://news.tvbs.com.tw/life/1234567');
+  await t.frame.click('#nextStepBtn');
+  await useClipboard(t, { fail: true, fallback: true });
+  await hoverCell(t);
+  await t.frame.click('#cellCopyBtn');
+  assert.equal((await t.frame.evaluate(() => window.__copied)).length, 1);
+  await useClipboard(t, { fail: true });
+  await t.frame.click('#cellCopyBtn');
+  assert.match(await t.frame.textContent('#statusToast'), /無法複製/);
+  assert.deepEqual(await t.frame.evaluate(() => window.__copied), []);
+  assert.deepEqual(t.errors, []);
+});
+
+test('複製推播連結：反灰與複製按鈕不污染下載圖片', async () => {
+  const t = await open();
+  await useClipboard(t);
+  await fillLink(t, 'https://news.tvbs.com.tw/life/1234567');
+  for (let i = 0; i < 6; i++) { await putPhoto(t.frame, i); await setLine(t.frame, i, `標題${i}`, 0); await setLine(t.frame, i, '第二行', 1); }
+  await t.frame.click('#nextStepBtn');
+  await hoverCell(t);
+  await t.page.screenshot({ path: '/tmp/linepush-copy-ready.png', fullPage: false });
+  const [dl] = await Promise.all([t.page.waitForEvent('download'), t.frame.dispatchEvent('#downloadJpgBtn', 'click')]);
+  const b64 = fs.readFileSync(await dl.path()).toString('base64');
+  const px = await t.frame.evaluate(async b64 => {
+    const image = new Image();
+    await new Promise((r, j) => { image.onload = r; image.onerror = j; image.src = 'data:image/png;base64,' + b64; });
+    const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
+    const g = c.getContext('2d'); g.drawImage(image, 0, 0);
+    return [...g.getImageData(100, 100, 1, 1).data];
+  }, b64);
+  assert.ok(near(px, [200, 30, 30]), '下載圖沒有選取反灰');
+  assert.deepEqual(t.errors, []);
 });

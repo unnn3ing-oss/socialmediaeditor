@@ -716,7 +716,7 @@ test('一台立即、一台排程；失敗的晶片可重送；全部完成跳�
   assert.equal(await page.isDisabled('#sendBtn'), true);
   await pick(page, '111');
   await pick(page, '222');
-  assert.match(await page.textContent('#sendBtn'), /全部送出（2 台）/);
+  assert.match(await page.textContent('#sendBtn'), /全部送出（2 個粉專）/);
   // 222 → 排程：選單選「排程發布」開時間視窗，+1 小時
   await page.click(`${chip('222')} .pg-mode`);
   await page.click('#modeMenu [data-m=sched]');
@@ -734,7 +734,7 @@ test('一台立即、一台排程；失敗的晶片可重送；全部完成跳�
   assert.ok(api.posts.every((p) => p.hasImage && p.message === '小編文 #颱風\n第二行'));
   assert.equal(api.posts[0].scheduledAt, null);
   assert.ok(Number(api.posts[1].scheduledAt) > Date.now() / 1000 + 3600 * 1.4);
-  assert.match(await page.textContent('#sendMsg'), /失敗 1 台/);
+  assert.match(await page.textContent('#sendMsg'), /失敗 1 個粉專/);
   assert.equal(await page.textContent('#sendBtn'), '發文未完成');
   assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
   assert.match(await page.textContent('#recordsList'), /失敗|發文未完成|權限/);
@@ -746,7 +746,7 @@ test('一台立即、一台排程；失敗的晶片可重送；全部完成跳�
   assert.equal(api.posts[2].page, '222');
   assert.equal(api.posts[2].message, '重送改成這段小編文');
   assert.match(await page.textContent(`${chip('222')} .pg-mode`), /✓ 排程 /);
-  assert.match(await page.textContent('#dnBody'), /已發布 1 台、已排程 1 台|已排程 1 台/);
+  assert.match(await page.textContent('#dnBody'), /已發布 1 個粉專、已排程 1 個粉專|已排程 1 個粉專/);
   assert.equal(await page.locator('#recordsList [data-record]').count(), 1, '重試只更新原紀錄');
   assert.equal(await page.getAttribute('#recordsList [data-record]', 'data-record'), recordId);
   const stored = await page.evaluate((id) => JSON.parse(localStorage.getItem('tbx.fbpost.records.v1')).find((r) => r.id === id), recordId);
@@ -985,6 +985,48 @@ test('Rundown：開關記住、SLUG 預設標題前 4 字；送出成功的台�
   assert.deepEqual(errors, []);
 });
 
+for (const scheduled of [false, true]) test(`送出按鈕：400 寬${scheduled ? '排程' : '立即'}長粉專名、清空按鈕不跳位`, async () => {
+  const name = '新聞粉專測試長名稱用來確認省略顯示';
+  const { page, api } = await open({ viewport: { width: 400, height: 900 }, pages: [{ ...PAGES[0], label: name }] });
+  await page.click('#newPost');
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  if (scheduled) {
+    await page.click(`${chip('111')} .pg-mode`);
+    await page.click('#modeMenu [data-m=sched]');
+    await page.keyboard.press('Enter');
+  }
+  const buttons = () => page.evaluate(() => {
+    const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    return { clear: box('clearBtn'), send: box('sendBtn') };
+  });
+  const before = await buttons();
+  assert.ok(Math.abs(before.clear.y - before.send.y) < 1);
+  let release;
+  api.postHold = new Promise((r) => { release = r; });
+  await page.click('#sendBtn');
+  const label = `${scheduled ? '正在排程到' : '正在發送到'} ${name}`;
+  try {
+    await page.waitForFunction((label) => document.getElementById('sendBtn').textContent === label, label);
+    const during = await buttons();
+    assert.deepEqual(during, before, '送出期間兩個按鈕的位置與大小保持不變');
+    assert.equal(await page.isDisabled('#clearBtn'), true);
+    assert.equal(await page.isHidden('#sendMsg'), true);
+    assert.equal(await page.getAttribute('#sendBtn', 'aria-label'), label);
+    assert.equal(await page.getAttribute('#sendBtn', 'title'), label);
+    assert.equal(await page.$eval('#sendBtn', b => b.scrollWidth <= b.clientWidth), true);
+    assert.equal(await page.$eval('#sendBtn .send-name', b => b.scrollWidth > b.clientWidth), true, '只縮短長粉專名');
+    // 嘗試關閉時仍留在進度中，不插入額外訊息推動按鈕列。
+    await page.dispatchEvent('#modal', 'cancel');
+    assert.equal(await page.isHidden('#sendMsg'), true);
+    assert.deepEqual(await buttons(), before);
+    await page.screenshot({ path: `/tmp/fbpost-send-${scheduled ? 'scheduled' : 'now'}-400.png` });
+  } finally { release(); }
+  await page.waitForSelector('#doneDlg[open]');
+  assert.match(await page.textContent('#dnBody'), scheduled ? /已排程 1 個粉專/ : /已發布 1 個粉專/);
+  assert.equal(await page.isDisabled('#clearBtn'), false);
+});
+
 for (const width of [1100, 400]) test(`Rundown：按鈕階段與請求順序，寬度 ${width}`, async () => {
   const { page, api } = await open({ rundown: true });
   await page.setViewportSize({ width, height: 900 });
@@ -1006,7 +1048,7 @@ for (const width of [1100, 400]) test(`Rundown：按鈕階段與請求順序，�
   api.rdHold = new Promise((r) => { releaseRd = r; });
   await page.click('#sendBtn');
   try {
-    await page.waitForFunction(() => document.getElementById('sendBtn').textContent === '送出臉書');
+    await page.waitForFunction(() => document.getElementById('sendBtn').textContent === '正在排程到 新聞');
     assert.equal(api.rundown.length, 0, '臉書未回覆前不能寫 RD');
     assert.equal(await page.isDisabled('#sendBtn'), true);
     releasePost();
@@ -1021,7 +1063,7 @@ for (const width of [1100, 400]) test(`Rundown：按鈕階段與請求順序，�
     await page.waitForSelector('#doneDlg[open]');
     assert.equal(await page.textContent('#sendBtn'), '完成');
     const stages = await page.evaluate(() => window.stages);
-    for (const label of ['送出臉書', '排程完成', '寫入 RD', '完成']) assert.ok(stages.includes(label), label);
+    for (const label of ['正在排程到 新聞', '排程完成', '寫入 RD', '完成']) assert.ok(stages.includes(label), label);
     assert.ok(stages.indexOf('排程完成') < stages.indexOf('寫入 RD'));
   } finally { releasePost(); releaseRd(); }
 });
@@ -1052,7 +1094,7 @@ test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 
   await pick(page, '111');
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
-  assert.match(await page.textContent('#dnBody'), /已發布 1 台；Rundown 沒寫入：Rundown：08:00 時段已滿/);
+  assert.match(await page.textContent('#dnBody'), /已發布 1 個粉專；Rundown 沒寫入：Rundown：08:00 時段已滿/);
   assert.equal(await page.textContent('#sendBtn'), 'RD 未完成');
   await page.click('#dnAgain');
   await page.click('#rdOn');

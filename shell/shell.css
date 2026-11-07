@@ -50,12 +50,11 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 /* 工作區 */
 #work { height: 100%; display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr; background: transparent; }
 #work.split { grid-template-columns: 1fr 1fr; }
-.pane { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); }
+.pane { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-right: 48px; background: var(--stage); }
 .pane[data-side='left'] { grid-column: 1; grid-row: 1; }
 .pane[data-side='right'] { grid-column: 2; grid-row: 1; border-left: 1px solid var(--line); }
 .pane.is-last::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--accent); pointer-events: none; z-index: 2; }
-.pane-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 0 14px; min-height: 44px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px; }
-.pane-close { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; background: none; border: 0; border-radius: 8px; color: var(--btn-text); cursor: pointer; font-size: 22px; line-height: 1; }
+.pane-close { position: absolute; top: 4px; right: 2px; z-index: 4; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; color: var(--btn-text); cursor: pointer; font-size: 22px; line-height: 1; }
 .pane-close:hover { color: var(--accent); background: var(--accent-soft); }
 .pane iframe { flex: 1 1 auto; width: 100%; border: 0; min-height: 0; background: var(--surface); }
 
@@ -73,6 +72,6 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 
 /* 公司憑證過期：蓋在窗格上的鎖定提示（iframe 保留） */
-.pane-lock { position: absolute; inset: 44px 0 0 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgba(244, 247, 253, .96); text-align: center; padding: 24px; }
+.pane-lock { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgba(244, 247, 253, .96); text-align: center; padding: 24px; }
 .pane-lock p { margin: 0; font-size: 16px; font-weight: 700; }
 #company-btn[hidden] { display: none; }

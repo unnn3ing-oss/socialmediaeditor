@@ -170,11 +170,15 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal .sw.is-on, .fp-modal .sw[aria-checked="true"] { box-shadow: 0 0 0 3px var(--accent); }
 
 /* 底列：粉專在左、送出在右 */
-.fp-modal .m-foot { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-top: 1px solid var(--border); flex-wrap: wrap; flex-direction: row; }
+.fp-modal .m-foot { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .fp-modal .pages { display: flex; gap: 8px; flex-wrap: wrap; }
-.fp-modal .send { position: relative; display: flex; align-items: center; gap: 14px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
-.fp-modal .send .hint { flex: 0 1 auto; min-width: 0; margin: 0; }
-.fp-modal .send-tip { font-size: 12px; }
+.fp-modal .send { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; width: min(100%, 420px); max-width: 100%; margin-left: auto; }
+.fp-modal #clearBtn { white-space: nowrap; min-height: 44px; }
+.fp-modal #sendBtn { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; gap: 0; justify-content: center; overflow: hidden; white-space: nowrap; }
+.fp-modal .send-state { flex: 0 0 auto; }
+.fp-modal .send-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-modal #sendMsg { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.fp-modal .send-tip { font-size: 12px; text-align: right; }
 
 /* 粉專按鈕 */
 .fp-modal .pg { display: inline-flex; align-items: stretch; border: 1.5px solid var(--accent); border-radius: 999px; overflow: hidden; background: var(--surface); }
@@ -253,11 +257,10 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
   .fp-modal .m-body { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "url" "left" "right"; gap: 16px; padding: 16px; }
   .fp-modal .m-head { padding: 12px 16px; flex-wrap: wrap; }
   .fp-modal .m-foot { padding: 12px 16px; gap: 10px; }
-  .fp-modal .send { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .fp-modal .send { width: 100%; }
   .fp-modal input, .fp-modal textarea { font-size: 16px; }
   .fp-modal .pages { gap: 6px; }
   .fp-modal .pg button { padding: 8px 11px; }
-  .fp-modal #sendBtn { flex: 1; justify-content: center; min-height: 44px; }
 }
 @media (max-width: 760px) {
   .fp { padding: 16px 12px 32px; }

@@ -154,11 +154,11 @@
   <footer class="m-foot">
     <div class="pages" id="pages" role="group" aria-label="要發的粉專（點名稱勾選，▾ 選立即或排程）"></div>
     <div class="send" id="sendArea">
-      <span class="hint" id="sendMsg" role="status"></span>
       <button type="button" class="btn" id="clearBtn">清空頁面</button>
-      <span class="muted send-tip" id="sendTip">請先勾選要發的粉專</span>
-      <button type="button" class="btn primary" id="sendBtn" disabled>全部送出</button>
+      <button type="button" class="btn primary" id="sendBtn" aria-live="polite" disabled>全部送出</button>
     </div>
+    <span class="muted send-tip" id="sendTip">請先勾選要發的粉專</span>
+    <p class="hint" id="sendMsg" role="status" hidden></p>
   </footer>
 
   <!-- 立即／排程選單、時間視窗（放在彈窗裡才看得到） -->
