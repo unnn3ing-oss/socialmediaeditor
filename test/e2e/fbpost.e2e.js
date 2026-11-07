@@ -47,7 +47,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
   page.on('pageerror', (e) => errors.push(e.message));
   const now = Math.floor(Date.now() / 1000);
   const api = {
-    failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0, rundown: [], rundownFail: null,
+    requestPaths: [], failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0, rundown: [], rundownFail: null,
     scheduled: {
       111: [
         { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' } },
@@ -72,6 +72,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     const req = r.request();
     if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
     const u = new URL(req.url());
+    api.requestPaths.push(u.pathname);
     const okJ = (data) => r.fulfill({ headers: CORS, json: { ok: true, data } });
     const bad = (code, error, status = 400) => r.fulfill({ status, headers: CORS, json: { ok: false, code, error } });
     if (/^\/assets\//.test(u.pathname)) return company ? r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([30, 60, 120]) }) : r.fulfill({ status: 404, headers: CORS, body: '' });
@@ -143,6 +144,15 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
   return { page, api, errors };
 }
 
+async function querySched(page) {
+  await page.click('#tabs [data-tab=sched]');
+  await page.click('#schedReload');
+}
+async function queryStats(page) {
+  await page.click('#tabs [data-tab=stats]');
+  await page.click('#statsReload');
+}
+
 async function photo(page) {
   await page.evaluate(async () => {
     const c = document.createElement('canvas'); c.width = 1200; c.height = 900;
@@ -162,8 +172,110 @@ async function fillUrl(page, url, via = 'enter') {
   await page.waitForFunction(() => /已帶入/.test(document.querySelector('#urlHint').textContent) && !document.querySelector('.is-skel'));
 }
 
+const automaticReads = (api) => api.requestPaths.filter((p) => /^\/fb\/(scheduled|posts|insights)$/.test(p));
+
+test('排程與成效：進入、切頁、切粉專及值班不查詢，按查詢才讀 Facebook', async () => {
+  const { page, api, errors } = await open();
+  assert.equal(await page.isVisible('#tab-records'), true);
+  assert.deepEqual(automaticReads(api), []);
+  await page.click('#tabs [data-tab=sched]');
+  await page.selectOption('#schedPage', '222');
+  await page.click('#tabs [data-tab=stats]');
+  await page.selectOption('#statsPage', '222');
+  await page.click('#dutyBtn');
+  await dutyPick(page, '111');
+  await page.click('#dutyOk');
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForTimeout(100);
+  assert.deepEqual(automaticReads(api), [], '顯示資料與切換偏好都不讀 Facebook 列表');
+  await querySched(page);
+  await page.waitForSelector('#schedList .item');
+  assert.deepEqual(automaticReads(api), ['/fb/scheduled']);
+  await queryStats(page);
+  await page.waitForSelector('#statsList .item');
+  assert.deepEqual(automaticReads(api), ['/fb/scheduled', '/fb/posts']);
+  await page.click('#statsList .item button');
+  await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
+  assert.deepEqual(automaticReads(api), ['/fb/scheduled', '/fb/posts', '/fb/insights']);
+  assert.deepEqual(errors, []);
+});
+
+test('本地排程紀錄：送出後保留、重新開啟仍在，不自動查 Facebook', async () => {
+  const { page, api, errors } = await open({ rundown: true });
+  assert.equal(await page.isChecked('#recordsAuto'), true);
+  await page.click('#newPost');
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click(`${chip('111')} .pg-mode`);
+  await page.click('#modeMenu [data-m=sched]');
+  await page.press('#timePop .tp-time', 'Enter');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
+  const recordId = await page.getAttribute('#recordsList [data-record]', 'data-record');
+  assert.match(await page.textContent('#recordsList'), /颱風假|小編文|北北基桃/);
+  assert.match(await page.textContent('#recordsList'), /新聞|TVBS新聞/);
+  assert.deepEqual(automaticReads(api), [], '送出後不能自動查遠端列表');
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+  assert.equal(await page.isVisible('#tab-records'), true);
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
+  assert.equal(await page.getAttribute('#recordsList [data-record]', 'data-record'), recordId);
+  await page.selectOption('#recordsFilter', 'scheduled');
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
+  assert.deepEqual(automaticReads(api), []);
+  assert.deepEqual(errors, []);
+});
+
+test('本地紀錄：預設清除七天前已發布，未來排程與失敗保留，到期只標待確認', async () => {
+  const { page, api, errors } = await open();
+  await page.evaluate(() => {
+    const now = Date.now(), day = 86400000, old = now - 8 * day;
+    const make = (id, status, scheduledAt = null) => ({ id, at: old, updatedAt: old, title: id, caption: '測試紀錄', url: '',
+      pages: [{ page: '111', label: '新聞', status, sentAt: old, scheduledAt, postId: '111_' + id, error: status === 'fail' ? '權限不足' : '' }] });
+    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([
+      make('舊的已發布', 'ok'), make('未來排程', 'ok', (now + day) / 1000),
+      make('發文失敗', 'fail'), make('到期待確認', 'ok', (now - day) / 1000),
+    ]));
+  });
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+  const text = await page.textContent('#recordsList');
+  assert.doesNotMatch(text, /舊的已發布/);
+  assert.match(text, /未來排程/);
+  assert.match(text, /發文失敗/);
+  assert.match(text, /到期待確認/);
+  assert.match(text, /待確認/);
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 3);
+  await page.selectOption('#recordsFilter', 'due');
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
+  assert.match(await page.textContent('#recordsList'), /到期待確認/);
+  assert.deepEqual(automaticReads(api), []);
+  assert.deepEqual(errors, []);
+});
+
+test('本地紀錄：關閉七天清除後重新開啟仍保留舊紀錄', async () => {
+  const { page, errors } = await open();
+  await page.uncheck('#recordsAuto');
+  await page.evaluate(() => {
+    const old = Date.now() - 9 * 86400000;
+    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([{ id: 'keep-old', at: old, updatedAt: old, title: '保留舊紀錄',
+      pages: [{ page: '111', label: '新聞', status: 'ok', scheduledAt: null, sentAt: old, postId: '111_99' }] }]));
+  });
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+  assert.equal(await page.isChecked('#recordsAuto'), false);
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
+  assert.match(await page.textContent('#recordsList'), /保留舊紀錄/);
+  assert.deepEqual(errors, []);
+});
+
 test('已排程分頁：列出（含留言狀態）並取消排程', async () => {
   const { page, api, errors } = await open();
+  await querySched(page);
   await page.waitForSelector('#schedList .item');
   const text = await page.textContent('#schedList');
   assert.match(text, /排好的貼文/);
@@ -178,6 +290,7 @@ test('已排程分頁：列出（含留言狀態）並取消排程', async () =>
 
 test('已排程分頁：改時間（成功更新列表、已發布顯示錯誤）', async () => {
   const { page, api, errors } = await open();
+  await querySched(page);
   await page.waitForSelector('#schedList .item');
   const before = await page.textContent('#schedList .item:first-child .meta b');
   await page.click('#schedList .item:first-child [data-act=resched]');
@@ -201,6 +314,7 @@ test('已排程分頁：改時間（成功更新列表、已發布顯示錯誤�
 
 test('排程時間太近：改時間不送出並提示', async () => {
   const { page, api } = await open();
+  await querySched(page);
   await page.waitForSelector('#schedList .item');
   await page.click('#schedList .item:first-child [data-act=resched]');
   await page.fill('#rsEditor .tp-time', '');
@@ -212,6 +326,7 @@ test('排程時間太近：改時間不送出並提示', async () => {
 
 test('留言失敗：紅點＋數字、補留言、知道了、新失敗跳通知', async () => {
   const { page, api, errors } = await open();
+  await page.click('#tabs [data-tab=sched]');
   await page.waitForSelector('#failList .item');
   assert.equal(await page.textContent('#schedBadge'), '1');
   assert.match(await page.textContent('#failBox'), /留言失敗（1）/);
@@ -235,6 +350,7 @@ test('留言失敗：紅點＋數字、補留言、知道了、新失敗跳通�
 
 test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完換成真資料；看成效也有占位', async () => {
   const { page, api, errors } = await open();
+  await querySched(page);
   await page.waitForSelector('#schedList .item');
   let release; api.hold = new Promise((r) => { release = r; });
   await page.click('#schedReload');
@@ -247,7 +363,7 @@ test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完
   assert.equal(await page.getAttribute('#schedList', 'aria-busy'), null);
   const real = await page.evaluate(() => document.querySelector('#schedList .item').getBoundingClientRect().height);
   assert.ok(Math.abs(real - h) <= 24, `骨架列 ${h}px、真的一列 ${real}px，高度差太多會跳版`);
-  await page.click('#tabs [data-tab=stats]');
+  await queryStats(page);
   await page.waitForSelector('#statsList .item');
   api.hold = new Promise((r) => { release = r; });
   await page.click('#statsList .item button');
@@ -260,6 +376,7 @@ test('讀取中顯示骨架列（尺寸同真的一列、aria-hidden），讀完
 
 test('已排程：純文字顯示「文字」；排序可切換時間最近／最遠，記住選擇', async () => {
   const { page, errors } = await open();
+  await querySched(page);
   await page.waitForSelector('#schedList .item');
   assert.equal(await page.textContent('#schedList .item .thumb.txt'), '文字');
   const order = () => page.$$eval('#schedList .item', (ls) => ls.map((l) => l.dataset.post));
@@ -275,7 +392,7 @@ test('已排程：純文字顯示「文字」；排序可切換時間最近／�
 
 test('成效：載入更多（很長的游標）接上第二頁，載入中按鈕不能再按', async () => {
   const { page, api, errors } = await open();
-  await page.click('#tabs [data-tab=stats]');
+  await queryStats(page);
   await page.waitForSelector('#statsList .item');
   await page.waitForSelector('#statsMore:not([hidden])');
   await page.click('#statsMore');
@@ -288,7 +405,7 @@ test('成效：載入更多（很長的游標）接上第二頁，載入中按�
 
 test('成效分頁：清單與看成效', async () => {
   const { page, errors } = await open();
-  await page.click('#tabs [data-tab=stats]');
+  await queryStats(page);
   await page.waitForSelector('#statsList .item');
   await page.click('#statsList .item button');
   await page.waitForFunction(() => /瀏覽 1,234/.test(document.querySelector('#statsList .ins').textContent));
@@ -430,12 +547,25 @@ test('一台立即、一台排程；失敗的晶片可重送；全部完成跳�
   assert.ok(Number(api.posts[1].scheduledAt) > Date.now() / 1000 + 3600 * 1.4);
   assert.match(await page.textContent('#sendMsg'), /失敗 1 台/);
   assert.equal(await page.textContent('#sendBtn'), '發文未完成');
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
+  assert.match(await page.textContent('#recordsList'), /失敗|發文未完成|權限/);
+  const recordId = await page.getAttribute('#recordsList [data-record]', 'data-record');
+  await page.fill('#caption', '重送改成這段小編文');
   await page.click(`${chip('222')} .retry`);
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(api.posts.length, 3);
   assert.equal(api.posts[2].page, '222');
+  assert.equal(api.posts[2].message, '重送改成這段小編文');
   assert.match(await page.textContent(`${chip('222')} .pg-mode`), /✓ 排程 /);
   assert.match(await page.textContent('#dnBody'), /已發布 1 台、已排程 1 台|已排程 1 台/);
+  assert.equal(await page.locator('#recordsList [data-record]').count(), 1, '重試只更新原紀錄');
+  assert.equal(await page.getAttribute('#recordsList [data-record]', 'data-record'), recordId);
+  const stored = await page.evaluate((id) => JSON.parse(localStorage.getItem('tbx.fbpost.records.v1')).find((r) => r.id === id), recordId);
+  assert.equal(stored.pages.find((p) => p.page === '111').caption, '小編文 #颱風\n第二行', '已成功粉專保留原送出內容');
+  assert.equal(stored.pages.find((p) => p.page === '222').caption, '重送改成這段小編文', '重送粉專保存當次內容');
+  assert.match(await page.textContent('#recordsList'), /重送內容：/);
+  assert.match(await page.textContent('#recordsList'), /重送改成這段小編文/);
+  assert.deepEqual(automaticReads(api), [], '發文或重送均不查遠端列表');
   await page.click('#dnAgain');
   assert.equal(await page.inputValue('#title'), '');
   assert.equal(await page.locator('.pg.on').count(), 0);
@@ -761,6 +891,7 @@ async function assertTimeFields(page, root) {
 for (const [w, h] of [[1280, 900], [400, 800]]) {
   test(`時間視窗與改時間（${w} 寬）：日期欄完整、時間欄 96px，不超出`, async () => {
     const { page, errors } = await open({ viewport: { width: w, height: h } });
+    await querySched(page);
     await page.waitForSelector('#schedList .item');
     await page.click('#schedList .item:first-child [data-act=resched]');
     await page.waitForSelector('#rsDlg[open]');

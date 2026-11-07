@@ -63,6 +63,9 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .cm { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 .cm.ok { color: var(--ok-text); }
 .cm.bad { color: var(--bad); font-weight: 500; }
+#recordsList .body { overflow-wrap: anywhere; }
+.record-edited { display: block; white-space: pre-wrap; }
+#recordsAuto { width: auto; }
 .fail-box { border: 1px solid var(--bad-line); background: var(--bad-bg); border-radius: 14px; padding: 10px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; color: var(--bad-text); }
 .fail-box h2 { margin: 0; font-size: 14px; font-weight: 700; color: var(--bad-text); }
 .fail-box .item { background: transparent; border-top-color: var(--bad-line); }

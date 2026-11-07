@@ -23,11 +23,22 @@
 
   <div class="fp-card">
   <div class="seg" role="tablist" aria-label="分頁" id="tabs">
-    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程<span class="dot-badge" id="schedBadge" hidden></span></button>
+    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="records">本地紀錄</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="sched">已排程<span class="dot-badge" id="schedBadge" hidden></span></button>
     <button type="button" role="tab" aria-selected="false" data-tab="stats">成效</button>
   </div>
 
-  <section id="tab-sched" class="tab">
+  <section id="tab-records" class="tab">
+    <div class="bar">
+      <label class="inline">顯示 <select id="recordsFilter"><option value="all">全部</option><option value="scheduled">排程中</option><option value="due">待確認</option><option value="published">已發布</option><option value="failed">失敗</option></select></label>
+      <label class="inline"><input type="checkbox" id="recordsAuto" checked>自動清除七天前紀錄</label>
+      <button type="button" class="btn btn-secondary btn-sm" id="recordsClean">清除舊紀錄</button>
+    </div>
+    <p class="hint">僅存這個瀏覽器的送出紀錄。排程時間已過會標為待確認，實際狀態請到「已排程／成效」查詢。未到期排程與失敗紀錄不會自動清除。</p>
+    <p class="hint" id="recordsHint" role="status"></p>
+    <ul class="list" id="recordsList"></ul>
+  </section>
+  <section id="tab-sched" class="tab" hidden>
     <div class="fail-box" id="failBox" hidden>
       <h2>留言失敗（<span id="failCount">0</span>）</h2>
       <ul class="list" id="failList"></ul>
@@ -35,7 +46,7 @@
     <div class="bar">
       <label class="inline">粉專 <select id="schedPage"></select></label>
       <label class="inline">排序 <select id="schedSort"><option value="near">時間最近</option><option value="far">時間最遠</option></select></label>
-      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">重新整理</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">查詢</button>
       <span class="hint" id="schedHint" role="status"></span>
     </div>
     <ul class="list" id="schedList"></ul>
@@ -44,7 +55,7 @@
   <section id="tab-stats" class="tab" hidden>
     <div class="bar">
       <label class="inline">粉專 <select id="statsPage"></select></label>
-      <button type="button" class="btn btn-secondary btn-sm" id="statsReload">重新整理</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="statsReload">查詢</button>
       <span class="hint" id="statsHint" role="status"></span>
     </div>
     <ul class="list" id="statsList"></ul>

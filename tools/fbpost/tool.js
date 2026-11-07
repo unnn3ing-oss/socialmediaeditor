@@ -11,6 +11,7 @@ import * as Sched from '../../sdk/news-sched.js';
 import { createPhotoEditor } from './editor.js';
 import * as Duty from './duty.js';
 import * as RD from './rundown.js';
+import { createStore } from './records.js';
 import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
 
 tb.init('fbpost');
@@ -58,9 +59,10 @@ function segment(root, attr, onPick) {
 }
 
 segment($('tabs'), 'tab', (t) => {
+  $('tab-records').hidden = t !== 'records';
   $('tab-sched').hidden = t !== 'sched';
   $('tab-stats').hidden = t !== 'stats';
-  if (t === 'stats' && !statsLoaded) loadStats(true);
+  if (t === 'records') renderRecords();
 });
 
 // ---------- 時間編輯（日期＋4 碼時間＋快捷鈕；排程發布的晶片與「改時間」共用）----------
@@ -130,9 +132,7 @@ async function loadPages(refresh = false) {
   renderPageChips();
   fillSelects(!selInit);
   selInit = true;
-  loadSched();
-  statsLoaded = false;
-  if (!$('tab-stats').hidden) loadStats(true);
+  resetQueries();
   renderDutyBtn();
   if (pages.length && !duty && !dutyAsked) openDuty();
 }
@@ -169,9 +169,7 @@ function onDutyChanged() {
   if (!modal.open) for (const c of chips.values()) if (!c.status) { c.on = c.id === mainId(); c.sched = false; c.at = null; }
   renderPageChips();
   fillSelects(true);
-  loadSched();
-  statsLoaded = false;
-  if (!$('tab-stats').hidden) loadStats(true);
+  resetQueries();
 }
 // 過期就清掉（全部空白重選）；回傳是否過期
 function dutyExpired() {
@@ -230,7 +228,78 @@ document.addEventListener('visibilitychange', () => {
 });
 const pageName = (id) => (pages.find((p) => p.id === id) || {}).name || id;
 
-// ---------- 已排程 ----------
+// ---------- 本地送出紀錄（使用者選擇保存，未送出草稿不落地） ----------
+const records = createStore();
+let currentRecord = null;
+function recordState(p) {
+  if (p.status === 'fail') return 'failed';
+  if (p.status === 'canceled') return 'canceled';
+  return p.scheduledAt ? (p.scheduledAt * 1000 > Date.now() ? 'scheduled' : 'due') : 'published';
+}
+const RECORD_STATES = { failed: '送出失敗', canceled: '已取消', scheduled: '排程中', due: '待確認', published: '已發布' };
+function renderRecords() {
+  const filter = $('recordsFilter').value;
+  const list = records.list().filter((r) => filter === 'all' || r.pages.some((p) => recordState(p) === filter));
+  $('recordsHint').textContent = (list.length ? `共 ${list.length} 筆` : '沒有本地紀錄') + (!records.persistent ? '；無法儲存到瀏覽器，紀錄只保留在本次頁面' : '');
+  $('recordsList').replaceChildren(...list.map((r) => {
+    const del = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '刪除紀錄' });
+    del.addEventListener('click', async () => {
+      if (await confirmBox('刪除這筆本地紀錄？', '只刪除這個瀏覽器的紀錄，不影響 Facebook 上的貼文。', '刪除')) { records.remove(r.id); renderRecords(); }
+    });
+    return el('li', { className: 'item', dataset: { record: r.id } },
+      el('div', { className: 'body' },
+        el('div', { className: 'meta' }, el('b', { textContent: fmtTime(r.at / 1000) })),
+        el('p', { className: 'msg', textContent: r.title || r.caption || '（沒有文字）' }),
+        r.title && r.caption ? el('p', { className: 'msg', textContent: r.caption }) : null,
+        /^https?:\/\//.test(r.url) ? el('a', { href: r.url, target: '_blank', rel: 'noopener', textContent: r.url }) : null,
+        ...r.pages.map((p) => el('p', { className: 'cm' + (p.status === 'fail' || p.rundown?.ok === false ? ' bad' : '') },
+          el('span', { textContent: `${p.label}｜${RECORD_STATES[recordState(p)]}${p.scheduledAt ? ' ' + fmtTime(p.scheduledAt) : ''}${p.error ? '：' + p.error : ''}` }),
+          p.rundown ? el('span', { textContent: '｜' + p.rundown.msg }) : null,
+          typeof p.caption === 'string' && (p.caption !== r.caption || p.title !== r.title || p.url !== r.url) ? el('span', { className: 'record-edited', textContent: `重送內容：${p.title || ''}\n${p.caption}\n${p.url || ''}` }) : null))),
+      el('div', { className: 'act' }, del));
+  }));
+}
+function saveRecord() {
+  if (!currentRecord) return;
+  currentRecord.updatedAt = Date.now();
+  records.save(currentRecord);
+  renderRecords();
+}
+function updateRecordedPost(postId, patch) {
+  for (const r of records.list()) if (r.pages.some((p) => p.postId === postId)) {
+    r.pages = r.pages.map((p) => p.postId === postId ? { ...p, ...patch } : p);
+    r.updatedAt = Date.now(); records.save(r);
+  }
+  renderRecords();
+}
+$('recordsAuto').checked = records.autoClean();
+$('recordsAuto').addEventListener('change', () => { records.setAutoClean($('recordsAuto').checked); renderRecords(); });
+$('recordsFilter').addEventListener('change', renderRecords);
+$('recordsClean').addEventListener('click', async () => {
+  if (await confirmBox('清除七天前的紀錄？', '只清除七天前的已發布／待確認紀錄。未到期排程、失敗紀錄保留，不影響 Facebook 貼文。', '清除')) { records.clean(); renderRecords(); }
+});
+if (records.autoClean()) records.clean();
+renderRecords();
+window.addEventListener('storage', () => renderRecords());
+
+// ---------- 已排程：僅按「查詢」讀取 ----------
+let schedSeq = 0;
+function resetSchedQuery() {
+  schedSeq++;
+  $('schedList').replaceChildren();
+  setBusy($('schedList'), false);
+  $('schedReload').disabled = false;
+  $('schedHint').textContent = '按「查詢」讀取 Facebook 排程';
+}
+function resetStatsQuery() {
+  statsSeq++;
+  statsBusy = false; statsLoaded = false; statsNext = null;
+  $('statsList').replaceChildren(); setBusy($('statsList'), false);
+  $('statsMore').hidden = true;
+  $('statsMoreHint').textContent = '';
+  $('statsHint').textContent = '按「查詢」讀取 Facebook 貼文';
+}
+function resetQueries() { resetSchedQuery(); resetStatsQuery(); }
 const COMMENT_TEXT = { pending: '等待留言', done: '已留言', canceled: '已取消留言' };
 function commentLine(c) {
   if (!c) return null;
@@ -265,10 +334,12 @@ $('schedSort').addEventListener('change', () => {
   applySort();
 });
 async function loadSched() {
+  const seq = ++schedSeq;
   const list = $('schedList'), hint = $('schedHint');
   const ids = $('schedPage').value ? [$('schedPage').value] : pages.map((p) => p.id);
   list.replaceChildren();
   if (!ids.length) { hint.textContent = '沒有粉專'; return; }
+  $('schedReload').disabled = true;
   hint.textContent = '讀取中…';
   setBusy(list, true);
   const items = [], errs = [];
@@ -276,6 +347,8 @@ async function loadSched() {
     try { for (const it of (await tb.api.call('/fb/scheduled?page=' + id)).items) items.push({ ...it, page: id }); }
     catch (e) { errs.push(`${pageName(id)}：${errText(e)}`); }
   }));
+  if (seq !== schedSeq) return;
+  $('schedReload').disabled = false;
   items.sort((a, b) => (a.at || 0) - (b.at || 0));
   setBusy(list, false);
   hint.textContent = (items.length ? `共 ${items.length} 篇` : '目前沒有排程') + (errs.length ? `；${errs.join('；')}` : '');
@@ -284,7 +357,7 @@ async function loadSched() {
     cancel.addEventListener('click', async () => {
       if (!(await confirmBox('取消這篇排程？', `${pageName(it.page)}｜${it.at ? fmtTime(it.at) : ''}\n取消後臉書上這篇排程會被刪除，無法復原。`, '取消排程'))) return;
       cancel.disabled = true;
-      try { await tb.api.call('/fb/cancel', { method: 'POST', body: { post: it.id } }); li.remove(); hint.textContent = '已取消一篇排程'; }
+      try { await tb.api.call('/fb/cancel', { method: 'POST', body: { post: it.id } }); updateRecordedPost(it.id, { status: 'canceled' }); li.remove(); hint.textContent = '已取消一篇排程'; }
       catch (e) { cancel.disabled = false; hint.textContent = '取消失敗：' + errText(e); }
     });
     const move = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '改時間', dataset: { act: 'resched' } });
@@ -300,7 +373,7 @@ async function loadSched() {
   }));
   applySort();
 }
-$('schedPage').addEventListener('change', loadSched);
+$('schedPage').addEventListener('change', resetSchedQuery);
 $('schedReload').addEventListener('click', () => { loadSched(); pollFailed(); });
 
 // 改時間：同網新的時間視窗；確定後 POST /fb/reschedule
@@ -324,7 +397,14 @@ $('rsYes').addEventListener('click', async () => {
     await tb.api.call('/fb/reschedule', { method: 'POST', body: { post: rsTarget.id, time: Math.floor(at.getTime() / 1000) } });
     $('rsDlg').close();
     $('schedHint').textContent = `已改成 ${Sched.fmtWhen(at, now())}`;
-    await loadSched();
+    const secs = Math.floor(at.getTime() / 1000);
+    rsTarget.at = secs;
+    updateRecordedPost(rsTarget.id, { scheduledAt: secs });
+    for (const row of $('schedList').querySelectorAll('li.item')) if (row.dataset.post === rsTarget.id) {
+      row.dataset.at = String(secs);
+      row.querySelector('.meta b').textContent = fmtTime(secs);
+    }
+    applySort();
     $('schedHint').textContent = `已改成 ${Sched.fmtWhen(at, now())}`;
   } catch (e) {
     $('rsErr').textContent = e.code === 'already_published' ? '這篇已經發布了，不能再改時間。' : errText(e);
@@ -358,7 +438,6 @@ function renderFails() {
         fails.items = fails.items.filter((x) => x.id !== c.id);
         renderFails();
         $('schedHint').textContent = okText;
-        loadSched();
       } catch (e) { retry.disabled = dismiss.disabled = false; note.textContent = '失敗：' + errText(e); }
     };
     retry.addEventListener('click', run('/fb/comment/retry', '已重新排入留言'));
@@ -456,7 +535,7 @@ function statRow(p) {
     el('div', { className: 'act' }, btn,
       p.url && /^https:\/\//.test(p.url) ? el('a', { className: 'btn btn-secondary btn-sm', href: p.url, target: '_blank', rel: 'noopener', textContent: '開啟' }) : null));
 }
-$('statsPage').addEventListener('change', () => loadStats(true));
+$('statsPage').addEventListener('change', resetStatsQuery);
 $('statsReload').addEventListener('click', () => loadStats(true));
 $('statsMore').addEventListener('click', () => loadStats(false));
 
@@ -858,6 +937,8 @@ async function send(ids) {
       const err = c.sched ? Sched.validate(c.at, now()) : null;
       if (err) { sendMsg(`${pageLabel(pages.find((p) => p.id === id))}：${err.msg}`, 'bad'); return; }
     }
+    const submission = { title: getLines().join('\n'), caption: payload.message, url: $('url').value.trim() };
+    if (!currentRecord) currentRecord = { id: crypto.randomUUID(), at: Date.now(), updatedAt: Date.now(), ...submission, pages: [] };
     ids.forEach((id) => { chips.get(id).status = 'sending'; renderChip(id); });
     sendStage('送出臉書');
     let schedN = 0, nowN = 0, commentBad = 0;
@@ -865,17 +946,23 @@ async function send(ids) {
     const rdInfo = { articleId: articleId($('url').value.trim()), slug: $('slug').value, lines: getLines(), type: RD.typeOf(mode, textStyle) };
     for (const [i, id] of ids.entries()) {
       const c = chips.get(id), page = pages.find((p) => p.id === id);
+      const localPage = { page: id, label: pageLabel(page), ...submission, scheduledAt: c.sched ? Math.floor(c.at.getTime() / 1000) : null, sentAt: Date.now(), status: 'fail', error: '' };
       sendMsg(`送出 ${pageLabel(page)}…（${i + 1}/${ids.length}）`);
       try {
         const r = await sendOne(page, payload, c.sched ? Math.floor(c.at.getTime() / 1000) : null);
         c.status = 'ok'; c.result = { schedule: c.sched };
-        sent.push({ code: page.code, at: c.sched ? Math.floor(c.at.getTime() / 1000) : new Date() });
+        localPage.status = 'ok'; localPage.postId = r?.id || '';
+        if (rdOn) localPage.rundown = { ok: false, msg: 'RD 待寫入' };
+        sent.push({ page: id, code: page.code, at: c.sched ? Math.floor(c.at.getTime() / 1000) : new Date() });
         if (c.sched) schedN++; else nowN++;
         if (r && r.comment && r.comment.status === 'failed') commentBad++;
       } catch (e) {
         c.status = 'fail'; c.result = { error: errText(e) };
+        localPage.error = errText(e);
         failed.push(`${pageLabel(page)} ${errText(e)}`);
       }
+      currentRecord.pages = currentRecord.pages.filter((p) => p.page !== id).concat(localPage);
+      saveRecord();
       renderChip(id);
     }
     const sum = [nowN ? `已發布 ${nowN} 台` : '', schedN ? `已排程 ${schedN} 台` : ''].filter(Boolean).join('、');
@@ -884,12 +971,16 @@ async function send(ids) {
       await paintStage();
     }
     const rd = await toRundown(rdInfo, sent, rdOn);
+    for (const s of sent) {
+      const p = currentRecord.pages.find((p) => p.page === s.page);
+      if (rd.results?.[s.code]) p.rundown = rd.results[s.code];
+    }
+    saveRecord();
     finalStage = failed.length ? '發文未完成' : rd.bad ? 'RD 未完成' : commentBad ? '留言未完成' : '完成';
     sendStage(finalStage);
-    const extra = (commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '') + (rd.msg ? '；' + rd.msg : '');
+    const extra = (commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '') + (rd.msg ? '；' + rd.msg : '') + (!records.persistent ? '；本地紀錄無法儲存，關閉頁面後會遺失' : '');
     if (failed.length) sendMsg(`${sum ? sum + '；' : ''}失敗 ${failed.length} 台：${failed.join('；')}（可按晶片上的「↻ 重送」）${extra}`, 'bad');
     else sendMsg(sum + extra, commentBad || rd.bad ? 'bad' : 'ok');
-    if (schedN) loadSched();
     pollFailed();
     if (!pendingChips().length && checkedChips().length) showDone((sum || '全部完成') + extra);
   } finally {
@@ -905,16 +996,20 @@ const rdLabel = (code) => { const p = pages.find((x) => x.code === code); return
 async function toRundown(info, sent, enabled) {
   if (!enabled || !sent.length) return { msg: '' };
   const { entries, skipped } = RD.entries(info, sent);
+  const results = {};
+  for (const code of skipped) results[code] = { ok: false, msg: 'RD 未寫入：請檢查粉專對應' };
   const skipMsg = skipped.length ? '未寫入 RD：' + skipped.map((code) => rdLabel(code) || '粉專對應缺漏').join('、') + '（請檢查粉專對應；僅支援新聞、娛樂、少康、國際＋）' : '';
-  if (!entries.length) return { msg: skipMsg, bad: true };
+  if (!entries.length) return { msg: skipMsg, bad: true, results };
   sendStage('寫入 RD');
   sendMsg('寫入 Rundown…');
   let res;
   try { res = await tb.api.call('/rundown', { method: 'POST', body: { action: 'add', entries } }); } catch (e) {
-    return { msg: ['Rundown 沒寫入：' + errText(e), skipMsg].filter(Boolean).join('；'), bad: true };
+    for (const en of entries) results[en.page] = { ok: false, msg: 'RD 未寫入：' + errText(e) };
+    return { msg: ['Rundown 沒寫入：' + errText(e), skipMsg].filter(Boolean).join('；'), bad: true, results };
   }
   const list = Array.isArray(res && res.results) ? res.results : [];
-  return { msg: ['Rundown：' + entries.map((en, i) => RD.describe(list[i], rdLabel(en.page))).join('；'), skipMsg].filter(Boolean).join('；'), bad: skipped.length > 0 || entries.some((en, i) => !(list[i] && list[i].ok)) };
+  entries.forEach((en, i) => { results[en.page] = { ok: list[i]?.ok === true, msg: 'RD：' + RD.describe(list[i], rdLabel(en.page)) }; });
+  return { msg: ['Rundown：' + entries.map((en, i) => RD.describe(list[i], rdLabel(en.page))).join('；'), skipMsg].filter(Boolean).join('；'), bad: skipped.length > 0 || entries.some((en, i) => !(list[i] && list[i].ok)), results };
 }
 function syncRd() {
   const on = $('rdOn').checked;
@@ -952,6 +1047,7 @@ const allSent = () => [...chips.values()].some((c) => c.on && c.status === 'ok')
 
 // 清空全部（同網新 resetAll）：唯一會刪內容的地方只有「確認關閉」「清空」「再發一篇」
 function resetAll() {
+  currentRecord = null;
   $('sendBtn').style.minWidth = '';
   $('sendBtn').style.maxWidth = '';
   for (const id of ['url', 'title', 'caption', 'comment', 'presetId']) $(id).value = '';
