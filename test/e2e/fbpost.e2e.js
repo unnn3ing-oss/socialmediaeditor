@@ -390,6 +390,36 @@ test('已排程：純文字顯示「文字」；排序可切換時間最近／�
   assert.deepEqual(errors, []);
 });
 
+test('已排程：最近／最遠比較距離現在，缺少時間放最後且切換不查詢', async () => {
+  const { page, api, errors } = await open();
+  const current = new Date('2026-11-07T15:00:00+08:00');
+  await page.clock.setFixedTime(current);
+  const sec = current.getTime() / 1000;
+  api.scheduled['111'] = [
+    { id: 'past-far', at: sec - 7200 },
+    { id: 'future', at: sec + 3600 },
+    { id: 'past-near', at: sec - 300 },
+    { id: 'no-time', at: null },
+  ];
+  await querySched(page);
+  await page.waitForFunction(() => document.querySelectorAll('#schedList .item').length === 4);
+  const order = () => page.$$eval('#schedList .item', rows => rows.map(r => r.dataset.post));
+  assert.deepEqual(await order(), ['past-near', 'future', 'past-far', 'no-time']);
+  const count = api.requestPaths.filter(p => p.startsWith('/fb/scheduled')).length;
+  await page.selectOption('#schedSort', 'far');
+  assert.deepEqual(await order(), ['past-far', 'future', 'past-near', 'no-time']);
+  await page.evaluate(() => { document.querySelector('[data-post="no-time"]').dataset.at = 'invalid'; });
+  await page.selectOption('#schedSort', 'near');
+  assert.deepEqual(await order(), ['past-near', 'future', 'past-far', 'no-time']);
+  // 現在往後移，最近的項目必須跟著重新計算，不能沿用第一次查詢的基準。
+  await page.clock.setFixedTime(new Date(current.getTime() + 3600000));
+  await page.selectOption('#schedSort', 'far');
+  await page.selectOption('#schedSort', 'near');
+  assert.deepEqual(await order(), ['future', 'past-near', 'past-far', 'no-time']);
+  assert.equal(api.requestPaths.filter(p => p.startsWith('/fb/scheduled')).length, count);
+  assert.deepEqual(errors, []);
+});
+
 test('成效：載入更多（很長的游標）接上第二頁，載入中按鈕不能再按', async () => {
   const { page, api, errors } = await open();
   await queryStats(page);

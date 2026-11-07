@@ -320,13 +320,20 @@ function setBusy(list, on) {
   if (on) list.append(skelRow(), skelRow(), skelRow());
   if (on) list.setAttribute('aria-busy', 'true'); else list.removeAttribute('aria-busy');
 }
-// 排序：時間最近（先發的在上）／時間最遠；只重排現有的列，不重新讀臉書。選擇記在這台瀏覽器
+// 排序：與現在相差最少／最多的在上，過去與未來都比較時間差；缺少時間放最後。
+// 只重排現有的列，不重新讀臉書。選擇記在這台瀏覽器。
 const SORT_KEY = 'fbpost.schedSort';
 try { const v = localStorage.getItem(SORT_KEY); if (v === 'near' || v === 'far') $('schedSort').value = v; } catch { /* 無痕或封鎖儲存：用預設 */ }
 function applySort() {
   const list = $('schedList'), far = $('schedSort').value === 'far';
   const rows = [...list.querySelectorAll(':scope > li.item')];
-  rows.sort((a, b) => (Number(a.dataset.at) - Number(b.dataset.at)) * (far ? -1 : 1));
+  const current = now().getTime() / 1000;
+  rows.sort((a, b) => {
+    const at = Number(a.dataset.at), bt = Number(b.dataset.at);
+    const aValid = Number.isFinite(at) && at > 0, bValid = Number.isFinite(bt) && bt > 0;
+    if (!aValid || !bValid) return aValid ? -1 : bValid ? 1 : 0;
+    return (Math.abs(at - current) - Math.abs(bt - current)) * (far ? -1 : 1) || at - bt;
+  });
   list.append(...rows);
 }
 $('schedSort').addEventListener('change', () => {
