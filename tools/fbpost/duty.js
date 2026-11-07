@@ -3,6 +3,7 @@
 export const MAX_DUTY = 3;
 export const RESET_HOUR = 5;
 const KEY = 'tbx.fbpost.duty.v1';
+const ls = () => { try { return globalThis.localStorage; } catch (e) { return null; } };   // 存取被擋時 getter 會丟錯
 
 // 從 now 算起下一個 05:00（本機時間）的毫秒
 export function nextReset(now = Date.now()) {
@@ -20,7 +21,7 @@ export function normalize(ids, main) {
 }
 
 // 讀：過期、格式壞掉 → null
-export function loadDuty(now = Date.now(), store = globalThis.localStorage) {
+export function loadDuty(now = Date.now(), store = ls()) {
   try {
     const v = JSON.parse(store.getItem(KEY) || 'null');
     if (!v || typeof v.exp !== 'number' || v.exp <= now) return null;
@@ -28,14 +29,14 @@ export function loadDuty(now = Date.now(), store = globalThis.localStorage) {
     return n ? { ...n, exp: v.exp } : null;
   } catch (e) { return null; }
 }
-export function saveDuty(ids, main, now = Date.now(), store = globalThis.localStorage) {
+export function saveDuty(ids, main, now = Date.now(), store = ls()) {
   const n = normalize(ids, main);
   if (!n) return null;
   const v = { ...n, exp: nextReset(now) };
   try { store.setItem(KEY, JSON.stringify(v)); } catch (e) { /* 被停用：這次分頁內照常 */ }
   return v;
 }
-export function clearDuty(store = globalThis.localStorage) {
+export function clearDuty(store = ls()) {
   try { store.removeItem(KEY); } catch (e) { /* 略過 */ }
 }
 

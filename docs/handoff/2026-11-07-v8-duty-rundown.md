@@ -33,7 +33,8 @@
 ## 下一步
 - [x] 依上表 1→6（unit 316 過；fbpost e2e 新增 4 支：值班×2、Rundown×2，舊「Rundown 尚未連接」測試換掉；舊測試用 open() 預設按「先不選」）
 - [x] 全部 e2e 85 過（sidepanel 測試加上值班視窗操作）、build --check 過
-- [ ] 審查代理 → 截圖給使用者 → 等「推」
+- [x] 審查代理：有條件通過，已修 2 處（localStorage 被擋時不會整個掛掉、過期改用記憶體中的 exp 判斷）
+- [ ] 截圖給使用者 → 等「推」（推時同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試
 `npm test`、`npm run e2e`（沙盒 chromium `/opt/pw-browsers/chromium`）、`node build.js --check`

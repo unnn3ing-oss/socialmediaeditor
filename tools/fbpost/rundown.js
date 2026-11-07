@@ -51,9 +51,10 @@ export function describe(r, label) {
 
 // 開關（只存開或關，不存內容）
 const KEY = 'tbx.fbpost.rundown.v1';
-export function rundownOn(store = globalThis.localStorage) {
+const ls = () => { try { return globalThis.localStorage; } catch (e) { return null; } };
+export function rundownOn(store = ls()) {
   try { return JSON.parse(store.getItem(KEY) || 'null')?.on === true; } catch (e) { return false; }
 }
-export function setRundownOn(on, store = globalThis.localStorage) {
+export function setRundownOn(on, store = ls()) {
   try { store.setItem(KEY, JSON.stringify({ on: !!on })); } catch (e) { /* 被停用：這次分頁內照常 */ }
 }

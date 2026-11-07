@@ -175,7 +175,7 @@ function onDutyChanged() {
 }
 // 過期就清掉（全部空白重選）；回傳是否過期
 function dutyExpired() {
-  if (!duty || Duty.loadDuty()) return false;
+  if (!duty || duty.exp > Date.now()) return false;   // 用記憶體裡的 exp 判斷（localStorage 被停用也不誤判）
   duty = null; dutyAsked = false;
   onDutyChanged();
   return true;
