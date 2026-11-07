@@ -110,12 +110,14 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
       const f = (k) => { const v = fd.get(k); return typeof v === 'string' ? v.replace(/\r\n/g, '\n') : v; };
       const rec = { page: f('page'), message: f('message'), scheduledAt: f('scheduledAt'), textPreset: f('textPreset'), comment: f('comment'), hasImage: typeof fd.get('image') === 'object' && fd.get('image') !== null };
       api.posts.push(rec);
+      if (api.postHold) await api.postHold;
       if (api.failPage === rec.page) { api.failPage = null; return bad('fb_permission', '沒有這個粉專的發文權限。', 403); }
       return okJ({ id: rec.page + '_99', scheduled: !!rec.scheduledAt, at: Number(rec.scheduledAt) || null, comment: { status: rec.comment ? (rec.scheduledAt ? 'queued' : 'done') : 'none' } });
     }
     if (u.pathname === '/rundown') {
       const b = JSON.parse(req.postData());
       api.rundown.push(b);
+      if (api.rdHold) await api.rdHold;
       if (api.rundownFail) return bad('rundown_failed', api.rundownFail, 502);
       if (b.action === 'ping') return okJ({ title: 'FB RUNDOWN(2026)', sheets: ['2026/11', '2026/10'] });
       return okJ({ results: b.entries.map((e, i) => ({ ok: true, status: i ? 'insert' : 'write', cell: '2026/11!AE' + (100 + i), time: e.time })) });
@@ -427,7 +429,7 @@ test('一台立即、一台排程；失敗的晶片可重送；全部完成跳�
   assert.equal(api.posts[0].scheduledAt, null);
   assert.ok(Number(api.posts[1].scheduledAt) > Date.now() / 1000 + 3600 * 1.4);
   assert.match(await page.textContent('#sendMsg'), /失敗 1 台/);
-  assert.match(await page.textContent('#sendBtn'), /全部送出（1 台）/);
+  assert.equal(await page.textContent('#sendBtn'), '發文未完成');
   await page.click(`${chip('222')} .retry`);
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(api.posts.length, 3);
@@ -664,6 +666,60 @@ test('Rundown：開關記住、SLUG 預設標題前 4 字；送出成功的台�
   assert.deepEqual(errors, []);
 });
 
+for (const width of [1100, 400]) test(`Rundown：按鈕階段與請求順序，寬度 ${width}`, async () => {
+  const { page, api } = await open({ rundown: true });
+  await page.setViewportSize({ width, height: 900 });
+  await page.click('#newPost');
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click(`${chip('111')} .pg-mode`);
+  await page.click('#modeMenu [data-m=sched]');
+  await page.keyboard.press('Enter');
+  const before = await page.locator('#sendBtn').boundingBox();
+  await page.evaluate((width) => {
+    window.stages = [];
+    if (width === 400) window.requestAnimationFrame = () => 0; // 模擬背景分頁不繪圖，RD 仍須繼續
+    const b = document.getElementById('sendBtn');
+    new MutationObserver(() => window.stages.push(b.textContent)).observe(b, { childList: true });
+  }, width);
+  let releasePost, releaseRd;
+  api.postHold = new Promise((r) => { releasePost = r; });
+  api.rdHold = new Promise((r) => { releaseRd = r; });
+  await page.click('#sendBtn');
+  try {
+    await page.waitForFunction(() => document.getElementById('sendBtn').textContent === '送出臉書');
+    assert.equal(api.rundown.length, 0, '臉書未回覆前不能寫 RD');
+    assert.equal(await page.isDisabled('#sendBtn'), true);
+    releasePost();
+    await page.waitForFunction(() => document.getElementById('sendBtn').textContent === '寫入 RD');
+    assert.equal(api.posts.length, 1);
+    await page.evaluate(() => document.getElementById('sendBtn').click());
+    assert.equal(api.posts.length, 1, '送出期間不能重複發文');
+    const during = await page.locator('#sendBtn').boundingBox();
+    assert.ok(Math.abs(before.width - during.width) < 1);
+    assert.equal(await page.$eval('#sendBtn', b => b.scrollWidth <= b.clientWidth), true);
+    releaseRd();
+    await page.waitForSelector('#doneDlg[open]');
+    assert.equal(await page.textContent('#sendBtn'), '完成');
+    const stages = await page.evaluate(() => window.stages);
+    for (const label of ['送出臉書', '排程完成', '寫入 RD', '完成']) assert.ok(stages.includes(label), label);
+    assert.ok(stages.indexOf('排程完成') < stages.indexOf('寫入 RD'));
+  } finally { releasePost(); releaseRd(); }
+});
+
+test('Rundown：粉專對應缺漏要顯示原因，不顯示完成', async () => {
+  const { page, api } = await open({ rundown: true, pages: [{ ...PAGES[0], code: '', name: '少康戰情室', label: '少康' }] });
+  await page.click('#newPost');
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 1);
+  assert.equal(api.rundown.length, 0);
+  assert.equal(await page.textContent('#sendBtn'), 'RD 未完成');
+  assert.match(await page.textContent('#dnBody'), /未寫入 RD：少康.*請檢查粉專對應/);
+});
+
 test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 測試連線', async () => {
   const { page, api, errors } = await open({ rundown: true });
   await page.click('#newPost');
@@ -678,6 +734,7 @@ test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.match(await page.textContent('#dnBody'), /已發布 1 台；Rundown 沒寫入：Rundown：08:00 時段已滿/);
+  assert.equal(await page.textContent('#sendBtn'), 'RD 未完成');
   await page.click('#dnAgain');
   await page.click('#rdOn');
   const n = api.rundown.length;

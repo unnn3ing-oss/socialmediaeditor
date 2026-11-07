@@ -730,6 +730,7 @@ function renderChip(id) {
   else e.mode.textContent = (c.sched && c.at ? `排程 ${Sched.fmtWhen(c.at, now())}` : '立即') + ' ▾';
 }
 function updateSendBtn() {
+  if (sending) return;
   const n = pendingChips().length;
   $('sendBtn').textContent = n ? `全部送出（${n} 台）` : '全部送出';
   $('sendBtn').disabled = !n || sending;
@@ -831,12 +832,23 @@ async function sendOne(page, p, at) {
   return tb.api.call('/fb/post', { method: 'POST', body: fd });
 }
 const sendMsg = (text, cls) => { const m = $('sendMsg'); m.textContent = text || ''; m.className = 'hint' + (cls ? ' ' + cls : ''); };
+const sendStage = (text) => { $('sendBtn').textContent = text; };
+const paintStage = () => new Promise((resolve) => {
+  // 背景分頁可能不繪圖，不能因此卡住 RD 寫入。
+  const fallback = setTimeout(resolve, 50);
+  requestAnimationFrame(() => setTimeout(() => { clearTimeout(fallback); resolve(); }, 0));
+});
 
 async function send(ids) {
   if (sending) return;
   if (!ids.length) { sendMsg('請先勾選要發的粉專', 'bad'); return; }
   sending = true;   // 在任何 await 之前就鎖上，避免連點兩下重複發文
+  const rdOn = $('rdOn').checked;
+  const width = $('sendBtn').getBoundingClientRect().width + 'px';
+  $('sendBtn').style.minWidth = width;
+  $('sendBtn').style.maxWidth = width;
   $('sendBtn').disabled = true;
+  let finalStage = '';
   try {
     let payload;
     try { payload = await buildPayload(); } catch (e) { sendMsg(errText(e), 'bad'); return; }
@@ -847,6 +859,7 @@ async function send(ids) {
       if (err) { sendMsg(`${pageLabel(pages.find((p) => p.id === id))}：${err.msg}`, 'bad'); return; }
     }
     ids.forEach((id) => { chips.get(id).status = 'sending'; renderChip(id); });
+    sendStage('送出臉書');
     let schedN = 0, nowN = 0, commentBad = 0;
     const failed = [], sent = [];
     const rdInfo = { articleId: articleId($('url').value.trim()), slug: $('slug').value, lines: getLines(), type: RD.typeOf(mode, textStyle) };
@@ -866,7 +879,13 @@ async function send(ids) {
       renderChip(id);
     }
     const sum = [nowN ? `已發布 ${nowN} 台` : '', schedN ? `已排程 ${schedN} 台` : ''].filter(Boolean).join('、');
-    const rd = await toRundown(rdInfo, sent);
+    if (sent.length) {
+      sendStage(failed.length ? '部分送出' : schedN && !nowN ? '排程完成' : '送出完成');
+      await paintStage();
+    }
+    const rd = await toRundown(rdInfo, sent, rdOn);
+    finalStage = failed.length ? '發文未完成' : rd.bad ? 'RD 未完成' : commentBad ? '留言未完成' : '完成';
+    sendStage(finalStage);
     const extra = (commentBad ? `；${commentBad} 台留言沒排成功，請到「已排程」分頁處理` : '') + (rd.msg ? '；' + rd.msg : '');
     if (failed.length) sendMsg(`${sum ? sum + '；' : ''}失敗 ${failed.length} 台：${failed.join('；')}（可按晶片上的「↻ 重送」）${extra}`, 'bad');
     else sendMsg(sum + extra, commentBad || rd.bad ? 'bad' : 'ok');
@@ -876,23 +895,26 @@ async function send(ids) {
   } finally {
     sending = false;
     updateSendBtn();
+    if (finalStage) sendStage(finalStage);
   }
 }
 $('sendBtn').addEventListener('click', () => send(pendingChips().map((c) => c.id)));
 
 // ---------- 排入 Rundown（開關打開才做；這次送成功的台各寫一筆，排程用排程時間、立即用送出當下）----------
 const rdLabel = (code) => { const p = pages.find((x) => x.code === code); return p ? pageLabel(p) : RD.PAGES[code]; };
-async function toRundown(info, sent) {
-  if (!$('rdOn').checked || !sent.length) return { msg: '' };
-  const { entries } = RD.entries(info, sent);
-  if (!entries.length) return { msg: '' };
+async function toRundown(info, sent, enabled) {
+  if (!enabled || !sent.length) return { msg: '' };
+  const { entries, skipped } = RD.entries(info, sent);
+  const skipMsg = skipped.length ? '未寫入 RD：' + skipped.map((code) => rdLabel(code) || '粉專對應缺漏').join('、') + '（請檢查粉專對應；僅支援新聞、娛樂、少康、國際＋）' : '';
+  if (!entries.length) return { msg: skipMsg, bad: true };
+  sendStage('寫入 RD');
   sendMsg('寫入 Rundown…');
   let res;
   try { res = await tb.api.call('/rundown', { method: 'POST', body: { action: 'add', entries } }); } catch (e) {
-    return { msg: 'Rundown 沒寫入：' + errText(e), bad: true };
+    return { msg: ['Rundown 沒寫入：' + errText(e), skipMsg].filter(Boolean).join('；'), bad: true };
   }
   const list = Array.isArray(res && res.results) ? res.results : [];
-  return { msg: 'Rundown：' + entries.map((en, i) => RD.describe(list[i], rdLabel(en.page))).join('；'), bad: entries.some((en, i) => !(list[i] && list[i].ok)) };
+  return { msg: ['Rundown：' + entries.map((en, i) => RD.describe(list[i], rdLabel(en.page))).join('；'), skipMsg].filter(Boolean).join('；'), bad: skipped.length > 0 || entries.some((en, i) => !(list[i] && list[i].ok)) };
 }
 function syncRd() {
   const on = $('rdOn').checked;
@@ -930,6 +952,8 @@ const allSent = () => [...chips.values()].some((c) => c.on && c.status === 'ok')
 
 // 清空全部（同網新 resetAll）：唯一會刪內容的地方只有「確認關閉」「清空」「再發一篇」
 function resetAll() {
+  $('sendBtn').style.minWidth = '';
+  $('sendBtn').style.maxWidth = '';
   for (const id of ['url', 'title', 'caption', 'comment', 'presetId']) $(id).value = '';
   hint(''); sendMsg('');
   state.articleUrl = ''; cap.auto = ''; cap.title = null;
