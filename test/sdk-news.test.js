@@ -46,6 +46,17 @@ test('buildLink', () => {
   assert.equal(R.buildLink('https://a.tw/1?utm_medium=fbarticlepic&utm_source=facebook', utm), 'https://a.tw/1?utm_medium=fbarticlepic&utm_source=facebook');
 });
 
+test('buildLink：接受問號與 & 前綴，保留既有參數與錨點、不重複附加', () => {
+  const utm = 'utm_source=facebook&utm_medium=tvbsteatimenewspic';
+  for (const prefix of ['?', '?&', '&']) {
+    assert.equal(R.buildLink('https://a.tw/1', prefix + utm), 'https://a.tw/1?' + utm);
+    assert.equal(R.buildLink('https://a.tw/1?x=1#top', prefix + utm), 'https://a.tw/1?x=1&' + utm + '#top');
+    const done = 'https://a.tw/1?' + utm;
+    assert.equal(R.buildLink(done, prefix + utm), done);
+  }
+  assert.equal(R.buildLink('https://a.tw/1', ' ?& '), 'https://a.tw/1');
+});
+
 test('buildLink：氣象大寫 Facebook 原樣帶出、不重複', () => {
   const wx = 'utm_source=Facebook&utm_medium=18weather';
   assert.equal(wx, 'utm_source=Facebook&utm_medium=18weather');

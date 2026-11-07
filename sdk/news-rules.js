@@ -23,7 +23,7 @@ function shortTitle(lines) {
 function buildLink(url, utm) {
   url = String(url || '').trim();
   if (!url) return '';
-  utm = String(utm || '');
+  utm = String(utm || '').trim().replace(/^[?&]+/, '');
   if (!utm) return url;
   const hashAt = url.indexOf('#');
   const base = hashAt >= 0 ? url.slice(0, hashAt) : url;

@@ -239,7 +239,7 @@ async function pagesWithMap(env, pages) {
 }
 
 // 管理頁：GET /admin/fb/pagemap、POST /admin/fb/pagemap（已通過 admin 驗證）
-const UTM_RE = /^[A-Za-z0-9_.~=&%+-]*$/;
+const UTM_RE = /^\??[A-Za-z0-9_.~=&%+-]*$/;
 export async function adminPageMap(request, env, path) {
   if (path !== '/admin/fb/pagemap') return null;
   if (request.method === 'GET') {
@@ -265,7 +265,7 @@ export async function adminPageMap(request, env, path) {
     const sort = it ? Number(it.sort) : NaN;
     if (!isId(id)) return fail(request, env, 'bad_request', '粉專 ID 格式不正確。');
     if (label.length < 1 || label.length > 20) return fail(request, env, 'bad_request', '簡稱要 1 到 20 個字。');
-    if (utm.length > 300 || !UTM_RE.test(utm)) return fail(request, env, 'bad_request', 'utm 只能用英數字與 _ . ~ = & % + - ，最長 300 字。');
+    if (utm.length > 300 || !UTM_RE.test(utm)) return fail(request, env, 'bad_request', 'utm 可用 ? 開頭，內容只能用英數字與 _ . ~ = & % + - ，最長 300 字。');
     if (!Number.isInteger(sort) || sort < 0 || sort > 999) return fail(request, env, 'bad_request', '排序要是 0 到 999 的整數。');
     clean.push({ id, label, utm, sort });
   }

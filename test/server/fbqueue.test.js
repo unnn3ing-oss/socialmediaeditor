@@ -106,6 +106,19 @@ test('admin pagemap：列出粉專、驗證、儲存', async () => {
   assert.equal(g2.body.data.items.find((i) => i.id === '111').saved, true);
 });
 
+test('pagemap：接受 ? 與 ?& 開頭的 utm，儲存後可讀回', async () => {
+  const env = mk();
+  for (const prefix of ['?', '?&']) {
+    const utm = prefix + 'utm_source=facebook&utm_medium=tvbsteatimenewspic';
+    const result = await api(env, 'POST', '/admin/fb/pagemap', { items: [{ id: '111', label: '新聞', utm, sort: 1 }] }, 'admin');
+    assert.equal(result.res.status, 200);
+    const get = await api(env, 'GET', '/admin/fb/pagemap', undefined, 'admin');
+    assert.equal(get.body.data.items.find((p) => p.id === '111').utm, utm);
+  }
+  const bad = await api(env, 'POST', '/admin/fb/pagemap', { items: [{ id: '111', label: '新聞', utm: 'utm_source=face?book', sort: 1 }] }, 'admin');
+  assert.equal(bad.res.status, 400);
+});
+
 // ---- 發文時留言 ----
 const post = (env, b) => api(env, 'POST', '/fb/post', b);
 
