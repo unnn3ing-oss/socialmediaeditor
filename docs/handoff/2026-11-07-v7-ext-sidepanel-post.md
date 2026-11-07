@@ -1,5 +1,5 @@
 # v7：外掛側邊欄做成「網新快速排程」一樣的介面（後端用 toolbox-api）
-- 狀態：進行中　- 分支：`claude/epic-carson-tbq8e0`（從 main 5f2fd55 起）　- 最後更新：2026-11-07
+- 狀態：**已完成**（2026-11-07 併入 main）　- 分支：`claude/epic-carson-tbq8e0`（從 main 5f2fd55 起）　- 最後更新：2026-11-07
 - 使用者原話：「幫我將外掛插件做出與目前「網新快速排程」一樣的介面，但後端都是目前這個工具的，與原有「網新快速排程」的後端及相關功能都不要。」→ 計畫 →「A」（版號 2.00、側邊欄內可輸入公司密碼）
 
 ## 已定案的決定
@@ -27,7 +27,7 @@
 - [x] 1→6 完成；unit 301、e2e 82 全過
 - [x] 「網頁版」改成分頁右側圓形圖示鈕（滑過才顯示文字）ce5d4c6
 - [x] 審查代理：通過，無需修改；截圖已給使用者
-- [ ] 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
+- [x] 使用者說「推」併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試
 `npm test`、`node build.js --check`、`npm run e2e`（沙盒 chromium `/opt/pw-browsers/chromium`）。
