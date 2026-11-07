@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "小編工具箱",
-  "version": "1.01",
+  "version": "2.00",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqt6bAZTDToOtnjvNORMB9tWa915ttflwIQYBgGy8bFfV6ZBOVvHmlx8+mC2fwJjoduvIuAK2qBlHbX3lgEovTfkIBOzDxgRAiUrD7Qvg7mCch1iV/wsEZ/ZHGITI1DlKaEfuDobnqAWeGAuKvDH5xkCg0yKp3hOMdulZ2BIrxnLoXXVE1Dum+PTgBuucejrb3j3GE/4uRVTwJfS2hmhToUFMGDpaTB3fpK7JfFow/iYABDIAezoz+dUM7bcQ5DL8czo6PUjMIVuD6YWrXViMjJuW5Ho/4xuJR7aaduM9vbUhZjGdkUct82I8XF8yt9bxiqRBYR5iqWxLCbtCDEKlSwIDAQAB",
   "permissions": [
     "alarms",
@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://api.github.com/*",
-    "https://raw.githubusercontent.com/*"
+    "https://raw.githubusercontent.com/*",
+    "https://unnn3ing-oss.github.io/*"
   ],
   "background": {
     "service_worker": "core/background.js",

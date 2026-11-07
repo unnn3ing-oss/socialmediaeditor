@@ -158,3 +158,16 @@ test('background：只接受自己的內容腳本；onMessage 回傳非同步結
     assert.equal(got.ok, true);
   } finally { delGlobal('chrome', 'self'); }
 });
+
+test('v2 側邊欄：可讀網站（嵌入發文頁共用公司憑證）；panel.html 認得的外掛來源等於固定 ID', async () => {
+  assert.ok(base.host_permissions.includes(`${SITE}/*`));
+  const { EXT_ID } = await import(url('extension/core/id.js'));
+  const { EXT_ORIGIN } = await import(url('shell/config.js'));
+  assert.equal(EXT_ORIGIN, `chrome-extension://${EXT_ID}`);
+  const html = fs.readFileSync(path.join(ROOT, 'extension/core/sidepanel.html'), 'utf8');
+  assert.match(html, /id="tabPost"/);
+  assert.match(html, /id="tabInfo"/);
+  assert.ok(!/digi-social-post|queen_session|Rundown/i.test(html + fs.readFileSync(path.join(ROOT, 'extension/core/sidepanel.js'), 'utf8')), '不含網新後台功能');
+  const cl = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/changelog.json'), 'utf8'));
+  assert.ok(cl[base.version], 'changelog 有這一版');
+});

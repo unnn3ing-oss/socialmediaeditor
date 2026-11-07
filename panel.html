@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小編工具箱</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="shell/panel.css">
+</head>
+<body>
+<!-- 單一工具外殼：給外掛側邊欄嵌入用（panel.html?tool=fbpost）。提供 tbxShell 與公司密碼解鎖，沒有櫥窗與工具列。 -->
+<main id="panel" aria-busy="true">
+  <div class="sk sk-panel" id="panelSk" aria-label="載入中"></div>
+  <section class="panel-card" id="panelLock" hidden>
+    <h1 id="panelTitle">公司專屬工具</h1>
+    <p id="panelMsg">輸入公司密碼後即可使用。</p>
+    <button type="button" class="btn btn-primary" id="company-btn">輸入公司密碼</button>
+  </section>
+  <section class="panel-card" id="panelErr" hidden>
+    <h1>找不到這個工具</h1>
+    <p>請更新外掛，或到網頁版使用。</p>
+  </section>
+  <div id="panelHost"></div>
+</main>
+<script type="module" src="shell/panel.js"></script>
+</body>
+</html>

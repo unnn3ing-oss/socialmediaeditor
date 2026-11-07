@@ -14,3 +14,4 @@
 - **內容保留**：切換模式／分頁用 hidden，不清內容；彈窗只有確認關閉、清空、再發一篇會清。
 - **素材**（`tool.json` 的 `assets`）：同圖片套版（`sticker.*`、`frame.*.ribbon`、`frame.logo`、`font.title`），公司素材只在後端。
 - **檔案**：`tool.js`（主畫面與送出）、`editor.js`（作圖框編輯器）、`textcard.js`（純文字底圖）、`tool.css`。
+- **外掛側邊欄**：外掛「發文」分頁嵌入 `panel.html?tool=fbpost`（根目錄），約 400px 寬時走既有的窄版排版（≤820px 彈窗單欄）。改這個工具的版面時，也要看側邊欄寬度。

@@ -1,8 +1,81 @@
-// 側邊欄：開啟網站、目前版本、檢查更新與更新彈窗（更新邏輯在 updater.js）
+// 側邊欄（版面照網新快速排程）：頂列「網頁版」＋分頁「發文／狀態與更新」。
+// 發文分頁嵌入網站的 panel.html?tool=fbpost（後端 toolbox-api）；狀態分頁的公司模式與一鍵檢測由嵌入頁用 postMessage 回報。
+// 更新邏輯在 updater.js。
 const SITE = 'https://unnn3ing-oss.github.io/socialmediaeditor/';
+const SITE_ORIGIN = new URL(SITE).origin;
+const PANEL = SITE + 'panel.html?tool=fbpost';
 
 document.getElementById('openSite').addEventListener('click', () => { chrome.tabs.create({ url: SITE }); });
-document.getElementById('extVer').textContent = `v${self.Updater.verOf(chrome.runtime.getManifest())}`;
+const VER = `v${self.Updater.verOf(chrome.runtime.getManifest())}`;
+document.getElementById('extVer').textContent = VER;
+document.getElementById('extVer2').textContent = VER;
+
+// ---- 分頁：記住上次停在哪一頁；切換只隱藏，不重建（發文內容不會消失）----
+(function () {
+  const tabs = { post: [document.getElementById('tabPost'), document.getElementById('panePost')],
+    info: [document.getElementById('tabInfo'), document.getElementById('paneInfo')] };
+  function show(name) {
+    for (const [k, [tab, pane]] of Object.entries(tabs)) {
+      tab.setAttribute('aria-selected', String(k === name));
+      pane.hidden = k !== name;
+    }
+    try { localStorage.setItem('tbx-sp-tab', name); } catch (e) { /* 存不了就算了 */ }
+  }
+  for (const [k, [tab]] of Object.entries(tabs)) tab.addEventListener('click', () => show(k));
+  let saved = 'post';
+  try { saved = localStorage.getItem('tbx-sp-tab') === 'info' ? 'info' : 'post'; } catch (e) { /* 預設發文 */ }
+  show(saved);
+})();
+
+// ---- 發文分頁與嵌入頁的訊息（只接受網站來源、而且是這個 iframe）----
+(function () {
+  const frame = document.getElementById('app');
+  const companyEl = document.getElementById('companyStatus');
+  const runBtn = document.getElementById('hcRun'), sumEl = document.getElementById('hcSum'), listEl = document.getElementById('hcList');
+  const ICON = { ok: '✅', warn: '⚠️', skip: '➖' };
+  const TIMEOUT = 15000;
+  let pending = null, seq = 0;
+  const post = (msg) => { try { frame.contentWindow.postMessage({ source: 'tbx-sidepanel', ...msg }, SITE_ORIGIN); } catch (e) { /* iframe 還沒好 */ } };
+
+  function setCompany(m) {
+    if (m.unlocked) {
+      const d = new Date(m.exp * 1000).toLocaleString('zh-TW', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      companyEl.textContent = `已解鎖（到 ${d}）`; companyEl.className = 'status ok';
+    } else { companyEl.textContent = '尚未解鎖：在「發文」分頁輸入公司密碼'; companyEl.className = 'status warn'; }
+  }
+  function renderRows(items) {
+    listEl.replaceChildren(...items.map((r) => {
+      const li = document.createElement('li'); li.className = 'hc-row'; li.dataset.id = r.id; li.dataset.state = r.state;
+      const ic = document.createElement('span'); ic.className = 'hc-ic'; ic.textContent = ICON[r.state] || '⚠️';
+      const b = document.createElement('b'); b.textContent = r.label;
+      const t = document.createElement('span'); t.className = 'hc-text'; t.textContent = r.text;
+      li.append(ic, b, t); return li;
+    }));
+    const bad = items.filter((r) => r.state === 'warn').length;
+    sumEl.textContent = bad ? `${bad} 項需要處理` : '全部正常';
+    sumEl.className = 'hc-sum ' + (bad ? 'warn' : 'ok');
+  }
+  function finish(items) { pending = null; runBtn.disabled = false; renderRows(items); }
+
+  window.addEventListener('message', (e) => {
+    if (e.origin !== SITE_ORIGIN || e.source !== frame.contentWindow) return;
+    const m = e.data;
+    if (!m || m.source !== 'tbx-panel') return;
+    if (m.type === 'company') setCompany(m);
+    else if (m.type === 'check' && pending && m.id === pending.id) { clearTimeout(pending.timer); finish(Array.isArray(m.items) ? m.items : []); }
+  });
+
+  runBtn.addEventListener('click', () => {
+    if (pending) return;
+    runBtn.disabled = true; sumEl.textContent = '檢測中…'; sumEl.className = 'hc-sum'; listEl.replaceChildren();
+    const id = ++seq;
+    pending = { id, timer: setTimeout(() => finish([{ id: 'panel', label: '發文頁', state: 'warn', text: '沒有回應：檢查網路，或切到「發文」分頁等它載入完再試' }]), TIMEOUT) };
+    post({ type: 'check', id });
+  });
+
+  frame.addEventListener('load', () => post({ type: 'hello' }));
+  frame.src = PANEL;
+})();
 
 (function () {
   const card = document.getElementById('updateCard');
@@ -105,6 +178,7 @@ document.getElementById('extVer').textContent = `v${self.Updater.verOf(chrome.ru
       if (latest.hasUpdate) {
         show(`${updateHeadline(latest)}：${(latest.notes[0] && latest.notes[0].summary) || latest.message}｜${fmtDate(latest.date)}`, true);
         applyBtn.hidden = false;
+        document.getElementById('infoDot').hidden = false;
         await refreshFolderHint();
         chrome.action.setBadgeText({ text: '新' }).catch(() => {});
         chrome.action.setBadgeBackgroundColor({ color: '#d92d20' }).catch(() => {});
@@ -113,6 +187,7 @@ document.getElementById('extVer').textContent = `v${self.Updater.verOf(chrome.ru
         show(latest.localNewer ? `本機版本 ${ver(latest.localVersion)} 比 GitHub 上的 ${ver(latest.version)} 新，不需要更新`
           : `已是最新版本${latest.version ? ' ' + ver(latest.version) : ''}（${fmtDate(latest.date)}）`);
         applyBtn.hidden = true;
+        document.getElementById('infoDot').hidden = true;
         chrome.action.setBadgeText({ text: '' }).catch(() => {});
       }
     } catch (err) {

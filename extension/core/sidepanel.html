@@ -6,17 +6,43 @@
 <title>小編工具箱</title>
 <link rel="stylesheet" href="sidepanel.css">
 </head>
-<body>
-<main class="wrap">
+<body class="sp">
+<header class="top">
+  <div class="top-btns">
+    <button type="button" class="btn btn-primary" id="openSite" title="在新分頁開啟小編工具箱">網頁版</button>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="側邊欄">
+    <button type="button" role="tab" id="tabPost" aria-controls="panePost" aria-selected="true">發文</button>
+    <button type="button" role="tab" id="tabInfo" aria-controls="paneInfo" aria-selected="false">狀態與更新<span class="dot" id="infoDot" hidden>新</span></button>
+  </nav>
+</header>
+
+<!-- 發文：嵌入網站的單一工具外殼（panel.html），流程和網頁版的「排程發布」相同 -->
+<main class="pane-post" id="panePost" role="tabpanel" aria-labelledby="tabPost">
+  <iframe id="app" title="排程發布" allow="clipboard-read; clipboard-write"></iframe>
+</main>
+
+<div class="wrap" id="paneInfo" role="tabpanel" aria-labelledby="tabInfo" hidden>
   <header class="head">
     <h1 id="extName">小編工具箱</h1>
+    <span class="muted num" id="extVer"></span>
   </header>
 
-  <button type="button" class="btn btn-primary btn-block" id="openSite">開啟小編工具箱</button>
+  <section class="card" id="companyCard">
+    <h2>公司模式</h2>
+    <div class="status" id="companyStatus" role="status">確認中…</div>
+  </section>
+
+  <section class="card" id="hcCard">
+    <h2>連線檢測</h2>
+    <div class="hc-head"><button type="button" class="btn btn-secondary" id="hcRun">一鍵檢測</button><span class="hc-sum" id="hcSum" role="status" aria-live="polite"></span></div>
+    <ul class="hc-list" id="hcList"></ul>
+    <div class="hint">檢查後端、公司憑證、臉書粉專與外掛橋接。</div>
+  </section>
 
   <section class="card" id="updateCard" aria-busy="false">
     <h2>版本更新</h2>
-    <div class="ver-row"><span class="muted">目前版本</span><span class="num" id="extVer"></span></div>
+    <div class="ver-row"><span class="muted">目前版本</span><span class="num" id="extVer2"></span></div>
     <div class="sk sk-line" id="upSk" hidden></div>
     <div class="up-status" id="upStatus" role="status" aria-live="polite">尚未檢查更新</div>
     <div class="row">
@@ -25,7 +51,7 @@
     </div>
     <div class="up-folder" id="upFolder" hidden>更新位置：已記住<button type="button" class="up-link" id="upRepick">更換資料夾</button></div>
   </section>
-</main>
+</div>
 
 <!-- 更新彈窗：有新版、選資料夾、確認權限變動、進度、完成／失敗都在這裡，不用瀏覽器的對話框 -->
 <dialog class="dialog" id="upDlg" aria-labelledby="upDlgTitle">

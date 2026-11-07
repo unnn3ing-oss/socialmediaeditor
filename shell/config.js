@@ -4,3 +4,5 @@ export const API_BASE = 'https://toolbox-api.19jpz-3.workers.dev';
 export const EXT_NAME = '小編工具箱';
 export const EXT_FOLDER = 'toolbox-ext';
 export const REPO = { owner: 'unnn3ing-oss', repo: 'socialmediaeditor', branch: 'main' };
+// 外掛固定 ID（manifest 的 key 算出，見 extension/core/id.js）；panel.html 只回覆這個外掛的側邊欄。
+export const EXT_ORIGIN = 'chrome-extension://odajlpffjjeiliinefhimmbpdeeggckg';

@@ -16,15 +16,16 @@
 ## 做法（改哪裡）
 | # | 檔案 | 狀態 |
 |---|---|---|
-| 1 | shell/panel.html、shell/panel.js（新） | ⬜ |
-| 2 | extension/core/sidepanel.{html,css,js} | ⬜ |
-| 3 | extension/core/manifest.base.json、extension/changelog.json → `node build.js` | ⬜ |
-| 4 | tools/fbpost/tool.css 窄版 | ⬜ |
-| 5 | 測試：test/extension.test.js、e2e 側邊欄／panel | ⬜ |
-| 6 | 文件：tools/fbpost/TOOL.md、規格 §8 側邊欄 | ⬜ |
+| 1 | panel.html（根目錄，catalog 相對路徑才對）、shell/panel.js、shell/panel.css；shell/config.js 加 EXT_ORIGIN | ✅ |
+| 2 | extension/core/sidepanel.{html,css,js} | ✅ |
+| 3 | extension/core/manifest.base.json、extension/changelog.json → `node build.js` | ✅ |
+| 4 | tools/fbpost/tool.css 窄版 | ✅ 不用改（既有 ≤820px 單欄，e2e 驗證） |
+| 5 | 測試：test/extension.test.js、test/e2e/sidepanel.e2e.js（真的載入外掛） | ✅ |
+| 6 | 文件：tools/fbpost/TOOL.md、規格 §8 側邊欄 | ✅ |
 
 ## 下一步
-- [ ] 1→6 依序做；截圖給使用者確認；審查代理審查
+- [x] 1→6 完成；unit 301、e2e 82 全過
+- [ ] 審查代理審查 → 截圖給使用者確認
 - [ ] 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試

@@ -340,7 +340,7 @@ socialmediaeditor/
   - facebook.com 相關功能留到 P3，到時再設計「偵測到舊外掛就讓給舊外掛」的機制。
 - **YT 下載助手**（已知事實）：`videodownload/host/installer.py` 的 `allowed_origins` 只寫一個外掛 ID。要改成同時允許新舊兩個外掛，已裝的人重跑一次安裝程式。**這會改到 videodownload repo，P2 時另外請你確認。**
 - **固定外掛 ID**：`manifest.json` 加 `key`（比照 videodownload），每台電腦的外掛 ID 都相同，下載助手的 `allowed_origins` 才能寫死。
-- **側邊欄**：第一版只放「開啟小編工具箱」與狀態。
+- **側邊欄**（外掛 2.00 起，版面照網新快速排程）：頂列「網頁版」＋分頁「發文／狀態與更新」。發文分頁嵌入網站的 `panel.html?tool=fbpost`（單一工具外殼，提供 tbxShell、可在側邊欄輸入公司密碼，後端 `toolbox-api`）；狀態分頁有公司模式、一鍵檢測（後端／憑證／粉專／外掛橋接，嵌入頁以 postMessage 回報，只回覆固定外掛 ID）、版本更新。網新 cookie、網新後台、Rundown 都不帶過來。`host_permissions` 有網站網址，嵌入頁才能和網站共用公司憑證。
 - **版本**：從 `1.00` 開始，規則比照 QuickPatterntool（`manifest.json`、`changelog.json`）。
 
 ### 8.1 安裝與更新（比照「網新快速排程」）
