@@ -27,20 +27,16 @@ test('extension pill settles', async () => {
   assert.equal(await page.locator('#status .sk').count(), 0);
 });
 
-test('install auto-opens on desktop', async () => {
+test('install does not auto-open on desktop', async () => {
   const page = await open({ viewport: { width: 1280, height: 820 } });
-  await page.waitForSelector('#deployOverlay:not([hidden])', { timeout: 5000 });
-  assert.equal(await page.locator('#deployOverlay .ds-pane:not([hidden])').count(), 1);
-  assert.match(await page.textContent('#deployInstallName'), /toolbox-install/);
-  // 同一分頁只自動開一次：關掉後重新整理不再自動開
-  await page.click('#deployCloseBtn');
-  await page.reload();
   await page.waitForSelector('#status .pill-warn', { timeout: 5000 });
   await page.waitForTimeout(500);
   assert.equal(await page.locator('#deployOverlay').count(), 0);
-  // 按下狀態膠囊可再打開
+  // 按下狀態膠囊才打開
   await page.click('#status .pill-warn');
   await page.waitForSelector('#deployOverlay:not([hidden])');
+  assert.equal(await page.locator('#deployOverlay .ds-pane:not([hidden])').count(), 1);
+  assert.match(await page.textContent('#deployInstallName'), /toolbox-install/);
 });
 
 test('no auto-open on phone', async () => {

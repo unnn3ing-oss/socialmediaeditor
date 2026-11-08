@@ -21,7 +21,6 @@ async function open() {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
   const page = await ctx.newPage();
   const api = { statusCode: 200, authOk: true, authDown: false };
-  await page.addInitScript(() => sessionStorage.setItem('tbx.installShown', '1'));
   await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
   await page.route('https://toolbox-api.19jpz-3.workers.dev/**', async (r) => {
     const req = r.request();

@@ -70,19 +70,3 @@ export function initStatus({ root, shell, openInstall, checks = CHECKS }) {
     byId,
   };
 }
-
-// 電腦版（滑鼠＋寬螢幕）偵測不到外掛時自動開教學；同一個分頁只開一次。
-export function shouldAutoOpenInstall({ win = window, storage = safeSession() } = {}) {
-  const desktop = win.matchMedia('(pointer: fine)').matches && win.innerWidth > 820;
-  if (!desktop) return false;
-  try { if (storage && storage.getItem('tbx.installShown')) return false; } catch { /* 沒有 sessionStorage 就照開 */ }
-  return true;
-}
-
-export function markInstallShown(storage = safeSession()) {
-  try { storage && storage.setItem('tbx.installShown', '1'); } catch { /* 靜默 */ }
-}
-
-function safeSession() {
-  try { return window.sessionStorage; } catch { return null; }
-}
