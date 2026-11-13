@@ -28,7 +28,8 @@
 - [x] 寫 CSS
 - [x] 補 e2e、跑相關測試（npm test 339、fbpost e2e 43 全過、build --check 通過）
 - [x] 截圖給使用者確認（桌面＋手機）
-- [ ] 另一個需求「隱藏／刪除示範工具 `sample`」待使用者確認做法（見對話；測試依賴 `tools/sample`）
+- [x] 示範工具 `sample`：使用者選 A（隱藏）。已從 `tools/registry.json` 移除並重建；資料夾保留當測試教材，`test/build.test.js` 的 `tmpRepo()` 在副本 registry 放回 `sample`。npm test 339、全部 e2e 111 通過
+- [ ] 使用者看過卡片 A 與 C／D／E（含有圖版）示意圖，選定樣式；注意：本地紀錄目前不存圖片，有圖版需先決定圖片來源（存縮圖 vs 只存文章 og:image 網址）
 - [ ] 使用者說「推」才併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
 
 ## 測試

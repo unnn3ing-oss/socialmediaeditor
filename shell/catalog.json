@@ -1,17 +1,6 @@
 {
   "tools": [
     {
-      "id": "sample",
-      "name": "範例工具",
-      "group": "做圖",
-      "desc": "示範工具內切換與清空",
-      "tier": "public",
-      "requires": [],
-      "icon": "tools/sample/icon.svg",
-      "thumb": "tools/sample/thumb.svg",
-      "entry": "tools/sample/index.html?v=3c9fae26a5"
-    },
-    {
       "id": "pattern",
       "name": "圖片套版",
       "group": "做圖",
