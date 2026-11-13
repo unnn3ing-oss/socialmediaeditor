@@ -211,7 +211,7 @@ npx wrangler deploy
    ```
    貼上 Apps Script 指令碼屬性 `TOKEN` 的值（至少 12 字）。
 2. 重新部署：`npx wrangler deploy`
-3. 打開排程發布 →「＋ 新增發文」→ Rundown 區塊的 ⚙ →「測試連線」。
+3. 打開管理頁 `後端網址/admin`，登入後找「Rundown 連線」卡片，按「檢查設定」，再按「測試連線」。
 
    **成功的樣子：** 顯示「連線成功：FB RUNDOWN…（分頁 2026/11…）」。顯示「後端還沒設定 Rundown」＝第 1 步沒設好；顯示「沒有回 JSON」＝Apps Script 部署的「誰可以存取」要選「所有人」。
 
@@ -235,7 +235,7 @@ npx wrangler deploy
 |---|---|
 | 換 Logo、版型 | `後端網址/admin` 上傳同名檔案 |
 | 看有沒有人回報錯誤 | 登入 `後端網址/admin`，按「錯誤日誌」的「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
-| 更新後端程式 | 在 `server` 資料夾再執行一次 `npx wrangler deploy` |
+| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy` |
 | 臉書 token 換了、新增粉專 | 用戶 token：新粉專會自動出現，不用動。粉專 token：照步驟 6-2 第 2 步重設 `FB_TOKEN`、再部署。都可以到管理頁按「檢查臉書連線」確認 |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |
 
