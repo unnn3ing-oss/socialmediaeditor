@@ -11,6 +11,9 @@ const { build } = require('../build.js');
 function tmpRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tbx-build-'));
   fs.cpSync(ROOT, dir, { recursive: true, filter: (src) => !/[\\/](\.git|node_modules)([\\/]|$)/.test(src) });
+  // 「範例工具」已從正式清單隱藏，但資料夾留作組裝測試的教材：副本的 registry 把它放回第一個。
+  const reg = readJson(dir, 'tools/registry.json');
+  if (!reg.includes('sample')) writeJson(dir, 'tools/registry.json', ['sample', ...reg]);
   return dir;
 }
 const readJson = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
