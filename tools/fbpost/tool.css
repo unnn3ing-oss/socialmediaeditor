@@ -87,7 +87,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .rec-thumb { width: 128px; height: 96px; object-fit: cover; border-radius: 10px; background: var(--fill); flex: none; }
 .rec-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .rec-title { margin: 0; font-weight: 700; white-space: pre-wrap; }
-.rec-caption { margin: 0; white-space: pre-wrap; color: #3a465c; font-size: 13px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rec-caption { margin: 0; white-space: pre-wrap; color: var(--text); font-size: 14px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .rec-caption.is-open { display: block; overflow: visible; }
 .rec-more { border: 0; background: none; padding: 0; color: var(--accent); font: 500 12px var(--font); cursor: pointer; }
 .rec-link { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

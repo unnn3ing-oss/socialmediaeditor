@@ -392,7 +392,7 @@ test('本地紀錄：預設清除七天前已發布，未來排程與失敗保�
   const { page, api, errors } = await open();
   await page.evaluate(() => {
     const now = Date.now(), day = 86400000, old = now - 8 * day;
-    const make = (id, status, scheduledAt = null) => ({ id, at: old, updatedAt: old, title: id, caption: '測試紀錄', url: '',
+    const make = (id, status, scheduledAt = null) => ({ id, at: old, updatedAt: old, title: id, caption: id, url: '',
       pages: [{ page: '111', label: '新聞', status, sentAt: old, scheduledAt, postId: '111_' + id, error: status === 'fail' ? '權限不足' : '' }] });
     localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([
       make('舊的已發布', 'ok'), make('未來排程', 'ok', (now + day) / 1000),
@@ -436,7 +436,7 @@ test('本地紀錄：卡片分欄顯示時間、整體狀態、標題／內文�
   assert.equal(await card.count(), 1);
   assert.equal(await card.getAttribute('data-state'), 'failed', '整體狀態取最需注意的失敗');
   assert.match(await card.locator('.rec-head').textContent(), /送出失敗.*2 個粉專/s);
-  assert.equal(await card.locator('.rec-title').textContent(), '卡片標題');
+  assert.equal(await card.locator('.rec-title').count(), 0, '有小編文時不重複顯示標題');
   assert.equal(await card.locator('.rec-caption').textContent(), '第一行內文\n第二行內文');
   assert.equal(await card.locator('.rec-link').getAttribute('href'), 'https://news.tvbs.com.tw/world/1');
   assert.equal(await card.locator('img.rec-thumb').count(), 0, '沒有縮圖時不佔位');
@@ -452,6 +452,19 @@ test('本地紀錄：卡片分欄顯示時間、整體狀態、標題／內文�
   assert.equal(await rows.nth(0).locator('details').count(), 0, '內容沒改的粉專沒有重送內容區');
   assert.match(await rows.nth(1).locator('details summary').textContent(), /重送內容：/);
   assert.match(await rows.nth(1).locator('.record-edited').textContent(), /重送改成這段內文/);
+  // 沒填小編文：用標題當主文字
+  await page.evaluate(() => {
+    const L = JSON.parse(localStorage.getItem('tbx.fbpost.records.v1')), at = Date.now() - 7200000;
+    L.push({ id: 'card-2', at, updatedAt: at, title: '只有標題的貼文', caption: '', url: '',
+      pages: [{ page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: null, postId: '1', error: '' }] });
+    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify(L));
+  });
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+  const noCap = page.locator('#recordsList [data-record="card-2"]');
+  assert.equal(await noCap.locator('.rec-title').textContent(), '只有標題的貼文');
+  assert.equal(await noCap.locator('.rec-caption').count(), 0);
   // 版面：卡片不超出視窗、粉專列沒有被壓成窄欄
   const box = await card.boundingBox();
   assert.ok(box.width > 400, '卡片寬度正常');
@@ -483,6 +496,28 @@ test('本地紀錄：網格／橫條檢視切換、重開記住，橫條時各�
   assert.equal(await page.getAttribute('#recordsView [data-view=list]', 'aria-pressed'), 'true');
   await page.click('#recordsView [data-view=grid]');
   assert.equal(await page.locator('#recordsList.is-list').count(), 0);
+  assert.deepEqual(errors, []);
+});
+
+test('本地紀錄：內文被截斷才出現「展開全文」，點了展開、再點收合', async () => {
+  const { page, errors } = await open();
+  await page.evaluate(() => {
+    const at = Date.now() - 3600000, pg = { page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: null, postId: '1', error: '' };
+    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([
+      { id: 'long', at, updatedAt: at, title: 't', caption: '很長的小編文，'.repeat(40), url: '', pages: [pg] },
+      { id: 'short', at: at - 1, updatedAt: at, title: 't', caption: '很短', url: '', pages: [pg] },
+    ]));
+  });
+  await reopen(page);
+  const long = page.locator('[data-record=long]'), short = page.locator('[data-record=short]');
+  assert.equal(await long.locator('.rec-more').isVisible(), true);
+  assert.equal(await short.locator('.rec-more').count(), 0);
+  const h0 = (await long.locator('.rec-caption').boundingBox()).height;
+  await long.locator('.rec-more').click();
+  assert.ok((await long.locator('.rec-caption').boundingBox()).height > h0, '展開後變高');
+  assert.equal(await long.locator('.rec-more').textContent(), '收合');
+  await long.locator('.rec-more').click();
+  assert.equal(await long.locator('.rec-more').textContent(), '展開全文');
   assert.deepEqual(errors, []);
 });
 
