@@ -590,3 +590,24 @@ test('前後端第 N 則留言常數一致', async () => {
   const c = await import('../../tools/fbpost/comments.js');
   assert.deepEqual([c.MAX_COMMENTS, c.DELAY_MIN, c.DELAY_MAX], [q.MAX_COMMENTS, q.EXTRA_DELAY_MIN, q.EXTRA_DELAY_MAX]);
 });
+
+test('syncScheduled：貼文已照時間發布、延遲留言還沒到 → due 不被往後推（每分鐘對時不能一直重設）', async () => {
+  const env = mk(); const q = await Q();
+  const now = Date.now(), published = Math.floor(now / 1000) - 60;   // 一分鐘前準時發布
+  await enqueue(env, { due: published + 300, seq: 2, delay: 300 });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [] })]);
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true, scheduled_publish_time: published } })]);
+  await q.syncScheduled(env, now);
+  assert.equal(rows(env)[0].due, published + 300);
+  await q.syncScheduled(env, now + 60000);
+  assert.equal(rows(env)[0].due, published + 300);
+});
+
+test('補欄位：別的 Worker 剛補好（duplicate column）不讓 ensureTables 失敗', async () => {
+  const env = mk(); const q = await Q();
+  const real = env.DB;
+  // 第二個 Worker 查 table_info 時還看不到新欄位（舊快照），但資料表其實已有 seq／delay
+  const stale = { prepare: (sql) => (/PRAGMA table_info/.test(sql) ? { all: async () => ({ results: [] }) } : real.prepare(sql)) };
+  await q.ensureTables({ ...env, DB: stale });
+  assert.ok(real.raw.prepare('PRAGMA table_info(fb_comments)').all().some((c) => c.name === 'delay'));
+});

@@ -32,7 +32,12 @@ export async function ensureTables(env) {
   for (const sql of DDL) await env.DB.prepare(sql).run();
   const info = await env.DB.prepare('PRAGMA table_info(fb_comments)').all();
   const have = new Set(((info && info.results) || []).map((c) => c.name));
-  for (const [col, def] of ADD_COLUMNS) if (!have.has(col)) await env.DB.prepare(`ALTER TABLE fb_comments ADD COLUMN ${col} ${def}`).run();
+  for (const [col, def] of ADD_COLUMNS) {
+    if (have.has(col)) continue;
+    // 多個 Worker 同時啟動時別人可能剛補好：duplicate column 視為已完成，不讓這次請求失敗
+    try { await env.DB.prepare(`ALTER TABLE fb_comments ADD COLUMN ${col} ${def}`).run(); }
+    catch (e) { if (!/duplicate column/i.test((e && e.message) || '')) throw e; }
+  }
   ensured.add(env.DB);
 }
 
@@ -264,7 +269,7 @@ async function syncPage(env, page, items, nowMs) {
     if (times.has(row.post_id)) {
       const t = times.get(row.post_id);
       if (t && t + (row.delay || 0) !== row.due) await retime(env, row, t, nowMs);
-    } else if (row.due * 1000 > nowMs) gone.push(row);   // 清單裡沒有、還沒到時間：可能被後台立刻發布或刪除
+    } else if ((row.due - (row.delay || 0)) * 1000 > nowMs) gone.push(row);   // 清單裡沒有、貼文的預定發布時間（due 扣掉延遲）還沒到：可能被後台立刻發布或刪除
   }
   if (!gone.length) return;
   const states = await fetchStates(env, token, [...new Set(gone.map((r) => r.post_id))]);
