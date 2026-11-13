@@ -1,5 +1,5 @@
 # 排程發布「本地紀錄」改成卡片樣式
-- 狀態：進行中　- 分支：claude/exciting-euler-q4b38p　- 最後更新：2026-11-13
+- 狀態：進行中　- 分支：claude/exciting-euler-q4b38p　- 最後更新：2026-11-13（卡片已完成並推開發分支，等使用者看截圖說「推」）
 - 使用者原始需求：「幫我做成卡片樣式的方法來表列，需要將個別資訊都清楚顯示」
 
 ## 已定案的決定
@@ -17,16 +17,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/tool.js`（`renderRecords`） | 改成卡片 DOM；新增整體狀態計算 | ⬜ |
-| `tools/fbpost/tool.css` | 卡片、狀態標籤、粉專列表樣式，窄螢幕堆疊 | ⬜ |
-| `tools/fbpost/TOOL.md` | 補「本地紀錄以卡片顯示」 | ⬜ |
-| `test/e2e/fbpost.e2e.js` | 新增卡片結構測試（欄位、狀態、RD、重送內容）；既有 `#recordsList [data-record]` 選擇器不變 | ⬜ |
+| `tools/fbpost/tool.js`（`renderRecords`） | 改成卡片 DOM；新增整體狀態計算 | ✅ |
+| `tools/fbpost/tool.css` | 卡片、狀態標籤、粉專列表樣式，窄螢幕堆疊 | ✅ |
+| `tools/fbpost/TOOL.md` | 補「本地紀錄以卡片顯示」 | ✅ |
+| `shell/catalog.json` | `node build.js` 重新產生（entry 版本雜湊） | ✅ |
+| `test/e2e/fbpost.e2e.js` | 新增卡片結構測試（欄位、狀態、RD、重送內容）；既有 `#recordsList [data-record]` 選擇器不變 | ✅ |
 
 ## 下一步
-- [ ] 改 `renderRecords`（保留 `li[data-record]`，刪除按鈕行為不變）
-- [ ] 寫 CSS
-- [ ] 補 e2e、跑相關測試
-- [ ] 用假資料拍一次截圖（單粉專、多粉專、失敗、重送內容）給使用者確認
+- [x] 改 `renderRecords`（保留 `li[data-record]`，刪除按鈕行為不變）
+- [x] 寫 CSS
+- [x] 補 e2e、跑相關測試（npm test 339、fbpost e2e 43 全過、build --check 通過）
+- [x] 截圖給使用者確認（桌面＋手機）
+- [ ] 另一個需求「隱藏／刪除示範工具 `sample`」待使用者確認做法（見對話；測試依賴 `tools/sample`）
 - [ ] 使用者說「推」才併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
 
 ## 測試
