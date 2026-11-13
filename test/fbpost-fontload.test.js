@@ -76,3 +76,12 @@ test('沒有 document.fonts（舊環境）時安靜略過', async () => {
   await loader.ensure('私密處');
   loader.request('私密處');
 });
+
+test('網路掛住時 ensure 逾時就放行，不卡住送出', async () => {
+  const { createFontLoader } = await load();
+  const fonts = { load: () => new Promise(() => {}) };   // 永遠不結束
+  const loader = createFontLoader({ fonts, specs: SPECS });
+  const t0 = Date.now();
+  await loader.ensure('喆', 50);
+  assert.ok(Date.now() - t0 < 1000, '逾時後要放行');
+});

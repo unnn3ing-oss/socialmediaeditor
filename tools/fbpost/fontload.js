@@ -3,6 +3,8 @@
 // 這裡用「實際要畫的字」去 document.fonts.load，載好再重畫；輸出圖片前用 ensure 等載完。
 // 只載入沒要求過的非 ASCII 字（ASCII 一律在第一段）；載入失敗（網路）不丟錯，下次還會再試。
 const isWide = (ch) => ch.codePointAt(0) > 0x7f;
+// ensure 最多等這麼久：網路掛住時 document.fonts.load 可能很久才結束，不能卡住送出（逾時就用現有的字型畫）
+export const ENSURE_TIMEOUT_MS = 5000;
 
 export function createFontLoader({ fonts = globalThis.document && globalThis.document.fonts, specs, onLoaded } = {}) {
   const asked = new Map();   // 字型規格 → 已要求（載入中或已載入）的字
@@ -40,7 +42,12 @@ export function createFontLoader({ fonts = globalThis.document && globalThis.doc
   return {
     // 不等待：載完後呼叫 onLoaded（讓畫面重畫）
     request(text) { load(text); },
-    // 等這段文字要用的字都載完（含先前已在載入中的）
-    async ensure(text) { await load(text); await Promise.all([...pending]); }
+    // 等這段文字要用的字都載完（含先前已在載入中的）；最多等 timeoutMs，逾時直接放行
+    async ensure(text, timeoutMs = ENSURE_TIMEOUT_MS) {
+      let timer;
+      const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+      try { await Promise.race([load(text).then(() => Promise.all([...pending])), timeout]); }
+      finally { clearTimeout(timer); }
+    }
   };
 }
