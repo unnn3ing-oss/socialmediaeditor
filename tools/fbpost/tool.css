@@ -321,7 +321,8 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 /* 第 2 則以後的留言：標題列（第 N 則＋發布後幾分鐘＋移除）＋文字框 */
 .fp-modal .add-comment { margin-top: 8px; }
 .fp-modal .xc { margin-top: 10px; }
-.fp-modal .xc .cap-head { margin-top: 0; gap: 8px; }
+.fp-modal .xc .cap-head { margin-top: 0; gap: 8px; flex-wrap: wrap; }
+.fp-modal .xc-preset { width: auto; max-width: 11em; min-height: 0; padding: 5px 8px; font-size: 13px; }
 .fp-modal .xc .cap-head label { margin: 0; }
 .fp-modal .xc-delay { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .fp-modal .xc-delay input { width: 72px; padding: 6px 8px; font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; }

@@ -6,13 +6,13 @@ import { handleAssets } from './core/assets.js';
 import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
-import { handleFb, adminFb, adminPageMap } from './core/fb.js';
+import { handleFb, adminFb, adminPageMap, adminCommentPresets } from './core/fb.js';
 import { handleRundown, adminRundown } from './core/rundown.js';
 import { syncScheduled, cleanupComments } from './core/fbqueue.js';
 
 export { CommentHub } from './core/fbqueue.js';
 
-adminExtras.push(adminLogs, adminFb, adminPageMap, adminRundown);
+adminExtras.push(adminLogs, adminFb, adminPageMap, adminCommentPresets, adminRundown);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 

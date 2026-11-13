@@ -17,17 +17,17 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/fbqueue.js`（或 fb.js）、`server/schema.sql` | 資料表 `fb_comment_presets`、讀寫函式 | ⬜ |
-| `server/core/fb.js` | `GET`／`POST /admin/fb/comment-presets`（管理憑證）、`GET /fb/comment-presets`（公司憑證） | ⬜ |
-| `server/core/admin-page.js` | 新卡片：讀取、編輯、儲存，比照「粉專對應」 | ⬜ |
-| `tools/fbpost/tool.js`、`index.html`、`tool.css` | 讀取清單；第 N 則列加下拉（無／各名稱）；選了填入文字框 | ⬜ |
-| 測試 | 單元（驗證、重複名稱、上限、權限）＋ e2e（下拉填入、選回無、無清單時隱藏） | ⬜ |
-| `tools/fbpost/TOOL.md`、規格 | 補說明 | ⬜ |
+| `server/core/fbqueue.js`（或 fb.js）、`server/schema.sql` | 資料表 `fb_comment_presets`、讀寫函式 | ✅ |
+| `server/core/fb.js` | `GET`／`POST /admin/fb/comment-presets`（管理憑證）、`GET /fb/comment-presets`（公司憑證） | ✅ |
+| `server/core/admin-page.js` | 新卡片：讀取、編輯、儲存，比照「粉專對應」 | ✅ |
+| `tools/fbpost/tool.js`、`index.html`、`tool.css` | 讀取清單；第 N 則列加下拉（無／各名稱）；選了填入文字框 | ✅ |
+| 測試 | 單元（驗證、重複名稱、上限、權限）＋ e2e（下拉填入、選回無、無清單時隱藏） | ✅ |
+| `tools/fbpost/TOOL.md`、規格 | 補說明 | ✅ |
 
 ## 下一步
-- [ ] 後端與單元測試
-- [ ] 管理頁卡片
-- [ ] 前端下拉＋e2e（假後端 e2e 要補 `/fb/comment-presets`）
+- [x] 後端與單元測試
+- [x] 管理頁卡片
+- [x] 前端下拉＋e2e（假後端已補 `/fb/comment-presets`）
 - [ ] `npm test`、`node build.js --check`、全部 e2e；截圖給使用者
 - [ ] 獨立審查代理（Sonnet）
 - [ ] 使用者說「推」才併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
@@ -38,3 +38,6 @@
 ## 注意事項
 - 公司素材不進 repo；預設文字只存後端 D1。
 - 產生檔不手改，跑 `node build.js`。不直接推 main。
+
+## 另案（使用者中途提出，尚未開始）
+- 「已排程／已發布」列表加「新增留言」，可由列表補留言。需先列做法與問題給使用者確認，回「開始」才做。

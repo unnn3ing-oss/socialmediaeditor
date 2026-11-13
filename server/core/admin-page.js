@@ -23,7 +23,8 @@ p{margin:0 0 12px;color:var(--sub)}
 code{background:var(--soft);color:var(--brand);padding:1px 7px;border-radius:7px;font-size:.9em}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:18px;padding:20px;margin:16px 0;box-shadow:0 24px 60px -30px rgba(0,43,102,.35)}
 label{display:block;font-weight:500;margin:12px 0 4px}
-input[type=text],input[type=password],input[type=number],select{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit}
+input[type=text],input[type=password],input[type=number],select,textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit}
+textarea{min-height:72px;resize:vertical}
 input[type=file]{width:100%;min-height:44px;padding:8px 0;font:inherit}
 button{min-height:44px;padding:0 20px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--sub);font:inherit;font-weight:500;cursor:pointer}
 button:hover:not(:disabled){border-color:var(--brand);color:var(--brand)}
@@ -109,6 +110,16 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <p class="msg" id="fbMsg" role="status"></p>
       <div class="scroll" id="fbWrap" hidden>
         <table><thead><tr><th>#</th><th>粉專</th><th>狀態</th><th>類型</th><th>到期</th><th>缺少的權限</th></tr></thead><tbody id="fbRows"></tbody></table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>第 N 則留言預設文字</h2>
+      <p>排程發布的「再新增一則留言」可以從下拉選這裡設定的文字（選了會填進文字框，發文時還能再改）。每則留言預設是「無」。名稱最多 <span id="cpNameMax">20</span> 字、最多 <span id="cpMax">20</span> 筆；內容可放活動連結、表情符號。</p>
+      <div class="row"><button id="cpLoad" type="button">讀取預設文字</button><button id="cpAdd" type="button" hidden>＋ 新增一筆</button><button id="cpSave" class="primary" type="button" hidden>儲存</button></div>
+      <p class="msg" id="cpMsg" role="status"></p>
+      <div class="scroll" id="cpWrap" hidden>
+        <table><thead><tr><th>名稱</th><th>內容</th><th></th></tr></thead><tbody id="cpRows"></tbody></table>
       </div>
     </section>
 
@@ -303,6 +314,46 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       say($('fbMsg'), bad ? bad + ' 組 token 有問題。' + note : '全部正常。' + note, bad ? 'err' : 'good');
     }).catch(function (e) { say($('fbMsg'), '檢查失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbBtn').disabled = false; });
+  };
+
+  // 第 N 則留言預設文字：整份讀取、整份儲存（順序＝下拉順序）；空白列儲存時略過
+  var cpLimits = { max: 20, nameMax: 20, textMax: 8000 };
+  function cpRow(name, text) {
+    var tr = document.createElement('tr');
+    var n = document.createElement('td'), t = document.createElement('td'), d = document.createElement('td');
+    var ni = document.createElement('input'), ti = document.createElement('textarea'), del = document.createElement('button');
+    ni.type = 'text'; ni.maxLength = cpLimits.nameMax; ni.value = name || ''; ni.setAttribute('aria-label', '名稱'); ni.className = 'cp-name';
+    ti.rows = 2; ti.maxLength = cpLimits.textMax; ti.value = text || ''; ti.setAttribute('aria-label', '內容'); ti.className = 'cp-text'; ti.style.width = '100%';
+    del.type = 'button'; del.textContent = '刪除'; del.setAttribute('aria-label', '刪除這一筆');
+    del.onclick = function () { tr.remove(); cpToggle(); };
+    n.appendChild(ni); t.appendChild(ti); d.appendChild(del); tr.appendChild(n); tr.appendChild(t); tr.appendChild(d);
+    return tr;
+  }
+  function cpToggle() { $('cpAdd').hidden = $('cpWrap').hidden || $('cpRows').children.length >= cpLimits.max; }
+  $('cpLoad').onclick = function () {
+    $('cpLoad').disabled = true; say($('cpMsg'), '讀取中');
+    api('/admin/fb/comment-presets').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data;
+      cpLimits = { max: d.max || 20, nameMax: d.nameMax || 20, textMax: d.textMax || 8000 };
+      $('cpMax').textContent = cpLimits.max; $('cpNameMax').textContent = cpLimits.nameMax;
+      var tb = $('cpRows'); tb.textContent = '';
+      d.items.forEach(function (it) { tb.appendChild(cpRow(it.name, it.text)); });
+      $('cpWrap').hidden = false; $('cpSave').hidden = false; cpToggle();
+      say($('cpMsg'), d.items.length ? '' : '還沒有預設文字，按「新增一筆」開始。');
+    }).catch(function (e) { say($('cpMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('cpLoad').disabled = false; });
+  };
+  $('cpAdd').onclick = function () { var r = cpRow('', ''); $('cpRows').appendChild(r); cpToggle(); r.querySelector('input').focus(); };
+  $('cpSave').onclick = function () {
+    var items = [].map.call($('cpRows').children, function (tr) { return { name: tr.querySelector('.cp-name').value, text: tr.querySelector('.cp-text').value }; });
+    $('cpSave').disabled = true; say($('cpMsg'), '儲存中');
+    api('/admin/fb/comment-presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
+      if (res.ok) { say($('cpMsg'), '已儲存。', 'good'); $('cpLoad').click(); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('cpMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('cpMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('cpSave').disabled = false; });
   };
 
   $('rdCheck').onclick = function () {

@@ -21,6 +21,7 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS fb_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, page_id TEXT NOT NULL, post_id TEXT, photo_id TEXT, message TEXT NOT NULL,
     due INTEGER NOT NULL, next_check INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', error TEXT, comment_id TEXT,
     dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, seq INTEGER NOT NULL DEFAULT 1, delay INTEGER NOT NULL DEFAULT 0)`,
+  'CREATE TABLE IF NOT EXISTS fb_comment_presets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, text TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)',
   'CREATE INDEX IF NOT EXISTS fb_comments_check ON fb_comments(status, next_check)',
   'CREATE INDEX IF NOT EXISTS fb_comments_post ON fb_comments(post_id)'
 ];
@@ -49,6 +50,23 @@ export const EXTRA_DELAY_MAX = 1440;
 const errText = (env, e) => scrub(env, (e && e.message) || '未知錯誤');
 const isMissing = (e) => e instanceof GraphError && e.fbCode === 100;
 const timeOf = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
+
+// ---- 第 N 則留言的預設文字（後台設定，發文工具下拉選用）----
+export const MAX_PRESETS = 20;
+export const PRESET_NAME_MAX = 20;
+export async function listPresets(env) {
+  if (!env.DB) return [];
+  await ensureTables(env);
+  const rows = await all(env, 'SELECT name, text FROM fb_comment_presets ORDER BY sort ASC, id ASC');
+  return rows.map((r) => ({ name: r.name, text: r.text }));
+}
+// 整份取代（順序＝排序）；呼叫前已驗證
+export async function savePresets(env, items, nowMs = Date.now()) {
+  await ensureTables(env);
+  await run(env, 'DELETE FROM fb_comment_presets');
+  let i = 0;
+  for (const it of items) await run(env, 'INSERT INTO fb_comment_presets (name, text, sort, updated) VALUES (?, ?, ?, ?)', it.name, it.text, i++, nowMs);
+}
 
 // ---- 佇列操作 ----
 // 新增一筆待留言；post 與 photo 至少一個。due＝預定留言秒（發布時間＋delay）；nextCheck＝毫秒；seq＝第幾則；delay＝發布後幾秒

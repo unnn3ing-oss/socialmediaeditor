@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run, all } from './db.js';
-import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
+import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
@@ -281,6 +281,39 @@ export async function adminPageMap(request, env, path) {
     await run(env, `INSERT INTO fb_page_map (page_id, code, label, utm, sort, updated) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(page_id) DO UPDATE SET label=excluded.label, utm=excluded.utm, sort=excluded.sort, updated=excluded.updated`, c.id, code, c.label, c.utm, c.sort, now);
   }
+  return ok(request, env, { saved: clean.length });
+}
+
+// 管理頁：第 N 則留言預設文字。GET／POST /admin/fb/comment-presets（已通過 admin 驗證）；整份取代，順序＝下拉順序
+export function checkPresets(list) {
+  if (!Array.isArray(list)) return '資料格式不正確。';
+  if (list.length > MAX_PRESETS) return `最多 ${MAX_PRESETS} 筆。`;
+  const seen = new Set(), clean = [];
+  for (const it of list) {
+    if (!it || typeof it !== 'object' || typeof it.name !== 'string' || typeof it.text !== 'string') return '資料格式不正確。';
+    const name = it.name.trim(), text = it.text.trim();
+    if (!name && !text) continue;   // 整列空白略過
+    if (!name || name.length > PRESET_NAME_MAX) return `名稱要 1 到 ${PRESET_NAME_MAX} 個字。`;
+    if (!text) return `「${name}」沒有內容。`;
+    if (text.length > MAX_COMMENT) return `「${name}」內容太長（上限 ${MAX_COMMENT} 字）。`;
+    if (seen.has(name)) return `名稱「${name}」重複了。`;
+    seen.add(name);
+    clean.push({ name, text });
+  }
+  return clean;
+}
+export async function adminCommentPresets(request, env, path) {
+  if (path !== '/admin/fb/comment-presets') return null;
+  if (!env.DB) return fail(request, env, 'misconfigured');
+  if (request.method === 'GET') return ok(request, env, { items: await listPresets(env), max: MAX_PRESETS, nameMax: PRESET_NAME_MAX, textMax: MAX_COMMENT });
+  if (request.method !== 'POST') return null;
+  const buf = await readBody(request, 700 * 1024);
+  if (!buf) return fail(request, env, 'too_large');
+  let b;
+  try { b = JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return fail(request, env, 'bad_request'); }
+  const clean = checkPresets(b && b.items);
+  if (typeof clean === 'string') return fail(request, env, 'bad_request', clean);
+  await savePresets(env, clean);
   return ok(request, env, { saved: clean.length });
 }
 
@@ -586,6 +619,11 @@ export async function handleFb(request, env, path) {
   try {
     if (path === '/fb/pages' && request.method === 'GET') {
       return ok(request, env, await pagesWithMap(env, await loadPages(env, { fresh: q.get('refresh') === '1' })));
+    }
+    if (path === '/fb/comment-presets' && request.method === 'GET') {
+      let items = [];
+      try { items = await listPresets(env); } catch (e) { /* 讀不到就當沒有，不影響發文 */ }
+      return ok(request, env, { items });
     }
     if (path === '/fb/posts' && request.method === 'GET') return await listPosts(request, env, q);
     if (path === '/fb/scheduled' && request.method === 'GET') return await listScheduled(request, env, q);

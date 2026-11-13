@@ -826,6 +826,26 @@ function updateCommentPreview() {
 }
 $('comment').addEventListener('input', updateCommentPreview);
 
+// 後台設定的第 N 則留言預設文字（下拉選用）：[{ name, text }]；沒登入公司密碼或讀取失敗就是空的，下拉隱藏，不影響發文
+let commentPresets = [];
+async function loadCommentPresets() {
+  try {
+    const r = await tb.api.call('/fb/comment-presets');
+    commentPresets = Array.isArray(r && r.items) ? r.items.filter((x) => x && typeof x.name === 'string' && typeof x.text === 'string') : [];
+  } catch { commentPresets = []; }
+  refreshPresetSelects();
+}
+// 下拉選項：「無」＋各預設名稱；保留各列目前選的名稱（清單改了、名稱還在就維持）
+function fillPresetSelect(sel) {
+  const keep = sel.value;
+  sel.replaceChildren(el('option', { value: '', textContent: '無' }), ...commentPresets.map((p, i) => el('option', { value: String(i), textContent: p.name })));
+  const idx = keep === '' ? -1 : commentPresets.findIndex((p) => p.name === sel.dataset.name);
+  sel.value = idx >= 0 ? String(idx) : '';
+  if (idx < 0) sel.dataset.name = '';
+  sel.hidden = !commentPresets.length;
+}
+function refreshPresetSelects() { extraBox.querySelectorAll('.xc-preset').forEach(fillPresetSelect); }
+
 // ---------- 第 2 則以後的留言：「＋ 再新增一則留言」；各則發布後幾分鐘留（預設 5，滾輪／↑↓ 每次 5 分鐘）----------
 // 純文字（可含活動連結、表情符號），不自動帶文章連結；空白的略過。切換分頁不重建（用 hidden），只有清空／關閉會移除。
 const extraBox = $('extraComments');
@@ -838,6 +858,7 @@ function renumberExtras() {
     r.querySelector('label').textContent = `第 ${n} 則留言`;
     r.querySelector('input').setAttribute('aria-label', `第 ${n} 則留言：發布後幾分鐘`);
     r.querySelector('.xc-del').setAttribute('aria-label', `移除第 ${n} 則留言`);
+    r.querySelector('.xc-preset').setAttribute('aria-label', `第 ${n} 則留言：選預設文字`);
   });
   $('addComment').hidden = extraRows().length >= Cm.EXTRA_SLOTS;
 }
@@ -859,8 +880,19 @@ function addExtraRow(message = '') {
   num.addEventListener('input', updateCommentPreview);
   num.addEventListener('change', () => { num.value = String(Cm.clampDelay(num.value)); updateCommentPreview(); });
   const del = el('button', { type: 'button', className: 'xc-del', textContent: '✕' });
+  // 預設文字下拉：預設「無」；選了把內容填進文字框（可再改）；選回「無」時，文字框還是剛填入的原文才清空，改過就保留
+  const sel = el('select', { className: 'xc-preset' });
+  fillPresetSelect(sel);
+  let filled = '';
+  sel.addEventListener('change', () => {
+    const p = sel.value === '' ? null : commentPresets[Number(sel.value)];
+    sel.dataset.name = p ? p.name : '';
+    if (p) { ta.value = p.text; filled = p.text; }
+    else { if (filled && ta.value === filled) ta.value = ''; filled = ''; }
+    updateCommentPreview();
+  });
   const row = el('div', { className: 'xc' },
-    el('div', { className: 'cap-head' }, el('label', { htmlFor: id }), el('span', { className: 'xc-delay' }, '發布後 ', num, ' 分鐘'), del),
+    el('div', { className: 'cap-head' }, el('label', { htmlFor: id }), sel, el('span', { className: 'xc-delay' }, '發布後 ', num, ' 分鐘'), del),
     ta);
   del.addEventListener('click', () => { row.remove(); renumberExtras(); updateCommentPreview(); $('addComment').focus(); });
   ta.addEventListener('input', updateCommentPreview);
@@ -1248,6 +1280,7 @@ async function requestClose() {
 $('newPost').addEventListener('click', async () => {
   if (dutyExpired() || (!duty && !dutyAsked && pages.length)) { await openDuty(); resetAll(); }
   modal.showModal(); $('url').focus();
+  loadCommentPresets();   // 後台剛改過預設文字，重新打開就看得到
 });
 $('mClose').addEventListener('click', requestClose);
 modal.addEventListener('cancel', (e) => { e.preventDefault(); requestClose(); });   // Esc 走同一條路
@@ -1271,4 +1304,5 @@ pickSwatch(swatch);
 updateCounters();
 updateCount();
 loadPages();
+loadCommentPresets();
 pollFailed();

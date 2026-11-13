@@ -41,7 +41,7 @@ async function skipDuty(page) {
   await page.click('#dutySkip');
   await page.waitForSelector('#dutyDlg:not([open])', { state: 'attached' });
 }
-async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES } = {}) {
+async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES, presets, presetsFail = false } = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -55,8 +55,11 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
       ],
       222: [],
     },
+    presets: [{ name: '活動宣傳', text: '追蹤粉專看更多 https://example.com/event 😀' }, { name: '感謝留言', text: '謝謝大家的留言' }], presetsFail: false,
     failedComments: [{ id: 'c1', page: '111', post: '111_8', message: '看更多新聞內容\nhttps://news.tvbs.com.tw/life/1', status: 'failed', error: '貼文沒有出現', due: now - 60, updated: now - 30, dismissed: false }],
   };
+  if (presets !== undefined) api.presets = presets;
+  api.presetsFail = presetsFail;
   await page.addInitScript(({ duty, rundown }) => {
     try {
       if (duty && typeof duty === 'object') localStorage.setItem('tbx.fbpost.duty.v1', JSON.stringify(duty));
@@ -110,6 +113,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
       for (const list of Object.values(api.scheduled)) for (const it of list) if (it.id === b.post) it.at = b.time;
       return okJ({ ok: true, post: b.post, time: b.time });
     }
+    if (u.pathname === '/fb/comment-presets') return api.presetsFail ? bad('unauthorized', '請先輸入公司密碼。', 401) : okJ({ items: api.presets });
     if (u.pathname === '/fb/comments') return okJ({ items: api.failedComments });
     if (u.pathname === '/fb/comment/retry' || u.pathname === '/fb/comment/dismiss') {
       const id = JSON.parse(req.postData()).id;
@@ -1391,4 +1395,43 @@ test('生僻字：純文字底圖輸入就載入，送出前等字型載完才�
   const last = (await fontCalls(page)).filter(([s]) => /^900 76px/.test(s)).pop();
   assert.ok(last[1].includes('㙓'), '送出前載入了最後輸入的字');
   assert.deepEqual(errors, []);
+});
+
+test('第 N 則留言：下拉預設「無」，選了把後台設定的內容填進文字框（可再改），選回「無」只清沒改過的', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await page.click('#addComment');
+  const sel = page.locator('#extraComments .xc .xc-preset').first();
+  const ta = page.locator('#extraComments .xc textarea').first();
+  assert.equal(await sel.inputValue(), '', '預設是「無」');
+  assert.deepEqual(await sel.locator('option').allTextContents(), ['無', '活動宣傳', '感謝留言']);
+  assert.equal(await ta.inputValue(), '', '預設不帶任何文字，也沒有自動出現第 2 則');
+  await sel.selectOption({ label: '活動宣傳' });
+  assert.equal(await ta.inputValue(), '追蹤粉專看更多 https://example.com/event 😀');
+  assert.match(await page.textContent('#commentPrev'), /第 2 則（發布後 5 分鐘）：\n追蹤粉專看更多/);
+  await sel.selectOption('');
+  assert.equal(await ta.inputValue(), '', '還是剛填入的原文 → 選回「無」清空');
+  await sel.selectOption({ label: '感謝留言' });
+  await ta.fill('謝謝大家的留言，也歡迎追蹤！');
+  await sel.selectOption('');
+  assert.equal(await ta.inputValue(), '謝謝大家的留言，也歡迎追蹤！', '改過的文字不會被清掉');
+  // 送出帶的是文字框現在的內容
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.deepEqual(JSON.parse(api.posts[0].extraComments), [{ message: '謝謝大家的留言，也歡迎追蹤！', delay: 5 }]);
+  assert.deepEqual(errors, []);
+});
+
+test('第 N 則留言：後台沒設定預設文字或讀不到（沒登入）時，下拉隱藏、其餘照常', async () => {
+  for (const mode of ['empty', 'fail']) {
+    const { page, api, errors } = await open({ presets: mode === 'empty' ? [] : undefined, presetsFail: mode === 'fail' });
+    await page.click('#newPost');
+    await page.click('#addComment');
+    assert.equal(await page.locator('#extraComments .xc .xc-preset').first().isHidden(), true, mode);
+    await page.locator('#extraComments .xc textarea').first().fill('手打的留言');
+    assert.match(await page.textContent('#commentPrev'), /手打的留言/);
+    assert.deepEqual(errors.filter((e) => !/401|unauthorized/i.test(e)), [], mode);
+  }
 });

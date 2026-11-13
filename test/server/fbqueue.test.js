@@ -611,3 +611,54 @@ test('補欄位：別的 Worker 剛補好（duplicate column）不讓 ensureTabl
   await q.ensureTables({ ...env, DB: stale });
   assert.ok(real.raw.prepare('PRAGMA table_info(fb_comments)').all().some((c) => c.name === 'delay'));
 });
+
+// ---- 第 N 則留言預設文字（後台設定，發文工具下拉選用） ----
+test('預設文字：管理憑證讀寫；整份取代、順序保留、空白列略過、前後去空白', async () => {
+  const env = mk();
+  assert.deepEqual((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data.items, []);
+  const r = await api(env, 'POST', '/admin/fb/comment-presets', { items: [{ name: ' 活動宣傳 ', text: ' 追蹤粉專 https://a.tw 😀 ' }, { name: '', text: '' }, { name: '感謝', text: '謝謝大家' }] }, 'admin');
+  assert.equal(r.res.status, 200);
+  assert.deepEqual(r.body.data, { saved: 2 });
+  const g = (await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data;
+  assert.deepEqual(g.items, [{ name: '活動宣傳', text: '追蹤粉專 https://a.tw 😀' }, { name: '感謝', text: '謝謝大家' }]);
+  assert.deepEqual([g.max, g.nameMax, g.textMax], [20, 20, 8000]);
+  await api(env, 'POST', '/admin/fb/comment-presets', { items: [{ name: '只剩這個', text: 'x' }] }, 'admin');
+  assert.deepEqual((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data.items, [{ name: '只剩這個', text: 'x' }], '整份取代');
+});
+
+test('預設文字：驗證（名稱／內容／長度／重複／筆數／格式）', async () => {
+  const env = mk();
+  const bad = async (items, re) => {
+    const r = await api(env, 'POST', '/admin/fb/comment-presets', { items }, 'admin');
+    assert.equal(r.res.status, 400, JSON.stringify(items).slice(0, 60));
+    if (re) assert.match(r.body.error, re);
+  };
+  await bad([{ name: '無內容', text: '  ' }], /沒有內容/);
+  await bad([{ name: '', text: '有字沒名稱' }], /名稱/);
+  await bad([{ name: 'n'.repeat(21), text: 'x' }], /名稱/);
+  await bad([{ name: 'a', text: 'x'.repeat(8001) }], /太長/);
+  await bad([{ name: 'a', text: '1' }, { name: 'a', text: '2' }], /重複/);
+  await bad(Array.from({ length: 21 }, (_, i) => ({ name: 'n' + i, text: 'x' })), /最多/);
+  await bad('not array');
+  await bad([{ name: 1, text: 'x' }]);
+  assert.deepEqual((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data.items, [], '驗證失敗不會寫入');
+  const ok20 = await api(env, 'POST', '/admin/fb/comment-presets', { items: Array.from({ length: 20 }, (_, i) => ({ name: 'n' + i, text: 'x' })) }, 'admin');
+  assert.equal(ok20.res.status, 200);
+});
+
+test('預設文字：公司憑證只能讀（給發文工具），不能寫；沒有憑證 401；管理端點擋公司憑證', async () => {
+  const env = mk();
+  await api(env, 'POST', '/admin/fb/comment-presets', { items: [{ name: '活動', text: '內容 https://a.tw' }] }, 'admin');
+  const g = await api(env, 'GET', '/fb/comment-presets');
+  assert.equal(g.res.status, 200);
+  assert.deepEqual(g.body.data.items, [{ name: '活動', text: '內容 https://a.tw' }]);
+  assert.equal((await api(env, 'POST', '/fb/comment-presets', { items: [] })).res.status, 404);
+  assert.equal((await api(env, 'GET', '/admin/fb/comment-presets')).res.status, 401, '公司憑證不能進管理端點');
+  assert.equal((await call('/fb/comment-presets', {}, env)).status, 401);
+});
+
+test('預設文字：沒有資料庫時公司端讀到空清單、管理端回 misconfigured', async () => {
+  const env = { ...mk(), DB: undefined };
+  assert.deepEqual((await api(env, 'GET', '/fb/comment-presets')).body.data.items, []);
+  assert.equal((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.code, 'misconfigured');
+});
