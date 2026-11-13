@@ -1,6 +1,8 @@
 // 作圖框的單張照片編輯器：照片（拖曳平移、滾輪／雙指縮放）＋框＋標題＋貼圖／馬賽克，輸出一張 1080×1080。
 // 繪製邏輯移植自 tools/pattern/app.js 與 stickers.js（公司風格一致）。
 // wrap 需要可定位（本模組會設 position:relative）；貼圖／馬賽克的操作方框是疊在畫布上的 DOM，匯出時不會包含。
+import { createFontLoader } from './fontload.js';
+
 const SIZE = 1080;
 const MAX_ZOOM = 5;
 const MAX_BYTES = 30 * 1024 * 1024;
@@ -56,7 +58,8 @@ const GEN_COLORS = [
 const GEN = { tag: '快訊', color: GEN_COLORS[0].hex };
 const GEN_TITLE_X = 108, GEN_TITLE_MAX_W = 900;
 const GEN_L1 = 72, GEN_L2 = 50, GEN_L1_BASE = 915, GEN_L2_BASE = 995;
-const FONT_FALLBACK = '"Microsoft JhengHei", "PingFang TC", "PMingLiU", sans-serif';
+// 缺字時先退回同系的 Noto Sans TC（公司字型 WHZ-Heavy 沒有的字也靠它），最後才用系統字型
+const FONT_FALLBACK = '"Noto Sans TC", "Microsoft JhengHei", "PingFang TC", "PMingLiU", sans-serif';
 
 const STICKER_NAMES = [
   ['smile', '笑臉'], ['shock', '驚嚇'], ['cry', '大哭'], ['angry', '生氣'],
@@ -95,6 +98,11 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {}, titleOverl
 
   const emit = () => { listeners.forEach(fn => { try { fn(); } catch (e) { console.error(e); } }); };
   const renderSoon = () => { if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; render(ctx, true); }); };
+  // 標題裡的罕見字：Google 字型分段下載，要用實際標題文字載入，載完重畫（見 fontload.js）
+  const fontLoader = createFontLoader({
+    specs: () => ['900 50px "Noto Sans TC"', '500 50px "Noto Sans TC"', ...(assets.fontLoaded ? ['50px "Noto Sans TC"'] : [])],
+    onLoaded: renderSoon
+  });
   const changed = () => { renderSoon(); layoutBoxes(); syncBar(); emit(); };
 
   // 資源載好只重畫一次，不算「內容改變」
@@ -622,10 +630,12 @@ export function createPhotoEditor({ canvas, wrap, fxBar, assets = {}, titleOverl
     setTitle(text) {
       titleRaw = String(text || '');
       titleLines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean).slice(0, MAX_TITLE_LINES);
+      fontLoader.request(titleLines.join(''));
       changed();
     },
-    exportBlob(type = 'image/jpeg', quality = 0.92) {
-      if (!image) return Promise.reject(new Error('請先放照片'));
+    async exportBlob(type = 'image/jpeg', quality = 0.92) {
+      if (!image) throw new Error('請先放照片');
+      await fontLoader.ensure(titleLines.join(''));   // 輸出前確認標題的字都載好，不會把還沒載入的罕見字畫成空白
       const off = document.createElement('canvas');
       off.width = SIZE; off.height = SIZE;
       const c = off.getContext('2d');

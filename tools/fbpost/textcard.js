@@ -4,7 +4,7 @@
 // 畫布固定 1080×1080。
 const SIZE = 1080;
 const TC = { px: 76, lineH: 110, maxW: 880, centerY: 524, baseOff: 23, shadow: 'rgba(0,0,0,.85)', blur: 5, off: 5 };
-const FALLBACK = '"Microsoft JhengHei", "PingFang TC", "PMingLiU", sans-serif';
+const FALLBACK = '"Noto Sans TC", "Microsoft JhengHei", "PingFang TC", "PMingLiU", sans-serif';
 
 const RAW_STYLES = [
   { key: 'flash', label: '快訊紅', bg: '#b00020' }, { key: 'intl', label: '國際藍', bg: '#0d2b6b' },

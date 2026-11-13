@@ -11,6 +11,7 @@ import * as Sched from '../../sdk/news-sched.js';
 import { createPhotoEditor } from './editor.js';
 import * as Duty from './duty.js';
 import * as RD from './rundown.js';
+import { createFontLoader } from './fontload.js';
 import { createStore } from './records.js';
 import { createQueryCache } from './query-cache.js';
 import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
@@ -762,7 +763,16 @@ titleEl.addEventListener('input', () => { updateCounters(); syncCaptionTitle(); 
 
 // ---------- 純文字底圖 ----------
 let swatch = TEXT_SWATCHES.find((s) => s.key === DEFAULT_SWATCH) || TEXT_SWATCHES[0];
-function renderCard() { drawTextCard($('textCanvas'), { text: getLines().join('\n'), swatch, fontLoaded: state.fontLoaded }); }
+// 純文字底圖的罕見字：用實際標題文字載入 Noto Sans TC（Google 字型分段下載，canvas 不會自動載），載完重畫
+const cardFonts = createFontLoader({
+  specs: () => ['900 76px "Noto Sans TC"', ...(state.fontLoaded ? ['76px "Noto Sans TC"'] : [])],
+  onLoaded: () => renderCard()
+});
+function renderCard() {
+  const text = getLines().join('\n');
+  cardFonts.request(text);
+  drawTextCard($('textCanvas'), { text, swatch, fontLoaded: state.fontLoaded });
+}
 function pickSwatch(s) {
   swatch = s;
   for (const x of $('swatches').children) { const on = x.dataset.key === s.key; x.classList.toggle('is-on', on); x.setAttribute('aria-checked', String(on)); }
@@ -996,6 +1006,7 @@ async function buildPayload() {
     p.image = await editor.exportBlob('image/jpeg', 0.92);
   } else if (textStyle === 'card') {
     if (!lines.length) throw new Error('請輸入標題（底圖文字）');
+    await cardFonts.ensure(lines.join('\n'));   // 送出的圖：標題的字都載好才畫
     drawTextCard($('textCanvas'), { text: lines.join('\n'), swatch, fontLoaded: state.fontLoaded });
     p.image = await new Promise((r) => $('textCanvas').toBlob(r, 'image/jpeg', 0.92));
     renderCard();
