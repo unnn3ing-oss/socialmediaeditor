@@ -284,8 +284,10 @@ function renderRecords() {
       if (await confirmBox('刪除這筆本地紀錄？', '只刪除這個瀏覽器的紀錄，不影響 Facebook 上的貼文。', '刪除')) { records.remove(r.id); renderRecords(); }
     });
     const state = overallState(r);
-    const long = r.caption.split('\n').length > 3 || r.caption.length > 90;
-    const caption = r.caption ? el('p', { className: 'rec-caption', textContent: r.caption }) : null;
+    // 小編文已帶標題：有填小編文就只顯示小編文，沒填才用標題當主文字。
+    const hasCaption = r.caption.trim() !== '';
+    const long = r.caption.split('\n').length > 3 || r.caption.length > 60;   // 先粗估，畫出來後由 syncMoreButtons 依實際是否被截斷修正
+    const caption = hasCaption ? el('p', { className: 'rec-caption', textContent: r.caption }) : null;
     const more = long ? el('button', { type: 'button', className: 'rec-more', textContent: '展開全文' }) : null;
     more?.addEventListener('click', () => { const open = caption.classList.toggle('is-open'); more.textContent = open ? '收合' : '展開全文'; });
     return el('li', { className: 'rec-card', dataset: { record: r.id, state } },
@@ -297,12 +299,20 @@ function renderRecords() {
       el('div', { className: 'rec-body' },
         r.thumb ? el('img', { className: 'rec-thumb', src: r.thumb, alt: '貼文圖片' }) : null,
         el('div', { className: 'rec-main' },
-          r.title ? el('p', { className: 'rec-title', textContent: r.title }) : null,
+          !hasCaption && r.title ? el('p', { className: 'rec-title', textContent: r.title }) : null,
           caption, more,
           /^https?:\/\//.test(r.url) ? el('a', { className: 'rec-link', href: r.url, target: '_blank', rel: 'noopener', textContent: r.url }) : null,
-          !r.title && !r.caption ? el('p', { className: 'rec-caption muted', textContent: '（沒有文字）' }) : null)),
+          !hasCaption && !r.title ? el('p', { className: 'rec-caption muted', textContent: '（沒有文字）' }) : null)),
       el('div', { className: 'rec-pages' }, ...r.pages.map((p) => recordPageRow(r, p))));
   }));
+  syncMoreButtons();
+}
+// 「展開全文」只在內文真的被截斷時顯示（量測實際高度；窗格隱藏量不到時保留粗估結果）。
+function syncMoreButtons() {
+  for (const card of $('recordsList').children) {
+    const cap = card.querySelector('.rec-caption'), btn = card.querySelector('.rec-more');
+    if (cap && btn && !cap.classList.contains('is-open') && cap.clientHeight > 0) btn.hidden = cap.scrollHeight <= cap.clientHeight + 1;
+  }
 }
 function saveRecord() {
   if (!currentRecord) return;
@@ -321,6 +331,7 @@ function updateRecordedPost(postId, patch) {
 const VIEW_KEY = 'fbpost.recordsView';
 const recordsView = segment($('recordsView'), 'view', (v) => {
   $('recordsList').classList.toggle('is-list', v === 'list');
+  syncMoreButtons();
   try { localStorage.setItem(VIEW_KEY, v); } catch { /* 略過 */ }
 });
 try { if (localStorage.getItem(VIEW_KEY) === 'list') recordsView.set('list'); } catch { /* 無痕或封鎖儲存：用預設網格 */ }
