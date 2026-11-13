@@ -1347,3 +1347,48 @@ test('底列：排入 Rundown 開關在左、SLUG 輸入框在右，與清空／
   assert.equal(await page.locator('#slug').isDisabled(), true);
   assert.deepEqual(errors, []);
 });
+
+// 生僻字留白：Google 把 Noto Sans TC 分段下載，要用「實際標題文字」載入；輸出圖片前要等載完
+const spyFontLoad = (page) => page.evaluate(() => {
+  window.__fl = [];
+  const orig = document.fonts.load.bind(document.fonts);
+  document.fonts.load = (spec, text) => { window.__fl.push([spec, text]); return orig(spec, text); };
+});
+const fontCalls = (page) => page.evaluate(() => window.__fl);
+
+test('生僻字：作圖框標題輸入後，用實際標題文字載入 Noto Sans TC（含各字重），英數字不載', async () => {
+  const { page, errors } = await open();
+  await page.click('#newPost');
+  await spyFontLoad(page);
+  await page.fill('#title', '私密處𠮷堃\nABC 喆');
+  await page.waitForFunction(() => window.__fl.length >= 2);
+  const calls = await fontCalls(page);
+  const heavy = calls.find(([s]) => /^900 50px/.test(s)), mid = calls.find(([s]) => /^500 50px/.test(s));
+  for (const c of [heavy, mid]) {
+    assert.ok(c, '每個用到的字重都載入');
+    for (const ch of ['私', '密', '處', '𠮷', '堃', '喆']) assert.ok(c[1].includes(ch), ch);
+    assert.ok(!/[A-Za-z ]/.test(c[1]), '英數字不用另外載');
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('生僻字：純文字底圖輸入就載入，送出前等字型載完才畫圖', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await page.click('#modeSeg [data-mode=text]');
+  await spyFontLoad(page);
+  await page.fill('#title', '𰻞𧃟鱲龘');
+  await page.waitForFunction(() => window.__fl.some(([s]) => /^900 76px/.test(s)));
+  const card = (await fontCalls(page)).find(([s]) => /^900 76px/.test(s));
+  for (const ch of ['𰻞', '𧃟', '鱲', '龘']) assert.ok(card[1].includes(ch), ch);
+  // 送出時：新輸入、還沒載過的字，要先載完才輸出（後端收到圖片）
+  await page.fill('#title', '𰻞𧃟鱲龘㙓');
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 1);
+  assert.equal(api.posts[0].hasImage, true);
+  const last = (await fontCalls(page)).filter(([s]) => /^900 76px/.test(s)).pop();
+  assert.ok(last[1].includes('㙓'), '送出前載入了最後輸入的字');
+  assert.deepEqual(errors, []);
+});
