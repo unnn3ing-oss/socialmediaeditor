@@ -11,6 +11,7 @@ import * as Sched from '../../sdk/news-sched.js';
 import { createPhotoEditor } from './editor.js';
 import * as Duty from './duty.js';
 import * as RD from './rundown.js';
+import * as Cm from './comments.js';
 import { createStore } from './records.js';
 import { createQueryCache } from './query-cache.js';
 import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textcard.js';
@@ -371,10 +372,12 @@ function resetStatsQuery() {
 }
 function resetQueries() { resetSchedQuery(); resetStatsQuery(); }
 const COMMENT_TEXT = { pending: '等待留言', done: '已留言', canceled: '已取消留言' };
-function commentLine(c) {
+// prefix＝「第 2 則・」；delay＝發布後幾分鐘（第 2 則以後才有）
+function commentLine(c, prefix = '', delay = 0) {
   if (!c) return null;
-  if (c.status === 'failed') return el('p', { className: 'cm bad', textContent: '留言失敗' + (c.error ? '：' + c.error : '') });
-  return el('p', { className: 'cm' + (c.status === 'done' ? ' ok' : ''), textContent: COMMENT_TEXT[c.status] || c.status });
+  const after = delay ? `（發布後 ${Cm.delayText(delay)}）` : '';
+  if (c.status === 'failed') return el('p', { className: 'cm bad', textContent: prefix + '留言失敗' + after + (c.error ? '：' + c.error : '') });
+  return el('p', { className: 'cm' + (c.status === 'done' ? ' ok' : ''), textContent: prefix + (COMMENT_TEXT[c.status] || c.status) + after });
 }
 // 讀取中的骨架列：形狀同真的一列（縮圖＋時間＋內文＋按鈕），讀完整批換掉，畫面不跳
 function skelRow() {
@@ -455,7 +458,8 @@ function renderScheduled(items, text) {
       el('div', { className: 'body' },
         el('div', { className: 'meta' }, el('b', { textContent: it.at ? fmtTime(it.at) : '—' }), el('span', { className: 'muted', textContent: pageName(it.page) })),
         el('p', { className: 'msg', textContent: it.message || '（沒有文字）' }),
-        commentLine(it.comment)),
+        commentLine(it.comment),
+        ...(it.extras || []).map((x) => commentLine(x, `第 ${x.seq} 則・`, x.delay))),
       el('div', { className: 'act' }, move, cancel));
     return li;
   }));
@@ -512,7 +516,7 @@ function renderFails() {
     const note = el('p', { className: 'cm bad', textContent: '原因：' + (c.error || '未知') });
     const li = el('li', { className: 'item fail', dataset: { comment: c.id } },
       el('div', { className: 'body' },
-        el('div', { className: 'meta' }, el('b', { textContent: pageName(c.page) }), el('span', { className: 'muted', textContent: c.due ? '預計 ' + fmtTime(c.due) : '' })),
+        el('div', { className: 'meta' }, el('b', { textContent: pageName(c.page) + (c.seq > 1 ? `・第 ${c.seq} 則` : '') }), el('span', { className: 'muted', textContent: c.due ? '預計 ' + fmtTime(c.due) : '' })),
         el('p', { className: 'msg', textContent: String(c.message || '').replace(/\s+/g, ' ').slice(0, 80) }), note),
       el('div', { className: 'act' }, retry, dismiss));
     const run = (path, okText) => async () => {
@@ -804,11 +808,58 @@ function updateCommentPreview() {
   const first = checkedChips()[0];
   const p = first && pages.find((x) => x.id === first.id);
   const box = $('commentPrev');
-  if (!p) { box.textContent = '勾選粉專後，這裡顯示留言預覽'; return; }
+  const tail = Cm.collectExtras(readExtraRows()).map((x, i) => `第 ${i + 2} 則（發布後 ${Cm.delayText(x.delay)}）：\n${x.message}`).join('\n');
+  const more = tail ? '\n' + tail : '';
+  if (!p) { box.textContent = '勾選粉專後，這裡顯示留言預覽' + more; return; }
   const text = commentFor(p);
-  box.textContent = text ? `留言預覽（${pageLabel(p)}）：\n${text}` : `留言預覽（${pageLabel(p)}）：不會留言（沒有文章網址也沒填留言）`;
+  box.textContent = (text ? `留言預覽（${pageLabel(p)}）：\n${text}` : `留言預覽（${pageLabel(p)}）：不會留言（沒有文章網址也沒填留言）`) + more;
 }
 $('comment').addEventListener('input', updateCommentPreview);
+
+// ---------- 第 2 則以後的留言：「＋ 再新增一則留言」；各則發布後幾分鐘留（預設 5，滾輪／↑↓ 每次 5 分鐘）----------
+// 純文字（可含活動連結、表情符號），不自動帶文章連結；空白的略過。切換分頁不重建（用 hidden），只有清空／關閉會移除。
+const extraBox = $('extraComments');
+let extraSeq = 0;
+const extraRows = () => [...extraBox.querySelectorAll('.xc')];
+const readExtraRows = () => extraRows().map((r) => ({ message: r.querySelector('textarea').value, delay: r.querySelector('input').value }));
+function renumberExtras() {
+  extraRows().forEach((r, i) => {
+    const n = i + 2;
+    r.querySelector('label').textContent = `第 ${n} 則留言`;
+    r.querySelector('input').setAttribute('aria-label', `第 ${n} 則留言：發布後幾分鐘`);
+    r.querySelector('.xc-del').setAttribute('aria-label', `移除第 ${n} 則留言`);
+  });
+  $('addComment').hidden = extraRows().length >= Cm.EXTRA_SLOTS;
+}
+function addExtraRow(message = '') {
+  if (extraRows().length >= Cm.EXTRA_SLOTS) return null;
+  const id = 'xcText' + ++extraSeq;
+  const ta = el('textarea', { id, rows: 2, placeholder: '純文字、活動連結、表情符號都可（不會自動帶文章連結）；空白＝不留這則' });
+  ta.value = message;
+  const num = el('input', { type: 'number', min: String(Cm.DELAY_MIN), max: String(Cm.DELAY_MAX), step: String(Cm.DELAY_STEP), value: String(Cm.nextDelay(readExtraRows().map((r) => Cm.clampDelay(r.delay)))) });
+  num.inputMode = 'numeric';
+  let acc = 0;
+  // 滑鼠停在數字框上滾輪：往上 +5、往下 −5（累積到約半格才動，每個事件最多一步，觸控板不會狂跳）；不影響整頁捲動
+  num.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    acc += e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+    if (Math.abs(acc) >= 50) { num.value = String(Cm.stepDelay(num.value, acc < 0 ? 1 : -1)); acc = 0; }   // 一格滾輪（約 100）＝一步
+    updateCommentPreview();
+  }, { passive: false });
+  num.addEventListener('input', updateCommentPreview);
+  num.addEventListener('change', () => { num.value = String(Cm.clampDelay(num.value)); updateCommentPreview(); });
+  const del = el('button', { type: 'button', className: 'xc-del', textContent: '✕' });
+  const row = el('div', { className: 'xc' },
+    el('div', { className: 'cap-head' }, el('label', { htmlFor: id }), el('span', { className: 'xc-delay' }, '發布後 ', num, ' 分鐘'), del),
+    ta);
+  del.addEventListener('click', () => { row.remove(); renumberExtras(); updateCommentPreview(); $('addComment').focus(); });
+  ta.addEventListener('input', updateCommentPreview);
+  extraBox.append(row);
+  renumberExtras(); updateCommentPreview();
+  return ta;
+}
+function clearExtras() { extraBox.replaceChildren(); renumberExtras(); }
+$('addComment').addEventListener('click', () => { const ta = addExtraRow(); if (ta) ta.focus(); });
 
 // ---------- 文章網址自動帶入（同網新 quickFill）----------
 const hint = (msg, cls) => { const h = $('urlHint'); h.textContent = msg || ''; h.className = 'hint' + (cls ? ' ' + cls : ''); };
@@ -1016,6 +1067,8 @@ async function sendOne(page, p, at) {
   if (p.textPreset) fd.append('textPreset', p.textPreset);
   if (at) fd.append('scheduledAt', String(at));
   fd.append('comment', commentFor(page));
+  const extras = Cm.collectExtras(readExtraRows());
+  if (extras.length) fd.append('extraComments', JSON.stringify(extras));
   return tb.api.call('/fb/post', { method: 'POST', body: fd });
 }
 const sendMsg = (text, cls) => { const m = $('sendMsg'); m.textContent = text || ''; m.className = 'hint' + (cls ? ' ' + cls : ''); m.hidden = !text; };
@@ -1070,7 +1123,7 @@ async function send(ids) {
         if (rdOn) localPage.rundown = { ok: false, msg: 'RD 待寫入' };
         sent.push({ page: id, code: page.code, at: c.sched ? Math.floor(c.at.getTime() / 1000) : new Date() });
         if (c.sched) schedN++; else nowN++;
-        if (r && r.comment && r.comment.status === 'failed') commentBad++;
+        if (r && ((r.comment && r.comment.status === 'failed') || (r.extras || []).some((x) => x.status === 'failed'))) commentBad++;
       } catch (e) {
         c.status = 'fail'; c.result = { error: errText(e) };
         localPage.error = errText(e);
@@ -1138,17 +1191,6 @@ function updateSlugHint() {
 $('rdOn').checked = RD.rundownOn();
 syncRd();
 $('rdOn').addEventListener('change', () => { RD.setRundownOn($('rdOn').checked); syncRd(); });
-$('rdSetBtn').addEventListener('click', () => { $('rdHint').textContent = ''; $('rdHint').className = 'hint'; $('rdDlg').showModal(); });
-$('rdClose').addEventListener('click', () => $('rdDlg').close());
-$('rdTest').addEventListener('click', async () => {
-  const h = $('rdHint');
-  $('rdTest').disabled = true; h.className = 'hint'; h.textContent = '測試中…';
-  try {
-    const j = await tb.api.call('/rundown', { method: 'POST', body: { action: 'ping' } });
-    h.className = 'hint ok'; h.textContent = `連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).slice(0, 3).join('、')}…）`;
-  } catch (e) { h.className = 'hint bad'; h.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : errText(e); }
-  finally { $('rdTest').disabled = false; }
-});
 
 // ---------- 完成、關閉、清空 ----------
 function showDone(body) {
@@ -1157,7 +1199,7 @@ function showDone(body) {
   $('doneDlg').showModal();
   $('dnAgain').focus();
 }
-const isDirty = () => !!($('url').value.trim() || $('title').value.trim() || $('caption').value.trim() || $('comment').value.trim() || $('presetId').value.trim() || (editor && editor.hasImage()));
+const isDirty = () => !!($('url').value.trim() || $('title').value.trim() || $('caption').value.trim() || $('comment').value.trim() || Cm.collectExtras(readExtraRows()).length || $('presetId').value.trim() || (editor && editor.hasImage()));
 const allSent = () => [...chips.values()].some((c) => c.on && c.status === 'ok') && !pendingChips().length;
 
 // 清空全部（同網新 resetAll）：唯一會刪內容的地方只有「確認關閉」「清空」「再發一篇」
@@ -1166,6 +1208,7 @@ function resetAll() {
   $('sendBtn').style.minWidth = '';
   $('sendBtn').style.maxWidth = '';
   for (const id of ['url', 'title', 'caption', 'comment', 'presetId']) $(id).value = '';
+  clearExtras();
   hint(''); sendMsg('');
   state.articleUrl = ''; cap.auto = ''; cap.title = null;
   learnSeps('', []);

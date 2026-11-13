@@ -476,3 +476,117 @@ test('cleanupComments：只刪 30 天前已結束的，待留言不動', async (
   await q.cleanupComments(env, Date.now());
   assert.deepEqual(rows(env).map((r) => r.id), [b]);
 });
+
+// ---- 第 N 則留言（發布後延遲） ----
+test('post：排程＋第 2、3 則 → 各入列，due＝排程時間＋延遲、seq 依序、第一則照舊', async () => {
+  const env = mk();
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_6' })]);
+  const at = nowSec() + 3600;
+  const r = await post(env, { page: '111', message: 'x', scheduledAt: at, comment: '第一則', extraComments: [{ message: ' 活動連結 https://a.tw ', delay: 5 }, { message: '第三則😀', delay: 30 }] });
+  assert.equal(r.res.status, 200);
+  assert.deepEqual(r.body.data.comment, { status: 'queued' });
+  assert.deepEqual(r.body.data.extras, [{ seq: 2, status: 'queued' }, { seq: 3, status: 'queued' }]);
+  const rs = rows(env);
+  assert.deepEqual(rs.map((x) => [x.seq, x.delay, x.due, x.next_check, x.message]), [
+    [1, 0, at, (at + 1) * 1000, '第一則'],
+    [2, 300, at + 300, (at + 301) * 1000, '活動連結 https://a.tw'],
+    [3, 1800, at + 1800, (at + 1801) * 1000, '第三則😀']
+  ]);
+});
+
+test('post：立即發布、沒有第一則，只有第 2 則 → 只入列第 2 則，從現在起算', async () => {
+  const env = mk();
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_5' })]);
+  const r = await post(env, { page: '111', message: 'x', extraComments: JSON.stringify([{ message: 'later', delay: 10 }]) });
+  assert.equal(r.res.status, 200);
+  assert.deepEqual(r.body.data.comment, { status: 'none' });
+  assert.ok(!calls.some((c) => c.path.endsWith('/comments')));
+  const [row] = rows(env);
+  assert.deepEqual([row.seq, row.delay, row.status], [2, 600, 'pending']);
+  assert.ok(Math.abs(row.due - (nowSec() + 600)) <= 2);
+});
+
+test('post：第 N 則驗證（延遲範圍、則數上限、格式、太長；空白略過）', async () => {
+  const env = mk();
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_5' })]);
+  const bad = async (extraComments) => assert.equal((await post(env, { page: '111', message: 'x', extraComments })).res.status, 400, JSON.stringify(extraComments));
+  await bad([{ message: 'a', delay: 4 }]);
+  await bad([{ message: 'a', delay: 1441 }]);
+  await bad([{ message: 'a', delay: 5.5 }]);
+  await bad([{ message: 'a', delay: 5 }, { message: 'b', delay: 10 }, { message: 'c', delay: 15 }]);
+  await bad([{ message: 'a'.repeat(8001), delay: 5 }]);
+  await bad('not json');
+  await bad({ message: 'a', delay: 5 });
+  assert.equal(rows(env).length, 0);
+  const ok = await post(env, { page: '111', message: 'x', extraComments: [{ message: '   ', delay: 99999 }, { message: 'a', delay: 1440 }] });
+  assert.equal(ok.res.status, 200);
+  assert.deepEqual(rows(env).map((x) => [x.seq, x.delay]), [[2, 86400]]);
+});
+
+test('reschedule：第 N 則跟著新發布時間移動（保留各自延遲）', async () => {
+  const env = mk();
+  const at = nowSec() + 4000;
+  await enqueue(env, { post: '111_9', due: at });
+  await enqueue(env, { post: '111_9', due: at + 300, seq: 2, delay: 300 });
+  const t = nowSec() + 7200;
+  routes.push([/\/111_9$/, (u, init) => (init.method === 'POST' ? reply({ success: true }) : reply({ id: '111_9', is_published: false }))]);
+  assert.equal((await api(env, 'POST', '/fb/reschedule', { post: '111_9', time: t })).res.status, 200);
+  assert.deepEqual(rows(env).map((x) => [x.seq, x.due, x.next_check]), [[1, t, (t + 1) * 1000], [2, t + 300, (t + 301) * 1000]]);
+});
+
+test('syncScheduled：後台改時間 → 第 N 則 due＝新時間＋延遲；沒改就不動', async () => {
+  const env = mk(); const q = await Q();
+  const at = nowSec() + 3600, newAt = at + 1800;
+  await enqueue(env, { due: at + 600, seq: 2, delay: 600 });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: at }] })]);
+  await q.syncScheduled(env, Date.now());
+  assert.equal(rows(env)[0].due, at + 600);
+  routes.length = 0;
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: newAt }] })]);
+  await q.syncScheduled(env, Date.now());
+  assert.deepEqual([rows(env)[0].due, rows(env)[0].next_check], [newAt + 600, (newAt + 601) * 1000]);
+});
+
+test('syncScheduled：後台提早發布 → 有延遲的從現在起算延遲，不馬上留', async () => {
+  const env = mk(); const q = await Q();
+  const at = nowSec() + 3600, now = Date.now();
+  await enqueue(env, { due: at + 300, seq: 2, delay: 300 });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [] })]);
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true, scheduled_publish_time: at } })]);
+  await q.syncScheduled(env, now);
+  const [r] = rows(env);
+  assert.equal(r.status, 'pending');
+  assert.ok(Math.abs(r.due - (Math.floor(now / 1000) + 300)) <= 1);
+  assert.ok(!calls.some((c) => c.path.endsWith('/comments')));
+});
+
+test('processDue：第 N 則到期且貼文已發布 → 留言成功；列表回 extras 與 seq', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env, { due: nowSec() - 5, seq: 2, delay: 300, message: '第二則' });
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
+  routes.push([/\/111_5\/comments$/, () => reply({ id: 'c2' })]);
+  await q.processDue(env, Date.now());
+  assert.deepEqual([rows(env)[0].status, rows(env)[0].comment_id], ['done', 'c2']);
+  const ex = await q.extraCommentsForPosts(env, ['111_5']);
+  assert.deepEqual(ex.get('111_5'), [{ id: 1, seq: 2, delay: 5, status: 'done', error: '', message: '第二則' }]);
+  assert.equal((await q.commentsForPosts(env, ['111_5'])).size, 0);   // 第一則的狀態不被第 2 則蓋掉
+  const l = await q.listComments(env, {});
+  assert.deepEqual([l[0].seq, l[0].delay], [2, 5]);
+});
+
+test('舊資料表（沒有 seq／delay）會自動補欄位，舊資料視為第一則、延遲 0', async () => {
+  const env = mk(); const q = await Q();
+  env.DB.raw.exec('DROP TABLE fb_comments');   // 假 D1 照 schema.sql 建表，這裡換回舊版結構
+  env.DB.raw.exec(`CREATE TABLE fb_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, page_id TEXT NOT NULL, post_id TEXT, photo_id TEXT, message TEXT NOT NULL,
+    due INTEGER NOT NULL, next_check INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', error TEXT, comment_id TEXT,
+    dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)`);
+  env.DB.raw.prepare("INSERT INTO fb_comments (page_id, post_id, message, due, next_check, created, updated) VALUES ('111','111_5','old',1,1,1,1)").run();
+  await q.ensureTables(env);
+  assert.deepEqual([rows(env)[0].seq, rows(env)[0].delay], [1, 0]);
+});
+
+test('前後端第 N 則留言常數一致', async () => {
+  const q = await Q();
+  const c = await import('../../tools/fbpost/comments.js');
+  assert.deepEqual([c.MAX_COMMENTS, c.DELAY_MIN, c.DELAY_MAX], [q.MAX_COMMENTS, q.EXTRA_DELAY_MIN, q.EXTRA_DELAY_MAX]);
+});

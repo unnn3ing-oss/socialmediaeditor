@@ -20,28 +20,38 @@ const DDL = [
   'CREATE TABLE IF NOT EXISTS fb_page_map (page_id TEXT PRIMARY KEY, code TEXT, label TEXT, utm TEXT, sort INTEGER, updated INTEGER)',
   `CREATE TABLE IF NOT EXISTS fb_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, page_id TEXT NOT NULL, post_id TEXT, photo_id TEXT, message TEXT NOT NULL,
     due INTEGER NOT NULL, next_check INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', error TEXT, comment_id TEXT,
-    dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)`,
+    dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, seq INTEGER NOT NULL DEFAULT 1, delay INTEGER NOT NULL DEFAULT 0)`,
   'CREATE INDEX IF NOT EXISTS fb_comments_check ON fb_comments(status, next_check)',
   'CREATE INDEX IF NOT EXISTS fb_comments_post ON fb_comments(post_id)'
 ];
+// 舊資料表補欄位：seq＝第幾則留言（1＝第一則）、delay＝發布後幾秒才留（due＝發布時間＋delay）
+const ADD_COLUMNS = [['seq', 'INTEGER NOT NULL DEFAULT 1'], ['delay', 'INTEGER NOT NULL DEFAULT 0']];
 const ensured = new WeakSet();
 export async function ensureTables(env) {
   if (!env.DB || ensured.has(env.DB)) return;
   for (const sql of DDL) await env.DB.prepare(sql).run();
+  const info = await env.DB.prepare('PRAGMA table_info(fb_comments)').all();
+  const have = new Set(((info && info.results) || []).map((c) => c.name));
+  for (const [col, def] of ADD_COLUMNS) if (!have.has(col)) await env.DB.prepare(`ALTER TABLE fb_comments ADD COLUMN ${col} ${def}`).run();
   ensured.add(env.DB);
 }
+
+// 第 N 則留言的規格（前端 tools/fbpost/comments.js 用同一組數字，test 會比對）
+export const MAX_COMMENTS = 3;            // 含第一則；之後要擴充只改這裡與前端常數
+export const EXTRA_DELAY_MIN = 5;         // 分鐘
+export const EXTRA_DELAY_MAX = 1440;
 
 const errText = (env, e) => scrub(env, (e && e.message) || '未知錯誤');
 const isMissing = (e) => e instanceof GraphError && e.fbCode === 100;
 const timeOf = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 
 // ---- 佇列操作 ----
-// 新增一筆待留言；post 與 photo 至少一個。due＝預定發布秒；nextCheck＝毫秒
-export async function enqueueComment(env, { page, post, photo, message, due, nextCheck, nowMs = Date.now() }) {
+// 新增一筆待留言；post 與 photo 至少一個。due＝預定留言秒（發布時間＋delay）；nextCheck＝毫秒；seq＝第幾則；delay＝發布後幾秒
+export async function enqueueComment(env, { page, post, photo, message, due, nextCheck, seq = 1, delay = 0, nowMs = Date.now() }) {
   await ensureTables(env);
   const r = await run(env,
-    `INSERT INTO fb_comments (page_id, post_id, photo_id, message, due, next_check, step, status, created, updated) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending', ?, ?)`,
-    page, post || null, photo || null, message, due, nextCheck, nowMs, nowMs);
+    `INSERT INTO fb_comments (page_id, post_id, photo_id, message, due, next_check, step, status, created, updated, seq, delay) VALUES (?, ?, ?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?)`,
+    page, post || null, photo || null, message, due, nextCheck, nowMs, nowMs, seq, delay);
   return r && r.meta ? r.meta.last_row_id : null;
 }
 
@@ -51,20 +61,33 @@ export async function cancelForPost(env, post, reason = '貼文已取消', nowMs
   await run(env, `UPDATE fb_comments SET status='canceled', error=?, updated=? WHERE post_id=? AND status='pending'`, reason, nowMs, post);
 }
 
-// 改排程時間：同貼文待留言項目的 due 改成新時間，檢查節奏重來
+// 改排程時間：同貼文待留言項目的 due 改成「新發布時間＋各自的 delay」，檢查節奏重來
 export async function rescheduleComments(env, post, time, nowMs = Date.now()) {
   await ensureTables(env);
-  await run(env, `UPDATE fb_comments SET due=?, step=0, next_check=?, error=NULL, updated=? WHERE post_id=? AND status='pending'`,
-    time, (time + OFFSETS[0]) * 1000, nowMs, post);
+  await run(env, `UPDATE fb_comments SET due=? + delay, step=0, next_check=(? + delay + ?) * 1000, error=NULL, updated=? WHERE post_id=? AND status='pending'`,
+    time, time, OFFSETS[0], nowMs, post);
 }
 
-// 每篇貼文最新一筆留言狀態：Map(post_id → { id, status, error, message })
+// 每篇貼文「第一則」最新一筆留言狀態：Map(post_id → { id, status, error, message })
 export async function commentsForPosts(env, posts) {
   const out = new Map();
   if (!posts.length) return out;
   await ensureTables(env);
-  const rows = await all(env, `SELECT id, post_id, status, error, message FROM fb_comments WHERE post_id IN (${posts.map(() => '?').join(',')}) ORDER BY id ASC`, ...posts);
+  const rows = await all(env, `SELECT id, post_id, status, error, message FROM fb_comments WHERE seq = 1 AND post_id IN (${posts.map(() => '?').join(',')}) ORDER BY id ASC`, ...posts);
   for (const r of rows) out.set(r.post_id, { id: r.id, status: r.status, error: r.error || '', message: r.message });
+  return out;
+}
+
+// 每篇貼文「第 2 則以後」的留言：Map(post_id → [{ id, seq, delay(分鐘), status, error, message }])，依 seq 排序
+export async function extraCommentsForPosts(env, posts) {
+  const out = new Map();
+  if (!posts.length) return out;
+  await ensureTables(env);
+  const rows = await all(env, `SELECT id, post_id, seq, delay, status, error, message FROM fb_comments WHERE seq > 1 AND post_id IN (${posts.map(() => '?').join(',')}) ORDER BY seq ASC, id ASC`, ...posts);
+  for (const r of rows) {
+    if (!out.has(r.post_id)) out.set(r.post_id, []);
+    out.get(r.post_id).push({ id: r.id, seq: r.seq, delay: Math.round(r.delay / 60), status: r.status, error: r.error || '', message: r.message });
+  }
   return out;
 }
 
@@ -73,8 +96,8 @@ export async function listComments(env, { status = 'all', page = '', nowMs = Dat
   const where = ['updated >= ?'], args = [nowMs - 7 * DAY];
   if (status === 'failed' || status === 'pending') { where.push('status = ?'); args.push(status); }
   if (page) { where.push('page_id = ?'); args.push(page); }
-  const rows = await all(env, `SELECT id, page_id, post_id, photo_id, message, status, error, due, updated, dismissed FROM fb_comments WHERE ${where.join(' AND ')} ORDER BY updated DESC, id DESC LIMIT 100`, ...args);
-  return rows.map((r) => ({ id: r.id, page: r.page_id, post: r.post_id || null, message: r.message, status: r.status, error: r.error || '', due: r.due, updated: r.updated, dismissed: !!r.dismissed }));
+  const rows = await all(env, `SELECT id, page_id, post_id, photo_id, message, status, error, due, updated, dismissed, seq, delay FROM fb_comments WHERE ${where.join(' AND ')} ORDER BY updated DESC, id DESC LIMIT 100`, ...args);
+  return rows.map((r) => ({ id: r.id, page: r.page_id, post: r.post_id || null, message: r.message, status: r.status, error: r.error || '', due: r.due, updated: r.updated, dismissed: !!r.dismissed, seq: r.seq || 1, delay: Math.round((r.delay || 0) / 60) }));
 }
 
 // 失敗的留言重試：回 true／false（不是 failed 就不處理）
@@ -115,8 +138,11 @@ async function advance(env, row, nowMs, interim, failMsg) {
     step, row.due * 1000 + OFFSETS[step] * 1000, interim || null, nowMs, row.id);
 }
 
-const retime = (env, row, time, nowMs) =>
-  run(env, `UPDATE fb_comments SET due=?, step=0, next_check=?, error=NULL, updated=? WHERE id=? AND status='pending'`, time, (time + OFFSETS[0]) * 1000, nowMs, row.id);
+// time＝貼文的發布時間；這筆留言的預定時間＝發布時間＋它自己的 delay
+const retime = (env, row, time, nowMs) => {
+  const due = time + (row.delay || 0);
+  return run(env, `UPDATE fb_comments SET due=?, step=0, next_check=?, error=NULL, updated=? WHERE id=? AND status='pending'`, due, (due + OFFSETS[0]) * 1000, nowMs, row.id);
+};
 
 // 一次問多個貼文的狀態：Map(id → {kind:'ok', published, time} | {kind:'missing'} | {kind:'error', msg})
 async function fetchStates(env, token, ids) {
@@ -191,7 +217,7 @@ async function processPage(env, page, items, nowMs) {
     if (st.kind === 'missing') { await finish(env, row, 'canceled', '貼文已刪除', nowMs); continue; }
     if (st.kind === 'error') { await advance(env, row, nowMs, st.msg, `留言失敗：${st.msg}`); continue; }
     if (!st.published) {
-      if (st.time && st.time !== row.due) await retime(env, row, st.time, nowMs);   // 後台改了時間（晚或早）：重設，不算失敗
+      if (st.time && st.time + (row.delay || 0) !== row.due) await retime(env, row, st.time, nowMs);   // 後台改了時間（晚或早）：重設，不算失敗
       else await advance(env, row, nowMs, null, NOT_PUBLISHED);
       continue;
     }
@@ -237,7 +263,7 @@ async function syncPage(env, page, items, nowMs) {
     if (!row.post_id) continue;
     if (times.has(row.post_id)) {
       const t = times.get(row.post_id);
-      if (t && t !== row.due) await retime(env, row, t, nowMs);
+      if (t && t + (row.delay || 0) !== row.due) await retime(env, row, t, nowMs);
     } else if (row.due * 1000 > nowMs) gone.push(row);   // 清單裡沒有、還沒到時間：可能被後台立刻發布或刪除
   }
   if (!gone.length) return;
@@ -246,7 +272,11 @@ async function syncPage(env, page, items, nowMs) {
     const st = states.get(row.post_id);
     if (!st) continue;
     if (st.kind === 'missing') await finish(env, row, 'canceled', '貼文已刪除', nowMs);
-    else if (st.kind === 'ok' && st.published) await run(env, `UPDATE fb_comments SET next_check=?, updated=? WHERE id=? AND status='pending'`, nowMs, nowMs, row.id);
+    else if (st.kind === 'ok' && st.published) {
+      // 被後台提早發布：第一則馬上留；有延遲的從「現在」起算延遲
+      if (row.delay > 0) await retime(env, row, Math.floor(nowMs / 1000), nowMs);
+      else await run(env, `UPDATE fb_comments SET next_check=?, updated=? WHERE id=? AND status='pending'`, nowMs, nowMs, row.id);
+    }
   }
 }
 

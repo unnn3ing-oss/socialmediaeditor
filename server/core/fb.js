@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run, all } from './db.js';
-import { ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
+import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
@@ -323,14 +323,18 @@ async function listScheduled(request, env, q) {
   if (!token) return fail(request, env, 'fb_unknown_page');
   const r = await graphGet(env, token, `/${page}/scheduled_posts`, { fields: 'id,message,scheduled_publish_time,created_time,full_picture', limit: 50 });
   let cm = new Map();
-  try { cm = env.DB ? await commentsForPosts(env, (r.data || []).map((p) => p.id).filter(isPostId)) : cm; } catch (e) { /* 留言狀態讀不到不影響清單 */ }
+  let ex = new Map();
+  const ids = (r.data || []).map((p) => p.id).filter(isPostId);
+  try { cm = env.DB ? await commentsForPosts(env, ids) : cm; } catch (e) { /* 留言狀態讀不到不影響清單 */ }
+  try { ex = env.DB ? await extraCommentsForPosts(env, ids) : ex; } catch (e) { /* 同上 */ }
   return ok(request, env, {
     items: (r.data || []).map((p) => {
       const c = cm.get(p.id);
       return {
         id: p.id, message: p.message || '', created: p.created_time || '', picture: p.full_picture || '',
         at: typeof p.scheduled_publish_time === 'number' ? p.scheduled_publish_time : Number(p.scheduled_publish_time) || null,
-        comment: c ? { id: c.id, status: c.status, error: c.error, message: c.message } : null
+        comment: c ? { id: c.id, status: c.status, error: c.error, message: c.message } : null,
+        extras: ex.get(p.id) || []
       };
     })
   });
@@ -384,12 +388,32 @@ async function readPostInput(request) {
     try { fd = await new Response(buf, { headers: { 'content-type': request.headers.get('content-type') } }).formData(); }
     catch (e) { return { error: 'bad_request' }; }
     const body = {};
-    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset', 'comment']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
+    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset', 'comment', 'extraComments']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
     const img = fd.get('image');
     if (img && typeof img === 'object') body.image = img;
     return { body };
   }
   return { error: 'bad_request' };
+}
+
+// 第 2 則以後的留言：[{ message, delay(發布後幾分鐘) }]。純文字、不自動帶連結；空白的略過。回陣列（含 seq、delay 秒）或錯誤字串
+export function parseExtras(raw) {
+  if (raw === undefined || raw === null || raw === '') return [];
+  let list = raw;
+  if (typeof raw === 'string') { try { list = JSON.parse(raw); } catch (e) { return '額外留言格式不正確。'; } }
+  if (!Array.isArray(list)) return '額外留言格式不正確。';
+  const out = [];
+  for (const it of list) {
+    if (!it || typeof it !== 'object' || (it.message !== undefined && typeof it.message !== 'string')) return '額外留言格式不正確。';
+    const message = String(it.message || '').trim();
+    if (!message) continue;
+    if (message.length > MAX_COMMENT) return '留言太長（上限 8000 字）。';
+    const minutes = Number(it.delay);
+    if (!Number.isInteger(minutes) || minutes < EXTRA_DELAY_MIN || minutes > EXTRA_DELAY_MAX) return `第 N 則留言要在發布後 ${EXTRA_DELAY_MIN}～${EXTRA_DELAY_MAX} 分鐘內。`;
+    out.push({ message, delay: minutes * 60 });
+  }
+  if (out.length > MAX_COMMENTS - 1) return `留言最多 ${MAX_COMMENTS} 則（含第一則）。`;
+  return out.map((x, i) => ({ ...x, seq: i + 2 }));
 }
 
 export function checkPost(b, now = nowSec()) {
@@ -420,38 +444,57 @@ export function checkPost(b, now = nowSec()) {
   const comment = typeof b.comment === 'string' ? b.comment.trim() : '';
   if (b.comment !== undefined && b.comment !== null && typeof b.comment !== 'string') return '留言格式不正確。';
   if (comment.length > MAX_COMMENT) return '留言太長（上限 8000 字）。';
+  const extras = parseExtras(b.extraComments);
+  if (typeof extras === 'string') return extras;
   let at = null;
   if (b.scheduledAt !== undefined && b.scheduledAt !== null && b.scheduledAt !== '') {
     at = Number(b.scheduledAt);
     if (!Number.isInteger(at)) return '排程時間格式不正確（Unix 秒數）。';
     if (at < now + MIN_SCHEDULE || at > now + MAX_SCHEDULE) return '排程時間要在 10 分鐘後到 30 天內。';
   }
-  return { page, message, link, imageUrl, image, at, textPreset, comment };
+  return { page, message, link, imageUrl, image, at, textPreset, comment, extras };
 }
 
 // 發文時留言（文章連結等）。立即發布：馬上留，失敗就入列交給總管重試；排程：入列等發布。
 // 圖片貼文 /photos 回的是照片 ID：沒有 post_id 時用 page_story_id 換貼文 ID，換不到就在佇列記 photo_id 之後再換。
 // 需使用者實測確認：照片 ID 換貼文 ID、排程中的照片是否查得到 page_story_id、留言要掛在哪個 ID。
-async function attachComment(env, token, v, r) {
+// 第 2 則以後（v.extras）一律入列：due＝發布時間（排程用排程時間、立即用現在）＋各自的 delay。
+async function attachComments(env, token, v, r) {
   const isPhoto = !!(v.image || v.imageUrl);
   const photo = isPhoto ? r.id : null;
   let post = r.post_id || (isPhoto ? null : r.id);
   if (!post && photo) post = await photoToPost(env, token, photo);
-  if (!v.at && post) {
-    try {
-      const c = await graphPost(env, token, `/${post}/comments`, { message: v.comment });
-      return { status: 'done', id: c && c.id ? String(c.id) : '' };
-    } catch (e) { /* 失敗不影響發文：入列重試 */ }
-  }
   const now = Date.now();
-  try {
-    await enqueueComment(env, {
-      page: v.page, post, photo, message: v.comment,
-      due: v.at || Math.floor(now / 1000), nextCheck: v.at ? (v.at + 1) * 1000 : now, nowMs: now
-    });
-    await kickHub(env);
-    return { status: 'queued' };
-  } catch (e) { return { status: 'failed' }; }
+  const base = v.at || Math.floor(now / 1000);
+  let comment = { status: 'none' };
+  if (v.comment) {
+    comment = null;
+    if (!v.at && post) {
+      try {
+        const c = await graphPost(env, token, `/${post}/comments`, { message: v.comment });
+        comment = { status: 'done', id: c && c.id ? String(c.id) : '' };
+      } catch (e) { /* 失敗不影響發文：入列重試 */ }
+    }
+    if (!comment) {
+      try {
+        await enqueueComment(env, {
+          page: v.page, post, photo, message: v.comment,
+          due: base, nextCheck: v.at ? (v.at + 1) * 1000 : now, nowMs: now
+        });
+        comment = { status: 'queued' };
+      } catch (e) { comment = { status: 'failed' }; }
+    }
+  }
+  const extras = [];
+  for (const x of v.extras || []) {
+    const due = base + x.delay;
+    try {
+      await enqueueComment(env, { page: v.page, post, photo, message: x.message, due, nextCheck: (due + 1) * 1000, seq: x.seq, delay: x.delay, nowMs: now });
+      extras.push({ seq: x.seq, status: 'queued' });
+    } catch (e) { extras.push({ seq: x.seq, status: 'failed' }); }
+  }
+  if (comment.status === 'queued' || extras.some((x) => x.status === 'queued')) await kickHub(env);
+  return { comment, extras };
 }
 
 async function createPost(request, env) {
@@ -473,8 +516,8 @@ async function createPost(request, env) {
       r = await graphPost(env, token, `/${v.page}/feed`, { message: v.message, link: v.link, text_format_preset_id: v.textPreset || undefined, ...sched });
     }
     await audit(env, v.at ? 'post-scheduled' : 'post-published');
-    const comment = v.comment ? await attachComment(env, token, v, r) : { status: 'none' };
-    return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at, comment });
+    const att = v.comment || v.extras.length ? await attachComments(env, token, v, r) : { comment: { status: 'none' }, extras: [] };
+    return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at, comment: att.comment, ...(att.extras.length ? { extras: att.extras } : {}) });
   } catch (e) {
     await audit(env, 'post-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;

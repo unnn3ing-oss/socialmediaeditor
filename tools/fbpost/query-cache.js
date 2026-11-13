@@ -23,6 +23,11 @@ function item(kind, value) {
   if (kind === 'scheduled') {
     const out = { ...common, at: finite(value.at) ? value.at : null };
     if (object(value.comment)) out.comment = { status: text(value.comment.status), error: text(value.comment.error), message: text(value.comment.message) };
+    if (Array.isArray(value.extras)) {
+      out.extras = value.extras.filter(object).slice(0, 10).map((x) => ({
+        seq: finite(x.seq) ? x.seq : 2, delay: finite(x.delay) ? x.delay : 0, status: text(x.status), error: text(x.error), message: text(x.message)
+      }));
+    }
     return out;
   }
   return { ...common, url: https(value.url), reactions: finite(value.reactions) ? value.reactions : 0,

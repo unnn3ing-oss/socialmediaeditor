@@ -50,7 +50,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     requestPaths: [], failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0, rundown: [], rundownFail: null,
     scheduled: {
       111: [
-        { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' } },
+        { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' }, extras: [{ id: 'cm3', seq: 2, delay: 5, status: 'pending', error: '', message: '活動連結' }] },
         { id: '111_8', message: '留言出事的貼文', at: now + 9000, picture: '', created: '', comment: { id: 'cm2', status: 'failed', error: '貼文沒有出現', message: 'x' } },
       ],
       222: [],
@@ -120,7 +120,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     if (u.pathname === '/fb/post') {
       const fd = await new Response(req.postDataBuffer(), { headers: { 'content-type': req.headers()['content-type'] } }).formData();
       const f = (k) => { const v = fd.get(k); return typeof v === 'string' ? v.replace(/\r\n/g, '\n') : v; };
-      const rec = { page: f('page'), message: f('message'), scheduledAt: f('scheduledAt'), textPreset: f('textPreset'), comment: f('comment'), hasImage: typeof fd.get('image') === 'object' && fd.get('image') !== null };
+      const rec = { page: f('page'), message: f('message'), scheduledAt: f('scheduledAt'), textPreset: f('textPreset'), comment: f('comment'), extraComments: f('extraComments'), hasImage: typeof fd.get('image') === 'object' && fd.get('image') !== null };
       api.posts.push(rec);
       if (api.postHold) await api.postHold;
       if (api.failPage === rec.page) { api.failPage = null; return bad('fb_permission', '沒有這個粉專的發文權限。', 403); }
@@ -1187,14 +1187,9 @@ test('Rundown：粉專對應缺漏要顯示原因，不顯示完成', async () =
   assert.match(await page.textContent('#dnBody'), /未寫入 RD：少康.*請檢查粉專對應/);
 });
 
-test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 測試連線', async () => {
+test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功', async () => {
   const { page, api, errors } = await open({ rundown: true });
   await page.click('#newPost');
-  await page.click('#rdSetBtn');
-  await page.click('#rdTest');
-  await page.waitForFunction(() => /連線成功/.test(document.getElementById('rdHint').textContent));
-  assert.match(await page.textContent('#rdHint'), /FB RUNDOWN\(2026\)/);
-  await page.click('#rdClose');
   api.rundownFail = 'Rundown：08:00 時段已滿';
   await fillUrl(page, URL1);
   await pick(page, '111');
@@ -1282,5 +1277,73 @@ test('標題最多 4 行：4 行可送出、5 行擋下；半形算 0.5；空白
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(api.posts.length, 1);
+  assert.deepEqual(errors, []);
+});
+
+test('第 N 則留言：新增列預設 5 分鐘、滾輪每次 5 分、最多 3 則（再加 2 則）、可移除', async () => {
+  const { page, errors } = await open();
+  await page.click('#newPost');
+  assert.equal(await page.locator('#extraComments .xc').count(), 0);
+  assert.equal(await page.getAttribute('#caption', 'rows'), '5', '小編文框預設縮矮（7→5 行）');
+  await page.click('#addComment');
+  const first = page.locator('#extraComments .xc').nth(0);
+  assert.equal(await first.locator('input').inputValue(), '5');
+  assert.match(await first.locator('label').textContent(), /第 2 則留言/);
+  await first.locator('input').hover();
+  await page.mouse.wheel(0, -100);
+  assert.equal(await first.locator('input').inputValue(), '10', '滾輪往上 +5');
+  await page.mouse.wheel(0, 100); await page.mouse.wheel(0, 100); await page.mouse.wheel(0, 100);
+  assert.equal(await first.locator('input').inputValue(), '5', '下限 5 分鐘');
+  await page.click('#addComment');
+  assert.equal(await page.locator('#extraComments .xc').nth(1).locator('input').inputValue(), '10', '第 3 則預設＝上一則＋5');
+  assert.equal(await page.isVisible('#addComment'), false, '含第一則共 3 則，加滿後按鈕消失');
+  await page.locator('#extraComments .xc').nth(1).locator('.xc-del').click();
+  assert.equal(await page.locator('#extraComments .xc').count(), 1);
+  assert.equal(await page.isVisible('#addComment'), true);
+  assert.deepEqual(errors, []);
+});
+
+test('第 N 則留言：隨貼文送出（純文字、不帶連結）、空白略過、再發一篇會清掉；預覽列出各則', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await fillUrl(page, URL1);
+  await pick(page, '111');
+  await page.click('#addComment');
+  await page.click('#addComment');
+  await page.locator('#extraComments .xc textarea').nth(0).fill(' 活動報名 https://a.tw/x 😀 ');
+  await page.locator('#extraComments .xc input').nth(1).fill('30');
+  await page.locator('#extraComments .xc input').nth(1).blur();
+  assert.match(await page.textContent('#commentPrev'), /第 2 則（發布後 5 分鐘）：\n活動報名 https:\/\/a\.tw\/x 😀/);
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 1);
+  assert.deepEqual(JSON.parse(api.posts[0].extraComments), [{ message: '活動報名 https://a.tw/x 😀', delay: 5 }], '第 3 則空白不送，第 2 則不自動帶連結／utm');
+  await page.click('#dnAgain');
+  assert.equal(await page.locator('#extraComments .xc').count(), 0);
+  assert.equal(await page.isVisible('#addComment'), true);
+  assert.deepEqual(errors, []);
+});
+
+test('已排程：第 2 則以後的留言各一行，標示第幾則與發布後幾分鐘', async () => {
+  const { page, errors } = await open();
+  await querySched(page);
+  await page.waitForSelector('#schedList .item');
+  assert.match(await page.textContent('#schedList'), /第 2 則・等待留言（發布後 5 分鐘）/);
+  assert.deepEqual(errors, []);
+});
+
+test('底列：排入 Rundown 開關在左、SLUG 輸入框在右，與清空／送出同列；沒有 ⚙ 設定', async () => {
+  const { page, errors } = await open({ rundown: true });
+  await page.click('#newPost');
+  assert.equal(await page.locator('#rdSetBtn, #rdDlg').count(), 0);
+  const box = (sel) => page.locator(sel).boundingBox();
+  const [sw, slug, clear, send] = [await box('#rdOn'), await box('#slug'), await box('#clearBtn'), await box('#sendBtn')];
+  assert.ok(sw.x < slug.x, '開關在左、輸入框在右');
+  assert.ok(slug.x + slug.width <= clear.x, 'Rundown 在清空頁面左邊空白處');
+  const mid = (b) => b.y + b.height / 2;
+  assert.ok(Math.abs(mid(sw) - mid(clear)) < 12 && Math.abs(mid(slug) - mid(send)) < 12, '同一列');
+  assert.equal(await page.locator('#slug').isDisabled(), false, '設定檔記著開啟 → 可輸入');
+  await page.click('#rdOn');
+  assert.equal(await page.locator('#slug').isDisabled(), true);
   assert.deepEqual(errors, []);
 });

@@ -1,5 +1,5 @@
 # 第 N 則留言（發布後延遲）＋ Rundown 搬到底列 ＋ 小編文框縮矮
-- 狀態：進行中　- 分支：claude/affectionate-fermat-36bbfp　- 最後更新：2026-11-13
+- 狀態：實作完成、等使用者看截圖＋審查（未推 main）　- 分支：claude/affectionate-fermat-36bbfp　- 最後更新：2026-11-13
 - 使用者原始需求：「使用排程發布貼文功能，能新增可設定時間留第二則留言的功能嗎？」→「先幫我把排入RD移動到下方工具列空白處，並左側為開關、右側為輸入框，設定的按鈕直接改為管理介面可看就好…第二則留言放到目前留言小編文的下方，用『再新增一則留言』按鈕，預設為5分鐘後，用滾輪可選每五分鐘為單位增減。方案選A。第N則不需帶連結，只有文字或其他活動宣傳連結、表情符號。暫時最多三則，並保留未來擴充可能。」＋「小編文的預設輸入框高度縮矮三分之一」
 
 ## 已定案的決定
@@ -19,21 +19,21 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/fbqueue.js` | 欄位 `seq`、`delay`（ALTER 補欄位）；`due` 帶 delay（reschedule／retime／syncPage／processPage）；`commentsForPosts` 回全部留言 | ⬜ |
-| `server/core/fb.js` | `/fb/post` 收 `extraComments`（JSON `[{message, delay}]`）驗證＋入列；立即發布從現在起算 | ⬜ |
-| `server/core/admin-page.js`、`admin.js` | Rundown 連線卡片＋測試連線端點 | ⬜ |
-| `tools/fbpost/index.html`、`tool.css`、`tool.js` | 底列 Rundown、留言列（新增／移除／滾輪）、預覽、送出帶入、清空／草稿判斷、小編文 rows=5 | ⬜ |
-| `tools/fbpost/records.js` | 紀錄保存各則內容（白名單） | ⬜ |
-| 已排程列表 | 每則留言一行：「第 2 則・等待留言（發布後 5 分）」 | ⬜ |
-| `tools/fbpost/TOOL.md`、規格 | 補說明 | ⬜ |
-| 測試 | 單元（延遲換算、跟隨改時間、取消連動、舊資料、上限）＋ e2e（留言列、滾輪、Rundown 搬位；舊 `#rdSetBtn`／`#rdTest` 測試改成管理頁） | ⬜ |
+| `server/core/fbqueue.js` | 欄位 `seq`、`delay`（ALTER 補欄位）；`due` 帶 delay（reschedule／retime／syncPage／processPage）；`commentsForPosts` 回全部留言 | ✅ |
+| `server/core/fb.js` | `/fb/post` 收 `extraComments`（JSON `[{message, delay}]`）驗證＋入列；立即發布從現在起算 | ✅ |
+| `server/core/admin-page.js`、`admin.js` | Rundown 連線卡片＋測試連線端點 | ✅ |
+| `tools/fbpost/index.html`、`tool.css`、`tool.js` | 底列 Rundown、留言列（新增／移除／滾輪）、預覽、送出帶入、清空／草稿判斷、小編文 rows=5 | ✅ |
+| `tools/fbpost/records.js` | **不改**：本地紀錄不保存留言內容（第一則本來就沒存，維持一致、少存資料）；改為 `query-cache.js` 白名單加 `extras` | ✅ |
+| 已排程列表 | 每則留言一行：「第 2 則・等待留言（發布後 5 分）」 | ✅ |
+| `tools/fbpost/TOOL.md`、規格 | 補說明 | ✅ |
+| 測試 | 單元（延遲換算、跟隨改時間、取消連動、舊資料、上限）＋ e2e（留言列、滾輪、Rundown 搬位；舊 `#rdSetBtn`／`#rdTest` 測試改成管理頁） | ✅ |
 
 ## 下一步
-- [ ] 後端 fbqueue／fb 與單元測試
-- [ ] 管理頁 Rundown 卡片
-- [ ] 前端（底列、留言列、紀錄、已排程）
-- [ ] 跑 `npm test`、`node build.js`、fbpost e2e；拍截圖給使用者（底列＋留言區）
-- [ ] 派獨立審查代理（Sonnet）
+- [x] 後端 fbqueue／fb 與單元測試（npm test 351 全過）
+- [x] 管理頁 Rundown 卡片（`/admin/rundown`、`/admin/rundown/ping`）
+- [x] 前端（底列、留言列、已排程）；新增 `tools/fbpost/comments.js`
+- [x] `node build.js --check`、全部 e2e 117 全過；截圖給使用者
+- [ ] 派獨立審查代理（Sonnet）並處理意見
 - [ ] 使用者說「推」才併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
 
 ## 測試
@@ -43,3 +43,6 @@
 - 公司素材不進 repo；第一則留言邏輯（自動連結＋utm）與 3 分鐘上限不變。
 - 產生檔（`shell/catalog.json` 等）不手改，跑 `node build.js`。
 - 不直接推 main。
+
+## 另案（使用者中途提問，尚未做）
+- 生僻字畫圖留白：原因推論＝`document.fonts.load(..., '標題')` 只載入「標題」那段 Google 字型切片，canvas 不會自動載其他切片；建議 A（畫圖前用實際標題文字載入字型）＋B（畫完偵測缺字並在送出前警告）。使用者回「開始」才做，另開版本。

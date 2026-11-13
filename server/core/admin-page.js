@@ -113,6 +113,15 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
 
     <section class="card">
+      <h2>Rundown 連線</h2>
+      <p>排程發布的「排入 Rundown」送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段；有勾選並送成功的粉專各寫一筆到對應區段：新聞＝主粉（新聞粉）、娛樂粉、少康粉、國際＋粉（擠看看、氣象沒有區段，略過）。</p>
+      <p>純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。照時間順序排進去：格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。</p>
+      <p>Apps Script 網址與金鑰放在後端 Secrets <code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>（同 Apps Script 指令碼屬性 <code>TOKEN</code>），這裡只檢查有沒有設好，不顯示內容。</p>
+      <div class="row"><button id="rdCheck" type="button">檢查設定</button><button id="rdPing" type="button">測試連線</button></div>
+      <p class="msg" id="rdMsg" role="status"></p>
+    </section>
+
+    <section class="card">
       <h2>粉專對應</h2>
       <p>排程發布工具用的粉專簡稱、文章連結的 utm 參數與排序（數字小的排前面）。沒有存過的粉專會依名稱套用預設值。</p>
       <div class="row"><button id="pmLoad" type="button">讀取粉專對應</button><button id="pmSave" class="primary" type="button" hidden>儲存</button></div>
@@ -294,6 +303,29 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       say($('fbMsg'), bad ? bad + ' 組 token 有問題。' + note : '全部正常。' + note, bad ? 'err' : 'good');
     }).catch(function (e) { say($('fbMsg'), '檢查失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbBtn').disabled = false; });
+  };
+
+  $('rdCheck').onclick = function () {
+    $('rdCheck').disabled = true; say($('rdMsg'), '檢查中');
+    api('/admin/rundown').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data;
+      if (d.configured) return say($('rdMsg'), 'RUNDOWN_URL、RUNDOWN_TOKEN 都已設定。可按「測試連線」確認 Apps Script 回得來。', 'good');
+      var miss = [];
+      if (!d.url) miss.push('RUNDOWN_URL（要是 https://script.google.com/macros/s/…/exec）');
+      if (!d.token) miss.push('RUNDOWN_TOKEN（至少 12 字）');
+      say($('rdMsg'), '還沒設好：' + miss.join('、') + '。設定後要重新部署後端。', 'err');
+    }).catch(function (e) { say($('rdMsg'), '檢查失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('rdCheck').disabled = false; });
+  };
+  $('rdPing').onclick = function () {
+    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
+    api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); return say($('rdMsg'), res.error || '連線失敗', 'err'); }
+      var d = res.data;
+      say($('rdMsg'), '連線成功：' + (d.title || '試算表') + '（分頁 ' + (d.sheets || []).slice(0, 3).join('、') + '…）', 'good');
+    }).catch(function (e) { say($('rdMsg'), '測試失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('rdPing').disabled = false; });
   };
 
   var pmItems = [];

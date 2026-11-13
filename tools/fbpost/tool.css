@@ -219,7 +219,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 /* 底列：粉專在左、送出在右 */
 .fp-modal .m-foot { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); }
 .fp-modal .pages { display: flex; gap: 8px; flex-wrap: wrap; }
-.fp-modal .send { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; width: min(100%, 420px); max-width: 100%; margin-left: auto; }
+.fp-modal .send { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; flex: 0 1 420px; width: min(100%, 420px); max-width: 100%; margin-left: auto; }
 .fp-modal #clearBtn { white-space: nowrap; min-height: 44px; }
 .fp-modal #sendBtn { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; gap: 0; justify-content: center; overflow: hidden; white-space: nowrap; }
 .fp-modal .send-state { flex: 0 0 auto; }
@@ -267,14 +267,13 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 @media (prefers-reduced-motion: reduce) { .fp-modal textarea.is-skel, .fp-modal .canvas-wrap.is-skel::after { animation: none; } }
 
 /* Rundown（外觀照網新，尚未連接先停用） */
-.fp-modal .rd-panel { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
-.fp-modal .rd-head { display: flex; align-items: center; gap: 8px; }
-.fp-modal .rd-map { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fp-modal .rd-head #rdSetBtn { margin-left: auto; flex: 0 0 auto; }
-.fp-modal .slug-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.fp-modal .m-right .slug-row label { margin: 0; white-space: nowrap; }
-.fp-modal .slug-row input { max-width: 220px; padding: 8px 10px; font-size: 14px; }
-.fp-modal .rd-panel.off .rd-map, .fp-modal .rd-panel.off .slug-row { opacity: .5; }
+/* 底列左側：開關（左）＋ SLUG 輸入框（右），右側是清空／送出 */
+.fp-modal .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fp-modal .rd-inline { display: flex; align-items: center; gap: 12px; flex: 1 1 300px; min-width: 0; }
+.fp-modal .slug-row { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.fp-modal .slug-row label { margin: 0; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--muted); }
+.fp-modal .slug-row input { flex: 1 1 auto; min-width: 0; max-width: 240px; padding: 8px 10px; font-size: 14px; }
+.fp-modal .rd-inline.off .slug-row { opacity: .5; }
 .fp-modal .rd-sw { flex: 0 0 auto; display: inline-flex !important; align-items: center; gap: 8px; margin: 0 !important; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; }
 .fp-modal .rd-sw input { appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 auto; width: 38px; height: 22px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: var(--track); box-shadow: inset 0 0 0 1px var(--border); cursor: pointer; }
 .fp-modal .rd-sw input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
@@ -283,7 +282,7 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .fp-modal .rd-sw input:checked::after { left: 19px; }
 .fp-modal .rd-sw input::after { transition: left .15s; }
 .fp-modal .rd-sw input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.fp-modal .rd-panel:not(.off) .rd-sw { color: var(--accent); }
+.fp-modal .rd-inline:not(.off) .rd-sw { color: var(--accent); }
 
 /* 值班粉專 */
 .duty-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -318,3 +317,15 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
   .fail-box .item .act { padding-left: 0; }
   .fp-head #newPost { flex: 1 1 100%; }
 }
+
+/* 第 2 則以後的留言：標題列（第 N 則＋發布後幾分鐘＋移除）＋文字框 */
+.fp-modal .add-comment { margin-top: 8px; }
+.fp-modal .xc { margin-top: 10px; }
+.fp-modal .xc .cap-head { margin-top: 0; gap: 8px; }
+.fp-modal .xc .cap-head label { margin: 0; }
+.fp-modal .xc-delay { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.fp-modal .xc-delay input { width: 72px; padding: 6px 8px; font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; }
+.fp-modal .xc-del { flex: 0 0 auto; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.fp-modal .xc-del:hover { background: var(--track); color: var(--text); }
+.fp-modal .xc textarea { margin-top: 6px; }
+@media (max-width: 640px) { .fp-modal .rd-inline { flex-basis: 100%; } .fp-modal .foot-row .send { flex-basis: 100%; } }

@@ -84,3 +84,29 @@ test('Apps Script 回錯誤或不是 JSON → rundown_failed', async () => {
   m = mockFetch(() => new Response('<html>'));
   try { const b = await (await call({ action: 'ping' }, env())).json(); assert.equal(b.code, 'rundown_failed'); assert.match(b.error, /所有人/); } finally { m.restore(); }
 });
+
+// ---- 管理頁：只檢查有沒有設好、測試連線；不回傳網址與金鑰 ----
+async function admin(method, path, e) {
+  const worker = await load(); const { signToken } = await loadToken();
+  const authorization = 'Bearer ' + (await signToken(e.SESSION_SECRET, 'admin', nowSec() + 600));
+  return worker.fetch(new Request('https://api.test' + path, { method, headers: { origin: ORIGIN, authorization } }), e, { waitUntil() {} });
+}
+
+test('管理頁 /admin/rundown：回設好了沒，不回網址與金鑰；沒有管理憑證 → 401', async () => {
+  const e = env();
+  const r = await admin('GET', '/admin/rundown', e);
+  const text = await r.text();
+  assert.deepEqual(JSON.parse(text).data, { configured: true, url: true, token: true });
+  assert.ok(!text.includes('AKfy_test-123') && !text.includes('rundown-token-123'));
+  assert.deepEqual((await (await admin('GET', '/admin/rundown', env({ RUNDOWN_TOKEN: 'short' }))).json()).data, { configured: false, url: true, token: false });
+  const worker = await load();
+  assert.equal((await worker.fetch(new Request('https://api.test/admin/rundown', { headers: { origin: ORIGIN } }), e, { waitUntil() {} })).status, 401);
+});
+
+test('管理頁 /admin/rundown/ping：成功回標題；沒設定 → rundown_off；Apps Script 錯誤 → rundown_failed', async () => {
+  let m = mockFetch({ ok: true, title: 'FB RUNDOWN', sheets: ['2026/11'] });
+  try { assert.deepEqual((await (await admin('POST', '/admin/rundown/ping', env())).json()).data, { title: 'FB RUNDOWN', sheets: ['2026/11'] }); assert.deepEqual(m.sent[0].body, { token: 'rundown-token-123', action: 'ping' }); } finally { m.restore(); }
+  assert.equal((await (await admin('POST', '/admin/rundown/ping', env({ RUNDOWN_URL: undefined }))).json()).code, 'rundown_off');
+  m = mockFetch({ ok: false, error: 'TOKEN 不對' });
+  try { const b = await (await admin('POST', '/admin/rundown/ping', env())).json(); assert.equal(b.code, 'rundown_failed'); } finally { m.restore(); }
+});

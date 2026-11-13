@@ -142,24 +142,26 @@
         </div>
       </div>
       <div class="cap-head"><label for="caption">小編文 <small class="muted" id="capCount"></small></label></div>
-      <textarea id="caption" rows="7" placeholder="小編文（含 hashtag）"></textarea>
+      <textarea id="caption" rows="5" placeholder="小編文（含 hashtag）"></textarea>
       <div class="cap-head"><label for="comment">留言小編文 <small class="muted">發文後第一則留言</small></label></div>
       <textarea id="comment" rows="2" placeholder="不填就自動帶：看更多新聞內容＋各粉專 utm 連結"></textarea>
+      <div id="extraComments"></div>
+      <button type="button" class="btn btn-secondary btn-sm add-comment" id="addComment">＋ 再新增一則留言</button>
       <p class="hint pre" id="commentPrev" role="status"></p>
-      <div class="rd-panel off" id="rdBox">
-        <div class="rd-head"><label class="rd-sw" title="送出成功後自動寫進 FB RUNDOWN"><input type="checkbox" role="switch" id="rdOn"><span>排入 Rundown</span></label>
-          <span class="muted rd-map" title="只排入這四個粉專；擠看看、氣象略過">主粉（新聞粉）、娛樂粉、少康粉、國際＋粉</span>
-          <button class="btn sm ghost" id="rdSetBtn" type="button" aria-label="Rundown 設定" title="Rundown 設定">⚙</button></div>
-        <div class="slug-row" id="slugRow"><label for="slug">SLUG</label><input id="slug" type="text" maxlength="20" autocomplete="off" disabled placeholder="空白＝標題前 4 字"></div>
-      </div>
     </div>
   </div>
 
   <footer class="m-foot">
     <div class="pages" id="pages" role="group" aria-label="要發的粉專（點名稱勾選，▾ 選立即或排程）"></div>
-    <div class="send" id="sendArea">
-      <button type="button" class="btn" id="clearBtn">清空頁面</button>
-      <button type="button" class="btn primary" id="sendBtn" aria-live="polite" disabled>全部送出</button>
+    <div class="foot-row">
+      <div class="rd-inline off" id="rdBox">
+        <label class="rd-sw" title="送出成功後自動寫進 FB RUNDOWN（新聞＝主粉、娛樂粉、少康粉、國際＋粉；擠看看、氣象略過）。連線設定在管理頁"><input type="checkbox" role="switch" id="rdOn"><span>排入 Rundown</span></label>
+        <div class="slug-row" id="slugRow"><label for="slug">SLUG</label><input id="slug" type="text" maxlength="20" autocomplete="off" disabled placeholder="空白＝標題前 4 字"></div>
+      </div>
+      <div class="send" id="sendArea">
+        <button type="button" class="btn" id="clearBtn">清空頁面</button>
+        <button type="button" class="btn primary" id="sendBtn" aria-live="polite" disabled>全部送出</button>
+      </div>
     </div>
     <span class="muted send-tip" id="sendTip">請先勾選要發的粉專</span>
     <p class="hint" id="sendMsg" role="status" hidden></p>
@@ -204,19 +206,6 @@
   <div class="actions">
     <button type="button" class="btn btn-secondary" id="dutySkip">先不選</button>
     <button type="button" class="btn btn-primary" id="dutyOk" disabled>確定</button>
-  </div>
-</dialog>
-
-<!-- Rundown 設定 -->
-<dialog class="dialog" id="rdDlg" aria-labelledby="rdTitle">
-  <h2 id="rdTitle">Rundown 自動排入</h2>
-  <p class="muted">送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段；有勾選並送成功的粉專各寫一筆到對應區段：新聞＝主粉（新聞粉）、娛樂粉、少康粉、國際＋粉（擠看看、氣象沒有區段，略過）。</p>
-  <p class="hint">純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。</p>
-  <p class="hint">照時間順序排進去：格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。Apps Script 網址與金鑰放在後端 Secrets，這裡不用填。</p>
-  <p class="hint" id="rdHint" role="status"></p>
-  <div class="actions">
-    <button type="button" class="btn btn-secondary" id="rdTest">測試連線</button>
-    <button type="button" class="btn btn-primary" id="rdClose">關閉</button>
   </div>
 </dialog>
 
