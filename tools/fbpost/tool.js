@@ -248,18 +248,28 @@ function overallState(r) {
   return RECORD_PRIORITY.find((s) => states.includes(s)) || 'published';
 }
 const badge = (state) => el('span', { className: `rec-badge st-${state}`, textContent: RECORD_STATES[state] });
-const field = (label, ...kids) => el('div', { className: 'rec-field' }, el('span', { className: 'rec-label', textContent: label }), ...kids);
+// 送出時把實際發出去的圖縮成小圖，只給本地紀錄卡片辨識用。
+async function makeThumb(blob) {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const k = Math.min(1, 240 / bmp.width);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close?.();
+    return c.toDataURL('image/jpeg', 0.6);
+  } catch { return ''; }
+}
 function recordPageRow(r, p) {
   const state = recordState(p);
   const edited = typeof p.caption === 'string' && (p.caption !== r.caption || p.title !== r.title || p.url !== r.url);
   const rdBad = p.rundown?.ok === false;
   return el('div', { className: 'rec-page', dataset: { state } },
-    el('span', { className: 'rec-pg', textContent: p.label || p.page }),
-    badge(state),
+    el('b', { className: 'rec-pg', textContent: p.label || p.page }),
+    el('span', { className: `rec-st st-${state}`, textContent: '● ' + RECORD_STATES[state] }),
     el('span', { className: 'rec-sched', textContent: p.scheduledAt ? '排程 ' + fmtTime(p.scheduledAt) : '立即發布' }),
-    p.rundown || p.error ? el('span', { className: 'rec-result' },
-      p.rundown ? el('span', { className: 'rec-rd' + (rdBad ? ' bad' : ' ok'), textContent: (rdBad ? '✘ ' : '✔ ') + p.rundown.msg }) : null,
-      p.error ? el('span', { className: 'rec-err bad', textContent: p.error }) : null) : null,
+    p.rundown ? el('span', { className: 'rec-rd' + (rdBad ? ' bad' : ' ok'), textContent: (rdBad ? '✘ ' : '✔ ') + p.rundown.msg }) : null,
+    p.error ? el('span', { className: 'rec-err bad', textContent: p.error }) : null,
     edited ? el('details', { className: 'rec-edited-box' },
       el('summary', { textContent: '重送內容：與原送出不同' }),
       el('span', { className: 'record-edited', textContent: `${p.title || ''}\n${p.caption}\n${p.url || ''}` })) : null);
@@ -269,22 +279,28 @@ function renderRecords() {
   const list = records.list().filter((r) => filter === 'all' || r.pages.some((p) => recordState(p) === filter));
   $('recordsHint').textContent = (list.length ? `共 ${list.length} 筆` : '沒有本地紀錄') + (!records.persistent ? '；無法儲存到瀏覽器，紀錄只保留在本次頁面' : '');
   $('recordsList').replaceChildren(...list.map((r) => {
-    const del = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '刪除紀錄' });
+    const del = el('button', { type: 'button', className: 'rec-del', textContent: '×', title: '刪除紀錄', ariaLabel: '刪除紀錄' });
     del.addEventListener('click', async () => {
       if (await confirmBox('刪除這筆本地紀錄？', '只刪除這個瀏覽器的紀錄，不影響 Facebook 上的貼文。', '刪除')) { records.remove(r.id); renderRecords(); }
     });
     const state = overallState(r);
+    const long = r.caption.split('\n').length > 3 || r.caption.length > 90;
+    const caption = r.caption ? el('p', { className: 'rec-caption', textContent: r.caption }) : null;
+    const more = long ? el('button', { type: 'button', className: 'rec-more', textContent: '展開全文' }) : null;
+    more?.addEventListener('click', () => { const open = caption.classList.toggle('is-open'); more.textContent = open ? '收合' : '展開全文'; });
     return el('li', { className: 'rec-card', dataset: { record: r.id, state } },
       el('div', { className: 'rec-head' },
         el('b', { className: 'rec-time', textContent: fmtTime(r.at / 1000) }),
         badge(state),
-        el('span', { className: 'rec-count', textContent: `${r.pages.length} 個粉專` }),
+        r.pages.length > 1 ? el('span', { className: 'rec-count', textContent: `${r.pages.length} 個粉專` }) : null,
         el('span', { className: 'grow' }), del),
-      el('div', { className: 'rec-content' },
-        r.title ? field('標題', el('p', { className: 'rec-text rec-title', textContent: r.title })) : null,
-        r.caption ? field('內文', el('p', { className: 'rec-text', textContent: r.caption })) : null,
-        /^https?:\/\//.test(r.url) ? field('連結', el('a', { href: r.url, target: '_blank', rel: 'noopener', textContent: r.url })) : null,
-        !r.title && !r.caption ? el('p', { className: 'rec-text muted', textContent: '（沒有文字）' }) : null),
+      el('div', { className: 'rec-body' },
+        r.thumb ? el('img', { className: 'rec-thumb', src: r.thumb, alt: '貼文圖片' }) : null,
+        el('div', { className: 'rec-main' },
+          r.title ? el('p', { className: 'rec-title', textContent: r.title }) : null,
+          caption, more,
+          /^https?:\/\//.test(r.url) ? el('a', { className: 'rec-link', href: r.url, target: '_blank', rel: 'noopener', textContent: r.url }) : null,
+          !r.title && !r.caption ? el('p', { className: 'rec-caption muted', textContent: '（沒有文字）' }) : null)),
       el('div', { className: 'rec-pages' }, ...r.pages.map((p) => recordPageRow(r, p))));
   }));
 }
@@ -1018,7 +1034,9 @@ async function send(ids) {
       if (err) { sendMsg(`${pageLabel(pages.find((p) => p.id === id))}：${err.msg}`, 'bad'); return; }
     }
     const submission = { title: getLines().join('\n'), caption: payload.message, url: $('url').value.trim() };
-    if (!currentRecord) currentRecord = { id: crypto.randomUUID(), at: Date.now(), updatedAt: Date.now(), ...submission, pages: [] };
+    const thumb = payload.image ? await makeThumb(payload.image) : '';
+    if (!currentRecord) currentRecord = { id: crypto.randomUUID(), at: Date.now(), updatedAt: Date.now(), ...submission, ...(thumb ? { thumb } : {}), pages: [] };
+    else if (thumb) currentRecord.thumb = thumb;
     ids.forEach((id) => { chips.get(id).status = 'sending'; renderChip(id); });
     let schedN = 0, nowN = 0, commentBad = 0;
     const failed = [], sent = [];

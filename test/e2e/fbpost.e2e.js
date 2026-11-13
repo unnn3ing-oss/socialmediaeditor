@@ -374,6 +374,7 @@ test('本地排程紀錄：送出後保留、重新開啟仍在，不自動查 F
   const recordId = await page.getAttribute('#recordsList [data-record]', 'data-record');
   assert.match(await page.textContent('#recordsList'), /颱風假|小編文|北北基桃/);
   assert.match(await page.textContent('#recordsList'), /新聞|TVBS新聞/);
+  assert.match(await page.getAttribute('#recordsList [data-record] img.rec-thumb', 'src'), /^data:image\/jpeg;base64,/, '送出的圖縮成小圖存在紀錄卡片');
   assert.deepEqual(automaticReads(api), [], '送出後不能自動查遠端列表');
   await page.reload();
   await page.waitForSelector('#pages .pg', { state: 'attached' });
@@ -434,10 +435,12 @@ test('本地紀錄：卡片分欄顯示時間、整體狀態、標題／內文�
   const card = page.locator('#recordsList li.rec-card[data-record="card-1"]');
   assert.equal(await card.count(), 1);
   assert.equal(await card.getAttribute('data-state'), 'failed', '整體狀態取最需注意的失敗');
-  assert.match(await card.locator('.rec-head').textContent(), /送出失敗.*2 個粉專|2 個粉專/s);
-  assert.equal(await card.locator('.rec-field').count(), 3);
+  assert.match(await card.locator('.rec-head').textContent(), /送出失敗.*2 個粉專/s);
   assert.equal(await card.locator('.rec-title').textContent(), '卡片標題');
-  assert.equal(await card.locator('.rec-field a').getAttribute('href'), 'https://news.tvbs.com.tw/world/1');
+  assert.equal(await card.locator('.rec-caption').textContent(), '第一行內文\n第二行內文');
+  assert.equal(await card.locator('.rec-link').getAttribute('href'), 'https://news.tvbs.com.tw/world/1');
+  assert.equal(await card.locator('img.rec-thumb').count(), 0, '沒有縮圖時不佔位');
+  assert.equal(await card.getByRole('button', { name: '刪除紀錄' }).count(), 1);
   const rows = card.locator('.rec-page');
   assert.equal(await rows.count(), 2);
   assert.equal(await rows.nth(0).getAttribute('data-state'), 'scheduled');

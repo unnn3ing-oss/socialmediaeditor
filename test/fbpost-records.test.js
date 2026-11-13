@@ -33,7 +33,7 @@ test('本地紀錄：新到舊排序，回傳資料不能改動儲存內容', ()
   assert.deepEqual(store.list().map((r) => r.id), ['r2']);
 });
 
-test('本地紀錄：白名單不保存 token、圖片或送出請求', () => {
+test('本地紀錄：白名單不保存 token、原圖或送出請求，只收小張 JPEG 縮圖', () => {
   const storage = memory(), store = R.createStore(storage);
   store.save({ ...record(), token: 'secret-token', image: 'image-data', body: { secret: true },
     pages: [{ ...record().pages[0], access_token: 'another-secret', image: 'private-image', rundown: { ok: true, msg: 'A1', token: 'rd-secret' } }] });
@@ -196,4 +196,16 @@ test('儲存恢復：清除舊紀錄遇到同時間版本的未來排程或失�
     assert.ok(changed, JSON.stringify(pageChange));
     for (const [key, value] of Object.entries(pageChange)) assert.equal(changed.pages[0][key], value);
   }
+});
+
+test('本地紀錄：縮圖只接受小張 JPEG data URL，其他格式或過大一律丟掉', () => {
+  const store = R.createStore(memory());
+  const ok = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+  store.save(record({ id: 'a', thumb: ok }));
+  store.save(record({ id: 'b', thumb: 'https://evil.test/x.png' }));
+  store.save(record({ id: 'c', thumb: 'data:image/png;base64,AAAA' }));
+  store.save(record({ id: 'd', thumb: 'data:image/jpeg;base64,' + 'A'.repeat(60000) }));
+  const by = Object.fromEntries(store.list().map((r) => [r.id, r]));
+  assert.equal(by.a.thumb, ok);
+  for (const id of ['b', 'c', 'd']) assert.equal('thumb' in by[id], false, id);
 });
