@@ -5,6 +5,9 @@ export const CLEAN_DAYS = 7;
 const DAY = 86400000;
 const text = (v) => typeof v === 'string' ? v : '';
 const time = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+// 縮圖：只收小張 JPEG data URL（送出時由頁面縮到約 240px 寬），其餘一律丟掉。
+const THUMB_MAX = 60000;
+const thumb = (v) => typeof v === 'string' && v.length <= THUMB_MAX && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(v) ? v : '';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 // 逐欄保存，呼叫端的 token、圖片與其他臨時資料不能跟著寫入。
@@ -24,7 +27,8 @@ function normalize(record) {
   if (pages.some((p) => !p)) return null;
   return {
     id: record.id, at: record.at, updatedAt: time(record.updatedAt) ?? record.at,
-    title: text(record.title), caption: text(record.caption), url: text(record.url), pages
+    title: text(record.title), caption: text(record.caption), url: text(record.url),
+    ...(thumb(record.thumb) ? { thumb: record.thumb } : {}), pages
   };
 }
 
