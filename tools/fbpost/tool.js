@@ -317,6 +317,13 @@ function updateRecordedPost(postId, patch) {
   }
   renderRecords();
 }
+// 檢視方式：網格（雙欄小卡）／橫條（一筆一列）。只切 class，不重建卡片。
+const VIEW_KEY = 'fbpost.recordsView';
+const recordsView = segment($('recordsView'), 'view', (v) => {
+  $('recordsList').classList.toggle('is-list', v === 'list');
+  try { localStorage.setItem(VIEW_KEY, v); } catch { /* 略過 */ }
+});
+try { if (localStorage.getItem(VIEW_KEY) === 'list') recordsView.set('list'); } catch { /* 無痕或封鎖儲存：用預設網格 */ }
 $('recordsAuto').checked = records.autoClean();
 $('recordsAuto').addEventListener('change', () => { records.setAutoClean($('recordsAuto').checked); renderRecords(); });
 $('recordsFilter').addEventListener('change', renderRecords);

@@ -101,6 +101,16 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .rec-edited-box { flex-basis: 100%; }
 .rec-edited-box summary { cursor: pointer; color: var(--accent); }
 .record-edited { display: block; white-space: pre-wrap; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: var(--fill); color: var(--text); }
+/* 橫條檢視：一筆一列；列夠寬時「內容」在左、「各粉專結果」在右，窄時退回上下堆疊 */
+#recordsList { container-type: inline-size; }
+#recordsList.is-list { grid-template-columns: 1fr; }
+@container (min-width: 700px) {
+  #recordsList.is-list .rec-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); grid-template-areas: "head head" "body pages"; gap: 10px 18px; }
+  #recordsList.is-list .rec-head { grid-area: head; }
+  #recordsList.is-list .rec-body { grid-area: body; }
+  #recordsList.is-list .rec-pages { grid-area: pages; border-top: 0; border-left: 1px dashed var(--line); padding: 0 0 0 16px; }
+  #recordsList.is-list .rec-thumb { width: 160px; height: 120px; }
+}
 @media (max-width: 420px) { .rec-thumb { width: 96px; height: 72px; } }
 #recordsAuto { width: auto; }
 .fail-box { border: 1px solid var(--bad-line); background: var(--bad-bg); border-radius: 14px; padding: 10px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; color: var(--bad-text); }

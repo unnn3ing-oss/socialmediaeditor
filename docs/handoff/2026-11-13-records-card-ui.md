@@ -45,3 +45,5 @@
 ## 縮圖版（草圖版）進度
 - ✅ `records.js` 白名單加 `thumb`；`tool.js` `makeThumb`／`renderRecords` 改雙欄小卡；`tool.css` 重寫；測試補 thumb 單元＋e2e
 - ⬜ 等使用者確認樣式與「存縮圖」例外後說「推」
+- ✅ 狀態色條改到卡片左側
+- ✅ 檢視切換「網格／橫條」：`#recordsView`（index.html）＋`segment()`（tool.js，localStorage `fbpost.recordsView`）＋CSS container query（容器 ≥700px 時橫條為左內容／右各粉專結果，窄時堆疊）；e2e 補切換、記憶、位置斷言

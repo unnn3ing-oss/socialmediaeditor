@@ -30,6 +30,10 @@
 
   <section id="tab-records" class="tab">
     <div class="bar">
+      <div class="seg sm" role="group" aria-label="紀錄檢視方式" id="recordsView">
+        <button type="button" class="is-on" aria-pressed="true" data-view="grid">網格</button>
+        <button type="button" aria-pressed="false" data-view="list">橫條</button>
+      </div>
       <label class="inline">顯示 <select id="recordsFilter"><option value="all">全部</option><option value="scheduled">排程中</option><option value="due">待確認</option><option value="published">已發布</option><option value="failed">失敗</option></select></label>
       <label class="inline"><input type="checkbox" id="recordsAuto" checked>自動清除七天前紀錄</label>
       <button type="button" class="btn btn-secondary btn-sm" id="recordsClean">清除舊紀錄</button>
