@@ -458,6 +458,34 @@ test('本地紀錄：卡片分欄顯示時間、整體狀態、標題／內文�
   assert.deepEqual(errors, []);
 });
 
+test('本地紀錄：網格／橫條檢視切換、重開記住，橫條時各粉專結果在右側', async () => {
+  const { page, errors } = await open();
+  await page.evaluate(() => {
+    const at = Date.now() - 3600000, pg = (x) => ({ page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: null, postId: '1', error: '', ...x });
+    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([1, 2, 3].map((n) => ({ id: 'v' + n, at: at - n, updatedAt: at, title: '標題' + n, caption: '內文' + n, url: '',
+      pages: [pg(), pg({ page: '222', label: '娛樂' })] }))));
+  });
+  await reopen(page);
+  const cards = page.locator('#recordsList .rec-card');
+  assert.equal(await page.getAttribute('#recordsView [data-view=grid]', 'aria-pressed'), 'true');
+  const g = await cards.nth(0).boundingBox();
+  const g2 = await cards.nth(1).boundingBox();
+  assert.ok(Math.abs(g.y - g2.y) < 2, '網格：前兩張並排');
+  await page.click('#recordsView [data-view=list]');
+  assert.equal(await page.locator('#recordsList.is-list').count(), 1);
+  assert.equal(await cards.count(), 3, '切換不重建、不增減卡片');
+  const l1 = await cards.nth(0).boundingBox(), l2 = await cards.nth(1).boundingBox();
+  assert.ok(l2.y > l1.y + l1.height - 2, '橫條：一筆一列');
+  const body = await cards.nth(0).locator('.rec-body').boundingBox(), pages = await cards.nth(0).locator('.rec-pages').boundingBox();
+  assert.ok(pages.x > body.x + body.width - 2, '橫條：各粉專結果在內容右側');
+  await reopen(page);
+  assert.equal(await page.locator('#recordsList.is-list').count(), 1, '重開記住橫條');
+  assert.equal(await page.getAttribute('#recordsView [data-view=list]', 'aria-pressed'), 'true');
+  await page.click('#recordsView [data-view=grid]');
+  assert.equal(await page.locator('#recordsList.is-list').count(), 0);
+  assert.deepEqual(errors, []);
+});
+
 test('本地紀錄：關閉七天清除後重新開啟仍保留舊紀錄', async () => {
   const { page, errors } = await open();
   await page.uncheck('#recordsAuto');
