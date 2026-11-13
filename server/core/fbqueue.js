@@ -63,9 +63,10 @@ export async function listPresets(env) {
 // 整份取代（順序＝排序）；呼叫前已驗證
 export async function savePresets(env, items, nowMs = Date.now()) {
   await ensureTables(env);
-  await run(env, 'DELETE FROM fb_comment_presets');
-  let i = 0;
-  for (const it of items) await run(env, 'INSERT INTO fb_comment_presets (name, text, sort, updated) VALUES (?, ?, ?, ?)', it.name, it.text, i++, nowMs);
+  // 刪除＋全部寫入放同一個 batch（D1 的 batch 是同一個交易，中途失敗會整批還原），不會把舊資料清掉卻沒寫入新的
+  const stmts = [env.DB.prepare('DELETE FROM fb_comment_presets')];
+  items.forEach((it, i) => stmts.push(env.DB.prepare('INSERT INTO fb_comment_presets (name, text, sort, updated) VALUES (?, ?, ?, ?)').bind(it.name, it.text, i, nowMs)));
+  await env.DB.batch(stmts);
 }
 
 // ---- 佇列操作 ----

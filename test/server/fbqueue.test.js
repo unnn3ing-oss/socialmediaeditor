@@ -662,3 +662,11 @@ test('預設文字：沒有資料庫時公司端讀到空清單、管理端回 m
   assert.deepEqual((await api(env, 'GET', '/fb/comment-presets')).body.data.items, []);
   assert.equal((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.code, 'misconfigured');
 });
+
+test('預設文字：寫入中途失敗不會把舊資料清掉（DELETE＋INSERT 同一個交易）', async () => {
+  const env = mk();
+  const q = await Q();
+  await q.savePresets(env, [{ name: '舊的', text: '舊內容' }]);
+  await assert.rejects(q.savePresets(env, [{ name: '新的', text: '新內容' }, { name: null, text: 'x' }]));
+  assert.deepEqual(await q.listPresets(env), [{ name: '舊的', text: '舊內容' }], '失敗後維持舊清單');
+});

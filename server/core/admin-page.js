@@ -119,7 +119,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="row"><button id="cpLoad" type="button">讀取預設文字</button><button id="cpAdd" type="button" hidden>＋ 新增一筆</button><button id="cpSave" class="primary" type="button" hidden>儲存</button></div>
       <p class="msg" id="cpMsg" role="status"></p>
       <div class="scroll" id="cpWrap" hidden>
-        <table><thead><tr><th>名稱</th><th>內容</th><th></th></tr></thead><tbody id="cpRows"></tbody></table>
+        <table><thead><tr><th style="width:24%">名稱</th><th>內容</th><th style="width:96px"></th></tr></thead><tbody id="cpRows"></tbody></table>
       </div>
     </section>
 
@@ -317,7 +317,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   };
 
   // 第 N 則留言預設文字：整份讀取、整份儲存（順序＝下拉順序）；空白列儲存時略過
-  var cpLimits = { max: 20, nameMax: 20, textMax: 8000 };
+  var cpLimits = { max: 20, nameMax: 20, textMax: 8000 }, cpNote = '';
   function cpRow(name, text) {
     var tr = document.createElement('tr');
     var n = document.createElement('td'), t = document.createElement('td'), d = document.createElement('td');
@@ -340,7 +340,9 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       var tb = $('cpRows'); tb.textContent = '';
       d.items.forEach(function (it) { tb.appendChild(cpRow(it.name, it.text)); });
       $('cpWrap').hidden = false; $('cpSave').hidden = false; cpToggle();
-      say($('cpMsg'), d.items.length ? '' : '還沒有預設文字，按「新增一筆」開始。');
+      if (cpNote) say($('cpMsg'), cpNote, 'good');   // 儲存後重新讀取，別把「已儲存」蓋掉
+      else say($('cpMsg'), d.items.length ? '' : '還沒有預設文字，按「新增一筆」開始。');
+      cpNote = '';
     }).catch(function (e) { say($('cpMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('cpLoad').disabled = false; });
   };
@@ -349,7 +351,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     var items = [].map.call($('cpRows').children, function (tr) { return { name: tr.querySelector('.cp-name').value, text: tr.querySelector('.cp-text').value }; });
     $('cpSave').disabled = true; say($('cpMsg'), '儲存中');
     api('/admin/fb/comment-presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
-      if (res.ok) { say($('cpMsg'), '已儲存。', 'good'); $('cpLoad').click(); }
+      if (res.ok) { cpNote = '已儲存。'; $('cpLoad').click(); }
       else if (res.code === 'unauthorized') expired();
       else say($('cpMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('cpMsg'), '連不上後端，請稍後再試。', 'err'); })

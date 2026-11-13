@@ -60,6 +60,7 @@ function fakeD1() {
   db.exec(fs.readFileSync(path.join(__dirname, '../../server/schema.sql'), 'utf8'));
   const plain = (row) => (row ? { ...row } : row);
   const stmt = (sql, args) => ({
+    sql, args,
     bind: (...a) => stmt(sql, a),
     async run() {
       const r = db.prepare(sql).run(...args);
@@ -72,7 +73,17 @@ function fakeD1() {
       return col ? row[col] : row;
     }
   });
-  return { raw: db, prepare: (sql) => stmt(sql, []) };
+  // batch：和 D1 一樣放進同一個交易，任一句失敗整批還原
+  async function batch(list) {
+    db.exec('BEGIN');
+    try {
+      const out = [];
+      for (const s of list) { const r = db.prepare(s.sql).run(...s.args); out.push({ success: true, meta: { changes: Number(r.changes) } }); }
+      db.exec('COMMIT');
+      return out;
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  return { raw: db, prepare: (sql) => stmt(sql, []), batch };
 }
 
 // 一組完整的測試環境
