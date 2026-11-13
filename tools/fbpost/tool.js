@@ -241,6 +241,29 @@ function recordState(p) {
   return p.scheduledAt ? (p.scheduledAt * 1000 > Date.now() ? 'scheduled' : 'due') : 'published';
 }
 const RECORD_STATES = { failed: '送出失敗', canceled: '已取消', scheduled: '排程中', due: '待確認', published: '已發布' };
+// 卡片頭的整體狀態：取最需要注意的那個。
+const RECORD_PRIORITY = ['failed', 'due', 'scheduled', 'published', 'canceled'];
+function overallState(r) {
+  const states = r.pages.map(recordState);
+  return RECORD_PRIORITY.find((s) => states.includes(s)) || 'published';
+}
+const badge = (state) => el('span', { className: `rec-badge st-${state}`, textContent: RECORD_STATES[state] });
+const field = (label, ...kids) => el('div', { className: 'rec-field' }, el('span', { className: 'rec-label', textContent: label }), ...kids);
+function recordPageRow(r, p) {
+  const state = recordState(p);
+  const edited = typeof p.caption === 'string' && (p.caption !== r.caption || p.title !== r.title || p.url !== r.url);
+  const rdBad = p.rundown?.ok === false;
+  return el('div', { className: 'rec-page', dataset: { state } },
+    el('span', { className: 'rec-pg', textContent: p.label || p.page }),
+    badge(state),
+    el('span', { className: 'rec-sched', textContent: p.scheduledAt ? '排程 ' + fmtTime(p.scheduledAt) : '立即發布' }),
+    p.rundown || p.error ? el('span', { className: 'rec-result' },
+      p.rundown ? el('span', { className: 'rec-rd' + (rdBad ? ' bad' : ' ok'), textContent: (rdBad ? '✘ ' : '✔ ') + p.rundown.msg }) : null,
+      p.error ? el('span', { className: 'rec-err bad', textContent: p.error }) : null) : null,
+    edited ? el('details', { className: 'rec-edited-box' },
+      el('summary', { textContent: '重送內容：與原送出不同' }),
+      el('span', { className: 'record-edited', textContent: `${p.title || ''}\n${p.caption}\n${p.url || ''}` })) : null);
+}
 function renderRecords() {
   const filter = $('recordsFilter').value;
   const list = records.list().filter((r) => filter === 'all' || r.pages.some((p) => recordState(p) === filter));
@@ -250,17 +273,19 @@ function renderRecords() {
     del.addEventListener('click', async () => {
       if (await confirmBox('刪除這筆本地紀錄？', '只刪除這個瀏覽器的紀錄，不影響 Facebook 上的貼文。', '刪除')) { records.remove(r.id); renderRecords(); }
     });
-    return el('li', { className: 'item', dataset: { record: r.id } },
-      el('div', { className: 'body' },
-        el('div', { className: 'meta' }, el('b', { textContent: fmtTime(r.at / 1000) })),
-        el('p', { className: 'msg', textContent: r.title || r.caption || '（沒有文字）' }),
-        r.title && r.caption ? el('p', { className: 'msg', textContent: r.caption }) : null,
-        /^https?:\/\//.test(r.url) ? el('a', { href: r.url, target: '_blank', rel: 'noopener', textContent: r.url }) : null,
-        ...r.pages.map((p) => el('p', { className: 'cm' + (p.status === 'fail' || p.rundown?.ok === false ? ' bad' : '') },
-          el('span', { textContent: `${p.label}｜${RECORD_STATES[recordState(p)]}${p.scheduledAt ? ' ' + fmtTime(p.scheduledAt) : ''}${p.error ? '：' + p.error : ''}` }),
-          p.rundown ? el('span', { textContent: '｜' + p.rundown.msg }) : null,
-          typeof p.caption === 'string' && (p.caption !== r.caption || p.title !== r.title || p.url !== r.url) ? el('span', { className: 'record-edited', textContent: `重送內容：${p.title || ''}\n${p.caption}\n${p.url || ''}` }) : null))),
-      el('div', { className: 'act' }, del));
+    const state = overallState(r);
+    return el('li', { className: 'rec-card', dataset: { record: r.id, state } },
+      el('div', { className: 'rec-head' },
+        el('b', { className: 'rec-time', textContent: fmtTime(r.at / 1000) }),
+        badge(state),
+        el('span', { className: 'rec-count', textContent: `${r.pages.length} 個粉專` }),
+        el('span', { className: 'grow' }), del),
+      el('div', { className: 'rec-content' },
+        r.title ? field('標題', el('p', { className: 'rec-text rec-title', textContent: r.title })) : null,
+        r.caption ? field('內文', el('p', { className: 'rec-text', textContent: r.caption })) : null,
+        /^https?:\/\//.test(r.url) ? field('連結', el('a', { href: r.url, target: '_blank', rel: 'noopener', textContent: r.url })) : null,
+        !r.title && !r.caption ? el('p', { className: 'rec-text muted', textContent: '（沒有文字）' }) : null),
+      el('div', { className: 'rec-pages' }, ...r.pages.map((p) => recordPageRow(r, p))));
   }));
 }
 function saveRecord() {

@@ -415,6 +415,46 @@ test('本地紀錄：預設清除七天前已發布，未來排程與失敗保�
   assert.deepEqual(errors, []);
 });
 
+test('本地紀錄：卡片分欄顯示時間、整體狀態、標題／內文／連結與各粉專結果', async () => {
+  const { page, errors } = await open();
+  await page.evaluate(() => {
+    const now = Date.now(), at = now - 3600000;
+    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([{
+      id: 'card-1', at, updatedAt: at, title: '卡片標題', caption: '第一行內文\n第二行內文', url: 'https://news.tvbs.com.tw/world/1',
+      pages: [
+        { page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: Math.floor((now + 86400000) / 1000), postId: '111_1', error: '', rundown: { ok: true, msg: 'RD：新聞 09:40 → I133' } },
+        { page: '222', label: '娛樂', status: 'fail', sentAt: at, scheduledAt: null, postId: '', error: '權限不足', rundown: { ok: false, msg: 'RD：寫入失敗' },
+          title: '改過的標題', caption: '重送改成這段內文', url: 'https://news.tvbs.com.tw/world/2' },
+      ],
+    }]));
+  });
+  await page.reload();
+  await page.waitForSelector('#pages .pg', { state: 'attached' });
+  await skipDuty(page);
+  const card = page.locator('#recordsList li.rec-card[data-record="card-1"]');
+  assert.equal(await card.count(), 1);
+  assert.equal(await card.getAttribute('data-state'), 'failed', '整體狀態取最需注意的失敗');
+  assert.match(await card.locator('.rec-head').textContent(), /送出失敗.*2 個粉專|2 個粉專/s);
+  assert.equal(await card.locator('.rec-field').count(), 3);
+  assert.equal(await card.locator('.rec-title').textContent(), '卡片標題');
+  assert.equal(await card.locator('.rec-field a').getAttribute('href'), 'https://news.tvbs.com.tw/world/1');
+  const rows = card.locator('.rec-page');
+  assert.equal(await rows.count(), 2);
+  assert.equal(await rows.nth(0).getAttribute('data-state'), 'scheduled');
+  assert.match(await rows.nth(0).textContent(), /新聞.*排程中.*排程 \d+\/\d+ \d+:\d+.*RD：新聞 09:40 → I133/s);
+  assert.ok(await rows.nth(0).locator('.rec-rd.ok').count());
+  assert.equal(await rows.nth(1).getAttribute('data-state'), 'failed');
+  assert.match(await rows.nth(1).textContent(), /娛樂.*送出失敗.*立即發布.*RD：寫入失敗.*權限不足/s);
+  assert.ok(await rows.nth(1).locator('.rec-rd.bad').count());
+  assert.equal(await rows.nth(0).locator('details').count(), 0, '內容沒改的粉專沒有重送內容區');
+  assert.match(await rows.nth(1).locator('details summary').textContent(), /重送內容：/);
+  assert.match(await rows.nth(1).locator('.record-edited').textContent(), /重送改成這段內文/);
+  // 版面：卡片不超出視窗、粉專列沒有被壓成窄欄
+  const box = await card.boundingBox();
+  assert.ok(box.width > 400, '卡片寬度正常');
+  assert.deepEqual(errors, []);
+});
+
 test('本地紀錄：關閉七天清除後重新開啟仍保留舊紀錄', async () => {
   const { page, errors } = await open();
   await page.uncheck('#recordsAuto');

@@ -63,8 +63,47 @@ select { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 1
 .cm { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 .cm.ok { color: var(--ok-text); }
 .cm.bad { color: var(--bad); font-weight: 500; }
-#recordsList .body { overflow-wrap: anywhere; }
-.record-edited { display: block; white-space: pre-wrap; }
+/* 本地紀錄：每筆一張卡片（卡片頭／內容／各粉專結果） */
+#recordsList { gap: 12px; margin-top: 8px; }
+.rec-card { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 2px 10px -4px rgba(0, 43, 102, .18); overflow: hidden; overflow-wrap: anywhere; border-left: 4px solid var(--st, var(--line)); }
+.rec-card[data-state=failed] { --st: var(--bad); }
+.rec-card[data-state=due] { --st: #d97706; }
+.rec-card[data-state=scheduled] { --st: var(--accent); }
+.rec-card[data-state=published] { --st: #16a34a; }
+.rec-card[data-state=canceled] { --st: #9aa3b5; }
+.rec-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--fill); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.rec-time { font-size: 15px; }
+.rec-count { font-size: 12px; color: var(--muted); }
+.rec-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font: 500 12px/20px var(--font); white-space: nowrap; background: var(--fill); color: var(--muted); }
+.rec-badge.st-failed { background: var(--bad-bg); color: var(--bad-text); box-shadow: inset 0 0 0 1px var(--bad-line); }
+.rec-badge.st-due { background: var(--warn-bg); color: var(--warn-text); box-shadow: inset 0 0 0 1px var(--warn-line); }
+.rec-badge.st-scheduled { background: var(--accent-soft); color: var(--accent-strong); }
+.rec-badge.st-published { background: var(--ok-bg); color: var(--ok-text); box-shadow: inset 0 0 0 1px var(--ok-line); }
+.rec-badge.st-canceled { background: var(--fill); color: var(--muted); }
+.rec-content { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+.rec-field { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 14px; }
+.rec-label { font-size: 12px; color: var(--muted); }
+.rec-text { margin: 0; white-space: pre-wrap; }
+.rec-title { font-weight: 700; }
+.rec-pages { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.rec-page { display: grid; grid-template-columns: 84px auto auto minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 8px 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.rec-page + .rec-page { border-top: 1px dashed var(--line); }
+.rec-pg { font-weight: 700; font-size: 14px; }
+.rec-sched { color: var(--muted); }
+.rec-result { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rec-edited-box { grid-column: 1 / -1; padding-left: 96px; }
+.rec-rd.ok { color: var(--ok-text); }
+.rec-rd.bad, .rec-err { color: var(--bad-text); font-weight: 500; }
+.rec-edited-box summary { cursor: pointer; color: var(--accent); }
+.record-edited { display: block; white-space: pre-wrap; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: var(--fill); color: var(--text); }
+@media (max-width: 560px) {
+  .rec-field { grid-template-columns: 1fr; gap: 2px; }
+  .rec-page { grid-template-columns: auto auto minmax(0, 1fr); }
+  .rec-pg { grid-column: 1 / -1; }
+  .rec-result { grid-column: 1 / -1; }
+  .rec-edited-box { padding-left: 0; }
+  .rec-count { display: none; }
+}
 #recordsAuto { width: auto; }
 .fail-box { border: 1px solid var(--bad-line); background: var(--bad-bg); border-radius: 14px; padding: 10px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; color: var(--bad-text); }
 .fail-box h2 { margin: 0; font-size: 14px; font-weight: 700; color: var(--bad-text); }
