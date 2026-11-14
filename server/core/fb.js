@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run, all } from './db.js';
-import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
+import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, getMaxAttempts, setMaxAttempts, ATTEMPTS_MIN, ATTEMPTS_MAX, DEFAULT_ATTEMPTS, RETRY_GAP_MS, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
@@ -315,6 +315,21 @@ export async function adminCommentPresets(request, env, path) {
   if (typeof clean === 'string') return fail(request, env, 'bad_request', clean);
   await savePresets(env, clean);
   return ok(request, env, { saved: clean.length });
+}
+
+// 管理頁：留言嘗試次數。GET／POST /admin/fb/settings（已通過 admin 驗證）；到點嘗試最多幾次（含第 1 次），間隔固定 30 秒，限流不重試
+export async function adminFbSettings(request, env, path) {
+  if (path !== '/admin/fb/settings') return null;
+  if (!env.DB) return fail(request, env, 'misconfigured');
+  const view = async () => ({ maxAttempts: await getMaxAttempts(env), min: ATTEMPTS_MIN, max: ATTEMPTS_MAX, default: DEFAULT_ATTEMPTS, gapSec: Math.round(RETRY_GAP_MS / 1000) });
+  if (request.method === 'GET') return ok(request, env, await view());
+  if (request.method !== 'POST') return null;
+  const { body: b, error } = await readJson(request);
+  if (error) return fail(request, env, error);
+  const n = b && b.maxAttempts;
+  if (!Number.isInteger(n) || n < ATTEMPTS_MIN || n > ATTEMPTS_MAX) return fail(request, env, 'bad_request', `嘗試次數要是 ${ATTEMPTS_MIN}～${ATTEMPTS_MAX} 的整數。`);
+  await setMaxAttempts(env, n);
+  return ok(request, env, await view());
 }
 
 // ---- 讀取 ----

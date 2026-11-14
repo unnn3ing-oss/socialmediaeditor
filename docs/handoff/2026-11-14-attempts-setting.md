@@ -1,5 +1,5 @@
 # 管理後台可設定「留言嘗試次數」
-- 狀態：進行中　- 分支：claude/epic-cori-gkqog7　- 最後更新：2026-11-14
+- 狀態：已完成（已併入 main）　- 分支：claude/epic-cori-gkqog7　- 最後更新：2026-11-14
 - 使用者原始需求：「那將嘗試次數可在管理後台設定次數好了」→ 確認：「1.可以 2.想改30秒」（接續 `2026-11-14-comment-due-only.md`，該版已併入 main）
 
 ## 已定案的決定
@@ -17,20 +17,21 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/fbqueue.js` | `fb_settings` 表、`getMaxAttempts`／`setMaxAttempts`；`advance` 用設定值；`RETRY_GAP_MS`＝30000 | ⬜ |
-| `server/core/fb.js` | `GET`／`POST /admin/fb/settings`（管理憑證；整數 1～5） | ⬜ |
-| `server/core/admin.js` 或掛載處 | 掛上新路由（比照 `adminCommentPresets`） | ⬜ |
-| `server/core/admin-page.js` | 新卡片「留言嘗試次數」：數字輸入、儲存、說明（限流不重試、間隔約 30 秒） | ⬜ |
-| `server/schema.sql` | `fb_settings` 表 | ⬜ |
-| `test/server/fbqueue.test.js` | 預設 2；設 1／3；範圍與型別驗證；讀取失敗退回 2；限流不受影響；公司憑證不能寫 | ⬜ |
-| `docs/deploy.md`、規格 §6、`CLAUDE.md` 進度 | 同步 | ⬜ |
+| `server/core/fbqueue.js` | `fb_settings` 表、`getMaxAttempts`／`setMaxAttempts`；`advance` 用設定值；`RETRY_GAP_MS`＝30000 | ✅ |
+| `server/core/fb.js` | `GET`／`POST /admin/fb/settings`（管理憑證；整數 1～5） | ✅ |
+| `server/core/admin.js` 或掛載處 | 掛上新路由（比照 `adminCommentPresets`） | ✅ |
+| `server/core/admin-page.js` | 新卡片「留言嘗試次數」：數字輸入、儲存、說明（限流不重試、間隔約 30 秒） | ✅ |
+| `server/schema.sql` | `fb_settings` 表 | ✅ |
+| `test/server/fbqueue.test.js` | 預設 2；設 1／3；範圍與型別驗證；讀取失敗退回 2；限流不受影響；公司憑證不能寫 | ✅ |
+| `docs/deploy.md`、規格 §6、`CLAUDE.md` 進度 | 同步 | ✅ |
 
 ## 下一步
-- [ ] 後端（表、讀寫、路由、advance）與測試
-- [ ] 管理頁卡片
-- [ ] `npm test`、`node build.js --check`
-- [ ] 獨立審查代理（Sonnet）
-- [ ] 使用者說「推」才併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
+- [x] 後端（表、讀寫、路由、advance）與測試
+- [x] 管理頁卡片（讀取過實際設定才能按儲存，避免用預設值蓋掉）
+- [x] `npm test` 372 項、`node build.js --check`
+- [x] 獨立審查代理（Sonnet）：通過；已修測試標題／秒界偶發／權限斷言寫死 401
+- [x] 使用者說「推」→ 併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
+- [ ] 使用者部署後端並在管理頁確認卡片可讀寫（見 `CLAUDE.md` 下一步）
 
 ## 測試
 `npm test`（重點 `test/server/fbqueue.test.js`）、`node build.js --check`。

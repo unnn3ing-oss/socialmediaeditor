@@ -294,7 +294,7 @@ socialmediaeditor/
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
 | rundown | `POST /rundown`（`{action:'ping'}`／`{action:'add', entries}`，需公司憑證）、`GET /admin/rundown`（設定檢查）、`POST /admin/rundown/ping`（管理頁測試連線） | 排程發布的「排入 Rundown」：檢查格式後補上金鑰轉給 Apps Script（從 -schedulenewnet 的 Worker `/rundown` 搬來，v8） | Secrets `RUNDOWN_URL`、`RUNDOWN_TOKEN` |
 | cron | 每日 03:17（UTC 19:17） | 清理過期圖床檔案、日誌、30 天前已結束的留言 | — |
-| cron | 每分鐘 | 發文留言時鐘：只查 D1 找「貼文發布時間＋各自延遲」已到的留言；沒到期就完全不打臉書。到點嘗試最多 2 次（第 2 次在第 1 次失敗後約 60 秒），仍失敗標 `failed` 顯示、不再自動重試；限流碼（4／17／32／341／613／80001）不重試；貼文未發布但臉書時間變了就以新時間重設（單筆最多 5 次）；貼文已刪除就取消。後台提早發布時，留言仍在原預定時間才送出 | D1 |
+| cron | 每分鐘 | 發文留言時鐘：只查 D1 找「貼文發布時間＋各自延遲」已到的留言；沒到期就完全不打臉書。到點嘗試次數可在管理頁「留言嘗試次數」設定（1～5，預設 2；D1 `fb_settings`，`GET`／`POST /admin/fb/settings`），每次失敗後間隔固定 30 秒（沒綁 Durable Object 時實際落在下一個每分鐘 cron，最多約 60 秒），試滿仍失敗標 `failed` 顯示、不再自動重試；限流碼（4／17／32／341／613／80001）不重試；貼文未發布但臉書時間變了就以新時間重設（單筆最多 5 次）；貼文已刪除就取消。後台提早發布時，留言仍在原預定時間才送出 | D1 |
 
 - 工具專屬路由放在 `tools/<id>/api.js`，`build.js` 自動掛到 `/t/<id>/`。
 - 必要 Secrets：`COMPANY_PASSWORD`、`ADMIN_PASSWORD`、`SESSION_SECRET`；Rundown 另需 `RUNDOWN_URL`、`RUNDOWN_TOKEN`；臉書另需 `FB_TOKEN`（選填 `FB_APP_ID`、`FB_APP_SECRET`）。

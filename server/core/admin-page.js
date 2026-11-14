@@ -124,6 +124,13 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
 
     <section class="card">
+      <h2>留言嘗試次數</h2>
+      <p>發文時留言到了預定時間，最多嘗試幾次（含第 1 次）。每次失敗後間隔約 <span id="atGap">30</span> 秒再試；試滿仍失敗就標「失敗」顯示在「已排程」分頁，不再自動重試。臉書限流時不重試，不受這個設定影響。可設 <span id="atMin">1</span>～<span id="atMax">5</span> 次，預設 <span id="atDef">2</span> 次，下一次嘗試就生效。</p>
+      <div class="row"><label for="atVal">嘗試次數</label><input id="atVal" type="number" min="1" max="5" step="1" value="2" style="width:80px"><button id="atLoad" type="button">讀取目前設定</button><button id="atSave" class="primary" type="button" disabled>儲存</button></div>
+      <p class="msg" id="atMsg" role="status"></p>
+    </section>
+
+    <section class="card">
       <h2>Rundown 連線</h2>
       <p>排程發布的「排入 Rundown」送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段；有勾選並送成功的粉專各寫一筆到對應區段：新聞＝主粉（新聞粉）、娛樂粉、少康粉、國際＋粉（擠看看、氣象沒有區段，略過）。</p>
       <p>純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。照時間順序排進去：格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。</p>
@@ -356,6 +363,28 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       else say($('cpMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('cpMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('cpSave').disabled = false; });
+  };
+
+  $('atLoad').onclick = function () {
+    $('atLoad').disabled = true; say($('atMsg'), '讀取中');
+    api('/admin/fb/settings').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data;
+      $('atMin').textContent = d.min; $('atMax').textContent = d.max; $('atDef').textContent = d.default; $('atGap').textContent = d.gapSec;
+      $('atVal').min = d.min; $('atVal').max = d.max; $('atVal').value = d.maxAttempts; $('atSave').disabled = false;   // 讀過實際設定才能儲存，避免用輸入框的預設值蓋掉
+      say($('atMsg'), '目前設定：最多嘗試 ' + d.maxAttempts + ' 次。');
+    }).catch(function (e) { say($('atMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('atLoad').disabled = false; });
+  };
+  $('atSave').onclick = function () {
+    var n = Number($('atVal').value);
+    $('atSave').disabled = true; say($('atMsg'), '儲存中');
+    api('/admin/fb/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ maxAttempts: n }) }).then(function (res) {
+      if (res.ok) { $('atVal').value = res.data.maxAttempts; say($('atMsg'), '已儲存：最多嘗試 ' + res.data.maxAttempts + ' 次。', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('atMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('atMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('atSave').disabled = false; });
   };
 
   $('rdCheck').onclick = function () {

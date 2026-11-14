@@ -1,7 +1,7 @@
 // 臉書「發文時留言」佇列。
 // D1 `fb_comments` 是唯一資料來源。等待期間完全不打臉書：每分鐘 cron（tickDue）只查 D1，
 // 到了「貼文發布時間＋各自延遲」才去問臉書一次；貼文還沒發而臉書上的時間變了，就以新時間重設。
-// 嘗試最多 2 次（第 2 次在第 1 次失敗後約 60 秒），仍失敗就標 failed 顯示給使用者，不再自動重試；限流不重試。
+// 嘗試次數可在管理頁設定（預設 2 次、每次間隔 30 秒），仍失敗就標 failed 顯示給使用者，不再自動重試；限流不重試。
 // Durable Object `CommentHub` 是選用的準時鬧鐘（沒綁定也能跑，靠 cron）。
 // token 一律走 fb.js 的 tokenFor／graph.js，不寫進 D1／KV／日誌；錯誤訊息一律先 scrub。
 import { all, first, run } from './db.js';
@@ -9,8 +9,9 @@ import { graphGet, graphPost, GraphError, scrub } from './graph.js';
 import { tokenFor } from './fb.js';
 
 export const FIRST_OFFSET = 1;          // 預定時間後第幾秒做第 1 次嘗試
-export const MAX_ATTEMPTS = 2;          // 每次排程最多嘗試幾次
-export const RETRY_GAP_MS = 50000;      // 第 1 次失敗後多久做第 2 次（約 1 分鐘；略短於每分鐘 cron 間隔，避免剛好差幾毫秒被跳過一輪）
+export const DEFAULT_ATTEMPTS = 2;      // 每次排程最多嘗試幾次（預設；後台可設 ATTEMPTS_MIN～ATTEMPTS_MAX）
+export const ATTEMPTS_MIN = 1, ATTEMPTS_MAX = 5;
+export const RETRY_GAP_MS = 30000;      // 失敗後多久再試（固定 30 秒；實際會落在下一個每分鐘 cron）
 export const MAX_RETIMES = 5;           // 單筆留言最多跟著臉書改時間重設幾次（防迴圈）
 const DAY = 86400000;
 const LEASE_MS = 60000;
@@ -25,6 +26,7 @@ const DDL = [
     due INTEGER NOT NULL, next_check INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', error TEXT, comment_id TEXT,
     dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, seq INTEGER NOT NULL DEFAULT 1, delay INTEGER NOT NULL DEFAULT 0, retimes INTEGER NOT NULL DEFAULT 0)`,
   'CREATE TABLE IF NOT EXISTS fb_comment_presets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, text TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)',
+  'CREATE TABLE IF NOT EXISTS fb_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated INTEGER NOT NULL)',
   'CREATE INDEX IF NOT EXISTS fb_comments_check ON fb_comments(status, next_check)',
   'CREATE INDEX IF NOT EXISTS fb_comments_post ON fb_comments(post_id)'
 ];
@@ -53,6 +55,25 @@ export const EXTRA_DELAY_MAX = 1440;
 const errText = (env, e) => scrub(env, (e && e.message) || '未知錯誤');
 const isMissing = (e) => e instanceof GraphError && e.fbCode === 100;
 const timeOf = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
+
+// ---- 後台設定：留言嘗試次數（D1 fb_settings；讀不到或值不合法一律退回預設，不讓留言停擺）----
+const validAttempts = (n) => Number.isInteger(n) && n >= ATTEMPTS_MIN && n <= ATTEMPTS_MAX;
+export async function getMaxAttempts(env) {
+  if (!env.DB) return DEFAULT_ATTEMPTS;
+  try {
+    await ensureTables(env);
+    const r = await first(env, `SELECT value FROM fb_settings WHERE key='max_attempts'`);
+    const n = r ? Number(r.value) : NaN;
+    return validAttempts(n) ? n : DEFAULT_ATTEMPTS;
+  } catch (e) { return DEFAULT_ATTEMPTS; }
+}
+// 呼叫前已驗證；回寫入的值
+export async function setMaxAttempts(env, n, nowMs = Date.now()) {
+  if (!validAttempts(n)) throw new Error('bad attempts');
+  await ensureTables(env);
+  await run(env, `INSERT INTO fb_settings (key, value, updated) VALUES ('max_attempts', ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated=excluded.updated`, String(n), nowMs);
+  return n;
+}
 
 // ---- 第 N 則留言的預設文字（後台設定，發文工具下拉選用）----
 export const MAX_PRESETS = 20;
@@ -154,10 +175,10 @@ export async function cleanupComments(env, nowMs) {
 const finish = (env, row, status, error, nowMs, commentId = null) =>
   run(env, `UPDATE fb_comments SET status=?, error=?, comment_id=?, updated=? WHERE id=? AND status='pending'`, status, error, commentId, nowMs, row.id);
 
-// 這次嘗試沒成功：第 1 次 → 約 60 秒後再試一次；第 2 次（或 stop＝限流）→ 標 failed 顯示，不再自動重試
+// 這次嘗試沒成功：還沒到設定的次數 → 30 秒後再試；到了（或 stop＝限流）→ 標 failed 顯示，不再自動重試
 async function advance(env, row, nowMs, interim, failMsg, stop = false) {
   const attempt = row.step + 1;
-  if (stop || attempt >= MAX_ATTEMPTS) return finish(env, row, 'failed', stop ? `${failMsg}（不重試）` : `${failMsg}（已試 ${attempt} 次）`, nowMs);
+  if (stop || attempt >= (row.maxAttempts || DEFAULT_ATTEMPTS)) return finish(env, row, 'failed', stop ? `${failMsg}（不重試）` : `${failMsg}（已試 ${attempt} 次）`, nowMs);
   return run(env, `UPDATE fb_comments SET step=?, next_check=?, error=?, updated=? WHERE id=? AND status='pending'`,
     attempt, nowMs + RETRY_GAP_MS, interim || null, nowMs, row.id);
 }
@@ -221,6 +242,8 @@ export async function processDue(env, nowMs) {
     const c = await run(env, `UPDATE fb_comments SET next_check=? WHERE id=? AND status='pending' AND next_check=?`, nowMs + LEASE_MS, r.id, r.next_check);
     if (c && c.meta && c.meta.changes === 1) rows.push(r);
   }
+  const maxAttempts = rows.length ? await getMaxAttempts(env) : DEFAULT_ATTEMPTS;
+  for (const r of rows) r.maxAttempts = maxAttempts;
   const byPage = new Map();
   for (const r of rows) { if (!byPage.has(r.page_id)) byPage.set(r.page_id, []); byPage.get(r.page_id).push(r); }
   for (const [page, items] of byPage) {

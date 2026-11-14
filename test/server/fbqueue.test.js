@@ -226,7 +226,7 @@ test('processDue：同粉專多篇合併成一次 ids 查詢；不同粉專各�
   assert.deepEqual(idCalls.map((c) => c.tok).sort(), [TOKEN_A, TOKEN_B].sort());
 });
 
-test('processDue：還沒到時間的不處理；第 1 次嘗試時還沒發布 → 約 60 秒後再試一次', async () => {
+test('processDue：還沒到時間的不處理；第 1 次嘗試時還沒發布 → 約 30 秒後再試一次', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 1;
   await enqueue(env, { due, nextCheck: Date.now() + 60000 });
@@ -724,4 +724,74 @@ test('預設文字：寫入中途失敗不會把舊資料清掉（DELETE＋INSER
   await q.savePresets(env, [{ name: '舊的', text: '舊內容' }]);
   await assert.rejects(q.savePresets(env, [{ name: '新的', text: '新內容' }, { name: null, text: 'x' }]));
   assert.deepEqual(await q.listPresets(env), [{ name: '舊的', text: '舊內容' }], '失敗後維持舊清單');
+});
+
+// ---- 後台設定：留言嘗試次數 ----
+const failOnce = async (q, env) => { env.DB.raw.prepare("UPDATE fb_comments SET next_check=1 WHERE status='pending'").run(); await q.processDue(env, Date.now()); return rows(env)[0]; };
+const unpublished = (due) => routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: due } })]);
+
+test('嘗試次數設定：預設 2、間隔 30 秒；管理憑證可讀寫，範圍 1～5 整數；公司憑證不能寫', async () => {
+  const env = mk();
+  let g = (await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data;
+  assert.deepEqual([g.maxAttempts, g.min, g.max, g.default, g.gapSec], [2, 1, 5, 2, 30]);
+  const r = await api(env, 'POST', '/admin/fb/settings', { maxAttempts: 4 }, 'admin');
+  assert.equal(r.res.status, 200);
+  assert.equal(r.body.data.maxAttempts, 4);
+  assert.equal((await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data.maxAttempts, 4);
+  for (const bad of [0, 6, 1.5, '3', null, -1, undefined]) {
+    assert.equal((await api(env, 'POST', '/admin/fb/settings', { maxAttempts: bad }, 'admin')).res.status, 400, String(bad));
+  }
+  assert.equal((await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data.maxAttempts, 4, '不合法的值不會改到設定');
+  assert.equal((await api(env, 'POST', '/admin/fb/settings', { maxAttempts: 3 }, 'company')).res.status, 401);
+  assert.equal((await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data.maxAttempts, 4);
+  const q = await Q();
+  assert.equal(q.RETRY_GAP_MS, 30000);
+});
+
+test('嘗試次數設定：設 1 → 第 1 次失敗就標失敗（已試 1 次）', async () => {
+  const env = mk(); const q = await Q();
+  await q.setMaxAttempts(env, 1);
+  const due = nowSec() - 5;
+  await enqueue(env, { due });
+  unpublished(due);
+  const r = await failOnce(q, env);
+  assert.deepEqual([r.status, r.error], ['failed', '沒偵測到貼文發布（已試 1 次）']);
+});
+
+test('嘗試次數設定：設 3 → 第 1、2 次失敗都先排下一次（30 秒後），第 3 次才標失敗；已排隊的留言也適用', async () => {
+  const env = mk(); const q = await Q();
+  const due = nowSec() - 5;
+  await enqueue(env, { due });   // 先排隊，之後才改設定
+  await q.setMaxAttempts(env, 3);
+  unpublished(due);
+  const t = Date.now();
+  env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
+  await q.processDue(env, t);
+  let r = rows(env)[0];
+  assert.deepEqual([r.status, r.step, r.next_check], ['pending', 1, t + 30000]);
+  r = await failOnce(q, env);
+  assert.deepEqual([r.status, r.step], ['pending', 2]);
+  r = await failOnce(q, env);
+  assert.deepEqual([r.status, r.error], ['failed', '沒偵測到貼文發布（已試 3 次）']);
+});
+
+test('嘗試次數設定：設 5 也一樣，限流第 1 次就停（不受次數影響）', async () => {
+  const env = mk(); const q = await Q();
+  await q.setMaxAttempts(env, 5);
+  await enqueue(env, { due: nowSec() - 5 });
+  routes.push([/\/v26\.0\/$/, () => fbErr(4, 'Application request limit reached')]);
+  const r = await failOnce(q, env);
+  assert.deepEqual([r.status, /（不重試）$/.test(r.error)], ['failed', true]);
+});
+
+test('嘗試次數設定：讀不到或值壞掉一律退回預設 2；沒有資料庫也不報錯', async () => {
+  const env = mk(); const q = await Q();
+  env.DB.raw.prepare("INSERT INTO fb_settings (key, value, updated) VALUES ('max_attempts', 'abc', 1)").run();
+  assert.equal(await q.getMaxAttempts(env), 2);
+  env.DB.raw.prepare("UPDATE fb_settings SET value='99'").run();
+  assert.equal(await q.getMaxAttempts(env), 2);
+  assert.equal(await q.getMaxAttempts({ ...env, DB: undefined }), 2);
+  await assert.rejects(() => q.setMaxAttempts(env, 9));
+  const broken = { ...env, DB: { prepare() { throw new Error('d1 down'); } } };
+  assert.equal(await q.getMaxAttempts(broken), 2);
 });
