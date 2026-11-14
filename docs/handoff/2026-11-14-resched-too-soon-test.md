@@ -1,5 +1,5 @@
 # 修「排程時間太近」e2e 測試跟時段有關
-- 狀態：進行中　- 分支：claude/keen-pascal-lvfwlr　- 最後更新：2026-11-14
+- 狀態：已完成　- 分支：claude/keen-pascal-lvfwlr　- 最後更新：2026-11-14
 - 使用者原始需求：`node --test --test-name-pattern="排程時間太近" test/e2e/fbpost.e2e.js` 失敗（expected 0、actual 1），查根因後修；使用者選方案 A。
 
 ## 已定案的決定
@@ -17,7 +17,7 @@
 ## 下一步
 - [x] 改測試
 - [x] UTC（23:01）／Asia/Taipei／Pacific/Honolulu／本地 23:58 各跑這支皆通過（23:58 修改前失敗）；整支 fbpost.e2e.js 53/53 通過
-- [ ] 給使用者看結果，說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
+- [x] 給使用者看結果，說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試
 `TZ=<時區> node --test --test-name-pattern="排程時間太近" test/e2e/fbpost.e2e.js`；`node --test test/e2e/fbpost.e2e.js`
