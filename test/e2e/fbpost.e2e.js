@@ -586,8 +586,14 @@ test('排程時間太近：改時間不送出並提示', async () => {
   await querySched(page);
   await page.waitForSelector('#schedList .item');
   await page.click('#schedList .item:first-child [data-act=resched]');
+  // 日期也填今天：假資料排在「現在＋2 小時」，晚上 22 點後會跨日，只改時間會變成「明天同時刻」而合法送出
+  const { day, hhmm } = await page.evaluate(() => {
+    const d = new Date(), p = (n) => String(n).padStart(2, '0');
+    return { day: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, hhmm: p(d.getHours()) + p(d.getMinutes()) };
+  });
+  await page.fill('#rsEditor .tp-date', day);
   await page.fill('#rsEditor .tp-time', '');
-  await page.type('#rsEditor .tp-time', new Date().toTimeString().slice(0, 5).replace(':', ''));
+  await page.type('#rsEditor .tp-time', hhmm);
   await page.click('#rsYes');
   assert.equal(api.reschedules.length, 0);
   assert.match(await page.textContent('#rsEditor .hint'), /至少要比現在晚 10 分鐘|時間格式/);

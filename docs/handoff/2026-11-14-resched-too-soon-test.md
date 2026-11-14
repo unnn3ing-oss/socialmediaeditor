@@ -12,11 +12,11 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `test/e2e/fbpost.e2e.js`「排程時間太近」 | 打時間前先 `fill('#rsEditor .tp-date', 今天 YYYY-MM-DD)` | ⬜ |
+| `test/e2e/fbpost.e2e.js`「排程時間太近」 | 在瀏覽器內取今天日期與 HHMM，先填 `.tp-date` 再打時間 | ✅ |
 
 ## 下一步
-- [ ] 改測試
-- [ ] UTC／Asia/Taipei／Pacific/Honolulu 各跑這支；再跑整支 fbpost.e2e.js
+- [x] 改測試
+- [x] UTC（23:01）／Asia/Taipei／Pacific/Honolulu／本地 23:58 各跑這支皆通過（23:58 修改前失敗）；整支 fbpost.e2e.js 53/53 通過
 - [ ] 給使用者看結果，說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試
