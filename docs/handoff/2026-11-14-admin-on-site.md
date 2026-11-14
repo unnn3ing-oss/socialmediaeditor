@@ -1,5 +1,5 @@
 # 管理後台搬到網站 admin 分頁＋依功能分類
-- 狀態：進行中　- 分支：claude/upbeat-mendel-dwdvxi　- 最後更新：2026-11-14
+- 狀態：已完成（已併入 main）　- 分支：claude/upbeat-mendel-dwdvxi　- 最後更新：2026-11-14
 - 使用者原始需求：「幫我將後台頁面依照功能分類整排版。可以將管理後台變成在 https://unnn3ing-oss.github.io/socialmediaeditor/ 的 admin 分頁嗎」
 
 ## 已定案的決定
