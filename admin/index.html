@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>小編工具箱 管理後台</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../"><span class="logo" aria-hidden="true">編</span><span class="word">小編<b>工具箱</b></span></a><span class="sub">後台</span>
+  <span class="right">
+    <a class="back" href="../">回工具箱</a>
+    <button id="logout" type="button" hidden>登出</button>
+  </span>
+</header>
+
+<section id="login" class="card login">
+  <h1>管理登入</h1>
+  <p>公開與公司素材、臉書發文、Rundown 的設定都在這裡，不用改程式也不用重新部署。</p>
+  <form id="loginForm">
+    <label for="pw">管理密碼</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <div class="row"><button class="primary" type="submit" id="loginBtn">登入</button></div>
+    <p class="msg" id="loginMsg" role="status"></p>
+  </form>
+</section>
+
+<div id="app" class="layout" hidden>
+  <nav class="side" role="tablist" aria-label="後台分類">
+    <button type="button" role="tab" id="tab-fb" data-tab="fb" aria-controls="panel-fb">臉書發文</button>
+    <button type="button" role="tab" id="tab-rd" data-tab="rd" aria-controls="panel-rd">Rundown</button>
+    <button type="button" role="tab" id="tab-assets" data-tab="assets" aria-controls="panel-assets">素材</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button type="button" role="tab" id="tab-logs" data-tab="logs" aria-controls="panel-logs">錯誤日誌</button>
+  </nav>
+
+  <main>
+    <!-- 臉書發文 -->
+    <div class="panel" id="panel-fb" role="tabpanel" aria-labelledby="tab-fb" hidden>
+      <h1>臉書發文</h1>
+      <p>排程發布工具的臉書連線、粉專與留言設定。</p>
+
+      <section class="card">
+        <h2>臉書連線</h2>
+        <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組 token（用戶 token 或粉專 token）能管哪些粉專（不會顯示 token 本身）。用戶 token 請留意「資料存取到」的日期，過了要重新授權。</p>
+        <div class="row"><button id="fbBtn" type="button">檢查臉書連線</button></div>
+        <p class="msg" id="fbMsg" role="status"></p>
+        <div class="scroll" id="fbWrap" hidden>
+          <table><thead><tr><th>#</th><th>粉專</th><th>狀態</th><th>類型</th><th>到期</th><th>缺少的權限</th></tr></thead><tbody id="fbRows"></tbody></table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>粉專對應</h2>
+        <p>排程發布工具用的粉專簡稱、文章連結的 utm 參數與排序（數字小的排前面）。沒有存過的粉專會依名稱套用預設值。</p>
+        <div class="row"><button id="pmLoad" type="button">讀取粉專對應</button><button id="pmSave" class="primary" type="button" hidden>儲存</button></div>
+        <p class="msg" id="pmMsg" role="status"></p>
+        <div class="scroll" id="pmWrap" hidden>
+          <table><thead><tr><th>粉專名稱</th><th>簡稱</th><th>utm</th><th>排序</th></tr></thead><tbody id="pmRows"></tbody></table>
+        </div>
+      </section>
+
+      <h2 class="group">留言設定</h2>
+      <div class="grid2">
+        <section class="card">
+          <h2>第 N 則留言預設文字</h2>
+          <p>排程發布的「再新增一則留言」可以從下拉選這裡設定的文字（選了會填進文字框，發文時還能再改）。每則留言預設是「無」。名稱最多 <span id="cpNameMax">20</span> 字、最多 <span id="cpMax">20</span> 筆；內容可放活動連結、表情符號。</p>
+          <div class="row"><button id="cpLoad" type="button">讀取預設文字</button><button id="cpAdd" type="button" hidden>＋ 新增一筆</button><button id="cpSave" class="primary" type="button" hidden>儲存</button></div>
+          <p class="msg" id="cpMsg" role="status"></p>
+          <div class="scroll" id="cpWrap" hidden>
+            <table><thead><tr><th style="width:24%">名稱</th><th>內容</th><th style="width:96px"></th></tr></thead><tbody id="cpRows"></tbody></table>
+          </div>
+        </section>
+        <section class="card">
+          <h2>留言嘗試次數</h2>
+          <p>發文時留言到了預定時間，最多嘗試幾次（含第 1 次）。每次失敗後間隔約 <span id="atGap">30</span> 秒再試；試滿仍失敗就標「失敗」顯示在「已排程」分頁，不再自動重試。臉書限流時不重試，不受這個設定影響。可設 <span id="atMin">1</span>～<span id="atMax">5</span> 次，預設 <span id="atDef">2</span> 次，下一次嘗試就生效。</p>
+          <div class="row"><label for="atVal" class="inline">嘗試次數</label><input id="atVal" type="number" min="1" max="5" step="1" value="2" class="narrow"><button id="atLoad" type="button">讀取目前設定</button><button id="atSave" class="primary" type="button" disabled>儲存</button></div>
+          <p class="msg" id="atMsg" role="status"></p>
+        </section>
+      </div>
+    </div>
+
+    <!-- Rundown -->
+    <div class="panel" id="panel-rd" role="tabpanel" aria-labelledby="tab-rd" hidden>
+      <h1>Rundown</h1>
+      <p>排程發布「排入 Rundown」寫入 FB RUNDOWN 試算表的連線。</p>
+      <section class="card">
+        <h2>Rundown 連線</h2>
+        <p>排程發布的「排入 Rundown」送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段；有勾選並送成功的粉專各寫一筆到對應區段：新聞＝主粉（新聞粉）、娛樂粉、少康粉、國際＋粉（擠看看、氣象沒有區段，略過）。</p>
+        <p>純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。照時間順序排進去：格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。</p>
+        <p>Apps Script 網址與金鑰放在後端 Secrets <code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>（同 Apps Script 指令碼屬性 <code>TOKEN</code>），這裡只檢查有沒有設好，不顯示內容。</p>
+        <div class="row"><button id="rdCheck" type="button">檢查設定</button><button id="rdPing" type="button">測試連線</button></div>
+        <p class="msg" id="rdMsg" role="status"></p>
+      </section>
+    </div>
+
+    <!-- 素材 -->
+    <div class="panel" id="panel-assets" role="tabpanel" aria-labelledby="tab-assets" hidden>
+      <h1>素材</h1>
+      <p>小編工具箱的公開與公司素材都在這裡上傳、替換、刪除。</p>
+      <section class="card" id="upCard">
+        <h2>上傳或替換素材</h2>
+        <p>素材名稱相同就會替換掉舊的。只接受 PNG、JPEG、WebP、SVG、WOFF2，每個最大 10 MB。</p>
+        <form id="upForm">
+          <label for="key">素材名稱</label>
+          <input id="key" type="text" placeholder="例如 logo-white.png" pattern="[a-z0-9][a-z0-9._\-]{0,63}" autocapitalize="off" required>
+          <label for="tier">等級</label>
+          <select id="tier">
+            <option value="company">company（公司專屬，要密碼才拿得到）</option>
+            <option value="public">public（所有人都看得到）</option>
+          </select>
+          <label for="file">檔案</label>
+          <input id="file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,font/woff2,.woff2" required>
+          <div class="row"><button class="primary" type="submit" id="upBtn">上傳</button></div>
+          <p class="msg" id="upMsg" role="status"></p>
+        </form>
+      </section>
+
+      <section class="card" id="listCard" aria-busy="true">
+        <h2>目前的素材</h2>
+        <div id="skel"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+        <div class="scroll" id="tableWrap" hidden>
+          <table>
+            <thead><tr><th>名稱</th><th>等級</th><th>大小</th><th>更新時間</th><th>操作</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <p id="empty" hidden>還沒有任何素材。</p>
+        <p class="msg" id="listMsg" role="status"></p>
+        <section class="confirm" id="confirm" hidden role="alertdialog" aria-labelledby="cfTitle">
+          <h2 id="cfTitle">確定要刪除嗎？</h2>
+          <p id="cfText"></p>
+          <div class="row">
+            <button class="danger solid" id="cfYes" type="button">刪除這個素材</button>
+            <button id="cfNo" type="button">先不要</button>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <!-- 錯誤日誌 -->
+    <div class="panel" id="panel-logs" role="tabpanel" aria-labelledby="tab-logs" hidden>
+      <h1>錯誤日誌</h1>
+      <p>各工具回報的錯誤與臉書發文結果。</p>
+      <section class="card">
+        <h2>最近的紀錄</h2>
+        <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。臉書發文的成功／失敗也記在這裡（工具 <code>fb</code>）。</p>
+        <div class="row"><button id="logBtn" type="button">查看最近 7 天</button></div>
+        <p class="msg" id="logMsg" role="status"></p>
+        <div class="scroll" id="logWrap" hidden>
+          <table><thead><tr><th>時間</th><th>工具</th><th>代碼</th><th>版本</th></tr></thead><tbody id="logRows"></tbody></table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script type="module" src="admin.js"></script>
+</body>
+</html>
