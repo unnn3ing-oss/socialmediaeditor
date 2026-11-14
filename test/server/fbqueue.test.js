@@ -226,7 +226,7 @@ test('processDue：同粉專多篇合併成一次 ids 查詢；不同粉專各�
   assert.deepEqual(idCalls.map((c) => c.tok).sort(), [TOKEN_A, TOKEN_B].sort());
 });
 
-test('processDue：還沒到時間的不處理；未發布就排下一個檢查點（第 3 秒）', async () => {
+test('processDue：還沒到時間的不處理；第 1 次嘗試時還沒發布 → 約 60 秒後再試一次', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 1;
   await enqueue(env, { due, nextCheck: Date.now() + 60000 });
@@ -234,9 +234,10 @@ test('processDue：還沒到時間的不處理；未發布就排下一個檢查�
   assert.equal(calls.length, 0);
   env.DB.raw.prepare('UPDATE fb_comments SET next_check=?').run(Date.now() - 1);
   routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: due } })]);
-  await q.processDue(env, Date.now());
+  const now = Date.now();
+  await q.processDue(env, now);
   const [r] = rows(env);
-  assert.deepEqual([r.status, r.step, r.next_check], ['pending', 1, due * 1000 + 3000]);
+  assert.deepEqual([r.status, r.step, r.next_check], ['pending', 1, now + q.RETRY_GAP_MS]);
 });
 
 test('processDue：後台改晚了 → 重設 due，不算失敗；改早也一樣', async () => {
@@ -275,17 +276,24 @@ test('processDue：貼文被刪（ids 缺該 id）→ canceled 貼文已刪除�
   assert.deepEqual([rs[2].status, rs[2].error], ['canceled', '貼文已刪除']);
 });
 
-test('processDue：超過 due+180 秒仍未發布 → failed（3 分鐘內沒偵測到貼文發布）', async () => {
+test('processDue：第 2 次嘗試仍未發布 → failed（已試 2 次），之後不再打臉書', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 200;
   await enqueue(env, { due, nextCheck: 1 });
   routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: due } })]);
   await q.processDue(env, Date.now());
+  assert.equal(rows(env)[0].status, 'pending');
+  env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
+  await q.processDue(env, Date.now());
   const [r] = rows(env);
-  assert.deepEqual([r.status, r.error], ['failed', '3 分鐘內沒偵測到貼文發布']);
+  assert.deepEqual([r.status, r.error], ['failed', '沒偵測到貼文發布（已試 2 次）']);
+  const n = calls.length;
+  await q.processDue(env, Date.now() + 3600000);
+  await q.tickDue(env, Date.now() + 3600000);
+  assert.equal(calls.length, n);   // 已失敗：不再自動重試
 });
 
-test('processDue：留言失敗 → 先排下一次；超過 3 分鐘 failed 並寫「留言失敗：」，訊息不含 token', async () => {
+test('processDue：留言失敗 → 先排下一次；第 2 次仍失敗 → failed 並寫「留言失敗：…（已試 2 次）」，訊息不含 token', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 5;
   await enqueue(env, { due });
@@ -300,7 +308,7 @@ test('processDue：留言失敗 → 先排下一次；超過 3 分鐘 failed 並
   await q.processDue(env, Date.now());
   [r] = rows(env);
   assert.equal(r.status, 'failed');
-  assert.match(r.error, /^留言失敗：/);
+  assert.match(r.error, /^留言失敗：.*（已試 2 次）$/);
   assert.ok(!r.error.includes(TOKEN_A));
 });
 
@@ -315,51 +323,116 @@ test('processDue：只有照片 ID → 先換貼文 ID 再處理', async () => {
   assert.deepEqual([r.status, r.post_id], ['done', '111_77']);
 });
 
-// ---- syncScheduled ----
-test('syncScheduled：時間被改 → 更新 due；只查有待留言的粉專', async () => {
+// ---- tickDue（每分鐘 cron：只查 D1，沒到期不打臉書）----
+test('tickDue：等待期間（預定時間還沒到）整天跑也完全不打臉書', async () => {
   const env = mk(); const q = await Q();
-  const at = nowSec() + 3600, newAt = at + 1800;
-  await enqueue(env, { due: at });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: newAt }] })]);
-  await q.syncScheduled(env, Date.now());
-  const [r] = rows(env);
-  assert.deepEqual([r.due, r.step, r.next_check], [newAt, 0, (newAt + 1) * 1000]);
-  assert.equal(calls.filter((c) => c.path.endsWith('/scheduled_posts')).length, 1);
-  assert.ok(!calls.some((c) => c.path.startsWith('/v26.0/222')));
-});
-
-test('syncScheduled：從清單消失且已發布 → 立刻留言；已刪除 → canceled', async () => {
-  const env = mk(); const q = await Q();
-  const at = nowSec() + 3600;
-  await enqueue(env, { due: at, post: '111_5' });
-  await enqueue(env, { due: at, post: '111_6' });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [] })]);
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true, scheduled_publish_time: at } })]);
-  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cmx' })]);
-  await q.syncScheduled(env, Date.now());
-  const rs = rows(env);
-  assert.equal(rs[0].status, 'done');
-  assert.deepEqual([rs[1].status, rs[1].error], ['canceled', '貼文已刪除']);
-});
-
-test('syncScheduled：沒有待留言項目就不打 Graph；沒設 DO 也不報錯', async () => {
-  const env = mk(); const q = await Q();
-  await q.syncScheduled(env, Date.now());
+  const at = nowSec() + 48 * 3600;
+  for (const page of ['111', '222']) {
+    await enqueue(env, { page, post: page + '_5', due: at });
+    await enqueue(env, { page, post: null, photo: page + '00', due: at + 300, seq: 2, delay: 300, nextCheck: (at + 301) * 1000 });
+  }
+  const t0 = Date.now();
+  for (let m = 0; m < 1440; m++) await q.tickDue(env, t0 + m * 60000);
   assert.equal(calls.length, 0);
-  await q.syncScheduled({ ...env, DB: undefined }, Date.now());
+  assert.equal(rows(env).filter((r) => r.status === 'pending').length, 4);
 });
 
-test('scheduled()：每日 cron 照舊清理，其他字串跑對時', async () => {
+test('tickDue：到了預定時間才問臉書並留言；沒有 DB 不報錯', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env, { due: nowSec() - 5 });
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
+  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cm' })]);
+  await q.tickDue(env, Date.now());
+  assert.equal(rows(env)[0].status, 'done');
+  await q.tickDue({ ...env, DB: undefined }, Date.now());
+});
+
+test('processDue：限流（code 4）第 1 次就 failed，不排第 2 次', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env, { due: nowSec() - 5 });
+  routes.push([/\/v26\.0\/$/, () => fbErr(4, 'Application request limit reached')]);
+  await q.processDue(env, Date.now());
+  const [r] = rows(env);
+  assert.equal(r.status, 'failed');
+  assert.match(r.error, /^留言失敗：.*（不重試）$/);
+  const n = calls.length;
+  await q.tickDue(env, Date.now() + 3600000);
+  assert.equal(calls.length, n);
+});
+
+test('processDue：貼文未發布且臉書時間變了 → 以新時間重設、次數歸零；之後每次改都重設，超過上限才停', async () => {
+  const env = mk(); const q = await Q();
+  const due = nowSec() - 2;
+  await enqueue(env, { due });
+  env.DB.raw.prepare('UPDATE fb_comments SET step=1').run();   // 已試過 1 次
+  const later = nowSec() + 7200;
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: later } })]);
+  await q.processDue(env, Date.now());
+  let [r] = rows(env);
+  assert.deepEqual([r.status, r.due, r.step, r.retimes], ['pending', later, 0, 1]);
+  env.DB.raw.prepare('UPDATE fb_comments SET retimes=?, next_check=1').run(q.MAX_RETIMES);
+  routes.length = 0;
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: later + 600 } })]);
+  await q.processDue(env, Date.now());
+  [r] = rows(env);
+  assert.deepEqual([r.status, r.error], ['failed', '貼文排程時間被改太多次，已停止自動留言']);
+});
+
+test('scheduled()：每日 cron 只清理，每分鐘 cron 處理到期留言', async () => {
   const w = await load(); const env = mk();
-  const at = nowSec() + 3600;
-  await enqueue(env, { due: at });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: at + 60 }] })]);
+  await enqueue(env, { due: nowSec() - 5 });
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
+  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cm' })]);
   env.DB.raw.prepare("INSERT INTO fb_comments (page_id, post_id, message, due, next_check, status, created, updated) VALUES ('1','1_1','m',1,1,'done',1,1)").run();
   let p; await w.scheduled({ cron: '17 19 * * *' }, env, { waitUntil: (x) => { p = x; } }); await p;
   assert.equal(calls.length, 0);
   assert.equal(rows(env).length, 1);   // 30 天前已結束的被清掉
   await w.scheduled({ cron: '* * * * *' }, env, { waitUntil: (x) => { p = x; } }); await p;
-  assert.equal(rows(env)[0].due, at + 60);
+  assert.equal(rows(env)[0].status, 'done');
+});
+
+test('processDue：只有照片 ID、照片已不存在（貼文被取消）→ canceled，不算失敗；其他錯誤照失敗處理', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env, { post: null, photo: '900' });
+  await enqueue(env, { post: null, photo: '901' });
+  routes.push([/\/900$/, () => fbErr(100, 'Unsupported get request. Object with ID 900 does not exist')]);
+  routes.push([/\/901$/, () => fbErr(100, '(#100) Tried accessing nonexisting field (page_story_id)')]);
+  await q.processDue(env, Date.now());
+  const [a, b] = rows(env);
+  assert.deepEqual([a.status, a.error], ['canceled', '貼文已刪除']);
+  assert.deepEqual([b.status, b.step], ['pending', 1]);
+});
+
+test('processDue：留言 POST 限流第 1 次就 failed 不重試；後端沒有該粉專 token 則照一般失敗流程', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env, { due: nowSec() - 5 });
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
+  routes.push([/\/111_5\/comments$/, () => fbErr(32, 'Page request limit reached')]);
+  await q.processDue(env, Date.now());
+  let [r] = rows(env);
+  assert.deepEqual([r.status, /（不重試）$/.test(r.error)], ['failed', true]);
+  // 後端沒有這個粉專的 token：照一般失敗流程，第 1 次先 pending
+  await enqueue(env, { page: '999', post: '999_1', due: nowSec() - 5 });
+  await q.processDue(env, Date.now());
+  r = rows(env)[1];
+  assert.deepEqual([r.status, r.step], ['pending', 1]);
+});
+
+test('retimes：改時間每次遞增；工具內改時間（reschedule）與失敗後重試都會歸零', async () => {
+  const env = mk(); const q = await Q();
+  await enqueue(env, { due: nowSec() - 2 });
+  for (let i = 1; i <= 3; i++) {
+    env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
+    routes.length = 0;
+    routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: nowSec() + 1000 * i } })]);
+    await q.processDue(env, Date.now());
+    assert.equal(rows(env)[0].retimes, i);
+  }
+  await q.rescheduleComments(env, '111_5', nowSec() + 5000);
+  assert.equal(rows(env)[0].retimes, 0);
+  env.DB.raw.prepare("UPDATE fb_comments SET status='failed', retimes=4").run();
+  assert.equal(await q.retryComment(env, rows(env)[0].id), true);
+  assert.deepEqual([rows(env)[0].status, rows(env)[0].retimes, rows(env)[0].step], ['pending', 0, 0]);
 });
 
 // ---- 路由 ----
@@ -415,13 +488,13 @@ test('comments 清單、retry、dismiss', async () => {
   assert.equal((await api(env, 'GET', '/fb/comments?status=all')).body.data.items.length, 2);
   assert.deepEqual((await api(env, 'GET', '/fb/comments?status=pending&page=222')).body.data.items.map((i) => i.id), [id2]);
   assert.equal((await api(env, 'GET', '/fb/comments?status=zzz')).res.status, 400);
-  // retry：只有 failed；due 太舊 → 重設為現在-1
+  // retry：只有 failed；預定時間不動、嘗試次數歸零、馬上開始
   assert.equal((await api(env, 'POST', '/fb/comment/retry', { id: id2 })).res.status, 400);
   r = await api(env, 'POST', '/fb/comment/retry', { id: id1 });
   assert.deepEqual(r.body.data, { status: 'pending' });
   const row = rows(env).find((x) => x.id === id1);
   assert.deepEqual([row.status, row.step, row.error], ['pending', 0, null]);
-  assert.ok(Math.abs(row.due - (nowSec() - 1)) <= 2);
+  assert.ok(Math.abs(row.due - (nowSec() - 3600)) <= 2);
   assert.ok(row.next_check <= Date.now());
   // dismiss
   r = await api(env, 'POST', '/fb/comment/dismiss', { id: id1 });
@@ -534,30 +607,14 @@ test('reschedule：第 N 則跟著新發布時間移動（保留各自延遲）'
   assert.deepEqual(rows(env).map((x) => [x.seq, x.due, x.next_check]), [[1, t, (t + 1) * 1000], [2, t + 300, (t + 301) * 1000]]);
 });
 
-test('syncScheduled：後台改時間 → 第 N 則 due＝新時間＋延遲；沒改就不動', async () => {
+test('processDue：第 N 則到期、貼文未發布且後台改了時間 → due＝新時間＋延遲，重設不算失敗', async () => {
   const env = mk(); const q = await Q();
-  const at = nowSec() + 3600, newAt = at + 1800;
-  await enqueue(env, { due: at + 600, seq: 2, delay: 600 });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: at }] })]);
-  await q.syncScheduled(env, Date.now());
-  assert.equal(rows(env)[0].due, at + 600);
-  routes.length = 0;
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: newAt }] })]);
-  await q.syncScheduled(env, Date.now());
-  assert.deepEqual([rows(env)[0].due, rows(env)[0].next_check], [newAt + 600, (newAt + 601) * 1000]);
-});
-
-test('syncScheduled：後台提早發布 → 有延遲的從現在起算延遲，不馬上留', async () => {
-  const env = mk(); const q = await Q();
-  const at = nowSec() + 3600, now = Date.now();
-  await enqueue(env, { due: at + 300, seq: 2, delay: 300 });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [] })]);
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true, scheduled_publish_time: at } })]);
-  await q.syncScheduled(env, now);
+  const newAt = nowSec() + 1800;   // 第 2 則（延遲 600 秒）剛到期，但後台把貼文改到之後
+  await enqueue(env, { due: nowSec() - 1, seq: 2, delay: 600, nextCheck: 1 });
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: newAt } })]);
+  await q.processDue(env, Date.now());
   const [r] = rows(env);
-  assert.equal(r.status, 'pending');
-  assert.ok(Math.abs(r.due - (Math.floor(now / 1000) + 300)) <= 1);
-  assert.ok(!calls.some((c) => c.path.endsWith('/comments')));
+  assert.deepEqual([r.status, r.due, r.next_check, r.step], ['pending', newAt + 600, (newAt + 601) * 1000, 0]);
 });
 
 test('processDue：第 N 則到期且貼文已發布 → 留言成功；列表回 extras 與 seq', async () => {
@@ -582,7 +639,7 @@ test('舊資料表（沒有 seq／delay）會自動補欄位，舊資料視為�
     dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)`);
   env.DB.raw.prepare("INSERT INTO fb_comments (page_id, post_id, message, due, next_check, created, updated) VALUES ('111','111_5','old',1,1,1,1)").run();
   await q.ensureTables(env);
-  assert.deepEqual([rows(env)[0].seq, rows(env)[0].delay], [1, 0]);
+  assert.deepEqual([rows(env)[0].seq, rows(env)[0].delay, rows(env)[0].retimes], [1, 0, 0]);
 });
 
 test('前後端第 N 則留言常數一致', async () => {
@@ -591,15 +648,13 @@ test('前後端第 N 則留言常數一致', async () => {
   assert.deepEqual([c.MAX_COMMENTS, c.DELAY_MIN, c.DELAY_MAX], [q.MAX_COMMENTS, q.EXTRA_DELAY_MIN, q.EXTRA_DELAY_MAX]);
 });
 
-test('syncScheduled：貼文已照時間發布、延遲留言還沒到 → due 不被往後推（每分鐘對時不能一直重設）', async () => {
+test('tickDue：貼文已準時發布、延遲留言還沒到 → 不打臉書、due 不動', async () => {
   const env = mk(); const q = await Q();
-  const now = Date.now(), published = Math.floor(now / 1000) - 60;   // 一分鐘前準時發布
-  await enqueue(env, { due: published + 300, seq: 2, delay: 300 });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [] })]);
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true, scheduled_publish_time: published } })]);
-  await q.syncScheduled(env, now);
-  assert.equal(rows(env)[0].due, published + 300);
-  await q.syncScheduled(env, now + 60000);
+  const now = Date.now(), published = Math.floor(now / 1000) - 60;
+  await enqueue(env, { due: published + 300, seq: 2, delay: 300, nextCheck: (published + 301) * 1000 });
+  await q.tickDue(env, now);
+  await q.tickDue(env, now + 60000);
+  assert.equal(calls.length, 0);
   assert.equal(rows(env)[0].due, published + 300);
 });
 

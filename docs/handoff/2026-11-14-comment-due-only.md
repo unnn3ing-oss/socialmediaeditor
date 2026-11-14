@@ -1,5 +1,5 @@
 # 留言只在排程時間觸發，不再每分鐘打臉書
-- 狀態：進行中　- 分支：claude/epic-cori-gkqog7　- 最後更新：2026-11-14
+- 狀態：已完成（已併入 main）　- 分支：claude/epic-cori-gkqog7　- 最後更新：2026-11-14
 - 使用者原始需求：「可以到排程時間才觸發，並且如果有更改時間則抓新排程時間重設觸發時間，失敗兩次就顯示，不反覆重試」（起因：後端與臉書請求過多被限流）
 
 ## 已查明的根因（事實，模擬實測）
@@ -20,19 +20,27 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/fbqueue.js` | 移除 `syncScheduled`／`syncPage` 的臉書對時（保留 D1 到期處理入口）；`OFFSETS` 改 2 次；`advance` 兩次即失敗；限流直接失敗；重設次數上限（需新欄位或沿用 `step`） | ⬜ |
-| `server/index.js` | `scheduled()`：每日 cron 清理，其他 cron 只跑 `processDue`；更新註解 | ⬜ |
-| `server/core/fb.js:610` | 註解更新（不再靠 cron 對時補） | ⬜ |
-| `server/wrangler.toml` | `crons = ["* * * * *", "17 19 * * *"]` | ⬜ |
-| `test/server/fbqueue.test.js` | 改寫 syncScheduled 相關與「3 分鐘」測試；新增：第 2 次失敗即停、限流不重試、重設時間、重設上限、等待期間 0 次 Graph 呼叫 | ⬜ |
-| `docs/deploy.md`、規格 §6、`tools/fbpost/TOOL.md`（如有提及） | 同步 | ⬜ |
+| `server/core/fbqueue.js` | 移除 `syncScheduled`／`syncPage` 的臉書對時（保留 D1 到期處理入口）；`OFFSETS` 改 2 次；`advance` 兩次即失敗；限流直接失敗；重設次數上限（需新欄位或沿用 `step`） | ✅ |
+| `server/index.js` | `scheduled()`：每日 cron 清理，其他 cron 只跑 `processDue`；更新註解 | ✅ |
+| `server/core/fb.js:610` | 註解更新（不再靠 cron 對時補） | ✅ |
+| `server/wrangler.toml` | `crons = ["* * * * *", "17 19 * * *"]` | ✅ |
+| `test/server/fbqueue.test.js` | 改寫 syncScheduled 相關與「3 分鐘」測試；新增：第 2 次失敗即停、限流不重試、重設時間、重設上限、等待期間 0 次 Graph 呼叫 | ✅ |
+| `docs/deploy.md`、規格 §6、`tools/fbpost/TOOL.md`（如有提及） | 同步 | ✅ |
+
+## 審查結果（Sonnet 獨立審查）與處理
+- 通過，無擋版 BUG。已處理：重試間隔 60→50 秒（避免與 cron 差幾毫秒被跳過）；`retryComment` 去掉多餘欄位；規格補 341、DO 措辭；補測試（retimes 歸零／遞增、POST 限流、舊表升級）。
+- 中度風險已補：排程照片換不到貼文 ID 時，貼文被取消後到點會誤報失敗 → 照片 API 回「物件不存在」（訊息明確）時改標 `canceled`，其他 100 錯誤仍算失敗。**照片是否換得到貼文 ID、被取消後錯誤長什麼樣仍需使用者實測。**
+- 已知取捨：後台提早發布時留言在原預定時間才送；一次限流會讓同輪到期留言全 failed，需手動「重試」。
+- 部署風險：使用者本機 `wrangler.toml`（填過 ID 的那份）要手動含 `crons = ["* * * * *", "17 19 * * *"]`，否則留言永遠不送；README／deploy.md 已提醒。
 
 ## 下一步
-- [ ] 改 fbqueue.js／index.js／wrangler.toml
-- [ ] 改測試並跑 `npm test`、`node build.js --check`
-- [ ] 用 scratchpad 模擬腳本驗證「等待期間 0 次 Graph」
-- [ ] 獨立審查代理
-- [ ] 使用者說「推」才併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
+- [x] 改 fbqueue.js／index.js／wrangler.toml
+- [x] 改測試並跑 `npm test`、`node build.js --check`
+- [x] 模擬驗證：等待期間 0 次 Graph；到點每則最多 2 次
+- [x] 獨立審查代理
+- [x] commit 並推開發分支
+- [x] 使用者說「推」→ 併入 main，同 commit 更新 `CLAUDE.md`「目前進度」
+- [ ] 使用者部署後端並實測（見 `CLAUDE.md` 下一步）
 
 ## 測試
 `npm test`（重點 `test/server/fbqueue.test.js`）、`node build.js --check`。

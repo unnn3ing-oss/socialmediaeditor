@@ -8,7 +8,7 @@ import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb, adminPageMap, adminCommentPresets } from './core/fb.js';
 import { handleRundown, adminRundown } from './core/rundown.js';
-import { syncScheduled, cleanupComments } from './core/fbqueue.js';
+import { tickDue, cleanupComments } from './core/fbqueue.js';
 
 export { CommentHub } from './core/fbqueue.js';
 
@@ -51,11 +51,11 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每天 03:17（UTC 19:17）清理；其他排程（每分鐘）做留言對時
+    // 每天 03:17（UTC 19:17）清理；其他排程（每分鐘）只查 D1 找到期留言，沒到期就不打臉書
     if (event && event.cron === '17 19 * * *') {
       ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupComments(env, Date.now()).catch(() => {})]));
     } else if (event && event.cron) {
-      ctx.waitUntil(syncScheduled(env, Date.now()));
+      ctx.waitUntil(tickDue(env, Date.now()));
     } else {
       ctx.waitUntil(cleanup(env, Date.now()));
     }

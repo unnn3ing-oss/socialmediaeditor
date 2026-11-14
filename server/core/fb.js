@@ -607,7 +607,7 @@ async function reschedulePost(request, env) {
     await audit(env, 'reschedule-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;
   }
-  try { await rescheduleComments(env, post, time); await kickHub(env); } catch (e) { /* 佇列更新失敗，下一分鐘 cron 對時會補上 */ }
+  try { await rescheduleComments(env, post, time); await kickHub(env); } catch (e) { /* 佇列更新失敗：到預定時間時會查到臉書上的新時間並重設 */ }
   return ok(request, env, { post, time });
 }
 

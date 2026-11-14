@@ -235,7 +235,7 @@ npx wrangler deploy
 |---|---|
 | 換 Logo、版型 | `後端網址/admin` 上傳同名檔案 |
 | 看有沒有人回報錯誤 | 登入 `後端網址/admin`，按「錯誤日誌」的「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
-| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy` |
+| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy`。**確認 `server/wrangler.toml` 的 `crons` 有 `"* * * * *"`（留言時鐘）和 `"17 19 * * *"`（每日清理）兩個** |
 | 臉書 token 換了、新增粉專 | 用戶 token：新粉專會自動出現，不用動。粉專 token：照步驟 6-2 第 2 步重設 `FB_TOKEN`、再部署。都可以到管理頁按「檢查臉書連線」確認 |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |
 

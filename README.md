@@ -51,6 +51,7 @@ npx wrangler deploy
 
 - `--autostash`：`wrangler.toml` 填過你的 ID，算「本機有修改」。這個參數會先暫存、更新完再放回，ID 不會被蓋掉，也不會因為修改而拉不下來。
 - 如果更新後看到 `wrangler.toml` 衝突，代表這個檔案在 `main` 上也改了：保留你的 ID，再套用 `main` 新增的設定，然後 `git add server/wrangler.toml`。
+- **留言排程需要每分鐘 cron**：確認你的 `server/wrangler.toml` 有 `crons = ["* * * * *", "17 19 * * *"]`（兩個都要）。缺了每分鐘那個，發文時留言就不會在排程時間送出。部署後可到 Cloudflare 後台 → Workers → `toolbox-api` → Settings → Triggers 確認兩個排程都在。
 - 部署成功的樣子：最後印出 `Deployed toolbox-api triggers` 和後端網址。
 - 沒有新增 Secrets 時不用重設；有新增會在 `docs/deploy.md` 說明。
 - 登入過期時先執行 `npx wrangler login`。

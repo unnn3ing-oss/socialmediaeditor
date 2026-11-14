@@ -290,10 +290,11 @@ socialmediaeditor/
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
 | fetch | `GET /fetch?url=`、`GET /fetch/image?url=`、`GET /fetch/article?url=`（文章 HTML，≤2 MB） | 代抓公開網頁的標題與 OG 圖；圖片代理（只收 JPG／PNG／GIF／WebP、≤10 MB，讓網頁能把主圖畫進畫布）；只允許白名單網域、轉址逐跳檢查 | KV 快取（網頁資訊） |
-| fb | `GET /fb/pages`、`/fb/posts`、`/fb/scheduled`、`/fb/insights`、`POST /fb/post`、`POST /fb/cancel`、`POST /fb/reschedule`（改排程時間）、`GET /fb/comments`、`POST /fb/comment/retry`、`POST /fb/comment/dismiss`（發文時留言佇列）、`GET /admin/fb`、`GET`／`POST /admin/fb/pagemap`（粉專簡稱與 utm）；`GET /fb/comment-presets`、`GET`／`POST /admin/fb/comment-presets`（第 N 則留言預設文字，D1 `fb_comment_presets`）；`POST /fb/post` 可帶 `extraComments`（第 2、3 則延遲留言，`fb_comments.seq`／`delay`） | 臉書粉專：清單、貼文成效、發文／排程、取消排程（只刪未發布；需公司憑證）；管理頁檢查 token 狀態。只放行這些動作，不做萬用代理 | 粉專 token 放 Secrets（`FB_TOKEN`），KV 快取；D1 `fb_page_map`、`fb_comments`；Durable Object `CommentHub` ＋每分鐘 cron 對時 |
+| fb | `GET /fb/pages`、`/fb/posts`、`/fb/scheduled`、`/fb/insights`、`POST /fb/post`、`POST /fb/cancel`、`POST /fb/reschedule`（改排程時間）、`GET /fb/comments`、`POST /fb/comment/retry`、`POST /fb/comment/dismiss`（發文時留言佇列）、`GET /admin/fb`、`GET`／`POST /admin/fb/pagemap`（粉專簡稱與 utm）；`GET /fb/comment-presets`、`GET`／`POST /admin/fb/comment-presets`（第 N 則留言預設文字，D1 `fb_comment_presets`）；`POST /fb/post` 可帶 `extraComments`（第 2、3 則延遲留言，`fb_comments.seq`／`delay`） | 臉書粉專：清單、貼文成效、發文／排程、取消排程（只刪未發布；需公司憑證）；管理頁檢查 token 狀態。只放行這些動作，不做萬用代理 | 粉專 token 放 Secrets（`FB_TOKEN`），KV 快取；D1 `fb_page_map`、`fb_comments`；每分鐘 cron 當留言時鐘（Durable Object `CommentHub` 為選用的準時鬧鐘，目前未綁定） |
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
 | rundown | `POST /rundown`（`{action:'ping'}`／`{action:'add', entries}`，需公司憑證）、`GET /admin/rundown`（設定檢查）、`POST /admin/rundown/ping`（管理頁測試連線） | 排程發布的「排入 Rundown」：檢查格式後補上金鑰轉給 Apps Script（從 -schedulenewnet 的 Worker `/rundown` 搬來，v8） | Secrets `RUNDOWN_URL`、`RUNDOWN_TOKEN` |
-| cron | 每日 | 清理過期圖床檔案、日誌 | — |
+| cron | 每日 03:17（UTC 19:17） | 清理過期圖床檔案、日誌、30 天前已結束的留言 | — |
+| cron | 每分鐘 | 發文留言時鐘：只查 D1 找「貼文發布時間＋各自延遲」已到的留言；沒到期就完全不打臉書。到點嘗試最多 2 次（第 2 次在第 1 次失敗後約 60 秒），仍失敗標 `failed` 顯示、不再自動重試；限流碼（4／17／32／341／613／80001）不重試；貼文未發布但臉書時間變了就以新時間重設（單筆最多 5 次）；貼文已刪除就取消。後台提早發布時，留言仍在原預定時間才送出 | D1 |
 
 - 工具專屬路由放在 `tools/<id>/api.js`，`build.js` 自動掛到 `/t/<id>/`。
 - 必要 Secrets：`COMPANY_PASSWORD`、`ADMIN_PASSWORD`、`SESSION_SECRET`；Rundown 另需 `RUNDOWN_URL`、`RUNDOWN_TOKEN`；臉書另需 `FB_TOKEN`（選填 `FB_APP_ID`、`FB_APP_SECRET`）。

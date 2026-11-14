@@ -21,9 +21,11 @@ bucket_name = "toolbox-files"
 binding = "CACHE"
 id = "填入你的 ID"
 
-# 每天台灣時間 03:17 清理日誌（UTC 19:17）
+# 兩個排程：
+#   每分鐘：只查 D1 找「到了預定時間」的發文留言，沒到期就完全不打臉書（留言時鐘，不能拿掉）
+#   每天台灣時間 03:17：清理日誌（UTC 19:17）
 [triggers]
-crons = ["17 19 * * *"]
+crons = ["* * * * *", "17 19 * * *"]
 
 # Secrets 不寫在這裡，用 wrangler secret put 設定：
 #   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET
