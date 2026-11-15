@@ -508,7 +508,7 @@ export function checkPost(b, now = nowSec()) {
 // 需使用者實測確認：照片 ID 換貼文 ID、排程中的照片是否查得到 page_story_id、留言要掛在哪個 ID。
 // 第 2 則以後（v.extras）一律入列：due＝發布時間（排程用排程時間、立即用現在）＋各自的 delay。
 async function attachComments(env, token, v, r) {
-  const isPhoto = !!(v.image || v.imageUrl);
+  const isPhoto = !!(v.image || v.imageUrl) && !v.at;   // 排程圖文走 /feed，回的已是貼文 ID
   const photo = isPhoto ? r.id : null;
   let post = r.post_id || (isPhoto ? null : r.id);
   if (!post && photo) post = await photoToPost(env, token, photo);
@@ -556,10 +556,19 @@ async function createPost(request, env) {
   try {
     let r;
     if (v.image || v.imageUrl) {
-      r = await graphPost(env, token, `/${v.page}/photos`, {
-        caption: v.message, url: v.imageUrl || undefined,
-        source: v.image ? [v.image, v.image.name || 'image'] : undefined, ...sched
-      });
+      const file = { url: v.imageUrl || undefined, source: v.image ? [v.image, v.image.name || 'image'] : undefined };
+      if (v.at) {
+        // 排程圖文：照 Meta 文件，先上傳暫存照片（temporary），再用 /feed＋attached_media 排程；直接 /photos 排程不會出現在「已排定」。
+        // /feed 直接回貼文 ID，留言不必再用照片 ID 換貼文 ID。
+        const photo = await graphPost(env, token, `/${v.page}/photos`, { ...file, published: 'false', temporary: 'true' });
+        if (!photo || !photo.id) throw new GraphError('fb_bad_request', '臉書沒有回傳照片 ID，無法排程。', null);
+        r = await graphPost(env, token, `/${v.page}/feed`, {
+          message: v.message, 'attached_media[0]': JSON.stringify({ media_fbid: String(photo.id) }),
+          published: 'false', scheduled_publish_time: String(v.at), unpublished_content_type: 'SCHEDULED'
+        });
+      } else {
+        r = await graphPost(env, token, `/${v.page}/photos`, { caption: v.message, ...file });
+      }
     } else {
       r = await graphPost(env, token, `/${v.page}/feed`, { message: v.message, link: v.link, text_format_preset_id: v.textPreset || undefined, ...sched });
     }
