@@ -448,7 +448,7 @@ export function checkPost(b, now = nowSec()) {
 // 圖片貼文 /photos 回的是照片 ID：沒有 post_id 時用 page_story_id 換貼文 ID，換不到就在佇列記 photo_id 之後再換。
 // 需使用者實測確認：照片 ID 換貼文 ID、排程中的照片是否查得到 page_story_id、留言要掛在哪個 ID。
 async function attachComment(env, token, v, r) {
-  const isPhoto = !!(v.image || v.imageUrl);   // /photos 回照片 ID（排程與立即皆是）
+  const isPhoto = !!(v.image || v.imageUrl) && !v.at;   // 排程有圖走 /feed，回的已是貼文 ID
   const photo = isPhoto ? r.id : null;
   let post = r.post_id || (isPhoto ? null : r.id);
   if (!post && photo) post = await photoToPost(env, token, photo);
@@ -482,11 +482,14 @@ async function createPost(request, env) {
     if (v.image || v.imageUrl) {
       const file = { url: v.imageUrl || undefined, source: v.image ? [v.image, v.image.name || 'image'] : undefined };
       if (v.at) {
-        // 排程有圖（測試原因③）：一步 /photos，除 published=false、scheduled_publish_time 外，加帶 Meta /photos 參數表列出的
-        // unpublished_content_type=SCHEDULED（文件沒有這種用法的範例，靠實測確認是否出現在「已排定」且有預覽）。
-        // 基準＝兩步驟（commit b982e4d）；這段不行就 revert 本 commit 回兩步驟。
-        r = await graphPost(env, token, `/${v.page}/photos`, {
-          caption: v.message, ...file, published: 'false', scheduled_publish_time: String(v.at), unpublished_content_type: 'SCHEDULED'
+        // 排程有圖：照 Meta 文件（graph-api/reference/page/photos「Uploading an unpublished photo」），
+        // 先上傳暫存照片（published=false、temporary=true），再用 /feed＋attached_media 排程，必帶 published、scheduled_publish_time、unpublished_content_type。
+        // /feed 直接回貼文 ID，留言不必再用照片 ID 換貼文 ID。
+        const photo = await graphPost(env, token, `/${v.page}/photos`, { ...file, published: 'false', temporary: 'true' });
+        if (!photo || !photo.id) throw new GraphError('fb_bad_request', '臉書沒有回傳照片 ID，無法排程。', null);
+        r = await graphPost(env, token, `/${v.page}/feed`, {
+          message: v.message, 'attached_media[0]': JSON.stringify({ media_fbid: String(photo.id) }),
+          published: 'false', scheduled_publish_time: String(v.at), unpublished_content_type: 'SCHEDULED'
         });
       } else {
         r = await graphPost(env, token, `/${v.page}/photos`, { caption: v.message, ...file });   // 立即發圖：不變

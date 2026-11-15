@@ -203,19 +203,29 @@ test('post：排程發布 → 入列等發布（due＝排程時間，鬧鐘 due+
   assert.deepEqual([row.post_id, row.due, row.next_check, row.status], ['111_6', at, (at + 1) * 1000, 'pending']);
 });
 
-test('post：圖片貼文只有照片 ID → 用 page_story_id 換貼文 ID；換不到就記 photo_id', async () => {
+test('post：立即發圖只有照片 ID → 用 page_story_id 換貼文 ID；換不到就記 photo_id', async () => {
   const env = mk();
   routes.push([/\/111\/photos$/, () => reply({ id: '900' })]);
   routes.push([/\/900$/, () => reply({ id: '900', page_story_id: '111_77' })]);
-  const at = nowSec() + 3600;
-  await post(env, { page: '111', message: 'x', imageUrl: 'https://e.com/a.jpg', scheduledAt: at, comment: 'hi' });
-  assert.equal(rows(env)[0].post_id, '111_77');
+  routes.push([/\/111_77\/comments$/, () => reply({ id: 'c1' })]);
+  await post(env, { page: '111', message: 'x', imageUrl: 'https://e.com/a.jpg', comment: 'hi' });
   routes.length = 0;
   routes.push([/\/111\/photos$/, () => reply({ id: '901' })]);
   routes.push([/\/901$/, () => fbErr(100, 'nope')]);
-  await post(env, { page: '111', message: 'x', imageUrl: 'https://e.com/a.jpg', scheduledAt: at, comment: 'hi' });
-  const r2 = rows(env)[1];
+  await post(env, { page: '111', message: 'x', imageUrl: 'https://e.com/a.jpg', comment: 'hi' });
+  const r2 = rows(env)[0];
   assert.deepEqual([r2.post_id, r2.photo_id], [null, '901']);
+});
+
+test('post：排程圖文走 /feed，留言直接掛 /feed 回的貼文 ID，不用換照片 ID', async () => {
+  const env = mk();
+  routes.push([/\/111\/photos$/, () => reply({ id: '902' })]);
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_88' })]);
+  const at = nowSec() + 3600;
+  await post(env, { page: '111', message: 'x', imageUrl: 'https://e.com/a.jpg', scheduledAt: at, comment: 'hi' });
+  const [row] = rows(env);
+  assert.deepEqual([row.post_id, row.photo_id, row.status], ['111_88', null, 'pending']);
+  assert.ok(!calls.some((c) => /\/902$/.test(c.path)));
 });
 
 test('post：multipart 也收 comment', async () => {
