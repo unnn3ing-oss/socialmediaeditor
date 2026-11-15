@@ -1,5 +1,5 @@
 # 管理頁暫時停用排程發布
-- 狀態：進行中　- 分支：claude/tender-carson-pl5eze　- 最後更新：2026-11-15
+- 狀態：已完成（已併入 main）　- 分支：claude/tender-carson-pl5eze　- 最後更新：2026-11-15
 - 使用者原始需求：「先幫我在管理頁中增加可以暫時停用排程發布的功能」
 
 ## 已定案的決定
@@ -31,7 +31,8 @@
 - [x] 工具公告＋e2e（fbpost.e2e.js 2 項；中途停用會關閉視窗但保留新增發文內容）
 - [x] `npm test` 375、全部 e2e 127、`node build.js --check` 通過；截圖已拍
 - [x] 獨立審查通過（無缺陷；低風險：原因依 UTF-16 截斷可能切到 emoji，不改）
-- [ ] 使用者確認後說「推」才併 main，同 commit 更新 CLAUDE.md「目前進度」
+- [x] 使用者說「推」，已併 main（同 commit 更新 CLAUDE.md「目前進度」）
+- [ ] 使用者重新部署後端並實測
 
 ## 測試
 `npm test`；`npx playwright test test/e2e/fbpost.e2e.js test/e2e/admin.e2e.js`；`node build.js --check`。
