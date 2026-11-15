@@ -63,6 +63,18 @@
             <button type="button" class="ds-btn primary" id="deployInstallBtn">下載安裝檔</button>
           </div>
           <div class="ds-status" id="deployStatus" role="status"></div>
+          <label class="ds-yt-opt">
+            <input type="checkbox" id="deployYtCheck">
+            <span>我也要用 YT 批量下載（另外下載 YT 下載助手安裝檔，約需安裝 Python、ffmpeg 等元件）</span>
+          </label>
+          <p class="ds-yt-hint">不確定的話可以先不勾，之後也可以在「YT 批量下載」工具裡再裝。</p>
+          <div class="ds-yt-mac" id="deployYtMac" data-only="mac" hidden>
+            <p>Mac 的 YT 下載助手：複製這一行，貼到「終端機」按 Enter（裝完工具箱外掛後再做也可以）。</p>
+            <div class="ds-copy">
+              <code id="deployYtCmd"></code>
+              <button type="button" class="ds-btn" id="deployYtCopy">複製 YT 指令</button>
+            </div>
+          </div>
           <ol class="ds-do">
             <li>按「下載安裝檔」，會下載 <code id="deployInstallName">toolbox-install.cmd</code>。</li>
             <li data-only="win">Chrome 若顯示「這類檔案可能有害」，請在下載清單按「<b>保留</b>」。</li>

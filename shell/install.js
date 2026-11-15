@@ -188,6 +188,11 @@ function zhError(err, lead) {
 
 // 教學畫面的 HTML 放在 shell/install.html，第一次打開時才載入。
 let mounted = null;
+// YT 下載助手安裝檔（見 tools/ytdl/PROTOCOL.md）：Windows 從網站下載，Mac 貼一行指令
+const YT_WIN_INSTALLER_NAME = 'ytdl-install-windows.cmd';
+const YT_WIN_INSTALLER_URL = new URL('../tools/ytdl/installers/' + YT_WIN_INSTALLER_NAME, import.meta.url).href;
+const YT_MAC_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/unnn3ing-oss/socialmediaeditor/main/tools/ytdl/installers/ytdl-install-mac.sh | bash';
+
 function mount() {
   if (!mounted) {
     mounted = (async () => {
@@ -216,6 +221,9 @@ function wireUp() {
   const zipBtn = document.getElementById('deployZipBtn');
   const copyUrlBtn = document.getElementById('deployCopyUrl');
   const copyCmdBtn = document.getElementById('deployCopyCmd');
+  const ytCheck = document.getElementById('deployYtCheck');
+  const ytMacBox = document.getElementById('deployYtMac');
+  const ytCopyBtn = document.getElementById('deployYtCopy');
   const statusEl = document.getElementById('deployStatus');
   const prevBtn = document.getElementById('deployPrevBtn');
   const nextBtn = document.getElementById('deployNextBtn');
@@ -247,6 +255,12 @@ function wireUp() {
   document.getElementById('deployInstallName').textContent = Installer.FILES[overlay.dataset.os];
   document.getElementById('deployMacCmd').textContent = Installer.macCommand;
   loadFolderEl.textContent = installedPath;
+
+  document.getElementById('deployYtCmd').textContent = YT_MAC_COMMAND;
+  // 勾選「也要 YT 批量下載」：Mac 才顯示一行指令（Windows 在按下載時多下載一個檔案）；不勾就完全不影響原流程
+  const syncYt = () => { ytMacBox.hidden = !(ytCheck.checked && overlay.dataset.os === 'mac'); };
+  ytCheck.addEventListener('change', syncYt);
+  syncYt();
 
   const setStatus = (msg, kind) => { statusEl.textContent = msg; statusEl.className = 'ds-status' + (kind ? ` ${kind}` : ''); };
   const refreshNav = () => {
@@ -340,6 +354,15 @@ function wireUp() {
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
 
+  function saveUrl(url, name) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+  }
+
   installBtn.addEventListener('click', async () => {
     if (busy) return;
     setBusy(true);
@@ -347,7 +370,17 @@ function wireUp() {
       const { name, text, type } = await buildInstaller(overlay.dataset.os, msg => setStatus(msg));
       save(new Blob([text], { type }), name);
       loadFolderEl.textContent = installedPath;
-      setStatus(`已下載安裝檔「${name}」。請按「下一步」執行它。`, 'ok');
+      let ytNote = '';
+      if (ytCheck.checked) {
+        if (overlay.dataset.os === 'win') {
+          await new Promise(r => setTimeout(r, 700)); // 隔一下再下載第二個檔案，Chrome 比較不會擋
+          saveUrl(YT_WIN_INSTALLER_URL, YT_WIN_INSTALLER_NAME);
+          ytNote = `也下載了 YT 下載助手安裝檔「${YT_WIN_INSTALLER_NAME}」（Chrome 若問是否允許下載多個檔案，請按允許；裝好外掛後再雙擊它）。`;
+        } else {
+          ytNote = '另外請複製下方的 YT 一行指令，貼到終端機執行。';
+        }
+      }
+      setStatus(`已下載安裝檔「${name}」。${ytNote}請按「下一步」執行它。`, 'ok');
     } catch (err) {
       setStatus(zhError(err, '發生錯誤'), 'err');
     } finally { setBusy(false); }
@@ -393,6 +426,7 @@ function wireUp() {
   }
   bindCopy(copyUrlBtn, 'chrome://extensions');
   bindCopy(copyCmdBtn, Installer.macCommand);
+  bindCopy(ytCopyBtn, YT_MAC_COMMAND);
 
   return { open, close, isOpen };
 }

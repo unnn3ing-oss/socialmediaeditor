@@ -189,15 +189,27 @@ test('background：工具 init(ctx) 的 push 只送到 tbx-push port；onSubscri
   const st = setupBackground();
   try {
     const bg = await import(url('extension/core/background.js') + '&push');
-    const posted = [];
-    let closed = false;
-    const mk = (name, id) => ({ name, sender: { id }, postMessage: (m) => posted.push(m), onDisconnect: { addListener() {} }, disconnect() { closed = true; } });
-    st.onConnect(mk('other', 'self'));
-    assert.equal(closed, true);
-    st.onConnect(mk('tbx-push', 'evil'));
-    st.onConnect(mk('tbx-push', 'self'));
+    const mk = (name, id) => {
+      const p = { name, sender: { id }, posted: [], closed: false, onDisconnect: { addListener() {} } };
+      p.postMessage = (m) => p.posted.push(m);
+      p.disconnect = () => { p.closed = true; };
+      return p;
+    };
+    const other = mk('other', 'self');
+    st.onConnect(other);
+    assert.equal(other.closed, true);
+    const evil = mk('tbx-push', 'evil');
+    st.onConnect(evil);
+    assert.equal(evil.closed, true);
+    const good = mk('tbx-push', 'self');
+    st.onConnect(good);
+    // ytdl 的 onSubscribe：新連線先送連線狀態快照
+    assert.equal(good.posted[0].tool, 'ytdl');
+    assert.equal(good.posted[0].data.type, 'status');
     bg.push('ytdl', { a: 1 });
-    assert.deepEqual(posted, [{ tool: 'ytdl', data: { a: 1 } }]);
+    assert.deepEqual(good.posted.at(-1), { tool: 'ytdl', data: { a: 1 } });
+    assert.deepEqual(evil.posted, []);
+    assert.deepEqual(other.posted, []);
   } finally { delGlobal('chrome', 'self'); }
 });
 
