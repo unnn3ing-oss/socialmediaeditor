@@ -7,13 +7,13 @@ import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb, adminPageMap } from './core/fb.js';
-import { handleRundown } from './core/rundown.js';
+import { handleRundown, adminRundown } from './core/rundown.js';
 import { adminFbPause } from './core/pause.js';   // 模組：暫停排程發布
 import { syncScheduled, cleanupComments } from './core/fbqueue.js';
 
 export { CommentHub } from './core/fbqueue.js';
 
-adminExtras.push(adminLogs, adminFb, adminPageMap, adminFbPause);
+adminExtras.push(adminLogs, adminFb, adminPageMap, adminFbPause, adminRundown);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 

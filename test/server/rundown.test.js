@@ -84,3 +84,40 @@ test('Apps Script 回錯誤或不是 JSON → rundown_failed', async () => {
   m = mockFetch(() => new Response('<html>'));
   try { const b = await (await call({ action: 'ping' }, env())).json(); assert.equal(b.code, 'rundown_failed'); assert.match(b.error, /所有人/); } finally { m.restore(); }
 });
+
+// ---- 管理頁：Rundown 連線 ----
+async function adminCall(path, method, e, auth = true) {
+  const worker = await load();
+  const headers = { origin: ORIGIN };
+  if (auth) { const { signToken } = await loadToken(); headers.authorization = 'Bearer ' + (await signToken(e.SESSION_SECRET, 'admin', nowSec() + 600)); }
+  return worker.fetch(new Request('https://api.test' + path, { method, headers }), e, { waitUntil() {} });
+}
+
+test('admin rundown：要管理憑證；公司憑證不行', async () => {
+  const e = env();
+  assert.equal((await adminCall('/admin/rundown', 'GET', e, false)).status, 401);
+  const worker = await load();
+  const res = await worker.fetch(new Request('https://api.test/admin/rundown/ping', { method: 'POST', headers: { origin: ORIGIN, authorization: 'Bearer ' + (await companyToken(e)) } }), e, { waitUntil() {} });
+  assert.equal(res.status, 401);
+});
+
+test('admin rundown：GET 只回有沒有設定，不回網址與金鑰', async () => {
+  const res = await adminCall('/admin/rundown', 'GET', env());
+  const text = await res.text();
+  assert.deepEqual(JSON.parse(text).data, { ready: true });
+  assert.ok(!text.includes('script.google.com') && !text.includes('rundown-token-123'));
+  const off = await (await adminCall('/admin/rundown', 'GET', env({ RUNDOWN_URL: '' }))).json();
+  assert.deepEqual(off.data, { ready: false });
+});
+
+test('admin rundown/ping：轉 ping 給 Apps Script；沒設定回 rundown_off；失敗回 rundown_failed', async () => {
+  let m = mockFetch({ ok: true, title: 'FB RUNDOWN', sheets: ['2026/11'] });
+  try {
+    const b = await (await adminCall('/admin/rundown/ping', 'POST', env())).json();
+    assert.deepEqual(b.data, { title: 'FB RUNDOWN', sheets: ['2026/11'] });
+    assert.deepEqual(m.sent[0].body, { token: 'rundown-token-123', action: 'ping' });
+  } finally { m.restore(); }
+  assert.equal((await (await adminCall('/admin/rundown/ping', 'POST', env({ RUNDOWN_TOKEN: '' }))).json()).code, 'rundown_off');
+  m = mockFetch({ ok: false, error: 'TOKEN 不對' });
+  try { const b = await (await adminCall('/admin/rundown/ping', 'POST', env())).json(); assert.equal(b.code, 'rundown_failed'); assert.match(b.error, /TOKEN 不對/); } finally { m.restore(); }
+});
