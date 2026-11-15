@@ -853,3 +853,15 @@ test('停用：留言佇列照常送；設定資料壞掉或讀不到當作使�
   assert.equal((await q.getPause(env)).paused, false);
   assert.equal((await q.getPause({})).paused, false, '沒有 D1 也當作使用中');
 });
+
+test('停用：前端用管理密碼登入的憑證（adm）不受限制，/fb/* 與 /rundown 照常；普通公司憑證仍被擋', async () => {
+  const env = mk({ RUNDOWN_URL: 'https://script.google.com/macros/s/abc/exec', RUNDOWN_TOKEN: 'rundown-token-123' });
+  await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '停用' }, 'admin');
+  const tok = (await (await call('/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: env.ADMIN_PASSWORD }) }, env)).json()).data.token;
+  const asAdm = (path, init = {}) => call(path, { ...init, headers: { authorization: 'Bearer ' + tok, ...(init.headers || {}) } }, env);
+  assert.equal((await asAdm('/fb/pages')).status, 200);
+  routes.push([/exec$/, () => reply({ ok: true, title: 'RD', sheets: [] })]);
+  const rd = await asAdm('/rundown', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
+  assert.notEqual((await rd.json()).code, 'fb_paused');
+  assert.equal((await api(env, 'GET', '/fb/pages')).body.code, 'fb_paused', '普通公司憑證仍被擋');
+});

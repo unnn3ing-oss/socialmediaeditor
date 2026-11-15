@@ -350,8 +350,9 @@ export async function adminFbPause(request, env, path) {
   return ok(request, env, view(await getPause(env)));
 }
 
-// 停用中回 fb_paused（附原因與停用時間）；使用中回 null。/fb/* 與 /rundown 共用
-export async function pausedFail(request, env) {
+// 停用中回 fb_paused（附原因與停用時間）；使用中或管理員憑證（前端用管理密碼登入，cred.adm）回 null。/fb/* 與 /rundown 共用
+export async function pausedFail(request, env, cred) {
+  if (cred && cred.adm) return null;
   const p = await getPause(env);
   return p.paused ? fail(request, env, 'fb_paused', null, { reason: p.reason, at: p.at }) : null;
 }
@@ -652,8 +653,9 @@ async function reschedulePost(request, env) {
 
 export async function handleFb(request, env, path) {
   if (path !== '/fb' && !path.startsWith('/fb/')) return null;
-  if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
-  const paused = await pausedFail(request, env);
+  const cred = await bearer(request, env, 'company');
+  if (!cred) return fail(request, env, 'unauthorized');
+  const paused = await pausedFail(request, env, cred);
   if (paused) return paused;
   if (!pageTokens(env).length) return fail(request, env, 'fb_not_configured');
   const q = new URL(request.url).searchParams;

@@ -110,3 +110,34 @@ test('fakeD1 可以 insert 與 select', async () => {
   assert.deepEqual(results, [{ tool: 'sample', code: 'x' }]);
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM logs').first()).n, 1);
 });
+
+// ---- 前端用管理密碼登入：帶 adm 的公司憑證（12 小時、不續期、不能進管理頁）----
+test('前端輸入管理密碼：拿到帶 adm 的公司憑證，12 小時，回 admin: true；公司密碼仍是普通憑證', async () => {
+  const env = mkEnv();
+  const { readToken } = await loadToken();
+  const a = await (await login(env.ADMIN_PASSWORD, env)).json();
+  assert.equal(a.ok, true);
+  assert.equal(a.data.admin, true);
+  assert.ok(Math.abs(a.data.exp - (nowSec() + 12 * 3600)) < 5);
+  const t = await readToken(env.SESSION_SECRET, a.data.token, nowSec());
+  assert.deepEqual([t.kind, t.adm], ['company', true]);
+  const c = await (await login('company-pass-123', env)).json();
+  assert.equal(c.data.admin, undefined);
+  assert.equal((await readToken(env.SESSION_SECRET, c.data.token, nowSec())).adm, false);
+});
+
+test('前端管理員憑證：/auth/status 回 admin 且不續期；不能進 /admin/*', async () => {
+  const env = mkEnv();
+  const a = await (await login(env.ADMIN_PASSWORD, env)).json();
+  const auth = { authorization: 'Bearer ' + a.data.token };
+  const st = await (await call('/auth/status', { headers: auth }, env)).json();
+  assert.equal(st.ok, true);
+  assert.equal(st.data.admin, true);
+  assert.equal(st.data.renew, undefined, '管理員憑證不續期（續了會變普通憑證）');
+  assert.equal((await call('/admin/assets', { headers: auth }, env)).status, 401);
+});
+
+test('沒設 ADMIN_PASSWORD 時管理密碼路徑關閉；空字串不會被當成管理密碼', async () => {
+  const env = mkEnv({ ADMIN_PASSWORD: '' });
+  assert.equal((await (await login('', env)).json()).code, 'bad_password');
+});

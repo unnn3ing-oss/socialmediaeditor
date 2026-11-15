@@ -285,7 +285,7 @@ socialmediaeditor/
 
 | 模組 | 路由 | 功能 | 資料 |
 |---|---|---|---|
-| auth | `POST /auth`、`GET /auth/status` | 公司密碼換憑證、狀態查詢 | 簽章金鑰放 Secrets |
+| auth | `POST /auth`、`GET /auth/status` | 公司密碼換憑證、狀態查詢；前端輸入管理密碼也可登入，拿到帶 `adm` 的公司憑證（12 小時、不續期、不能進 `/admin/*`），不受管理頁「暫停排程發布」限制 | 簽章金鑰放 Secrets |
 | assets | `GET /assets/manifest`、`GET /assets/<key>` | 依憑證回傳公司版或通用版清單與檔案 | R2＋D1 |
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |

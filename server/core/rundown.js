@@ -59,8 +59,9 @@ export async function adminRundown(request, env, path) {
 export async function handleRundown(request, env, path) {
   if (path !== '/rundown') return null;
   if (request.method !== 'POST') return fail(request, env, 'not_found');
-  if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
-  const paused = await pausedFail(request, env);
+  const cred = await bearer(request, env, 'company');
+  if (!cred) return fail(request, env, 'unauthorized');
+  const paused = await pausedFail(request, env, cred);
   if (paused) return paused;
   if (!rundownReady(env)) return fail(request, env, 'rundown_off');
   const body = rundownBody(await readJson(request));

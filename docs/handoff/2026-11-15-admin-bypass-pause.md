@@ -14,16 +14,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/token.js` | payload 可帶 `adm:1`，readToken 回傳 `adm` | ⬜ |
-| `server/core/auth.js` | `/auth` 雙密碼、`/auth/status` 回 admin、不續期 | ⬜ |
-| `server/core/fb.js`、`rundown.js` | 有 `adm` 跳過停用 | ⬜ |
-| `shell/company.js` | 存 `admin`，膠囊顯示「（管理員）剩 X 小時」 | ⬜ |
-| 測試、規格 §5.3 | | ⬜ |
+| `server/core/token.js` | payload 可帶 `adm:1`，readToken 回傳 `adm` | ✅ |
+| `server/core/auth.js` | `/auth` 雙密碼、`/auth/status` 回 admin、不續期 | ✅ |
+| `server/core/fb.js`、`rundown.js` | 有 `adm` 跳過停用 | ✅ |
+| `shell/company.js` | 存 `admin`，膠囊顯示「（管理員）剩 X 小時」 | ✅ |
+| 測試、規格 §5.3 | | ✅ |
 
 ## 下一步
-- [ ] 後端＋單元測試
-- [ ] 前端膠囊＋e2e
-- [ ] npm test、e2e、build check、獨立審查
+- [x] 後端＋單元測試（auth.test.js 3 項、fbqueue.test.js 1 項）
+- [x] 前端膠囊＋e2e（company.e2e.js 1 項）
+- [x] npm test 379、全部 e2e 128、build check 通過
+- [ ] 獨立審查
+- [ ] 使用者說「推」才併 main，同 commit 更新 CLAUDE.md「目前進度」
 
 ## 注意事項
 - 後端需重新部署；不升外掛版號。
