@@ -1,6 +1,17 @@
 {
   "tools": [
     {
+      "id": "sample",
+      "name": "範例工具",
+      "group": "做圖",
+      "desc": "示範工具內切換與清空",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/sample/icon.svg",
+      "thumb": "tools/sample/thumb.svg",
+      "entry": "tools/sample/index.html?v=3c9fae26a5"
+    },
+    {
       "id": "pattern",
       "name": "圖片套版",
       "group": "做圖",
@@ -9,7 +20,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=de7b4c9c50"
+      "entry": "tools/pattern/index.html?v=81963e395b"
     },
     {
       "id": "linepush",
@@ -20,7 +31,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=1ff0bd16ab"
+      "entry": "tools/linepush/index.html?v=194b700551"
     },
     {
       "id": "collage",
@@ -31,7 +42,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=a711105b0a"
+      "entry": "tools/collage/index.html?v=bd0000e825"
     },
     {
       "id": "watermark",
@@ -42,7 +53,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=af5aff3436"
+      "entry": "tools/watermark/index.html?v=aecd7c19e9"
     },
     {
       "id": "resize",
@@ -53,7 +64,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=12b86a7942"
+      "entry": "tools/resize/index.html?v=055427672c"
     },
     {
       "id": "design",
@@ -64,7 +75,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=123e464656"
+      "entry": "tools/design/index.html?v=c62ea766a7"
     },
     {
       "id": "fbpost",
@@ -75,7 +86,7 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=e288892705"
+      "entry": "tools/fbpost/index.html?v=ebd4a63328"
     }
   ]
 }

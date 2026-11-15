@@ -41,7 +41,7 @@ async function skipDuty(page) {
   await page.click('#dutySkip');
   await page.waitForSelector('#dutyDlg:not([open])', { state: 'attached' });
 }
-async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES, presets, presetsFail = false, paused = null } = {}) {
+async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES } = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -50,17 +50,13 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     requestPaths: [], failPage: null, posts: [], afters: [], cancels: [], reschedules: [], rescheduleError: null, retries: [], dismisses: [], articleReq: 0, imageFail: 0, rundown: [], rundownFail: null,
     scheduled: {
       111: [
-        { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' }, extras: [{ id: 'cm3', seq: 2, delay: 5, status: 'pending', error: '', message: '活動連結' }] },
+        { id: '111_7', message: '排好的貼文', at: now + 7200, picture: '', created: '', comment: { id: 'cm1', status: 'pending', error: null, message: 'x' } },
         { id: '111_8', message: '留言出事的貼文', at: now + 9000, picture: '', created: '', comment: { id: 'cm2', status: 'failed', error: '貼文沒有出現', message: 'x' } },
       ],
       222: [],
     },
-    presets: [{ name: '活動宣傳', text: '追蹤粉專看更多 https://example.com/event 😀' }, { name: '感謝留言', text: '謝謝大家的留言' }], presetsFail: false,
     failedComments: [{ id: 'c1', page: '111', post: '111_8', message: '看更多新聞內容\nhttps://news.tvbs.com.tw/life/1', status: 'failed', error: '貼文沒有出現', due: now - 60, updated: now - 30, dismissed: false }],
   };
-  if (presets !== undefined) api.presets = presets;
-  api.paused = paused;
-  api.presetsFail = presetsFail;
   await page.addInitScript(({ duty, rundown }) => {
     try {
       if (duty && typeof duty === 'object') localStorage.setItem('tbx.fbpost.duty.v1', JSON.stringify(duty));
@@ -79,7 +75,6 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     api.requestPaths.push(u.pathname);
     const okJ = (data) => r.fulfill({ headers: CORS, json: { ok: true, data } });
     const bad = (code, error, status = 400) => r.fulfill({ status, headers: CORS, json: { ok: false, code, error } });
-    if (api.paused && (/^\/fb\//.test(u.pathname) || u.pathname === '/rundown')) return r.fulfill({ status: 503, headers: CORS, json: { ok: false, code: 'fb_paused', error: '排程發布暫時停用中。', detail: api.paused } });
     if (/^\/assets\//.test(u.pathname)) return company ? r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([30, 60, 120]) }) : r.fulfill({ status: 404, headers: CORS, body: '' });
     if (u.pathname === '/fb/pages') return okJ(pages);
     if (api.hold && /^\/fb\/(scheduled|insights)$/.test(u.pathname)) await api.hold;   // 測骨架屏：先卡住回應
@@ -115,7 +110,6 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
       for (const list of Object.values(api.scheduled)) for (const it of list) if (it.id === b.post) it.at = b.time;
       return okJ({ ok: true, post: b.post, time: b.time });
     }
-    if (u.pathname === '/fb/comment-presets') return api.presetsFail ? bad('unauthorized', '請先輸入公司密碼。', 401) : okJ({ items: api.presets });
     if (u.pathname === '/fb/comments') return okJ({ items: api.failedComments });
     if (u.pathname === '/fb/comment/retry' || u.pathname === '/fb/comment/dismiss') {
       const id = JSON.parse(req.postData()).id;
@@ -126,7 +120,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     if (u.pathname === '/fb/post') {
       const fd = await new Response(req.postDataBuffer(), { headers: { 'content-type': req.headers()['content-type'] } }).formData();
       const f = (k) => { const v = fd.get(k); return typeof v === 'string' ? v.replace(/\r\n/g, '\n') : v; };
-      const rec = { page: f('page'), message: f('message'), scheduledAt: f('scheduledAt'), textPreset: f('textPreset'), comment: f('comment'), extraComments: f('extraComments'), hasImage: typeof fd.get('image') === 'object' && fd.get('image') !== null };
+      const rec = { page: f('page'), message: f('message'), scheduledAt: f('scheduledAt'), textPreset: f('textPreset'), comment: f('comment'), hasImage: typeof fd.get('image') === 'object' && fd.get('image') !== null };
       api.posts.push(rec);
       if (api.postHold) await api.postHold;
       if (api.failPage === rec.page) { api.failPage = null; return bad('fb_permission', '沒有這個粉專的發文權限。', 403); }
@@ -156,7 +150,6 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     return { page: fr, api, errors };
   }
   await page.goto(srv.url + 'tools/fbpost/index.html');
-  if (paused) { await page.waitForSelector('#pausedBox:not([hidden])'); return { page, api, errors }; }
   await page.waitForSelector('#pages .pg', { state: 'attached' });
   if (duty === 'skip') await skipDuty(page);
   return { page, api, errors };
@@ -381,7 +374,6 @@ test('本地排程紀錄：送出後保留、重新開啟仍在，不自動查 F
   const recordId = await page.getAttribute('#recordsList [data-record]', 'data-record');
   assert.match(await page.textContent('#recordsList'), /颱風假|小編文|北北基桃/);
   assert.match(await page.textContent('#recordsList'), /新聞|TVBS新聞/);
-  assert.match(await page.getAttribute('#recordsList [data-record] img.rec-thumb', 'src'), /^data:image\/jpeg;base64,/, '送出的圖縮成小圖存在紀錄卡片');
   assert.deepEqual(automaticReads(api), [], '送出後不能自動查遠端列表');
   await page.reload();
   await page.waitForSelector('#pages .pg', { state: 'attached' });
@@ -399,7 +391,7 @@ test('本地紀錄：預設清除七天前已發布，未來排程與失敗保�
   const { page, api, errors } = await open();
   await page.evaluate(() => {
     const now = Date.now(), day = 86400000, old = now - 8 * day;
-    const make = (id, status, scheduledAt = null) => ({ id, at: old, updatedAt: old, title: id, caption: id, url: '',
+    const make = (id, status, scheduledAt = null) => ({ id, at: old, updatedAt: old, title: id, caption: '測試紀錄', url: '',
       pages: [{ page: '111', label: '新聞', status, sentAt: old, scheduledAt, postId: '111_' + id, error: status === 'fail' ? '權限不足' : '' }] });
     localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([
       make('舊的已發布', 'ok'), make('未來排程', 'ok', (now + day) / 1000),
@@ -420,111 +412,6 @@ test('本地紀錄：預設清除七天前已發布，未來排程與失敗保�
   assert.equal(await page.locator('#recordsList [data-record]').count(), 1);
   assert.match(await page.textContent('#recordsList'), /到期待確認/);
   assert.deepEqual(automaticReads(api), []);
-  assert.deepEqual(errors, []);
-});
-
-test('本地紀錄：卡片分欄顯示時間、整體狀態、標題／內文／連結與各粉專結果', async () => {
-  const { page, errors } = await open();
-  await page.evaluate(() => {
-    const now = Date.now(), at = now - 3600000;
-    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([{
-      id: 'card-1', at, updatedAt: at, title: '卡片標題', caption: '第一行內文\n第二行內文', url: 'https://news.tvbs.com.tw/world/1',
-      pages: [
-        { page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: Math.floor((now + 86400000) / 1000), postId: '111_1', error: '', rundown: { ok: true, msg: 'RD：新聞 09:40 → I133' } },
-        { page: '222', label: '娛樂', status: 'fail', sentAt: at, scheduledAt: null, postId: '', error: '權限不足', rundown: { ok: false, msg: 'RD：寫入失敗' },
-          title: '改過的標題', caption: '重送改成這段內文', url: 'https://news.tvbs.com.tw/world/2' },
-      ],
-    }]));
-  });
-  await page.reload();
-  await page.waitForSelector('#pages .pg', { state: 'attached' });
-  await skipDuty(page);
-  const card = page.locator('#recordsList li.rec-card[data-record="card-1"]');
-  assert.equal(await card.count(), 1);
-  assert.equal(await card.getAttribute('data-state'), 'failed', '整體狀態取最需注意的失敗');
-  assert.match(await card.locator('.rec-head').textContent(), /送出失敗.*2 個粉專/s);
-  assert.equal(await card.locator('.rec-title').count(), 0, '有小編文時不重複顯示標題');
-  assert.equal(await card.locator('.rec-caption').textContent(), '第一行內文\n第二行內文');
-  assert.equal(await card.locator('.rec-link').getAttribute('href'), 'https://news.tvbs.com.tw/world/1');
-  assert.equal(await card.locator('img.rec-thumb').count(), 0, '沒有縮圖時不佔位');
-  assert.equal(await card.getByRole('button', { name: '刪除紀錄' }).count(), 1);
-  const rows = card.locator('.rec-page');
-  assert.equal(await rows.count(), 2);
-  assert.equal(await rows.nth(0).getAttribute('data-state'), 'scheduled');
-  assert.match(await rows.nth(0).textContent(), /新聞.*排程中.*排程 \d+\/\d+ \d+:\d+.*RD：新聞 09:40 → I133/s);
-  assert.ok(await rows.nth(0).locator('.rec-rd.ok').count());
-  assert.equal(await rows.nth(1).getAttribute('data-state'), 'failed');
-  assert.match(await rows.nth(1).textContent(), /娛樂.*送出失敗.*立即發布.*RD：寫入失敗.*權限不足/s);
-  assert.ok(await rows.nth(1).locator('.rec-rd.bad').count());
-  assert.equal(await rows.nth(0).locator('details').count(), 0, '內容沒改的粉專沒有重送內容區');
-  assert.match(await rows.nth(1).locator('details summary').textContent(), /重送內容：/);
-  assert.match(await rows.nth(1).locator('.record-edited').textContent(), /重送改成這段內文/);
-  // 沒填小編文：用標題當主文字
-  await page.evaluate(() => {
-    const L = JSON.parse(localStorage.getItem('tbx.fbpost.records.v1')), at = Date.now() - 7200000;
-    L.push({ id: 'card-2', at, updatedAt: at, title: '只有標題的貼文', caption: '', url: '',
-      pages: [{ page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: null, postId: '1', error: '' }] });
-    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify(L));
-  });
-  await page.reload();
-  await page.waitForSelector('#pages .pg', { state: 'attached' });
-  await skipDuty(page);
-  const noCap = page.locator('#recordsList [data-record="card-2"]');
-  assert.equal(await noCap.locator('.rec-title').textContent(), '只有標題的貼文');
-  assert.equal(await noCap.locator('.rec-caption').count(), 0);
-  // 版面：卡片不超出視窗、粉專列沒有被壓成窄欄
-  const box = await card.boundingBox();
-  assert.ok(box.width > 400, '卡片寬度正常');
-  assert.deepEqual(errors, []);
-});
-
-test('本地紀錄：網格／橫條檢視切換、重開記住，橫條時各粉專結果在右側', async () => {
-  const { page, errors } = await open();
-  await page.evaluate(() => {
-    const at = Date.now() - 3600000, pg = (x) => ({ page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: null, postId: '1', error: '', ...x });
-    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([1, 2, 3].map((n) => ({ id: 'v' + n, at: at - n, updatedAt: at, title: '標題' + n, caption: '內文' + n, url: '',
-      pages: [pg(), pg({ page: '222', label: '娛樂' })] }))));
-  });
-  await reopen(page);
-  const cards = page.locator('#recordsList .rec-card');
-  assert.equal(await page.getAttribute('#recordsView [data-view=grid]', 'aria-pressed'), 'true');
-  const g = await cards.nth(0).boundingBox();
-  const g2 = await cards.nth(1).boundingBox();
-  assert.ok(Math.abs(g.y - g2.y) < 2, '網格：前兩張並排');
-  await page.click('#recordsView [data-view=list]');
-  assert.equal(await page.locator('#recordsList.is-list').count(), 1);
-  assert.equal(await cards.count(), 3, '切換不重建、不增減卡片');
-  const l1 = await cards.nth(0).boundingBox(), l2 = await cards.nth(1).boundingBox();
-  assert.ok(l2.y > l1.y + l1.height - 2, '橫條：一筆一列');
-  const body = await cards.nth(0).locator('.rec-body').boundingBox(), pages = await cards.nth(0).locator('.rec-pages').boundingBox();
-  assert.ok(pages.x > body.x + body.width - 2, '橫條：各粉專結果在內容右側');
-  await reopen(page);
-  assert.equal(await page.locator('#recordsList.is-list').count(), 1, '重開記住橫條');
-  assert.equal(await page.getAttribute('#recordsView [data-view=list]', 'aria-pressed'), 'true');
-  await page.click('#recordsView [data-view=grid]');
-  assert.equal(await page.locator('#recordsList.is-list').count(), 0);
-  assert.deepEqual(errors, []);
-});
-
-test('本地紀錄：內文被截斷才出現「展開全文」，點了展開、再點收合', async () => {
-  const { page, errors } = await open();
-  await page.evaluate(() => {
-    const at = Date.now() - 3600000, pg = { page: '111', label: '新聞', status: 'ok', sentAt: at, scheduledAt: null, postId: '1', error: '' };
-    localStorage.setItem('tbx.fbpost.records.v1', JSON.stringify([
-      { id: 'long', at, updatedAt: at, title: 't', caption: '很長的小編文，'.repeat(40), url: '', pages: [pg] },
-      { id: 'short', at: at - 1, updatedAt: at, title: 't', caption: '很短', url: '', pages: [pg] },
-    ]));
-  });
-  await reopen(page);
-  const long = page.locator('[data-record=long]'), short = page.locator('[data-record=short]');
-  assert.equal(await long.locator('.rec-more').isVisible(), true);
-  assert.equal(await short.locator('.rec-more').count(), 0);
-  const h0 = (await long.locator('.rec-caption').boundingBox()).height;
-  await long.locator('.rec-more').click();
-  assert.ok((await long.locator('.rec-caption').boundingBox()).height > h0, '展開後變高');
-  assert.equal(await long.locator('.rec-more').textContent(), '收合');
-  await long.locator('.rec-more').click();
-  assert.equal(await long.locator('.rec-more').textContent(), '展開全文');
   assert.deepEqual(errors, []);
 });
 
@@ -589,14 +476,8 @@ test('排程時間太近：改時間不送出並提示', async () => {
   await querySched(page);
   await page.waitForSelector('#schedList .item');
   await page.click('#schedList .item:first-child [data-act=resched]');
-  // 日期也填今天：假資料排在「現在＋2 小時」，晚上 22 點後會跨日，只改時間會變成「明天同時刻」而合法送出
-  const { day, hhmm } = await page.evaluate(() => {
-    const d = new Date(), p = (n) => String(n).padStart(2, '0');
-    return { day: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, hhmm: p(d.getHours()) + p(d.getMinutes()) };
-  });
-  await page.fill('#rsEditor .tp-date', day);
   await page.fill('#rsEditor .tp-time', '');
-  await page.type('#rsEditor .tp-time', hhmm);
+  await page.type('#rsEditor .tp-time', new Date().toTimeString().slice(0, 5).replace(':', ''));
   await page.click('#rsYes');
   assert.equal(api.reschedules.length, 0);
   assert.match(await page.textContent('#rsEditor .hint'), /至少要比現在晚 10 分鐘|時間格式/);
@@ -1200,9 +1081,14 @@ test('Rundown：粉專對應缺漏要顯示原因，不顯示完成', async () =
   assert.match(await page.textContent('#dnBody'), /未寫入 RD：少康.*請檢查粉專對應/);
 });
 
-test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功', async () => {
+test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 測試連線', async () => {
   const { page, api, errors } = await open({ rundown: true });
   await page.click('#newPost');
+  await page.click('#rdSetBtn');
+  await page.click('#rdTest');
+  await page.waitForFunction(() => /連線成功/.test(document.getElementById('rdHint').textContent));
+  assert.match(await page.textContent('#rdHint'), /FB RUNDOWN\(2026\)/);
+  await page.click('#rdClose');
   api.rundownFail = 'Rundown：08:00 時段已滿';
   await fillUrl(page, URL1);
   await pick(page, '111');
@@ -1290,216 +1176,5 @@ test('標題最多 4 行：4 行可送出、5 行擋下；半形算 0.5；空白
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(api.posts.length, 1);
-  assert.deepEqual(errors, []);
-});
-
-test('第 N 則留言：新增列預設 5 分鐘、滾輪每次 5 分、最多 3 則（再加 2 則）、可移除', async () => {
-  const { page, errors } = await open();
-  await page.click('#newPost');
-  assert.equal(await page.locator('#extraComments .xc').count(), 0);
-  assert.equal(await page.getAttribute('#caption', 'rows'), '5', '小編文框預設縮矮（7→5 行）');
-  await page.click('#addComment');
-  const first = page.locator('#extraComments .xc').nth(0);
-  assert.equal(await first.locator('input').inputValue(), '5');
-  assert.match(await first.locator('label').textContent(), /第 2 則留言/);
-  await first.locator('input').hover();
-  await page.mouse.wheel(0, -100);
-  assert.equal(await first.locator('input').inputValue(), '10', '滾輪往上 +5');
-  await page.mouse.wheel(0, 100); await page.mouse.wheel(0, 100); await page.mouse.wheel(0, 100);
-  assert.equal(await first.locator('input').inputValue(), '5', '下限 5 分鐘');
-  await page.click('#addComment');
-  assert.equal(await page.locator('#extraComments .xc').nth(1).locator('input').inputValue(), '10', '第 3 則預設＝上一則＋5');
-  assert.equal(await page.isVisible('#addComment'), false, '含第一則共 3 則，加滿後按鈕消失');
-  await page.locator('#extraComments .xc').nth(1).locator('.xc-del').click();
-  assert.equal(await page.locator('#extraComments .xc').count(), 1);
-  assert.equal(await page.isVisible('#addComment'), true);
-  assert.deepEqual(errors, []);
-});
-
-test('第 N 則留言：隨貼文送出（純文字、不帶連結）、空白略過、再發一篇會清掉；預覽列出各則', async () => {
-  const { page, api, errors } = await open();
-  await page.click('#newPost');
-  await fillUrl(page, URL1);
-  await pick(page, '111');
-  await page.click('#addComment');
-  await page.click('#addComment');
-  await page.locator('#extraComments .xc textarea').nth(0).fill(' 活動報名 https://a.tw/x 😀 ');
-  await page.locator('#extraComments .xc input').nth(1).fill('30');
-  await page.locator('#extraComments .xc input').nth(1).blur();
-  assert.match(await page.textContent('#commentPrev'), /第 2 則（發布後 5 分鐘）：\n活動報名 https:\/\/a\.tw\/x 😀/);
-  await page.click('#sendBtn');
-  await page.waitForSelector('#doneDlg[open]');
-  assert.equal(api.posts.length, 1);
-  assert.deepEqual(JSON.parse(api.posts[0].extraComments), [{ message: '活動報名 https://a.tw/x 😀', delay: 5 }], '第 3 則空白不送，第 2 則不自動帶連結／utm');
-  await page.click('#dnAgain');
-  assert.equal(await page.locator('#extraComments .xc').count(), 0);
-  assert.equal(await page.isVisible('#addComment'), true);
-  assert.deepEqual(errors, []);
-});
-
-test('已排程：第 2 則以後的留言各一行，標示第幾則與發布後幾分鐘', async () => {
-  const { page, errors } = await open();
-  await querySched(page);
-  await page.waitForSelector('#schedList .item');
-  assert.match(await page.textContent('#schedList'), /第 2 則・等待留言（發布後 5 分鐘）/);
-  assert.deepEqual(errors, []);
-});
-
-test('底列：排入 Rundown 開關在左、SLUG 輸入框在右，與清空／送出同列；沒有 ⚙ 設定', async () => {
-  const { page, errors } = await open({ rundown: true });
-  await page.click('#newPost');
-  assert.equal(await page.locator('#rdSetBtn, #rdDlg').count(), 0);
-  const box = (sel) => page.locator(sel).boundingBox();
-  const [sw, slug, clear, send] = [await box('#rdOn'), await box('#slug'), await box('#clearBtn'), await box('#sendBtn')];
-  assert.ok(sw.x < slug.x, '開關在左、輸入框在右');
-  assert.ok(slug.x + slug.width <= clear.x, 'Rundown 在清空頁面左邊空白處');
-  const mid = (b) => b.y + b.height / 2;
-  assert.ok(Math.abs(mid(sw) - mid(clear)) < 12 && Math.abs(mid(slug) - mid(send)) < 12, '同一列');
-  assert.equal(await page.locator('#slug').isDisabled(), false, '設定檔記著開啟 → 可輸入');
-  await page.click('#rdOn');
-  assert.equal(await page.locator('#slug').isDisabled(), true);
-  assert.deepEqual(errors, []);
-});
-
-// 生僻字留白：Google 把 Noto Sans TC 分段下載，要用「實際標題文字」載入；輸出圖片前要等載完
-const spyFontLoad = (page) => page.evaluate(() => {
-  window.__fl = [];
-  const orig = document.fonts.load.bind(document.fonts);
-  document.fonts.load = (spec, text) => { window.__fl.push([spec, text]); return orig(spec, text); };
-});
-const fontCalls = (page) => page.evaluate(() => window.__fl);
-
-test('生僻字：作圖框標題輸入後，用實際標題文字載入 Noto Sans TC（含各字重），英數字不載', async () => {
-  const { page, errors } = await open();
-  await page.click('#newPost');
-  await spyFontLoad(page);
-  await page.fill('#title', '私密處𠮷堃\nABC 喆');
-  await page.waitForFunction(() => window.__fl.length >= 2);
-  const calls = await fontCalls(page);
-  const heavy = calls.find(([s]) => /^900 50px/.test(s)), mid = calls.find(([s]) => /^500 50px/.test(s));
-  for (const c of [heavy, mid]) {
-    assert.ok(c, '每個用到的字重都載入');
-    for (const ch of ['私', '密', '處', '𠮷', '堃', '喆']) assert.ok(c[1].includes(ch), ch);
-    assert.ok(!/[A-Za-z ]/.test(c[1]), '英數字不用另外載');
-  }
-  assert.deepEqual(errors, []);
-});
-
-test('生僻字：純文字底圖輸入就載入，送出前等字型載完才畫圖', async () => {
-  const { page, api, errors } = await open();
-  await page.click('#newPost');
-  await page.click('#modeSeg [data-mode=text]');
-  await spyFontLoad(page);
-  await page.fill('#title', '𰻞𧃟鱲龘');
-  await page.waitForFunction(() => window.__fl.some(([s]) => /^900 76px/.test(s)));
-  const card = (await fontCalls(page)).find(([s]) => /^900 76px/.test(s));
-  for (const ch of ['𰻞', '𧃟', '鱲', '龘']) assert.ok(card[1].includes(ch), ch);
-  // 送出時：新輸入、還沒載過的字，要先載完才輸出（後端收到圖片）
-  await page.fill('#title', '𰻞𧃟鱲龘㙓');
-  await pick(page, '111');
-  await page.click('#sendBtn');
-  await page.waitForSelector('#doneDlg[open]');
-  assert.equal(api.posts.length, 1);
-  assert.equal(api.posts[0].hasImage, true);
-  const last = (await fontCalls(page)).filter(([s]) => /^900 76px/.test(s)).pop();
-  assert.ok(last[1].includes('㙓'), '送出前載入了最後輸入的字');
-  assert.deepEqual(errors, []);
-});
-
-test('純文字底圖輸出失敗（toBlob 回 null）→ 不送出、顯示錯誤，不會發成無圖貼文', async () => {
-  const { page, api, errors } = await open();
-  await page.click('#newPost');
-  await page.click('#modeSeg [data-mode=text]');
-  await page.fill('#title', '測試標題');
-  await page.evaluate(() => { HTMLCanvasElement.prototype.toBlob = function (cb) { setTimeout(() => cb(null), 0); }; });
-  await pick(page, '111');
-  await page.click('#sendBtn');
-  await page.waitForFunction(() => /輸出圖片失敗/.test(document.querySelector('#sendMsg').textContent));
-  assert.equal(api.posts.length, 0, '沒有送出任何貼文');
-  assert.deepEqual(errors, []);
-});
-
-test('第 N 則留言：下拉預設「無」，選了把後台設定的內容填進文字框（可再改），選回「無」只清沒改過的', async () => {
-  const { page, api, errors } = await open();
-  await page.click('#newPost');
-  await page.click('#addComment');
-  const sel = page.locator('#extraComments .xc .xc-preset').first();
-  const ta = page.locator('#extraComments .xc textarea').first();
-  assert.equal(await sel.inputValue(), '', '預設是「無」');
-  assert.deepEqual(await sel.locator('option').allTextContents(), ['無', '活動宣傳', '感謝留言']);
-  assert.equal(await ta.inputValue(), '', '預設不帶任何文字，也沒有自動出現第 2 則');
-  await sel.selectOption({ label: '活動宣傳' });
-  assert.equal(await ta.inputValue(), '追蹤粉專看更多 https://example.com/event 😀');
-  assert.match(await page.textContent('#commentPrev'), /第 2 則（發布後 5 分鐘）：\n追蹤粉專看更多/);
-  await sel.selectOption('');
-  assert.equal(await ta.inputValue(), '', '還是剛填入的原文 → 選回「無」清空');
-  await sel.selectOption({ label: '感謝留言' });
-  await ta.fill('謝謝大家的留言，也歡迎追蹤！');
-  await sel.selectOption('');
-  assert.equal(await ta.inputValue(), '謝謝大家的留言，也歡迎追蹤！', '改過的文字不會被清掉');
-  // 送出帶的是文字框現在的內容
-  await fillUrl(page, URL1);
-  await pick(page, '111');
-  await page.click('#sendBtn');
-  await page.waitForSelector('#doneDlg[open]');
-  assert.deepEqual(JSON.parse(api.posts[0].extraComments), [{ message: '謝謝大家的留言，也歡迎追蹤！', delay: 5 }]);
-  assert.deepEqual(errors, []);
-});
-
-test('第 N 則留言：後台沒設定預設文字或讀不到（沒登入）時，下拉隱藏、其餘照常', async () => {
-  for (const mode of ['empty', 'fail']) {
-    const { page, api, errors } = await open({ presets: mode === 'empty' ? [] : undefined, presetsFail: mode === 'fail' });
-    await page.click('#newPost');
-    await page.click('#addComment');
-    assert.equal(await page.locator('#extraComments .xc .xc-preset').first().isHidden(), true, mode);
-    await page.locator('#extraComments .xc textarea').first().fill('手打的留言');
-    assert.match(await page.textContent('#commentPrev'), /手打的留言/);
-    assert.deepEqual(errors.filter((e) => !/401|unauthorized/i.test(e)), [], mode);
-  }
-});
-
-// ---- 暫停排程發布（管理頁開關）----
-const PAUSE = { reason: '臉書權杖更換中，預計 15:00 恢復', at: Date.UTC(2026, 10, 15, 6, 2) };
-const visibleKids = (page) => page.$$eval('main.fp > *', (els) => els.filter((e) => e.offsetParent !== null || getComputedStyle(e).display !== 'none').map((e) => e.id || e.className));
-
-test('停用：開啟就停用只顯示公告（原因、停用時間），重新檢查仍停用；恢復後回到工具', async () => {
-  const { page, api, errors } = await open({ paused: PAUSE });
-  assert.match(await page.textContent('#pausedReason'), /臉書權杖更換中，預計 15:00 恢復/);
-  assert.match(await page.textContent('#pausedAt'), /^停用時間：11\/15 \d\d:02$/);
-  assert.deepEqual(await visibleKids(page), ['pausedBox'], '除了公告其他都隱藏');
-  assert.equal(await page.isVisible('#newPost'), false);
-  await page.click('#pausedRecheck');
-  await page.waitForFunction(() => document.getElementById('pausedMsg').textContent === '仍在停用中。');
-  api.paused = null;
-  await page.click('#pausedRecheck');
-  await page.waitForSelector('#pausedBox', { state: 'hidden' });
-  await skipDuty(page);
-  assert.equal(await page.isVisible('#newPost'), true);
-  assert.equal(await page.locator('#pages .pg').count(), 2);
-  assert.deepEqual(errors, []);
-});
-
-test('停用：使用中途被停用，任何操作切成公告且關閉開著的視窗；恢復後原本內容還在', async () => {
-  const { page, api, errors } = await open();
-  await querySched(page);
-  await page.waitForSelector('#schedList .item');
-  await page.click('#newPost');
-  await page.waitForSelector('#modal[open]');
-  await page.fill('#url', '還沒送出的網址');
-  api.paused = { reason: '', at: null };
-  await page.$eval('#schedReload', (b) => b.click());   // 視窗開著時背景的呼叫被擋（例：留言輪詢）
-  await page.waitForSelector('#pausedBox:not([hidden])');
-  assert.equal(await page.textContent('#pausedReason'), '原因：管理員未填寫');
-  assert.equal(await page.isVisible('#pausedAt'), false);
-  assert.deepEqual(await visibleKids(page), ['pausedBox']);
-  assert.equal(await page.locator('dialog[open]').count(), 0);
-  api.paused = null;
-  await page.click('#pausedRecheck');
-  await page.waitForSelector('#pausedBox', { state: 'hidden' });
-  assert.equal(await page.isVisible('#tab-sched'), true, '回到原本的分頁');
-  assert.ok(await page.locator('#schedList .item').count() >= 1, '列表內容保留');
-  await page.click('#newPost');
-  await page.waitForSelector('#modal[open]');
-  assert.equal(await page.inputValue('#url'), '還沒送出的網址', '新增發文的內容保留');
   assert.deepEqual(errors, []);
 });

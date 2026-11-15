@@ -40,30 +40,17 @@ export async function loginWith(request, env, kind, secretName, ttlSec) {
   return ok(request, env, { token: await signToken(env.SESSION_SECRET, kind, exp), exp });
 }
 
-// 前端登入：公司密碼 → 公司憑證；管理密碼 → 帶 adm 的公司憑證（12 小時、不續期，不受暫停排程發布限制；不能進 /admin/*）
-export const ADMIN_FRONT_TTL = 12 * 3600;
-async function companyLogin(request, env) {
-  if (!secretOk(env) || typeof env.COMPANY_PASSWORD !== 'string' || !env.COMPANY_PASSWORD) return fail(request, env, 'misconfigured');
-  const password = await readPassword(request);
-  if (password === null) return fail(request, env, 'bad_request');
-  let adm = false;
-  if (!(await passwordMatches(password, env.COMPANY_PASSWORD))) {
-    adm = typeof env.ADMIN_PASSWORD === 'string' && !!env.ADMIN_PASSWORD && (await passwordMatches(password, env.ADMIN_PASSWORD));
-    if (!adm) { await sleep(failDelay(env)); return fail(request, env, 'bad_password'); }
-  }
-  const exp = nowSec() + (adm ? ADMIN_FRONT_TTL : sessionTtl(env));
-  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, adm), exp, ...(adm ? { admin: true } : {}) });
-}
-
 export async function handleAuth(request, env, path) {
-  if (path === '/auth' && request.method === 'POST') return companyLogin(request, env);
+  if (path === '/auth' && request.method === 'POST') {
+    return loginWith(request, env, 'company', 'COMPANY_PASSWORD', sessionTtl(env));
+  }
   if (path === '/auth/status' && request.method === 'GET') {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');
     if (!t) return fail(request, env, 'unauthorized');
-    const data = { company: true, exp: t.exp, ...(t.adm ? { admin: true } : {}) };
-    // 剩不到一半效期就續一張；舊的到期前仍有效。管理員憑證不續（續了會變成普通憑證，到期請重新輸入）
-    if (!t.adm && t.exp - nowSec() < sessionTtl(env) / 2) {
+    const data = { company: true, exp: t.exp };
+    // 剩不到一半效期就續一張；舊的到期前仍有效
+    if (t.exp - nowSec() < sessionTtl(env) / 2) {
       const exp = nowSec() + sessionTtl(env);
       data.renew = { token: await signToken(env.SESSION_SECRET, 'company', exp), exp };
     }

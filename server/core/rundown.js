@@ -3,7 +3,6 @@
 // 本文：{ action:'ping' } 或 { action:'add', entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
 import { ok, fail, readBody } from './http.js';
 import { bearer } from './auth.js';
-import { pausedFail } from './fb.js';
 
 export const RUNDOWN_PAGES = ['news', 'ent', 'shaokang', 'intl'];
 const URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
@@ -32,41 +31,20 @@ async function readJson(request) {
   try { return JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return null; }
 }
 
-// Apps Script 會 302 到 googleusercontent 再回 JSON；失敗回 null
-async function callAppsScript(env, body) {
-  try {
-    const r = await fetch(env.RUNDOWN_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: env.RUNDOWN_TOKEN, ...body }) });
-    return await r.json().catch(() => null);
-  } catch (e) { return null; }
-}
-
-// 管理頁（已通過 admin 驗證）：GET /admin/rundown 只回「設定好了沒」，POST /admin/rundown/ping 測試連線；網址與金鑰都不回傳
-export async function adminRundown(request, env, path) {
-  if (path === '/admin/rundown' && request.method === 'GET') {
-    return ok(request, env, { configured: rundownReady(env), url: URL_RE.test(env.RUNDOWN_URL || ''), token: typeof env.RUNDOWN_TOKEN === 'string' && env.RUNDOWN_TOKEN.length >= 12 });
-  }
-  if (path === '/admin/rundown/ping' && request.method === 'POST') {
-    if (!rundownReady(env)) return fail(request, env, 'rundown_off');
-    const j = await callAppsScript(env, { action: 'ping' });
-    if (!j || typeof j !== 'object') return fail(request, env, 'rundown_failed', 'Rundown 的 Apps Script 沒有回 JSON（確認部署的「誰可以存取」是「所有人」）。');
-    if (!j.ok) return fail(request, env, 'rundown_failed', 'Rundown：' + String(j.error || '失敗').slice(0, 200));
-    return ok(request, env, { title: j.title, sheets: j.sheets });
-  }
-  return null;
-}
-
 export async function handleRundown(request, env, path) {
   if (path !== '/rundown') return null;
   if (request.method !== 'POST') return fail(request, env, 'not_found');
-  const cred = await bearer(request, env, 'company');
-  if (!cred) return fail(request, env, 'unauthorized');
-  const paused = await pausedFail(request, env, cred);
-  if (paused) return paused;
+  if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
   if (!rundownReady(env)) return fail(request, env, 'rundown_off');
   const body = rundownBody(await readJson(request));
   if (!body) return fail(request, env, 'bad_request');
-  const j = await callAppsScript(env, body);
+  let j = null;
+  try {
+    // Apps Script 會 302 到 googleusercontent 再回 JSON
+    const r = await fetch(env.RUNDOWN_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ token: env.RUNDOWN_TOKEN, ...body }) });
+    j = await r.json().catch(() => null);
+  } catch (e) { j = null; }
   if (!j || typeof j !== 'object') return fail(request, env, 'rundown_failed', 'Rundown 的 Apps Script 沒有回 JSON（確認部署的「誰可以存取」是「所有人」）。');
   if (!j.ok) return fail(request, env, 'rundown_failed', 'Rundown：' + String(j.error || '失敗').slice(0, 200));
   return ok(request, env, j.results ? { results: j.results } : { title: j.title, sheets: j.sheets });

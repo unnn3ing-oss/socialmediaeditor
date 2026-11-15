@@ -2,9 +2,9 @@
 
 把小編常用的做圖、發文、下載工具整合在一個網站，搭配一個 Chrome 外掛與一個後端。
 
-- 網站：https://unnn3ing-oss.github.io/socialmediaeditor/ （併入 main 並開啟 GitHub Pages 後生效）
+- 網站：https://unnn3ing-oss.github.io/socialmediaeditor/（併入 main 並開啟 GitHub Pages 後生效）
 - 後端：`toolbox-api`（Cloudflare Worker），網址 https://toolbox-api.19jpz-3.workers.dev ，部署方式見 `docs/deploy.md`
-- 管理後台：https://unnn3ing-oss.github.io/socialmediaeditor/admin/ （輸入管理密碼 `ADMIN_PASSWORD`；分「臉書發文／Rundown／素材／錯誤日誌」四類。舊網址 `後端網址/admin` 會自動轉過來）
+- 管理後台：https://toolbox-api.19jpz-3.workers.dev/admin （輸入管理密碼 `ADMIN_PASSWORD`；上傳公司素材、檢查臉書連線、粉專對應、錯誤紀錄）
 
 ## 目錄
 
@@ -28,30 +28,3 @@ npm test          # 單元測試
 npm run e2e       # 瀏覽器測試
 node build.js     # 產生檔案
 ```
-
-## 更新後端（git pull 方式）
-
-後端程式有改（`server/` 底下的檔案）時，在自己的電腦照下面做。只改網站（`tools/`、`shell/` 等）不用部署，GitHub Pages 會自己更新。
-
-第一次：把專案抓下來，並把 `server/wrangler.toml` 裡的「填入你的 ID」換成自己的資料庫與快取 ID（步驟見 `docs/deploy.md`）。
-
-```bash
-git clone https://github.com/unnn3ing-oss/socialmediaeditor.git
-cd socialmediaeditor
-```
-
-之後每次更新：
-
-```bash
-cd socialmediaeditor
-git pull --autostash origin main
-cd server
-npx wrangler deploy
-```
-
-- `--autostash`：`wrangler.toml` 填過你的 ID，算「本機有修改」。這個參數會先暫存、更新完再放回，ID 不會被蓋掉，也不會因為修改而拉不下來。
-- 如果更新後看到 `wrangler.toml` 衝突，代表這個檔案在 `main` 上也改了：保留你的 ID，再套用 `main` 新增的設定，然後 `git add server/wrangler.toml`。
-- **留言排程需要每分鐘 cron**：確認你的 `server/wrangler.toml` 有 `crons = ["* * * * *", "17 19 * * *"]`（兩個都要）。缺了每分鐘那個，發文時留言就不會在排程時間送出。部署後可到 Cloudflare 後台 → Workers → `toolbox-api` → Settings → Triggers 確認兩個排程都在。
-- 部署成功的樣子：最後印出 `Deployed toolbox-api triggers` 和後端網址。
-- 沒有新增 Secrets 時不用重設；有新增會在 `docs/deploy.md` 說明。
-- 登入過期時先執行 `npx wrangler login`。
