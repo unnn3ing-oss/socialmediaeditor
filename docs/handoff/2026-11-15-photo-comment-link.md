@@ -12,14 +12,14 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/fbqueue.js` | 新增 `linkPhotoComments(env, page, post, photoIds)`、`attachmentTargets(post)` | ⬜ |
-| `server/core/fb.js` | `cancelPost`／`reschedulePost` 查 `is_published` 時多要 attachments 並先連結；`listScheduled` 同 | ⬜ |
-| `tools/fbpost/tool.js` | `buildPayload` 底圖 `toBlob` null 丟錯 | ⬜ |
-| `test/server/fb.test.js` | 回歸測試：只有 photo_id 的留言，改早時間後 due 跟著改；取消後留言取消；列表顯示留言狀態；attachments 欄位錯誤時退回 | ⬜ |
+| `server/core/fbqueue.js` | 新增 `linkPhotoComments(env, page, post, photoIds)`、`attachmentTargets(post)` | ✅ |
+| `server/core/fb.js` | `cancelPost`／`reschedulePost` 查 `is_published` 時多要 attachments 並先連結；`listScheduled` 同 | ✅ |
+| `tools/fbpost/tool.js` | `buildPayload` 底圖 `toBlob` null 丟錯 | ✅ |
+| `test/server/fbqueue.test.js`、`test/e2e/fbpost.e2e.js` | 回歸測試（含 toBlob null 不送出）：只有 photo_id 的留言，改早時間後 due 跟著改；取消後留言取消；列表顯示留言狀態；attachments 欄位錯誤時退回 | ✅ |
 
 ## 下一步
-- [ ] 實作上表
-- [ ] npm test、fbpost e2e、build --check
+- [x] 實作上表
+- [x] npm test 384 項、fbpost e2e 56 項、build --check 通過（新測試在舊程式碼上確認會失敗）
 - [ ] 獨立代理審查
 - [ ] 給使用者看結果，等「推」
 

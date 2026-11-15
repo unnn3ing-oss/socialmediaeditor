@@ -137,6 +137,30 @@ export async function cancelForPost(env, post, reason = '貼文已取消', nowMs
   await run(env, `UPDATE fb_comments SET status='canceled', error=?, updated=? WHERE post_id=? AND status='pending'`, reason, nowMs, post);
 }
 
+// 貼文 attachments 欄位 → 附件指向的物件 ID（照片貼文＝照片 ID；含 subattachments）
+export function attachmentTargets(post) {
+  const out = new Set();
+  const walk = (list) => {
+    for (const a of (list && list.data) || []) {
+      const id = a && a.target && a.target.id;
+      if (typeof id === 'string' && /^\d+$/.test(id)) out.add(id);
+      if (a && a.subattachments) walk(a.subattachments);
+    }
+  };
+  walk(post && post.attachments);
+  return [...out];
+}
+
+// 有圖排程送出時換不到貼文 ID 的留言只記了 photo_id：用貼文附件的照片 ID 對上，補 post_id（之後改時間／取消／列表才找得到）
+export async function linkPhotoComments(env, page, post, photoIds) {
+  if (!env.DB || !post || !photoIds || !photoIds.length) return 0;
+  await ensureTables(env);
+  const r = await run(env,
+    `UPDATE fb_comments SET post_id=? WHERE page_id=? AND post_id IS NULL AND status='pending' AND photo_id IN (${photoIds.map(() => '?').join(',')})`,
+    post, page, ...photoIds);
+  return (r && r.meta && r.meta.changes) || 0;
+}
+
 // 改排程時間：同貼文待留言項目的 due 改成「新發布時間＋各自的 delay」，檢查節奏重來
 export async function rescheduleComments(env, post, time, nowMs = Date.now()) {
   await ensureTables(env);

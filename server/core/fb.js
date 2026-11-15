@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run, all } from './db.js';
-import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, getMaxAttempts, setMaxAttempts, getPause, setPause, cleanReason, PAUSE_REASON_MAX, ATTEMPTS_MIN, ATTEMPTS_MAX, DEFAULT_ATTEMPTS, RETRY_GAP_MS, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
+import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, getMaxAttempts, setMaxAttempts, getPause, setPause, cleanReason, PAUSE_REASON_MAX, ATTEMPTS_MIN, ATTEMPTS_MAX, DEFAULT_ATTEMPTS, RETRY_GAP_MS, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost, attachmentTargets, linkPhotoComments } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
@@ -394,10 +394,11 @@ async function listScheduled(request, env, q) {
   if (!isId(page)) return fail(request, env, 'bad_request', '缺少粉專 ID（page）。');
   const token = await tokenFor(env, page);
   if (!token) return fail(request, env, 'fb_unknown_page');
-  const r = await graphGet(env, token, `/${page}/scheduled_posts`, { fields: 'id,message,scheduled_publish_time,created_time,full_picture', limit: 50 });
+  const r = await getWithAttachments(env, token, `/${page}/scheduled_posts`, 'id,message,scheduled_publish_time,created_time,full_picture', { limit: 50 });
   let cm = new Map();
   let ex = new Map();
   const ids = (r.data || []).map((p) => p.id).filter(isPostId);
+  for (const p of r.data || []) if (isPostId(p.id)) await linkPhotos(env, p.id, p);
   try { cm = env.DB ? await commentsForPosts(env, ids) : cm; } catch (e) { /* 留言狀態讀不到不影響清單 */ }
   try { ex = env.DB ? await extraCommentsForPosts(env, ids) : ex; } catch (e) { /* 同上 */ }
   return ok(request, env, {
@@ -445,6 +446,22 @@ async function insights(request, env, q) {
 }
 
 // ---- 發文／排程 ----
+// 有圖排程的留言可能只記了照片 ID：在原本就會打的請求多要 attachments，用附件照片 ID 補上貼文 ID（不多打臉書）。
+// attachments 讀不到（錯誤碼 100）就退回原本的欄位再查一次，行為與修改前相同。
+const ATTACH_FIELD = 'attachments{target{id},subattachments{target{id}}}';
+async function getWithAttachments(env, token, path, fields, params = {}) {
+  try { return await graphGet(env, token, path, { ...params, fields: `${fields},${ATTACH_FIELD}` }); }
+  catch (e) {
+    if (!(e instanceof GraphError && e.fbCode === 100)) throw e;
+    return graphGet(env, token, path, { ...params, fields });
+  }
+}
+async function linkPhotos(env, post, info) {
+  if (!env.DB) return;
+  const ids = attachmentTargets(info);
+  if (!ids.length) return;
+  try { await linkPhotoComments(env, post.split('_')[0], post, ids); } catch (e) { /* 連不上 D1 不影響主要操作 */ }
+}
 // 本文可以是 JSON（page、message、link、imageUrl、scheduledAt）或 multipart（同欄位，另可附 image 檔）
 async function readPostInput(request) {
   const ct = (request.headers.get('content-type') || '').toLowerCase();
@@ -607,8 +624,9 @@ async function cancelPost(request, env) {
   if (!isPostId(post)) return fail(request, env, 'bad_request', '貼文 ID 格式不正確（應為 粉專ID_貼文ID）。');
   const token = await tokenFor(env, post.split('_')[0]);
   if (!token) return fail(request, env, 'fb_unknown_page');
-  const info = await graphGet(env, token, `/${post}`, { fields: 'is_published' });
+  const info = await getWithAttachments(env, token, `/${post}`, 'is_published');
   if (info.is_published !== false) return fail(request, env, 'bad_request', '這篇已經發布，不能在這裡刪除。');
+  await linkPhotos(env, post, info);
   try {
     await graphDelete(env, token, `/${post}`);
     await audit(env, 'post-canceled');
@@ -638,8 +656,9 @@ async function reschedulePost(request, env) {
   if (time < now + MIN_SCHEDULE || time > now + MAX_SCHEDULE) return fail(request, env, 'bad_request', '排程時間要在 10 分鐘後到 30 天內。');
   const token = await tokenFor(env, post.split('_')[0]);
   if (!token) return fail(request, env, 'fb_unknown_page');
-  const info = await graphGet(env, token, `/${post}`, { fields: 'is_published' });
+  const info = await getWithAttachments(env, token, `/${post}`, 'is_published');
   if (info.is_published !== false) return fail(request, env, 'already_published', '這篇已經發布，不能改排程時間。');
+  await linkPhotos(env, post, info);
   try {
     await graphPost(env, token, `/${post}`, { scheduled_publish_time: String(time) });
     await audit(env, 'post-rescheduled');
