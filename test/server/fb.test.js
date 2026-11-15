@@ -101,7 +101,8 @@ test('粉專清單：每組 token 對應一個粉專，回應不含 token，第�
   const env = fbEnv();
   const { res, body, text } = await getJ(env, '/fb/pages');
   assert.equal(res.status, 200);
-  assert.deepEqual(body.data.map((p) => [p.id, p.name, p.followers]), [['222', '娛樂粉專', 1000], ['111', '新聞粉專', 1000]]);
+  assert.deepEqual(body.data.map((p) => [p.id, p.name, p.followers]), [['111', '新聞粉專', 1000], ['222', '娛樂粉專', 1000]]);
+  assert.deepEqual(body.data.map((p) => p.code), ['news', 'ent']);   // 名稱包含「新聞」「娛樂」→ 自動對到區段
   assert.ok(!('idx' in body.data[0]));
   noToken(text);
   for (const v of env.CACHE.store.values()) noToken(v.value);

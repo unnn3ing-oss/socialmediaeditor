@@ -213,8 +213,17 @@ export const DEFAULT_PAGEMAP = [
   { code: 'weather', label: '氣象', name: 'TVBS氣象', utm: 'utm_source=Facebook&utm_medium=18weather' }
 ].map((d, i) => ({ ...d, sort: i + 1, key: normName(d.name) }));
 
+// 名稱包含這些字就猜成對應區段（完全比對失敗才用；依序比對，「新聞」放最後避免吃掉「娛樂新聞」之類）
+const NAME_HINTS = [['少康', 'shaokang'], ['擠看看', 'jkk'], ['國際', 'intl'], ['娛樂', 'ent'], ['氣象', 'weather'], ['新聞', 'news']];
+export function guessCode(name) {
+  const n = normName(name);
+  const exact = DEFAULT_PAGEMAP.find((x) => x.key === n);
+  if (exact) return exact.code;
+  const hit = NAME_HINTS.find(([w]) => n.includes(w));
+  return hit ? hit[1] : '';
+}
 function defaultMap(name) {
-  const d = DEFAULT_PAGEMAP.find((x) => x.key === normName(name));
+  const d = DEFAULT_PAGEMAP.find((x) => x.key === normName(name)) || DEFAULT_PAGEMAP.find((x) => x.code === guessCode(name));
   return d ? { code: d.code, label: d.label, utm: d.utm, sort: d.sort } : { code: '', label: name, utm: '', sort: 100 };
 }
 async function pageMapRows(env) {
@@ -226,10 +235,12 @@ async function pageMapRows(env) {
   } catch (e) { /* D1 壞了就用預設，不能讓 /fb/pages 壞掉 */ }
   return m;
 }
-// 回 { code, label, utm, sort, saved }
+// 回 { code（實際使用的 RD 區段）, codeSet（管理頁設定；空白＝自動依名稱）, label, utm, sort, saved }
 const mapFor = (rows, p) => {
   const r = rows.get(p.id);
-  return r ? { code: r.code || '', label: r.label || p.name, utm: r.utm || '', sort: Number.isInteger(r.sort) ? r.sort : 100, saved: true } : { ...defaultMap(p.name), saved: false };
+  if (!r) return { ...defaultMap(p.name), codeSet: '', saved: false };
+  const codeSet = r.code || '';
+  return { code: codeSet || guessCode(p.name), codeSet, label: r.label || p.name, utm: r.utm || '', sort: Number.isInteger(r.sort) ? r.sort : 100, saved: true };
 };
 
 const publicPage = ({ id, name, link, picture, followers }) => ({ id, name, link, picture, followers });
@@ -247,7 +258,7 @@ export async function adminPageMap(request, env, path) {
     let pages = [];
     try { pages = await loadPages(env); } catch (e) { pages = []; }
     const rows = await pageMapRows(env);
-    const items = pages.map((p) => { const m = mapFor(rows, p); return { id: p.id, name: p.name, code: m.code, label: m.label, utm: m.utm, sort: m.sort, saved: m.saved }; })
+    const items = pages.map((p) => { const m = mapFor(rows, p); return { id: p.id, name: p.name, code: m.code, codeSet: m.codeSet, auto: guessCode(p.name), label: m.label, utm: m.utm, sort: m.sort, saved: m.saved }; })
       .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'zh-Hant'));
     return ok(request, env, { items });
   }
@@ -268,19 +279,22 @@ export async function adminPageMap(request, env, path) {
     if (label.length < 1 || label.length > 20) return fail(request, env, 'bad_request', '簡稱要 1 到 20 個字。');
     if (utm.length > 300 || !UTM_RE.test(utm)) return fail(request, env, 'bad_request', 'utm 可用 ? 開頭，內容只能用英數字與 _ . ~ = & % + - ，最長 300 字。');
     if (!Number.isInteger(sort) || sort < 0 || sort > 999) return fail(request, env, 'bad_request', '排序要是 0 到 999 的整數。');
-    clean.push({ id, label, utm, sort });
+    // RD 區段：空白＝自動（依名稱猜）；沒帶就沿用舊值（相容舊管理頁）
+    let code;
+    if (it && it.code !== undefined && it.code !== null) {
+      if (typeof it.code !== 'string' || (it.code !== '' && !DEFAULT_PAGEMAP.some((d) => d.code === it.code))) return fail(request, env, 'bad_request', 'RD 區段不正確。');
+      code = it.code;
+    }
+    clean.push({ id, label, utm, sort, code });
   }
   if (!env.DB) return fail(request, env, 'misconfigured');
   await ensureTables(env);
   const now = Date.now();
   const old = await pageMapRows(env);
-  let pages = [];
-  try { pages = await loadPages(env); } catch (e) { pages = []; }
   for (const c of clean) {
-    const name = (pages.find((p) => p.id === c.id) || {}).name || '';
-    const code = old.has(c.id) ? old.get(c.id).code || '' : defaultMap(name).code;
+    const code = c.code !== undefined ? c.code : old.has(c.id) ? old.get(c.id).code || '' : '';
     await run(env, `INSERT INTO fb_page_map (page_id, code, label, utm, sort, updated) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(page_id) DO UPDATE SET label=excluded.label, utm=excluded.utm, sort=excluded.sort, updated=excluded.updated`, c.id, code, c.label, c.utm, c.sort, now);
+      ON CONFLICT(page_id) DO UPDATE SET code=excluded.code, label=excluded.label, utm=excluded.utm, sort=excluded.sort, updated=excluded.updated`, c.id, code, c.label, c.utm, c.sort, now);
   }
   return ok(request, env, { saved: clean.length });
 }

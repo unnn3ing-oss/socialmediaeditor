@@ -101,9 +101,44 @@ test('admin pagemap：列出粉專、驗證、儲存', async () => {
   const ok = await api(env, 'POST', '/admin/fb/pagemap', { items: [{ id: '111', label: '新聞2', utm: 'utm_source=Facebook&utm_medium=a-b_c.d~e%20+', sort: 7 }] }, 'admin');
   assert.equal(ok.res.status, 200);
   const row = env.DB.raw.prepare('SELECT * FROM fb_page_map').get();
-  assert.deepEqual([row.page_id, row.code, row.label, row.sort], ['111', 'news', '新聞2', 7]);
+  assert.deepEqual([row.page_id, row.code, row.label, row.sort], ['111', '', '新聞2', 7]);   // 沒帶 code＝自動
   const g2 = await api(env, 'GET', '/admin/fb/pagemap', undefined, 'admin');
-  assert.equal(g2.body.data.items.find((i) => i.id === '111').saved, true);
+  const i111 = g2.body.data.items.find((i) => i.id === '111');
+  assert.deepEqual([i111.saved, i111.code, i111.codeSet, i111.auto], [true, 'news', '', 'news']);
+});
+
+test('guessCode：完全比對優先，其次名稱包含關鍵字（新聞最後比）', async () => {
+  const { guessCode } = await import('../../server/core/fb.js');
+  assert.equal(guessCode('少康戰情室'), 'shaokang');
+  assert.equal(guessCode('TVBS 少康戰情室'), 'shaokang');
+  assert.equal(guessCode('少康戰情室｜TVBS新聞'), 'shaokang');
+  assert.equal(guessCode('TVBS 娛樂新聞'), 'ent');
+  assert.equal(guessCode('TVBS國際＋'), 'intl');
+  assert.equal(guessCode('TVBS 新聞'), 'news');
+  assert.equal(guessCode('隨便粉專'), '');
+});
+
+test('pagemap：RD 區段可設定；空白＝自動依名稱；D1 舊列 code 空白也會自動猜；非法值拒絕', async () => {
+  PAGES[TOKEN_B] = { id: '222', name: 'TVBS 少康戰情室' };
+  try {
+    const env = mk();
+    env.DB.raw.prepare("INSERT INTO fb_page_map VALUES ('222','','少康','',3,1)").run();   // 之前存成空白 code
+    let r = await api(env, 'GET', '/fb/pages');
+    assert.equal(r.body.data.find((p) => p.id === '222').code, 'shaokang');
+    const save = (code) => api(env, 'POST', '/admin/fb/pagemap', { items: [{ id: '222', label: '少康', utm: '', sort: 3, code }] }, 'admin');
+    assert.equal((await save('bogus')).res.status, 400);
+    assert.equal((await save(1)).res.status, 400);
+    assert.equal((await save('intl')).res.status, 200);
+    r = await api(env, 'GET', '/fb/pages');
+    assert.equal(r.body.data.find((p) => p.id === '222').code, 'intl');
+    // 沒帶 code：沿用舊值
+    await api(env, 'POST', '/admin/fb/pagemap', { items: [{ id: '222', label: '少康2', utm: '', sort: 3 }] }, 'admin');
+    assert.equal(env.DB.raw.prepare("SELECT code FROM fb_page_map WHERE page_id='222'").get().code, 'intl');
+    assert.equal((await save('')).res.status, 200);
+    const g = await api(env, 'GET', '/admin/fb/pagemap', undefined, 'admin');
+    const it = g.body.data.items.find((i) => i.id === '222');
+    assert.deepEqual([it.code, it.codeSet, it.auto], ['shaokang', '', 'shaokang']);
+  } finally { PAGES[TOKEN_B] = { id: '222', name: '隨便粉專' }; }
 });
 
 test('pagemap：接受 ? 與 ?& 開頭的 utm，儲存後可讀回', async () => {
