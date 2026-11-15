@@ -24,7 +24,9 @@
 - [x] 步驟 1、2 commit、npm test 359、build --check
 - [ ] 使用者「推」→ 部署 → 排有圖排程，看「已排定」與預覽
 - [x] ③ 不行：revert 步驟 2（回兩步驟）
-- [ ] 列原因②做法給使用者確認（開始後再做）
+- [x] 列原因②做法給使用者確認 → 使用者：「用 toolbox-files，但改一天後刪除就好」
+- [ ] 原因②實作：新模組 `server/core/fbimg.js`（R2 `tmp/fbimg/<32 hex>.<ext>` 暫存、公開 `GET /fbimg/<名>`、每天 03:17 cron 刪超過 24 小時的檔，所以實際保留 1～2 天）；`createPost` 排程＋圖片檔＋有 FILES 時，兩步驟第 1 步改用 `url`（沒 FILES 退回 source）；index.js 掛路由與 cron
+- [ ] npm test、build --check、審查；使用者「推」→ 部署 → 實測
 
 ## 注意事項
 - 後端需重新部署；外掛不升版號。
