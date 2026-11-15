@@ -12,6 +12,14 @@
 </head>
 <body>
 <main class="fp">
+  <section class="paused-box" id="pausedBox" hidden role="alert" aria-labelledby="pausedTitle">
+    <h2 id="pausedTitle">排程發布暫時停用中</h2>
+    <p id="pausedReason"></p>
+    <p id="pausedAt" hidden></p>
+    <p class="paused-note">臉書上已排定的貼文與自動留言會照常發布。恢復使用請洽管理員。</p>
+    <button type="button" class="btn btn-secondary" id="pausedRecheck">重新檢查</button>
+    <p class="paused-msg" id="pausedMsg" role="status"></p>
+  </section>
   <header class="fp-head">
     <h1>排程發布</h1>
     <span class="pill" id="pagesState">讀取粉專中…</span>

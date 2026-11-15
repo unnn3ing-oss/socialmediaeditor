@@ -44,6 +44,24 @@
       <h1>臉書發文</h1>
       <p>排程發布工具的臉書連線、粉專與留言設定。</p>
 
+      <section class="card" id="pzCard">
+        <h2>暫停排程發布</h2>
+        <p>停用後同事開啟排程發布工具（網站與外掛側邊欄）只會看到停用公告，不能發文、查詢、取消或改時間，也不能排入 Rundown。臉書上已排定的貼文與自動留言<strong>照常發布</strong>。只能在這裡手動恢復。</p>
+        <p class="pz-state" id="pzState">目前狀態：尚未讀取</p>
+        <label for="pzReason">停用原因（選填，最多 <span id="pzMax">100</span> 字，會顯示給同事）</label>
+        <input id="pzReason" type="text" maxlength="100" placeholder="例：臉書權杖更換中，預計 15:00 恢復">
+        <div class="row"><button id="pzLoad" type="button">讀取目前狀態</button><button id="pzToggle" class="danger" type="button" disabled>停用排程發布</button><button id="pzSaveReason" type="button" hidden>更新原因</button></div>
+        <p class="msg" id="pzMsg" role="status"></p>
+        <section class="confirm" id="pzConfirm" hidden role="alertdialog" aria-labelledby="pzCfTitle">
+          <h2 id="pzCfTitle">確定要停用排程發布嗎？</h2>
+          <p>同事會立刻無法使用排程發布工具，直到你按「恢復使用」。已排定的貼文與留言照常發布。</p>
+          <div class="row">
+            <button class="danger solid" id="pzYes" type="button">停用</button>
+            <button id="pzNo" type="button">先不要</button>
+          </div>
+        </section>
+      </section>
+
       <section class="card">
         <h2>臉書連線</h2>
         <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組 token（用戶 token 或粉專 token）能管哪些粉專（不會顯示 token 本身）。用戶 token 請留意「資料存取到」的日期，過了要重新授權。</p>

@@ -3,6 +3,7 @@
 // 本文：{ action:'ping' } 或 { action:'add', entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
 import { ok, fail, readBody } from './http.js';
 import { bearer } from './auth.js';
+import { pausedFail } from './fb.js';
 
 export const RUNDOWN_PAGES = ['news', 'ent', 'shaokang', 'intl'];
 const URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
@@ -59,6 +60,8 @@ export async function handleRundown(request, env, path) {
   if (path !== '/rundown') return null;
   if (request.method !== 'POST') return fail(request, env, 'not_found');
   if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
+  const paused = await pausedFail(request, env);
+  if (paused) return paused;
   if (!rundownReady(env)) return fail(request, env, 'rundown_off');
   const body = rundownBody(await readJson(request));
   if (!body) return fail(request, env, 'bad_request');

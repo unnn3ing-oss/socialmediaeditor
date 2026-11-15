@@ -19,6 +19,31 @@ import { TEXT_SWATCHES, DEFAULT_SWATCH, drawTextCard, swatchCss } from './textca
 
 tb.init('fbpost');
 
+// ---------- 暫停排程發布（管理頁開關）：任何呼叫回 fb_paused 就把整個工具換成公告；用隱藏切換，內容保留 ----------
+const pausedBox = document.getElementById('pausedBox');
+function showPaused(detail) {
+  const d = detail || {};
+  $('pausedReason').textContent = d.reason ? '原因：' + d.reason : '原因：管理員未填寫';
+  $('pausedAt').textContent = d.at ? '停用時間：' + fmtTime(Math.floor(d.at / 1000)) : '';
+  $('pausedAt').hidden = !d.at;
+  $('pausedMsg').textContent = '';
+  if (pausedBox.hidden) {
+    // 關掉開著的視窗：確認框按「取消」讓等待中的動作結束；新增發文視窗不清內容，恢復後再打開還在
+    if ($('confirmDlg').open) $('cfNo').click();
+    for (const dlg of document.querySelectorAll('dialog[open]')) { if (dlg === modal) ourClose = true; dlg.close(); }
+  }
+  document.querySelector('main.fp').classList.add('is-paused');
+  pausedBox.hidden = false;
+}
+function hidePaused() {
+  document.querySelector('main.fp').classList.remove('is-paused');
+  pausedBox.hidden = true;
+}
+async function fbCall(path, opts) {
+  try { return await tb.api.call(path, opts); }
+  catch (e) { if (e && e.code === 'fb_paused') showPaused(e.detail); throw e; }
+}
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, { dataset, ...props } = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
@@ -127,13 +152,14 @@ async function loadPages(refresh = false) {
   st.className = 'pill';
   st.textContent = '讀取粉專中…';
   try {
-    pages = await tb.api.call('/fb/pages' + (refresh ? '?refresh=1' : ''));
+    pages = await fbCall('/fb/pages' + (refresh ? '?refresh=1' : ''));
+    hidePaused();
     st.className = 'pill ' + (pages.length ? 'pill-ok' : 'pill-warn');
     st.textContent = pages.length ? `已連線 ${pages.length} 個粉專` : '沒有可用的粉專';
   } catch (e) {
     pages = [];
     st.className = 'pill pill-warn';
-    st.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : e.code === 'fb_not_configured' ? '後端還沒設定臉書 token' : '粉專讀取失敗：' + errText(e);
+    st.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : e.code === 'fb_not_configured' ? '後端還沒設定臉書 token' : e.code === 'fb_paused' ? '排程發布暫時停用中' : '粉專讀取失敗：' + errText(e);
   }
   renderPageChips();
   fillSelects(!selInit);
@@ -143,6 +169,13 @@ async function loadPages(refresh = false) {
   if (pages.length && !duty && !dutyAsked) openDuty();
 }
 $('pagesRefresh').addEventListener('click', () => loadPages(true));
+$('pausedRecheck').addEventListener('click', async () => {
+  const b = $('pausedRecheck');
+  b.disabled = true; $('pausedMsg').textContent = '檢查中…';
+  await loadPages();
+  b.disabled = false;
+  if (!pausedBox.hidden) $('pausedMsg').textContent = '仍在停用中。';
+});
 
 // ---------- 值班粉專（1～3 個，★主要）：只影響預設，其他粉專照樣可選；到下一個 05:00 失效 ----------
 let duty = Duty.loadDuty();
@@ -425,7 +458,7 @@ async function loadSched() {
   const errs = [];
   await Promise.all(ids.map(async (id) => {
     try {
-      const r = await tb.api.call('/fb/scheduled?page=' + id);
+      const r = await fbCall('/fb/scheduled?page=' + id);
       if (seq === schedSeq) queryCache.set('scheduled', id, { items: r.items });
     }
     catch (e) { errs.push(`${pageName(id)}：${errText(e)}`); }
@@ -449,7 +482,7 @@ function renderScheduled(items, text) {
     cancel.addEventListener('click', async () => {
       if (!(await confirmBox('取消這篇排程？', `${pageName(it.page)}｜${it.at ? fmtTime(it.at) : ''}\n取消後臉書上這篇排程會被刪除，無法復原。`, '取消排程'))) return;
       cancel.disabled = true;
-      try { await tb.api.call('/fb/cancel', { method: 'POST', body: { post: it.id } }); updateRecordedPost(it.id, { status: 'canceled' }); updateScheduledCache(it.page, it.id, null); hint.textContent += '；已取消一篇排程'; }
+      try { await fbCall('/fb/cancel', { method: 'POST', body: { post: it.id } }); updateRecordedPost(it.id, { status: 'canceled' }); updateScheduledCache(it.page, it.id, null); hint.textContent += '；已取消一篇排程'; }
       catch (e) { cancel.disabled = false; hint.textContent = '取消失敗：' + errText(e); }
     });
     const move = el('button', { type: 'button', className: 'btn btn-secondary btn-sm', textContent: '改時間', dataset: { act: 'resched' } });
@@ -487,7 +520,7 @@ $('rsYes').addEventListener('click', async () => {
   const at = rsEd.get(), btn = $('rsYes');
   btn.disabled = true;
   try {
-    await tb.api.call('/fb/reschedule', { method: 'POST', body: { post: rsTarget.id, time: Math.floor(at.getTime() / 1000) } });
+    await fbCall('/fb/reschedule', { method: 'POST', body: { post: rsTarget.id, time: Math.floor(at.getTime() / 1000) } });
     $('rsDlg').close();
     $('schedHint').textContent = `已改成 ${Sched.fmtWhen(at, now())}`;
     const secs = Math.floor(at.getTime() / 1000);
@@ -523,7 +556,7 @@ function renderFails() {
     const run = (path, okText) => async () => {
       retry.disabled = dismiss.disabled = true;
       try {
-        await tb.api.call(path, { method: 'POST', body: { id: c.id } });
+        await fbCall(path, { method: 'POST', body: { id: c.id } });
         fails.items = fails.items.filter((x) => x.id !== c.id);
         renderFails();
         $('schedHint').textContent = okText;
@@ -547,7 +580,7 @@ async function pollFailed() {
   if (polling) return;
   polling = true;
   try {
-    const r = await tb.api.call('/fb/comments?status=failed');
+    const r = await fbCall('/fb/comments?status=failed');
     const items = (r.items || []).filter((i) => !i.dismissed);
     const fresh = items.filter((i) => !fails.seen.has(i.id));
     items.forEach((i) => fails.seen.add(i.id));
@@ -585,7 +618,7 @@ async function loadStats(reset) {
   else more.textContent = '載入中…';
   setBusy(list, true);
   try {
-    const r = await tb.api.call(`/fb/posts?page=${page}&limit=10` + (!reset ? '&after=' + encodeURIComponent(previous.next) : ''));
+    const r = await fbCall(`/fb/posts?page=${page}&limit=10` + (!reset ? '&after=' + encodeURIComponent(previous.next) : ''));
     if (seq !== statsSeq) return;
     if (!reset && queryCache.get('published', page)?.generation !== previous.generation) {
       renderStats(queryCache.get('published', page));
@@ -623,7 +656,7 @@ function statRow(p, pageId, generation) {
         return;
       }
       const saved = queryCache.get('insights', key);
-      const r = saved?.generation === generation ? saved.data : await tb.api.call('/fb/insights?post=' + encodeURIComponent(p.id));
+      const r = saved?.generation === generation ? saved.data : await fbCall('/fb/insights?post=' + encodeURIComponent(p.id));
       if (queryCache.get('published', pageId)?.generation !== generation) {
         out.textContent = '列表已更新，請按刷新';
         return;
@@ -830,7 +863,7 @@ $('comment').addEventListener('input', updateCommentPreview);
 let commentPresets = [];
 async function loadCommentPresets() {
   try {
-    const r = await tb.api.call('/fb/comment-presets');
+    const r = await fbCall('/fb/comment-presets');
     commentPresets = Array.isArray(r && r.items) ? r.items.filter((x) => x && typeof x.name === 'string' && typeof x.text === 'string') : [];
   } catch { commentPresets = []; }
   refreshPresetSelects();
@@ -912,7 +945,7 @@ let filling = false;
 async function loadMainImage(images) {
   for (const im of images.slice(0, 3)) {   // 失敗再試下一張，最多 3 張
     try {
-      const res = await tb.api.call('/fetch/image?url=' + encodeURIComponent(im.url), { raw: true });
+      const res = await fbCall('/fetch/image?url=' + encodeURIComponent(im.url), { raw: true });
       let blob = await res.blob();
       if (!/^image\//.test(blob.type)) blob = new Blob([blob], { type: 'image/jpeg' });
       await editor.loadFile(blob);
@@ -933,7 +966,7 @@ async function quickFill() {
     await editorReady;
     let art;
     try {
-      const r = await tb.api.call('/fetch/article?url=' + encodeURIComponent(url));
+      const r = await fbCall('/fetch/article?url=' + encodeURIComponent(url));
       art = parseArticle(r.html, r.url || url);
     } catch (e) { hint('帶入失敗：' + (e.code === 'host_not_allowed' ? '這個網址不在允許的網域（tvbs.com.tw）' : errText(e)), 'bad'); return; }
     state.articleUrl = url;
@@ -1112,7 +1145,7 @@ async function sendOne(page, p, at) {
   fd.append('comment', commentFor(page));
   const extras = Cm.collectExtras(readExtraRows());
   if (extras.length) fd.append('extraComments', JSON.stringify(extras));
-  return tb.api.call('/fb/post', { method: 'POST', body: fd });
+  return fbCall('/fb/post', { method: 'POST', body: fd });
 }
 const sendMsg = (text, cls) => { const m = $('sendMsg'); m.textContent = text || ''; m.className = 'hint' + (cls ? ' ' + cls : ''); m.hidden = !text; };
 const sendStage = (text, name = '') => {
@@ -1214,7 +1247,7 @@ async function toRundown(info, sent, enabled) {
   if (!entries.length) return { msg: skipMsg, bad: true, results };
   sendStage('寫入 RD');
   let res;
-  try { res = await tb.api.call('/rundown', { method: 'POST', body: { action: 'add', entries } }); } catch (e) {
+  try { res = await fbCall('/rundown', { method: 'POST', body: { action: 'add', entries } }); } catch (e) {
     for (const en of entries) results[en.page] = { ok: false, msg: 'RD 未寫入：' + errText(e) };
     return { msg: ['Rundown 沒寫入：' + errText(e), skipMsg].filter(Boolean).join('；'), bad: true, results };
   }

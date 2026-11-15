@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run, all } from './db.js';
-import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, getMaxAttempts, setMaxAttempts, ATTEMPTS_MIN, ATTEMPTS_MAX, DEFAULT_ATTEMPTS, RETRY_GAP_MS, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
+import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, getMaxAttempts, setMaxAttempts, getPause, setPause, cleanReason, PAUSE_REASON_MAX, ATTEMPTS_MIN, ATTEMPTS_MAX, DEFAULT_ATTEMPTS, RETRY_GAP_MS, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
@@ -332,6 +332,30 @@ export async function adminFbSettings(request, env, path) {
   return ok(request, env, await view());
 }
 
+// 管理頁：暫時停用排程發布。GET／POST /admin/fb/pause（已通過 admin 驗證）；body { paused: boolean, reason?: string }
+export async function adminFbPause(request, env, path) {
+  if (path !== '/admin/fb/pause') return null;
+  if (!env.DB) return fail(request, env, 'misconfigured');
+  const view = (p) => ({ ...p, reasonMax: PAUSE_REASON_MAX });
+  if (request.method === 'GET') return ok(request, env, view(await getPause(env)));
+  if (request.method !== 'POST') return null;
+  const { body: b, error } = await readJson(request);
+  if (error) return fail(request, env, error);
+  if (!b || typeof b.paused !== 'boolean') return fail(request, env, 'bad_request', '缺少 paused（true／false）。');
+  if (b.reason !== undefined && b.reason !== null && typeof b.reason !== 'string') return fail(request, env, 'bad_request', '停用原因要是文字。');
+  const reason = cleanReason(b.reason);
+  if (reason.length > PAUSE_REASON_MAX) return fail(request, env, 'bad_request', `停用原因最多 ${PAUSE_REASON_MAX} 字。`);
+  await setPause(env, b.paused, reason);
+  await audit(env, b.paused ? 'fbpost-paused' : 'fbpost-resumed');
+  return ok(request, env, view(await getPause(env)));
+}
+
+// 停用中回 fb_paused（附原因與停用時間）；使用中回 null。/fb/* 與 /rundown 共用
+export async function pausedFail(request, env) {
+  const p = await getPause(env);
+  return p.paused ? fail(request, env, 'fb_paused', null, { reason: p.reason, at: p.at }) : null;
+}
+
 // ---- 讀取 ----
 async function listPosts(request, env, q) {
   const page = q.get('page');
@@ -629,6 +653,8 @@ async function reschedulePost(request, env) {
 export async function handleFb(request, env, path) {
   if (path !== '/fb' && !path.startsWith('/fb/')) return null;
   if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
+  const paused = await pausedFail(request, env);
+  if (paused) return paused;
   if (!pageTokens(env).length) return fail(request, env, 'fb_not_configured');
   const q = new URL(request.url).searchParams;
   try {

@@ -11,6 +11,7 @@ let srv, browser;
 test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
 
+let PZ = { paused: false, reason: '', at: null };
 const DATA = {
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
@@ -18,6 +19,8 @@ const DATA = {
   'GET /admin/fb/pagemap': { items: [{ id: '1', name: '新聞粉', label: '新聞', utm: 'utm_source=fb', sort: 1, saved: true }] },
   'GET /admin/fb/comment-presets': { items: [{ name: '活動', text: '快來看' }], max: 20, nameMax: 20, textMax: 8000 },
   'GET /admin/fb/settings': { maxAttempts: 3, min: 1, max: 5, default: 2, gapSec: 30 },
+  'GET /admin/fb/pause': () => ({ ...PZ, reasonMax: 100 }),
+  'POST /admin/fb/pause': (b) => { PZ = b.paused ? { paused: true, reason: b.reason.trim(), at: PZ.at || Date.UTC(2026, 10, 15, 6, 2) } : { paused: false, reason: '', at: null }; return { ...PZ, reasonMax: 100 }; },
   'GET /admin/rundown': { configured: true, url: true, token: true },
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN', sheets: ['11/14'] },
 };
@@ -36,6 +39,7 @@ async function open(viewport, hash = '') {
       const ok = JSON.parse(req.postData()).password === 'pw-123';
       return r.fulfill({ json: ok ? { ok: true, data: { token: 'T' } } : { ok: false, code: 'bad_password' } });
     }
+    if (typeof DATA[key] === 'function') return r.fulfill({ json: { ok: true, data: DATA[key](req.postData() ? JSON.parse(req.postData()) : null) } });
     if (key in DATA) return r.fulfill({ json: { ok: true, data: DATA[key] } });
     return r.fulfill({ json: { ok: false, code: 'not_found', error: '找不到' } });
   });
@@ -121,4 +125,36 @@ test('頁面不用 emoji 或箭頭', async () => {
   const html = await page.content();
   assert.doesNotMatch(html, /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}]/u);
   assert.match(html, /<meta name="robots" content="noindex">/);
+});
+
+test('暫停排程發布：先讀取才能操作，停用前確認（先不要不送出），可改原因、恢復', async () => {
+  PZ = { paused: false, reason: '', at: null };
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  await login(page);
+  const posts = () => calls.filter((c) => c.key === 'POST /admin/fb/pause').length;
+  assert.equal(await page.isDisabled('#pzToggle'), true, '沒讀取前不能停用');
+  await page.click('#pzLoad');
+  await page.waitForFunction(() => document.getElementById('pzState').textContent === '目前狀態：使用中');
+  await page.fill('#pzReason', '權杖更換中');
+  await page.click('#pzToggle');
+  assert.equal(await page.isVisible('#pzConfirm'), true);
+  await page.click('#pzNo');
+  assert.equal(await page.isVisible('#pzConfirm'), false);
+  assert.equal(posts(), 0, '按先不要不會送出');
+  await page.click('#pzToggle');
+  await page.click('#pzYes');
+  await page.waitForFunction(() => /^目前狀態：已停用（2026-11-15 \d\d:02 起）$/.test(document.getElementById('pzState').textContent));
+  assert.equal(await page.textContent('#pzToggle'), '恢復使用');
+  assert.equal(await page.isVisible('#pzSaveReason'), true);
+  assert.equal(PZ.reason, '權杖更換中');
+  await page.fill('#pzReason', '改成 16:00 恢復');
+  await page.click('#pzSaveReason');
+  await page.waitForFunction(() => document.getElementById('pzMsg').textContent === '已更新停用原因。');
+  assert.equal(PZ.reason, '改成 16:00 恢復');
+  await page.click('#pzToggle');
+  await page.waitForFunction(() => document.getElementById('pzState').textContent === '目前狀態：使用中');
+  assert.equal(PZ.paused, false);
+  assert.equal(await page.isVisible('#pzSaveReason'), false);
+  assert.ok(calls.filter((c) => c.key && c.key.endsWith('/admin/fb/pause')).every((c) => c.auth === 'Bearer T'), '帶管理 token');
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });

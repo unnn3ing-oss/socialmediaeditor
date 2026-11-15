@@ -223,6 +223,46 @@ if (window.top !== window.self) {
       .then(function () { $('atSave').disabled = false; });
   };
 
+  // ---- 暫停排程發布：先讀取目前狀態才能操作；停用前確認 ----
+  var pzPaused = null;
+  function pzShow(d) {
+    pzPaused = !!d.paused;
+    $('pzMax').textContent = d.reasonMax || 100;
+    $('pzReason').maxLength = d.reasonMax || 100;
+    $('pzState').textContent = pzPaused ? '目前狀態：已停用（' + (d.at ? fmtTime(d.at) : '時間不明') + ' 起）' : '目前狀態：使用中';
+    $('pzState').className = 'pz-state ' + (pzPaused ? 'off' : 'on');
+    $('pzReason').value = pzPaused ? (d.reason || '') : $('pzReason').value;
+    $('pzToggle').textContent = pzPaused ? '恢復使用' : '停用排程發布';
+    $('pzToggle').className = pzPaused ? 'primary' : 'danger';
+    $('pzToggle').disabled = false;
+    $('pzSaveReason').hidden = !pzPaused;
+  }
+  function pzSend(paused, okText) {
+    $('pzToggle').disabled = true; $('pzSaveReason').disabled = true; say($('pzMsg'), '儲存中');
+    return api('/admin/fb/pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: paused, reason: $('pzReason').value }) }).then(function (res) {
+      if (res.ok) { pzShow(res.data); say($('pzMsg'), okText, 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('pzMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('pzMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { if (pzPaused !== null) $('pzToggle').disabled = false; $('pzSaveReason').disabled = false; });
+  }
+  $('pzLoad').onclick = function () {
+    $('pzLoad').disabled = true; say($('pzMsg'), '讀取中');
+    api('/admin/fb/pause').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      pzShow(res.data); say($('pzMsg'), '');
+    }).catch(function (e) { say($('pzMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('pzLoad').disabled = false; });
+  };
+  $('pzToggle').onclick = function () {
+    if (pzPaused === null) return;
+    if (pzPaused) { pzSend(false, '已恢復使用。'); return; }
+    $('pzConfirm').hidden = false; $('pzYes').focus();
+  };
+  $('pzYes').onclick = function () { $('pzConfirm').hidden = true; pzSend(true, '已停用排程發布。'); };
+  $('pzNo').onclick = function () { $('pzConfirm').hidden = true; $('pzToggle').focus(); };
+  $('pzSaveReason').onclick = function () { pzSend(true, '已更新停用原因。'); };
+
   $('rdCheck').onclick = function () {
     $('rdCheck').disabled = true; say($('rdMsg'), '檢查中');
     api('/admin/rundown').then(function (res) {
@@ -285,7 +325,7 @@ if (window.top !== window.self) {
 
   function signOut() {
     token = ''; pending = '';
-    $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('login').hidden = false;
+    $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('pzConfirm').hidden = true; pzPaused = null; $('pzToggle').disabled = true; $('pzSaveReason').hidden = true; $('pzState').textContent = '目前狀態：尚未讀取'; $('pzState').className = 'pz-state'; say($('pzMsg'), ''); $('login').hidden = false;
   }
   $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
 

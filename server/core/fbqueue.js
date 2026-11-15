@@ -75,6 +75,34 @@ export async function setMaxAttempts(env, n, nowMs = Date.now()) {
   return n;
 }
 
+// ---- 後台設定：暫時停用排程發布（D1 fb_settings 一列 key='pause'，value＝JSON {reason, at}；沒有這列＝使用中）----
+// 讀不到或資料壞掉一律當作「使用中」，不讓 D1 問題把工具擋死。只擋 /fb/* 與 /rundown，留言佇列照常送。
+export const PAUSE_REASON_MAX = 100;
+const NOT_PAUSED = Object.freeze({ paused: false, reason: '', at: null });
+export function cleanReason(s) {
+  return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+export async function getPause(env) {
+  if (!env.DB) return { ...NOT_PAUSED };
+  try {
+    await ensureTables(env);
+    const r = await first(env, `SELECT value FROM fb_settings WHERE key='pause'`);
+    if (!r) return { ...NOT_PAUSED };
+    const v = JSON.parse(r.value);
+    if (!v || typeof v !== 'object') return { ...NOT_PAUSED };
+    return { paused: true, reason: cleanReason(v.reason).slice(0, PAUSE_REASON_MAX), at: timeOf(v.at) };
+  } catch (e) { return { ...NOT_PAUSED }; }
+}
+// paused=true：寫入（已停用時保留原本的停用時間，只更新原因）；false：刪除這列
+export async function setPause(env, paused, reason = '', nowMs = Date.now()) {
+  await ensureTables(env);
+  if (!paused) { await run(env, `DELETE FROM fb_settings WHERE key='pause'`); return { ...NOT_PAUSED }; }
+  const cur = await getPause(env);
+  const v = { reason: cleanReason(reason).slice(0, PAUSE_REASON_MAX), at: cur.paused && cur.at ? cur.at : nowMs };
+  await run(env, `INSERT INTO fb_settings (key, value, updated) VALUES ('pause', ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated=excluded.updated`, JSON.stringify(v), nowMs);
+  return { paused: true, reason: v.reason, at: v.at };
+}
+
 // ---- 第 N 則留言的預設文字（後台設定，發文工具下拉選用）----
 export const MAX_PRESETS = 20;
 export const PRESET_NAME_MAX = 20;
