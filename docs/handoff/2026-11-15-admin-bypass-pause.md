@@ -24,7 +24,7 @@
 - [x] 後端＋單元測試（auth.test.js 3 項、fbqueue.test.js 1 項）
 - [x] 前端膠囊＋e2e（company.e2e.js 1 項）
 - [x] npm test 379、全部 e2e 128、build check 通過
-- [ ] 獨立審查
+- [x] 獨立審查通過（無缺陷）
 - [ ] 使用者說「推」才併 main，同 commit 更新 CLAUDE.md「目前進度」
 
 ## 注意事項
