@@ -14,12 +14,13 @@
 | `sdk/` | 工具唯一能用的共用功能（說明見 `sdk/README.md`） |
 | `ui/tokens.css` | 共用樣式 |
 | `tools/` | 每個工具一個資料夾；`registry.json` 決定啟用哪些 |
+| `tools/ytdl/` | YT 批量下載：網頁、外掛模組（`ext/`）、本機下載助手（`host/`，Python）與安裝檔（`installers/`）；說明見 `tools/ytdl/PROTOCOL.md`、`tools/ytdl/HOST.md` |
 | `extension/` | 統一外掛「小編工具箱」 |
 | `server/` | 後端 `toolbox-api` |
 | `build.js` | 讀工具清單，產生外殼目錄、外掛 manifest、路由表 |
 | `docs/` | 設計規格、實作計畫、設計稿、部署說明 |
 
-`shell/catalog.json`、`extension/manifest.json`、`extension/routes.gen.js`、`server/routes.gen.js` 是 `node build.js` 產生的，請勿手改。
+`shell/catalog.json`、`extension/manifest.json`、`extension/routes.gen.js`、`extension/tools/`、`server/routes.gen.js` 是 `node build.js` 產生的，請勿手改。`tools/ytdl/installers/` 由 `python3 tools/ytdl/build_installers.py` 產生（改了 `tools/ytdl/host/` 或安裝檔模板就要重跑，CI 會檢查）。
 
 ## 開發
 

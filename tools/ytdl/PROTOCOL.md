@@ -61,3 +61,13 @@
 - 拿掉 `update_ext_*`（外掛檔案由工具箱更新）。
 - `update_check`／`update_stage` 的 `files` 名稱是 `tools/ytdl/host/` 底下的檔名（不含路徑），下載位址 `https://raw.githubusercontent.com/unnn3ing-oss/socialmediaeditor/<commit>/tools/ytdl/host/<name>`。
 - `doctor` 的 `extensionId` 用來檢查 `allowed_origins`。
+
+## 實作後的補充（2026-11-15，A／B／C 回報）
+- `ext/lib/page.js` 保留（`queue.js` 用到 `classifyTabUrl`）。
+- `queue_add`：合法網址即使下載助手未連線也先排進清單（回 `ok:true`），開始下載才檢查連線；壞網址回 `ok:false`。
+- 下載助手更新比對用 `GET /repos/unnn3ing-oss/socialmediaeditor/contents/tools/ytdl/host?ref=<commit>`（只列這一層 `*.py`）。`update_info.current`＝下載助手版本，`latestSha`＝GitHub 最新 commit（給 `update_apply`）。
+- `update_apply`：`update_stage`→`update_commit` 成功後斷開，約 800ms 後重新 `connectNative`；stage 之後失敗一律 `update_rollback`，rollback 也失敗時提示重新執行安裝檔。
+- storage key：`ytdl-queue`、`ytdl-update-info`；鬧鐘 `ytdl-check-update`；不碰 `chrome.action`。
+- 下載助手：`install_record.py` 改為 `engine_record.py`（只記引擎）；`update_status` 不再有 `extensionFolder`；`installer.py` 參數 `--keep`（拿掉 `--parent`、`--extension-zip`、`--no-open`、`--no-deploy`）。安裝位置 Windows `%LOCALAPPDATA%\TbxYtdl`、Mac `~/Library/Application Support/TbxYtdl`。
+- 網頁：設定步驟是頁內卡片（沒連好才展開）；「安裝外掛教學」呼叫外殼 `tbxShell.openInstall()`，單獨開頁時顯示指路文字。`tb.ext.call` 逾時一律 `no_extension`，外掛是否消失由每 2 秒的 `ping` 判斷。
+- 封面檔名規則：`ext/lib/covername.js` 與 `host/covers.py` 必須一致（範例在 `test/ytdl/ext-helpers.test.mjs`）。
