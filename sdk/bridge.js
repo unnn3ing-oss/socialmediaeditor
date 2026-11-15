@@ -30,5 +30,19 @@ export function createExt({ win = globalThis.window, timers = defaultTimers, non
         win.postMessage(makeRequest(op, payload, n), '*');
       });
     },
+    // 訂閱外掛推播：工具背景模組用 ctx.push(data) 推來的資料，交給 cb(data)。回傳取消訂閱的函式。
+    // 外掛重新載入（內容腳本重新注入，送 ready）時自動再訂閱一次。
+    on(tool, cb) {
+      const subscribe = () => win.postMessage({ source: 'tbx-web', type: 'subscribe' }, '*');
+      const onMsg = (e) => {
+        const d = e && e.data;
+        if (!d || d.source !== 'tbx-ext') return;
+        if (d.type === 'ready') subscribe();
+        else if (d.type === 'push' && d.tool === tool) cb(d.data);
+      };
+      win.addEventListener('message', onMsg);
+      subscribe();
+      return () => win.removeEventListener('message', onMsg);
+    },
   };
 }

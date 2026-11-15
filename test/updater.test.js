@@ -48,7 +48,7 @@ async function installStubs(world, U) {
     sidePanel: { setPanelBehavior: () => Promise.resolve() },
   });
   // runtime 需要 onMessage 等給 background 用
-  Object.assign(chrome.runtime, { id: 'self', onMessage: { addListener() {} }, onInstalled: { addListener() {} }, onStartup: { addListener() {} } });
+  Object.assign(chrome.runtime, { id: 'self', onMessage: { addListener() {} }, onConnect: { addListener() {} }, onInstalled: { addListener() {} }, onStartup: { addListener() {} } });
   const base = 'https://api.github.com/repos/unnn3ing-oss/socialmediaeditor';
   const raw = 'https://raw.githubusercontent.com/unnn3ing-oss/socialmediaeditor/';
   const body = (b, init) => new Response(b, init);

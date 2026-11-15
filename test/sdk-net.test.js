@@ -71,6 +71,24 @@ test('ext.call rejects with code on ok:false', async () => {
   await assert.rejects(p, (e) => e.code === 'denied' && e.message === '不行');
 });
 
+test('ext.on：訂閱推播、只收自己工具、ready 時再訂閱、取消後不再收', async () => {
+  const { createExt } = await import('../sdk/bridge.js');
+  const win = fakeWindow();
+  const ext = createExt({ win, timers: fakeTimers() });
+  const got = [];
+  const off = ext.on('ytdl', (d) => got.push(d));
+  assert.deepEqual(win.posted[0], { source: 'tbx-web', type: 'subscribe' });
+  win.dispatch({ source: 'tbx-ext', type: 'push', tool: 'ytdl', data: 1 });
+  win.dispatch({ source: 'tbx-ext', type: 'push', tool: 'other', data: 2 });
+  win.dispatch({ source: 'tbx-web', type: 'push', tool: 'ytdl', data: 3 });
+  win.dispatch({ source: 'tbx-ext', type: 'ready', version: '3.0' });
+  assert.deepEqual(got, [1]);
+  assert.equal(win.posted.filter((m) => m.type === 'subscribe').length, 2);
+  off();
+  win.dispatch({ source: 'tbx-ext', type: 'push', tool: 'ytdl', data: 4 });
+  assert.deepEqual(got, [1]);
+});
+
 test('api.call sends Bearer, skips expired token, saves renew', async () => {
   const { createApi } = await import('../sdk/api.js');
   const calls = [];

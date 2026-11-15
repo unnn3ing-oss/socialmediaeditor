@@ -3,6 +3,7 @@
 //   shell/catalog.json        外殼的櫥窗與工具列資料
 //   extension/manifest.json   外掛 manifest（manifest.base.json ＋ 各工具 ext 的權限聯集）
 //   extension/routes.gen.js   外掛背景的工具路由表；並把 tools/<id>/ext.js 複製成 extension/tools/<id>.js
+//                             （ext.dir 時整個資料夾複製到 extension/tools/<id>/）
 //   server/routes.gen.js      後端的工具路由表（掛在 /t/<id>/）
 // 用法：node build.js（寫檔）／node build.js --check（只檢查產生檔是否過期）
 const fs = require('node:fs');
@@ -23,6 +24,26 @@ function listRepoBasenames(root) {
   };
   walk(root);
   return names;
+}
+
+// 資料夾裡所有檔案的相對路徑（以 / 分隔、排序；略過 . 開頭）
+function listFiles(dir, prefix = '') {
+  const out = [];
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (ent.name.startsWith('.')) continue;
+    const rel = prefix + ent.name;
+    if (ent.isDirectory()) out.push(...listFiles(path.join(dir, ent.name), rel + '/'));
+    else out.push(rel);
+  }
+  return out;
+}
+function removeEmptyDirs(dir) {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!ent.isDirectory()) continue;
+    const p = path.join(dir, ent.name);
+    removeEmptyDirs(p);
+    if (!fs.readdirSync(p).length) fs.rmdirSync(p);
+  }
 }
 
 // 版號規則是 X.YZ（例如 1.00、1.05）；Chrome 不接受開頭是 0 的數字段，所以給 Chrome 的 version 去掉開頭的 0（1.00→1.0、1.05→1.5），
@@ -95,11 +116,18 @@ async function build(root, { check = false, write = true } = {}) {
   outputs['extension/manifest.json'] = JSON.stringify(manifest, null, 2) + '\n';
 
   const v = (id) => 't_' + id.replace(/-/g, '_');
+  // ext.dir：整個資料夾複製到 extension/tools/<id>/，入口是資料夾裡的 background；沒有 dir 時只複製一個檔成 extension/tools/<id>.js
+  const extEntry = (t) => (t.ext.dir ? `./tools/${t.id}/${t.ext.background.slice(t.ext.dir.length + 1)}` : `./tools/${t.id}.js`);
   outputs['extension/routes.gen.js'] = GEN_HEADER
-    + withExt.map((t) => `import * as ${v(t.id)} from './tools/${t.id}.js';\n`).join('')
+    + withExt.map((t) => `import * as ${v(t.id)} from '${extEntry(t)}';\n`).join('')
     + `export const toolOps = {${withExt.map((t) => ` '${t.id}': ${v(t.id)}`).join(',')}${withExt.length ? ' ' : ''}};\n`;
   for (const t of withExt) {
-    outputs[`extension/tools/${t.id}.js`] = fs.readFileSync(path.join(toolsDir, t.id, t.ext.background), 'utf8');
+    if (t.ext.dir) {
+      const src = path.join(toolsDir, t.id, t.ext.dir);
+      for (const rel of listFiles(src)) outputs[`extension/tools/${t.id}/${rel}`] = fs.readFileSync(path.join(src, rel), 'utf8');
+    } else {
+      outputs[`extension/tools/${t.id}.js`] = fs.readFileSync(path.join(toolsDir, t.id, t.ext.background), 'utf8');
+    }
   }
 
   const withApi = tools.filter((t) => t.api);
@@ -110,7 +138,7 @@ async function build(root, { check = false, write = true } = {}) {
   // extension/tools/ 只能有這次產生的檔案
   const extToolsDir = path.join(root, 'extension/tools');
   const stale = fs.existsSync(extToolsDir)
-    ? fs.readdirSync(extToolsDir).map((f) => `extension/tools/${f}`).filter((rel) => !(rel in outputs))
+    ? listFiles(extToolsDir).map((f) => `extension/tools/${f}`).filter((rel) => !(rel in outputs))
     : [];
 
   if (check) {
@@ -127,6 +155,7 @@ async function build(root, { check = false, write = true } = {}) {
       await fsp.writeFile(path.join(root, rel), content);
     }
     for (const rel of stale) await fsp.rm(path.join(root, rel), { force: true });
+    if (fs.existsSync(extToolsDir)) removeEmptyDirs(extToolsDir);
   }
   return { errors, outputs };
 }
