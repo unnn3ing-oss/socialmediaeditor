@@ -17,10 +17,14 @@
 | 2（原因③） | 有圖排程改一步：/photos 帶 caption、source、published=false、scheduled_publish_time、**unpublished_content_type=SCHEDULED**；留言照片 ID 換貼文 ID 邏輯恢復 → 見下一個 commit | ✅ |
 | 3（原因②，③不行才做） | revert 步驟 2 → 兩步驟改用圖片網址（R2 暫存公開網址）上傳；做法另列給使用者確認 | ⬜ |
 
+## 實測結果
+- 原因③（`543c0de`）：臉書後台「已排定」列表**沒出現**；工具「已排程」（`/scheduled_posts`）**讀得到**。→ 已 revert，回兩步驟（與 `b982e4d` 相同）。
+
 ## 下一步
 - [x] 步驟 1、2 commit、npm test 359、build --check
 - [ ] 使用者「推」→ 部署 → 排有圖排程，看「已排定」與預覽
-- [ ] ③ 不行：revert 步驟 2（回兩步驟）並列原因②做法
+- [x] ③ 不行：revert 步驟 2（回兩步驟）
+- [ ] 列原因②做法給使用者確認（開始後再做）
 
 ## 注意事項
 - 後端需重新部署；外掛不升版號。
