@@ -13,12 +13,12 @@
 ## 做法（每步一個 commit，可單獨 revert）
 | 步驟 | 內容 | 狀態 |
 |---|---|---|
-| 1 | `git revert 95348a4`：有圖排程回兩步驟（基準） | ⬜ |
-| 2（原因③） | 有圖排程改一步：/photos 帶 caption、source、published=false、scheduled_publish_time、**unpublished_content_type=SCHEDULED**；留言照片 ID 換貼文 ID 邏輯恢復 | ⬜ |
+| 1 | `git revert 95348a4`：有圖排程回兩步驟（基準）→ `b982e4d` | ✅ |
+| 2（原因③） | 有圖排程改一步：/photos 帶 caption、source、published=false、scheduled_publish_time、**unpublished_content_type=SCHEDULED**；留言照片 ID 換貼文 ID 邏輯恢復 → 見下一個 commit | ✅ |
 | 3（原因②，③不行才做） | revert 步驟 2 → 兩步驟改用圖片網址（R2 暫存公開網址）上傳；做法另列給使用者確認 | ⬜ |
 
 ## 下一步
-- [ ] 步驟 1、2 commit、npm test、build --check
+- [x] 步驟 1、2 commit、npm test 359、build --check
 - [ ] 使用者「推」→ 部署 → 排有圖排程，看「已排定」與預覽
 - [ ] ③ 不行：revert 步驟 2（回兩步驟）並列原因②做法
 
