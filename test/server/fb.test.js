@@ -671,3 +671,16 @@ test('cleanupFbImg：刪超過 24 小時的暫存圖，留新的與其他資料�
   assert.equal(await cleanupFbImg(env, Date.now()), 1);
   assert.deepEqual([...env.FILES.store.keys()].sort(), ['assets/old.png', 'tmp/fbimg/' + 'b'.repeat(32) + '.jpg']);
 });
+
+test('R2 寫入失敗：排程有圖退回直接上傳 source，照常排程', async () => {
+  const env = fbEnv();
+  env.FILES.put = async () => { throw new Error('r2 down'); };
+  routes.push([/\/111\/photos$/, () => reply({ id: '903' })]);
+  routes.push([/\/111\/feed$/, () => reply({ id: '111_11' })]);
+  const fd = new FormData();
+  fd.append('page', '111'); fd.append('message', 'x'); fd.append('scheduledAt', String(nowSec() + 3600));
+  fd.append('image', new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' }), 'a.jpg');
+  const res = await call('/fb/post', { method: 'POST', headers: await auth(env), body: fd }, env);
+  assert.equal(res.status, 200);
+  assert.ok(calls.find((x) => x.path.endsWith('/photos')).init.body.get('source'));
+});

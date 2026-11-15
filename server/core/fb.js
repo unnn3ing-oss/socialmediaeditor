@@ -487,7 +487,7 @@ async function createPost(request, env) {
         // 先上傳暫存照片（published=false、temporary=true），再用 /feed＋attached_media 排程，必帶 published、scheduled_publish_time、unpublished_content_type。
         // /feed 直接回貼文 ID，留言不必再用照片 ID 換貼文 ID。
         // 原因②：圖片檔先存 R2 暫存並給臉書公開網址（url），不直接上傳檔案（source）；沒綁 R2 就照舊上傳檔案
-        const tmpUrl = v.image ? await putTempImage(env, new URL(request.url).origin, v.image) : null;
+        const tmpUrl = v.image ? await putTempImage(env, new URL(request.url).origin, v.image).catch(() => null) : null;   // R2 寫入失敗也退回直接上傳
         const up = tmpUrl ? { url: tmpUrl } : file;
         const photo = await graphPost(env, token, `/${v.page}/photos`, { ...up, published: 'false', temporary: 'true' });
         if (!photo || !photo.id) throw new GraphError('fb_bad_request', '臉書沒有回傳照片 ID，無法排程。', null);
