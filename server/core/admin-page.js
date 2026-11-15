@@ -39,6 +39,8 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
 .pm-hint{font-size:13px;margin-top:4px}
+#pmRows select{min-width:160px}
+#pmRows td.err select{color:var(--ink);font-weight:400}
 .msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e6ecf6;vertical-align:middle}
