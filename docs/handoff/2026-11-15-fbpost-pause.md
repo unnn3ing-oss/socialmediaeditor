@@ -30,7 +30,7 @@
 - [x] 管理頁卡片＋e2e（admin.e2e.js 1 項）
 - [x] 工具公告＋e2e（fbpost.e2e.js 2 項；中途停用會關閉視窗但保留新增發文內容）
 - [x] `npm test` 375、全部 e2e 127、`node build.js --check` 通過；截圖已拍
-- [ ] 獨立審查
+- [x] 獨立審查通過（無缺陷；低風險：原因依 UTF-16 截斷可能切到 emoji，不改）
 - [ ] 使用者確認後說「推」才併 main，同 commit 更新 CLAUDE.md「目前進度」
 
 ## 測試
