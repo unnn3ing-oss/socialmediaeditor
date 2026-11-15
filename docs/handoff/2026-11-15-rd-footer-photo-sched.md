@@ -1,5 +1,5 @@
 # Rundown 底列＋測試移到管理頁＋少康 RD（RD 區段 A＋B）＋有圖排程照 Meta 文件改兩步驟
-- 狀態：進行中　- 分支：claude/dreamy-hawking-mme5c2　- 最後更新：2026-11-15
+- 狀態：已完成（已併入 main）　- 分支：claude/dreamy-hawking-mme5c2　- 最後更新：2026-11-15
 - 使用者原始需求：「需要把排入Rundown開關與輸入框移動到空白處，並且左邊開關右邊輸入框」「將測試功能移動到管理後台，並解決少康無法正確寫入RD的問題」；查證 Meta 文件後「開始，有圖排程用方案 A，RD 用 A＋B」。
 
 ## 已定案的決定
@@ -25,7 +25,7 @@
 - [x] 後端三項（27c7183 有圖排程、6c40c75 RD 區段、363bfc4 管理頁 Rundown API）
 - [x] 管理頁兩處、fbpost 底列（40bb55b、836d296）
 - [x] npm test 361、e2e 126、build --check、截圖、獨立審查（Sonnet）通過
-- [ ] 使用者說「推」才併入 main，同 commit 更新 CLAUDE.md「目前進度」
+- [x] 使用者說「推」才併入 main，同 commit 更新 CLAUDE.md「目前進度」
 - [ ] 部署後端後實測：排一篇有圖排程（Meta 後台「已排定」出現、到點發布、留言）；管理頁「粉專對應」確認少康 RD 區段＝自動（少康），排入 RD；管理頁 Rundown 測試連線
 
 ## 測試
