@@ -119,33 +119,6 @@ test('pagemap：接受 ? 與 ?& 開頭的 utm，儲存後可讀回', async () =>
   assert.equal(bad.res.status, 400);
 });
 
-test('pagemap：RD 區段 code 可存可改、非法值拒絕、不帶不覆蓋、改簡稱不動 code', async () => {
-  const env = mk();
-  const save = (it) => api(env, 'POST', '/admin/fb/pagemap', { items: [{ id: '222', label: '少康', utm: '', sort: 3, ...it }] }, 'admin');
-  const codeOf = () => env.DB.raw.prepare("SELECT code FROM fb_page_map WHERE page_id='222'").get().code;
-  // 原名對不上預設 → code 空；沒帶 code 存檔維持空
-  assert.equal((await save({})).res.status, 200);
-  assert.equal(codeOf(), '');
-  // 手動指定少康
-  assert.equal((await save({ code: 'shaokang' })).res.status, 200);
-  assert.equal(codeOf(), 'shaokang');
-  const g = await api(env, 'GET', '/admin/fb/pagemap', undefined, 'admin');
-  assert.equal(g.body.data.items.find((i) => i.id === '222').code, 'shaokang');
-  // 只改簡稱（不帶 code）不動 code
-  assert.equal((await save({ label: '少康2' })).res.status, 200);
-  assert.equal(codeOf(), 'shaokang');
-  // 非法值拒絕、不改動
-  for (const code of ['hacker', 'NEWS', 5, ' ', false]) assert.equal((await save({ code })).res.status, 400, String(code));
-  assert.equal(codeOf(), 'shaokang');
-  // 空字串＝不寫 RD
-  assert.equal((await save({ code: '' })).res.status, 200);
-  assert.equal(codeOf(), '');
-  // /fb/pages 也跟著回新的 code
-  await save({ code: 'intl' });
-  const r = await api(env, 'GET', '/fb/pages');
-  assert.equal(r.body.data.find((p) => p.id === '222').code, 'intl');
-});
-
 // ---- 發文時留言 ----
 const post = (env, b) => api(env, 'POST', '/fb/post', b);
 

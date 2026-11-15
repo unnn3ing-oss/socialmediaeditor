@@ -267,13 +267,7 @@ export async function adminPageMap(request, env, path) {
     if (label.length < 1 || label.length > 20) return fail(request, env, 'bad_request', '簡稱要 1 到 20 個字。');
     if (utm.length > 300 || !UTM_RE.test(utm)) return fail(request, env, 'bad_request', 'utm 可用 ? 開頭，內容只能用英數字與 _ . ~ = & % + - ，最長 300 字。');
     if (!Number.isInteger(sort) || sort < 0 || sort > 999) return fail(request, env, 'bad_request', '排序要是 0 到 999 的整數。');
-    // RD 區段（code）：沒帶就沿用舊值（相容舊請求）；帶了只接受已知代號或空字串（＝不寫 RD）
-    let code;
-    if (it && it.code !== undefined && it.code !== null) {
-      if (typeof it.code !== 'string' || (it.code !== '' && !DEFAULT_PAGEMAP.some((d) => d.code === it.code))) return fail(request, env, 'bad_request', 'RD 區段不正確。');
-      code = it.code;
-    }
-    clean.push({ id, label, utm, sort, code });
+    clean.push({ id, label, utm, sort });
   }
   if (!env.DB) return fail(request, env, 'misconfigured');
   await ensureTables(env);
@@ -283,9 +277,9 @@ export async function adminPageMap(request, env, path) {
   try { pages = await loadPages(env); } catch (e) { pages = []; }
   for (const c of clean) {
     const name = (pages.find((p) => p.id === c.id) || {}).name || '';
-    const code = c.code !== undefined ? c.code : old.has(c.id) ? old.get(c.id).code || '' : defaultMap(name).code;
+    const code = old.has(c.id) ? old.get(c.id).code || '' : defaultMap(name).code;
     await run(env, `INSERT INTO fb_page_map (page_id, code, label, utm, sort, updated) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(page_id) DO UPDATE SET code=excluded.code, label=excluded.label, utm=excluded.utm, sort=excluded.sort, updated=excluded.updated`, c.id, code, c.label, c.utm, c.sort, now);
+      ON CONFLICT(page_id) DO UPDATE SET label=excluded.label, utm=excluded.utm, sort=excluded.sort, updated=excluded.updated`, c.id, code, c.label, c.utm, c.sort, now);
   }
   return ok(request, env, { saved: clean.length });
 }

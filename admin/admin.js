@@ -247,7 +247,6 @@ if (window.top !== window.self) {
   };
 
   var pmItems = [];
-  var PM_CODES = [['', '未設定（不寫 RD）'], ['news', '新聞'], ['ent', '娛樂'], ['shaokang', '少康'], ['intl', '國際＋'], ['jkk', '擠看看（無 RD 區）'], ['weather', '氣象（無 RD 區）']];
   $('pmLoad').onclick = function () {
     $('pmLoad').disabled = true; say($('pmMsg'), '讀取中');
     api('/admin/fb/pagemap').then(function (res) {
@@ -263,16 +262,7 @@ if (window.top !== window.self) {
           if (type === 'number') { inp.min = 0; inp.max = 999; inp.step = 1; inp.style.width = '90px'; }
           c.appendChild(inp); tr.appendChild(c);
         }
-        cell('text', it.label, '簡稱', 'pmL' + i);
-        // RD 區段（code）：決定排入 Rundown 寫到哪一區；簡稱只是顯示用，與這欄無關
-        var rc = document.createElement('td'), sel = document.createElement('select');
-        sel.id = 'pmC' + i; sel.setAttribute('aria-label', it.name + ' RD 區段');
-        PM_CODES.forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
-        sel.value = PM_CODES.some(function (o) { return o[0] === it.code; }) ? it.code : '';
-        rc.appendChild(sel);
-        if (!sel.value) { rc.className = 'err'; var hint = document.createElement('div'); hint.textContent = '未設定，RD 不會寫入'; rc.appendChild(hint); }
-        tr.appendChild(rc);
-        cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
+        cell('text', it.label, '簡稱', 'pmL' + i); cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
         tb.appendChild(tr);
       });
       $('pmWrap').hidden = !pmItems.length; $('pmSave').hidden = !pmItems.length;
@@ -282,7 +272,7 @@ if (window.top !== window.self) {
   };
   $('pmSave').onclick = function () {
     var items = pmItems.map(function (it, i) {
-      return { id: it.id, label: $('pmL' + i).value, code: $('pmC' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
+      return { id: it.id, label: $('pmL' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
     });
     $('pmSave').disabled = true; say($('pmMsg'), '儲存中');
     api('/admin/fb/pagemap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {

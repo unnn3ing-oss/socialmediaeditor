@@ -22,23 +22,20 @@ const DATA = {
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN', sheets: ['11/14'] },
 };
 
-async function open(viewport, hash = '', data = {}) {
+async function open(viewport, hash = '') {
   const ctx = await browser.newContext({ viewport });
   const page = await ctx.newPage();
-  page.__data = data;
   const calls = [];
   page.on('pageerror', (e) => calls.push('ERR ' + e.message));
   await page.route(API + '/**', async (r) => {
     const req = r.request();
     const u = new URL(req.url());
     const key = req.method() + ' ' + u.pathname;
-    if (key === 'POST /admin/fb/pagemap') { calls.push({ key, auth: req.headers().authorization || '', body: req.postData() || '' }); return r.fulfill({ json: { ok: true, data: { saved: 2 } } }); }
-    calls.push({ key, auth: req.headers().authorization || '', body: req.postData() || '' });
+    calls.push({ key, auth: req.headers().authorization || '' });
     if (key === 'POST /admin/login') {
       const ok = JSON.parse(req.postData()).password === 'pw-123';
       return r.fulfill({ json: ok ? { ok: true, data: { token: 'T' } } : { ok: false, code: 'bad_password' } });
     }
-    if (key in (page.__data || {})) return r.fulfill({ json: { ok: true, data: page.__data[key] } });
     if (key in DATA) return r.fulfill({ json: { ok: true, data: DATA[key] } });
     return r.fulfill({ json: { ok: false, code: 'not_found', error: '找不到' } });
   });
@@ -124,26 +121,4 @@ test('頁面不用 emoji 或箭頭', async () => {
   const html = await page.content();
   assert.doesNotMatch(html, /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}]/u);
   assert.match(html, /<meta name="robots" content="noindex">/);
-});
-
-test('粉專對應：RD 區段下拉預選目前值、空值標紅、儲存時送出 code，簡稱獨立', async () => {
-  const items = [
-    { id: '1', name: '新聞粉', code: 'news', label: '新聞', utm: '', sort: 1, saved: true },
-    { id: '3', name: 'TVBS少康戰情室', code: '', label: '少康', utm: '', sort: 3, saved: false }
-  ];
-  const { page, calls } = await open({ width: 1280, height: 860 }, '', { 'GET /admin/fb/pagemap': { items } });
-  await login(page);
-  await page.click('#pmLoad');
-  await page.waitForSelector('#pmWrap:not([hidden])');
-  assert.equal(await page.inputValue('#pmC0'), 'news');
-  assert.equal(await page.inputValue('#pmC1'), '');
-  assert.match(await page.textContent('#pmRows tr:nth-child(2)'), /未設定，RD 不會寫入/);
-  assert.equal(await page.locator('#pmRows tr:nth-child(1) td.err').count(), 0);
-  await page.selectOption('#pmC1', 'shaokang');
-  await page.fill('#pmL1', '少康新簡稱');
-  await page.click('#pmSave');
-  for (let i = 0; i < 50 && !calls.some((c) => c.key === 'POST /admin/fb/pagemap'); i++) await page.waitForTimeout(100);
-  const saved = JSON.parse(calls.find((c) => c.key === 'POST /admin/fb/pagemap').body);
-  assert.deepEqual(saved.items.map((i) => [i.id, i.code, i.label]), [['1', 'news', '新聞'], ['3', 'shaokang', '少康新簡稱']]);
-  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });
