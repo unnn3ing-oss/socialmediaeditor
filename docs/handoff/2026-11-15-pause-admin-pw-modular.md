@@ -24,7 +24,8 @@
 | 測試 | pause、auth、fbpost e2e、company e2e、admin 頁 | ✅ |
 
 ## 下一步
-- [ ] 實作、測試、獨立審查、給使用者看、等「推」
+- [x] 實作、測試（npm test 353、e2e 118、build --check）、獨立審查通過（發文核心未動、adm 不能進 /admin）
+- [ ] 給使用者看、等「推」
 
 ## 參考
 原版 commit：`d020fed`（暫停）、`fac834d`（管理密碼）；交接 `2026-11-15-fbpost-pause.md`、`2026-11-15-admin-bypass-pause.md`。
