@@ -12,8 +12,9 @@
 ## 做法
 | 檔案 | 狀態 |
 |---|---|
-| `admin/index.html`、`admin.css`、`admin.js` | ⬜ |
-| `test/e2e/admin.e2e.js` | ⬜ |
+| `admin/index.html`、`admin.css`、`admin.js` | ✅ |
+| `test/e2e/admin.e2e.js` | ✅ |
 
 ## 下一步
-- [ ] 搬回並移除不存在的卡片、測試、審查、給使用者看、等「推」
+- [x] 搬回並移除不存在的卡片；npm test 353、e2e 122、build --check 通過
+- [ ] 審查、給使用者看、等「推」

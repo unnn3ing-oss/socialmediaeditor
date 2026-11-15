@@ -4,7 +4,7 @@
 
 - 網站：https://unnn3ing-oss.github.io/socialmediaeditor/（併入 main 並開啟 GitHub Pages 後生效）
 - 後端：`toolbox-api`（Cloudflare Worker），網址 https://toolbox-api.19jpz-3.workers.dev ，部署方式見 `docs/deploy.md`
-- 管理後台：https://toolbox-api.19jpz-3.workers.dev/admin （輸入管理密碼 `ADMIN_PASSWORD`；上傳公司素材、檢查臉書連線、粉專對應、錯誤紀錄）
+- 管理後台：https://unnn3ing-oss.github.io/socialmediaeditor/admin/ （分類排版；後端版 https://toolbox-api.19jpz-3.workers.dev/admin 也能用，兩個功能相同。輸入管理密碼 `ADMIN_PASSWORD`；上傳公司素材、暫停排程發布、檢查臉書連線、粉專對應、錯誤紀錄）
 
 ## 目錄
 
