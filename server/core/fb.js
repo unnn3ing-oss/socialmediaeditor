@@ -448,7 +448,7 @@ async function insights(request, env, q) {
 // ---- 發文／排程 ----
 // 有圖排程的留言可能只記了照片 ID：在原本就會打的請求多要 attachments，用附件照片 ID 補上貼文 ID（不多打臉書）。
 // attachments 讀不到（錯誤碼 100）就退回原本的欄位再查一次，行為與修改前相同。
-const ATTACH_FIELD = 'attachments{target{id},subattachments{target{id}}}';
+const ATTACH_FIELD = 'attachments{target{id}}';   // 一次只發一張圖，不展開子附件（列表 50 篇時回應較小）
 async function getWithAttachments(env, token, path, fields, params = {}) {
   try { return await graphGet(env, token, path, { ...params, fields: `${fields},${ATTACH_FIELD}` }); }
   catch (e) {
