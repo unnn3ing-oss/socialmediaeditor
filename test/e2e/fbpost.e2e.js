@@ -1406,6 +1406,19 @@ test('生僻字：純文字底圖輸入就載入，送出前等字型載完才�
   assert.deepEqual(errors, []);
 });
 
+test('純文字底圖輸出失敗（toBlob 回 null）→ 不送出、顯示錯誤，不會發成無圖貼文', async () => {
+  const { page, api, errors } = await open();
+  await page.click('#newPost');
+  await page.click('#modeSeg [data-mode=text]');
+  await page.fill('#title', '測試標題');
+  await page.evaluate(() => { HTMLCanvasElement.prototype.toBlob = function (cb) { setTimeout(() => cb(null), 0); }; });
+  await pick(page, '111');
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => /輸出圖片失敗/.test(document.querySelector('#sendMsg').textContent));
+  assert.equal(api.posts.length, 0, '沒有送出任何貼文');
+  assert.deepEqual(errors, []);
+});
+
 test('第 N 則留言：下拉預設「無」，選了把後台設定的內容填進文字框（可再改），選回「無」只清沒改過的', async () => {
   const { page, api, errors } = await open();
   await page.click('#newPost');

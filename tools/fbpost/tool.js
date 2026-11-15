@@ -1125,6 +1125,7 @@ async function buildPayload() {
     await cardFonts.ensure(lines.join('\n'));   // 送出的圖：標題的字都載好才畫
     drawTextCard($('textCanvas'), { text: lines.join('\n'), swatch, fontLoaded: state.fontLoaded });
     p.image = await new Promise((r) => $('textCanvas').toBlob(r, 'image/jpeg', 0.92));
+    if (!p.image) throw new Error('輸出圖片失敗，請再試一次');   // 沒有圖就不送，避免發成無圖的純文字貼文
     renderCard();
   } else {
     if (!caption.trim()) throw new Error('請輸入小編文');

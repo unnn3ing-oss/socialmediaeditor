@@ -865,3 +865,59 @@ test('停用：前端用管理密碼登入的憑證（adm）不受限制，/fb/*
   assert.notEqual((await rd.json()).code, 'fb_paused');
   assert.equal((await api(env, 'GET', '/fb/pages')).body.code, 'fb_paused', '普通公司憑證仍被擋');
 });
+
+// ---- 有圖排程：留言只記 photo_id 時，靠貼文附件的照片 ID 補上 post_id ----
+const photoPost = (id, photo, extra = {}) => ({ id, is_published: false, attachments: { data: [{ target: { id: photo } }] }, ...extra });
+
+test('照片留言（只有 photo_id）：改早時間 → 補 post_id、due 跟著新時間；第 N 則保留延遲', async () => {
+  const env = mk();
+  const at = nowSec() + 7200;
+  await enqueue(env, { post: null, photo: '77', due: at });
+  await enqueue(env, { post: null, photo: '77', due: at + 300, seq: 2, delay: 300 });
+  await enqueue(env, { post: null, photo: '88', due: at });   // 別張照片不受影響
+  const t = nowSec() + 1800;
+  routes.push([/\/111_9$/, (u, init) => (init.method === 'POST' ? reply({ success: true }) : reply(photoPost('111_9', '77')))]);
+  assert.equal((await api(env, 'POST', '/fb/reschedule', { post: '111_9', time: t })).res.status, 200);
+  const get = calls.find((c) => c.path.endsWith('/111_9') && c.method === 'GET');
+  assert.match(get.q.get('fields'), /^is_published,attachments\{target\{id\}/);
+  assert.equal(calls.filter((c) => c.path.endsWith('/111_9')).length, 2);   // 不多打臉書：一次 GET＋一次改時間
+  assert.deepEqual(rows(env).map((x) => [x.post_id, x.due]), [['111_9', t], ['111_9', t + 300], [null, at]]);
+});
+
+test('照片留言（只有 photo_id）：取消 → 留言跟著取消', async () => {
+  const env = mk();
+  await enqueue(env, { post: null, photo: '77', due: nowSec() + 7200 });
+  routes.push([/\/111_9$/, (u, init) => (init.method === 'DELETE' ? reply({ success: true }) : reply(photoPost('111_9', '77')))]);
+  assert.equal((await api(env, 'POST', '/fb/cancel', { post: '111_9' })).res.status, 200);
+  assert.deepEqual(rows(env).map((x) => [x.post_id, x.status]), [['111_9', 'canceled']]);
+});
+
+test('照片留言：已排程列表靠附件對上並顯示留言狀態（含第 N 則）；別的粉專不會被連結', async () => {
+  const env = mk();
+  await enqueue(env, { post: null, photo: '77', due: nowSec() + 7200, message: '第一則' });
+  await enqueue(env, { post: null, photo: '77', due: nowSec() + 7500, seq: 2, delay: 300, message: '第二則' });
+  await enqueue(env, { page: '222', post: null, photo: '77', due: nowSec() + 7200 });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [photoPost('111_9', '77', { message: 'm', scheduled_publish_time: nowSec() + 7200 })] })]);
+  const r = await api(env, 'GET', '/fb/scheduled?page=111');
+  const it = r.body.data.items[0];
+  assert.equal(it.comment.message, '第一則');
+  assert.deepEqual(it.extras.map((x) => x.message), ['第二則']);
+  assert.deepEqual(rows(env).map((x) => x.post_id), ['111_9', '111_9', null]);
+});
+
+test('attachments 欄位被臉書拒絕（錯誤碼 100）→ 退回原欄位再查，取消／列表照常', async () => {
+  const env = mk();
+  await enqueue(env, { post: '111_9', due: nowSec() + 7200 });
+  const noAttach = (ok) => (u, init, tok, url) => (/attachments/.test(url.searchParams.get('fields') || '') ? fbErr(100, '(#100) Unknown field') : ok(init));
+  routes.push([/\/111_9$/, noAttach((init) => (init.method === 'DELETE' ? reply({ success: true }) : reply({ id: '111_9', is_published: false })))]);
+  routes.push([/\/111\/scheduled_posts$/, noAttach(() => reply({ data: [{ id: '111_9', message: 'm' }] }))]);
+  assert.equal((await api(env, 'GET', '/fb/scheduled?page=111')).body.data.items[0].comment.status, 'pending');
+  assert.equal((await api(env, 'POST', '/fb/cancel', { post: '111_9' })).res.status, 200);
+  assert.equal(rows(env)[0].status, 'canceled');
+});
+
+test('attachmentTargets：含子附件、略過非數字 ID', async () => {
+  const q = await Q();
+  assert.deepEqual(q.attachmentTargets({ attachments: { data: [{ target: { id: '1' }, subattachments: { data: [{ target: { id: '2' } }, { target: { id: 'x' } }] } }, {}] } }), ['1', '2']);
+  assert.deepEqual(q.attachmentTargets({}), []);
+});
