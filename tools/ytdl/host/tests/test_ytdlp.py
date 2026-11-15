@@ -1,0 +1,526 @@
+import json
+import sys
+import threading
+import time
+from pathlib import Path
+
+import pytest
+
+from quality import format_selector, format_sort
+from ytdlp import (DoneInfo, Engine, Progress, ResolveError, StreamResult, VideoRef,
+                   build_download_args, classify_error, normalize_url, parse_done_line,
+                   parse_progress_line, resolve, run_capture, stream_download)
+
+
+def test_build_args():
+    a = build_download_args(Engine(Path("yt-dlp"), Path("/ff"), Path("/dn/deno")),
+                            "https://youtu.be/x", 1080, Path("/o/t.mp4"), Path("/o/.ytdl-partial/x"))
+    assert a[0] == "yt-dlp" and "--ignore-config" in a and "--no-playlist" in a
+    assert a[a.index("-f") + 1] == format_selector(1080)
+    assert a[a.index("-S") + 1] == format_sort(1080)
+    assert a[a.index("--merge-output-format") + 1] == "mp4"
+    assert [a[i + 1] for i, x in enumerate(a) if x == "-P"] == [f"home:{Path('/o')}", f"temp:{Path('/o/.ytdl-partial/x')}"]
+    assert a[a.index("-o") + 1] == "t.mp4"
+    assert a[a.index("--js-runtimes") + 1] == f"deno:{Path('/dn/deno')}"
+    assert a[a.index("--ffmpeg-location") + 1] == str(Path("/ff"))
+    assert a[-2:] == ["--", "https://youtu.be/x"]
+
+
+def test_build_args_without_optional_parts():
+    a = build_download_args(Engine(Path("yt-dlp")), "https://youtu.be/x", 720, Path("/o/t.mp4"), Path("/o/.p/x"))
+    assert "--ffmpeg-location" not in a and "--js-runtimes" not in a
+
+
+def test_target_percent_is_escaped():
+    a = build_download_args(Engine(Path("yt-dlp")), "https://youtu.be/x", 720, Path("/o/100%.mp4"), Path("/o/.p/x"))
+    assert a[a.index("-o") + 1] == "100%%.mp4"
+
+
+def test_real_yt_dlp_keeps_partial_files_in_the_per_video_dir_and_finishes_in_the_output_dir(tmp_path):
+    yt_dlp = pytest.importorskip("yt_dlp")
+    out = tmp_path / "輸出 100%"
+    args = build_download_args(Engine(Path("yt-dlp")), "https://youtu.be/x", 1080, out / "T 100%.mp4",
+                               out / ".ytdl-partial" / "x")
+    ydl = yt_dlp.YoutubeDL({**yt_dlp.parse_options(args[1:]).ydl_opts, "quiet": True})
+    info = {"id": "x", "title": "T", "ext": "mp4"}
+    assert ydl.prepare_filename(info) == str(out / "T 100%.mp4")  # an absolute -o would have made -P a no-op
+    assert ydl.prepare_filename(info, "temp") == str(out / ".ytdl-partial" / "x" / "T 100%.mp4")
+
+
+def test_parse_progress():
+    assert parse_progress_line("[ytdl-progress]512|1024|NA|2048.5|3") == Progress(50.0, 2048.5, 3)
+    assert parse_progress_line("[ytdl-progress]512|NA|2048|NA|NA") == Progress(25.0, None, None)
+    assert parse_progress_line("[ytdl-progress]512|NA|NA|NA|NA") == Progress(None, None, None)
+    assert parse_progress_line("random") is None
+
+
+def test_parse_done():
+    assert parse_done_line("[ytdl-done]abc|1080|avc1.640028") == DoneInfo("abc", 1080, "avc1.640028")
+    assert parse_done_line("[ytdl-done]abc|NA|NA") == DoneInfo("abc", None, None)
+    assert parse_done_line("x") is None
+
+
+@pytest.mark.parametrize("stderr,code", [
+    ("ERROR: [youtube] x: Private video. Sign in if you've been granted access to this video", "private"),
+    ("ERROR: [youtube] x: Video unavailable", "unavailable"),
+    ("ERROR: This video is not available in your country", "region"),
+    ("ERROR: Sign in to confirm you’re not a bot", "bot_check"),
+    ("ERROR: Sign in to confirm your age", "login_required"),
+    ("ERROR: Unable to download webpage: The read operation timed out", "network"),
+    ("ERROR: Temporary failure in name resolution", "network"),
+    ("ERROR: n challenge solving failed", "engine_outdated"),
+    ("ERROR: Unable to extract initial data", "engine_outdated"),
+    ("OSError: [Errno 28] No space left on device", "disk_full"),
+    ("something odd happened", "unknown"),
+    ("ERROR: [youtube] x: Unable to download webpage: HTTP Error 429: Too Many Requests", "rate_limited"),
+    ("ERROR: Too many requests", "rate_limited"),
+    ("ERROR: unable to download video data: HTTP Error 403: Forbidden", "forbidden"),
+    ("ERROR: [youtube] x: Unable to download webpage: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+     "self-signed certificate in certificate chain (_ssl.c:1006)", "tls"),
+    ("ERROR: [youtube] x: Unable to download API page: [SSL: WRONG_VERSION_NUMBER] wrong version number", "tls"),
+    ("ERROR: Unable to download webpage: self-signed certificate in certificate chain", "tls"),
+    ("ERROR: unable to open for writing: [WinError 225] Operation did not complete successfully because "
+     "the file contains a virus or potentially unwanted software", "blocked_by_antivirus"),
+    ("ERROR: Unable to rename file: [WinError 32] The process cannot access the file because it is being used "
+     "by another process: 'a.part' -> 'a'", "file_locked"),
+    ("ERROR: unable to open for writing: PermissionError(13, 'Permission denied')", "file_locked"),
+    ("ERROR: [youtube] x: Unable to download webpage: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in "
+     "violation of protocol (_ssl.c:1006)", "network"),
+    ("ERROR: unable to download video data: Members-only content", "login_required"),
+])
+def test_classify(stderr, code):
+    got, message = classify_error(stderr)
+    assert got == code and message
+
+
+def test_classify_user_messages_are_actionable_chinese():
+    assert classify_error("ERROR: HTTP Error 429: Too Many Requests")[1] == \
+        "YouTube 暫時限制了請求，請等一陣子再試，並調高「間隔」"
+    assert classify_error("ERROR: [SSL: CERTIFICATE_VERIFY_FAILED] x")[1] == \
+        "公司網路可能攔截了加密連線（憑證驗證失敗），請洽資訊人員"
+    assert classify_error("ERROR: [WinError 225] the file contains a virus")[1] == \
+        "檔案被防毒軟體擋下，請把 TbxYtdl 資料夾（YT 下載助手）加入防毒例外"
+    assert classify_error("ERROR: [WinError 32] being used by another process")[1] == \
+        "檔案被其他程式使用中，關閉後再試"
+
+
+def test_classify_engine_hint_names_the_button_that_really_updates_the_engine():
+    # re-running the installer keeps a yt-dlp that still starts; only the panel's button updates it
+    message = classify_error("ERROR: Unable to extract initial data")[1]
+    assert message == "下載引擎可能過舊，請到小編工具箱的 YT 批量下載工具，按「更新下載引擎」後再試"
+    assert "安裝檔" not in message
+
+
+def test_classify_looks_only_at_error_lines_when_there_are_any():
+    stderr = ("WARNING: [youtube] Sign in to confirm you're not a bot\n"
+              "ERROR: [youtube] x: Unable to download webpage: The read operation timed out")
+    assert classify_error(stderr)[0] == "network"
+
+
+def test_classify_falls_back_to_the_whole_text_without_error_lines():
+    assert classify_error("Traceback (most recent call last):\nOSError: [Errno 28] No space left on device")[0] \
+        == "disk_full"
+
+
+def test_classify_unknown_message_quotes_the_last_error_line():
+    stderr = "ERROR: first problem\nERROR: second problem\nWARNING: trailing noise"
+    code, message = classify_error(stderr)
+    assert code == "unknown" and "second problem" in message and "noise" not in message
+
+
+ROOT = "https://www.youtube.com"
+
+
+@pytest.mark.parametrize("src,expected", [
+    (f"{ROOT}/@abc", f"{ROOT}/@abc/videos"),
+    (f"{ROOT}/@abc/", f"{ROOT}/@abc/videos"),
+    (f"{ROOT}/@abc?si=x", f"{ROOT}/@abc/videos?si=x"),
+    (f"{ROOT}/channel/UC123", f"{ROOT}/channel/UC123/videos"),
+    (f"{ROOT}/c/Name", f"{ROOT}/c/Name/videos"),
+    (f"{ROOT}/user/Name", f"{ROOT}/user/Name/videos"),
+    (f"{ROOT}/@abc/videos", f"{ROOT}/@abc/videos"),
+    (f"{ROOT}/@abc/shorts", f"{ROOT}/@abc/shorts"),
+    (f"{ROOT}/watch?v=abc", f"{ROOT}/watch?v=abc"),
+    (f"{ROOT}/playlist?list=1", f"{ROOT}/playlist?list=1"),
+    ("https://youtu.be/abc", "https://youtu.be/abc"),
+])
+def test_normalize_url(src, expected):
+    assert normalize_url(src) == expected
+
+
+def fake_run(lines, rc=0, err=""):
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd)
+        return rc, "\n".join(json.dumps(x) for x in lines), err
+
+    return run, calls
+
+
+def test_resolve_expands_and_dedupes():
+    run, calls = fake_run([{"id": "a1", "title": "T1"}, {"id": "a2", "title": None}, {"id": "a1", "title": "T1"}])
+    got = resolve(Engine(Path("yt-dlp")), [f"{ROOT}/@abc"], limit=5, run=run)
+    assert got == [VideoRef("a1", "T1", f"{ROOT}/watch?v=a1"), VideoRef("a2", "a2", f"{ROOT}/watch?v=a2")]
+    cmd = calls[0]
+    assert cmd[cmd.index("--playlist-items") + 1] == "1:5"
+    assert "--flat-playlist" in cmd and "--dump-json" in cmd and "--ignore-config" in cmd
+    assert cmd[-2:] == ["--", f"{ROOT}/@abc/videos"]
+
+
+def test_resolve_failure_raises():
+    run, _ = fake_run([], rc=1, err="ERROR: Private video")
+    with pytest.raises(ResolveError) as exc:
+        resolve(Engine(Path("yt-dlp")), [f"{ROOT}/watch?v=x"], run=run)
+    assert exc.value.code == "private"
+
+
+def collect(cmd, cancel=None):
+    lines = []
+    result = stream_download(cmd, lines.append, cancel or threading.Event())
+    return result, lines
+
+
+def test_stream_lines_and_stderr():
+    result, lines = collect([sys.executable, "-c", 'print("a");print("b")'])
+    assert lines == ["a", "b"] and result.returncode == 0
+
+
+def test_stream_failure():
+    result, _ = collect([sys.executable, "-c", 'import sys;sys.stderr.write("boom");sys.exit(3)'])
+    assert result == StreamResult(3, "boom", False)
+
+
+def test_stream_cancel():
+    cancel = threading.Event()
+    threading.Timer(0.2, cancel.set).start()
+    started = time.monotonic()
+    result, _ = collect([sys.executable, "-c", "import time;time.sleep(30)"], cancel)
+    assert time.monotonic() - started < 5
+    assert result.cancelled is True and result.returncode != 0
+
+
+def test_resolve_partial_failure_keeps_other_urls():
+    def run(cmd):
+        if cmd[-1].endswith("bad"):
+            return 1, "", "ERROR: Private video"
+        return 0, json.dumps({"id": "a1", "title": "T1"}), ""
+
+    got = resolve(Engine(Path("yt-dlp")), [f"{ROOT}/watch?v=ok", f"{ROOT}/watch?v=bad"], run=run)
+    assert got == [VideoRef("a1", "T1", f"{ROOT}/watch?v=a1"), VideoRef("", "", f"{ROOT}/watch?v=bad")]
+
+
+def test_resolve_all_urls_failing_raises():
+    run, _ = fake_run([], rc=1, err="ERROR: Video unavailable")
+    with pytest.raises(ResolveError) as exc:
+        resolve(Engine(Path("yt-dlp")), [f"{ROOT}/watch?v=a", f"{ROOT}/watch?v=b"], run=run)
+    assert exc.value.code == "unavailable"
+
+
+@pytest.mark.parametrize("url,single", [
+    (f"{ROOT}/watch?v=abc&list=PL1", True),
+    (f"{ROOT}/watch?v=abc", True),
+    ("https://youtu.be/abc?list=PL1", True),
+    (f"{ROOT}/shorts/abc", True),
+    (f"{ROOT}/playlist?list=PL1", False),
+    (f"{ROOT}/@abc", False),
+    (f"{ROOT}/@abc/videos", False),
+])
+def test_resolve_no_playlist_only_for_single_video_urls(url, single):
+    run, calls = fake_run([{"id": "a1", "title": "T1"}])
+    resolve(Engine(Path("yt-dlp")), [url], run=run)
+    assert ("--no-playlist" in calls[0]) is single
+
+
+def test_run_capture_missing_executable_does_not_raise():
+    code, out, err = run_capture(["/nonexistent/yt-dlp-xyz", "--version"])
+    assert code != 0 and out == "" and err
+
+
+def test_resolve_includes_duration_when_present_and_none_otherwise():
+    run, _ = fake_run([{"id": "a1", "title": "T1", "duration": 222.0}, {"id": "a2", "title": "T2"},
+                       {"id": "a3", "title": "T3", "duration": "bad"}])
+    got = resolve(Engine(Path("yt-dlp")), [f"{ROOT}/@abc"], run=run)
+    assert [r.duration for r in got] == [222, None, None]
+
+
+def test_fetch_meta_parses_description_and_truncates():
+    from ytdlp import fetch_meta
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd)
+        return 0, json.dumps({"id": "v1", "title": "標題", "description": "x" * 9000 + " #tag"}), ""
+
+    meta = fetch_meta(Engine(Path("yt-dlp")), f"{ROOT}/watch?v=v1", run=run)
+    assert meta["id"] == "v1" and meta["title"] == "標題" and len(meta["description"]) == 8000
+    cmd = calls[0]
+    assert "--skip-download" in cmd and "--no-playlist" in cmd and "--dump-json" in cmd
+    assert cmd[-2:] == ["--", f"{ROOT}/watch?v=v1"]
+
+
+def test_fetch_meta_missing_description_is_empty_string():
+    from ytdlp import fetch_meta
+    meta = fetch_meta(Engine(Path("yt-dlp")), f"{ROOT}/watch?v=v1",
+                      run=lambda cmd: (0, json.dumps({"id": "v1", "title": "T"}), ""))
+    assert meta["description"] == ""
+
+
+def test_fetch_meta_classifies_failure():
+    from ytdlp import fetch_meta
+    with pytest.raises(ResolveError) as exc:
+        fetch_meta(Engine(Path("yt-dlp")), f"{ROOT}/watch?v=v1", run=lambda cmd: (1, "", "ERROR: Private video"))
+    assert exc.value.code == "private"
+    with pytest.raises(ResolveError):
+        fetch_meta(Engine(Path("yt-dlp")), f"{ROOT}/watch?v=v1", run=lambda cmd: (0, "not json", ""))
+
+
+# -- warnings are no longer hidden: yt-dlp reports a missing JavaScript runtime only as a WARNING ----------
+
+NO_DENO_WARNING = (
+    "WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another "
+    "runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been "
+    "deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one")
+SABR_WARNING = ("WARNING: [youtube] abc123def45: Some web client https formats have been skipped as they are missing a url. "
+                "YouTube is forcing SABR streaming for this client.")
+
+
+def test_base_args_no_longer_hide_warnings():
+    assert "--no-warnings" not in Engine(Path("yt-dlp")).base_args()
+    assert "--no-warnings" not in Engine(Path("yt-dlp"), Path("/ff"), Path("/dn/deno")).base_args()
+
+
+def test_missing_javascript_runtime_behind_a_format_error_is_deno_missing():
+    stderr = (f"{NO_DENO_WARNING}\n{SABR_WARNING}\n"
+              "ERROR: [youtube] abc123def45: Requested format is not available. Use --list-formats for a list of available formats")
+    code, message = classify_error(stderr)
+    assert code == "deno_missing"
+    assert message == "找不到 Deno（解開 YouTube 驗證需要），請重新執行安裝檔，它會自動補齊"
+
+
+def test_missing_javascript_runtime_with_an_unknown_error_is_deno_missing():
+    stderr = f"{NO_DENO_WARNING}\nERROR: [youtube] abc123def45: Something nobody has seen before"
+    assert classify_error(stderr)[0] == "deno_missing"
+
+
+def test_missing_javascript_runtime_only_as_a_warning_with_a_crash_is_deno_missing():
+    stderr = f"{NO_DENO_WARNING}\nTraceback (most recent call last):\nKeyError: 'x'"
+    assert classify_error(stderr)[0] == "deno_missing"
+
+
+def test_missing_javascript_runtime_does_not_hide_a_real_cause():
+    assert classify_error(f"{NO_DENO_WARNING}\nERROR: [youtube] x: Private video. Sign in")[0] == "private"
+    assert classify_error(f"{NO_DENO_WARNING}\nERROR: [youtube] x: HTTP Error 429: Too Many Requests")[0] == "rate_limited"
+    assert classify_error(f"{NO_DENO_WARNING}\nERROR: [youtube] x: Unable to download webpage: timed out")[0] == "network"
+
+
+def test_signature_failure_without_the_javascript_warning_stays_engine_outdated():
+    stderr = ("WARNING: [youtube] abc: Signature solving failed: Some formats may be missing.\n"
+              "ERROR: [youtube] abc: Requested format is not available")
+    assert classify_error(stderr)[0] == "engine_outdated"
+
+
+def test_warnings_do_not_decide_the_class_when_there_is_no_error_line():
+    stderr = "WARNING: [download] Got error: timed out. Retrying (1/10)...\nTraceback (most recent call last):\nKeyError: 'x'"
+    code, message = classify_error(stderr)
+    assert code == "unknown" and "KeyError" in message and "Retrying" not in message
+
+
+def test_unknown_message_never_quotes_a_warning_when_something_else_exists():
+    code, message = classify_error("ERROR: odd failure\nWARNING: trailing noise about formats")
+    assert code == "unknown" and "odd failure" in message and "noise" not in message
+
+
+def test_stream_download_still_separates_progress_lines_from_warning_stderr():
+    script = ('import sys;print("[ytdl-progress]1|2|NA|NA|NA");'
+              'sys.stderr.write("WARNING: [youtube] something\\n")')
+    result, lines = collect([sys.executable, "-c", script])
+    assert lines == ["[ytdl-progress]1|2|NA|NA|NA"] and "WARNING" in result.stderr and result.returncode == 0
+
+
+# -- log hooks -------------------------------------------------------------------------------------
+
+def test_resolve_logs_the_stderr_tail_when_a_url_fails():
+    logged = []
+    run, _ = fake_run([], rc=1, err="WARNING: noise\nERROR: Private video")
+    with pytest.raises(ResolveError):
+        resolve(Engine(Path("yt-dlp")), [f"{ROOT}/watch?v=x" + "y" * 200], run=run, log=logged.append)
+    text = "\n".join(logged)
+    assert "resolve failed" in text and "code=private" in text and "ERROR: Private video" in text
+    assert "y" * 130 not in text  # urls are cut at 120 characters
+
+
+def test_resolve_logs_warnings_even_when_it_succeeds_but_not_the_json():
+    logged = []
+    run, _ = fake_run([{"id": "a1", "title": "T1"}], err=NO_DENO_WARNING)
+    assert resolve(Engine(Path("yt-dlp")), [f"{ROOT}/@abc"], run=run, log=logged.append)
+    text = "\n".join(logged)
+    assert "No supported JavaScript runtime" in text and '"id"' not in text
+
+
+def test_resolve_without_a_log_is_silent():
+    run, _ = fake_run([{"id": "a1", "title": "T1"}], err="WARNING: x")
+    assert resolve(Engine(Path("yt-dlp")), [f"{ROOT}/@abc"], run=run)
+
+
+def test_fetch_meta_logs_failures_and_warnings():
+    from ytdlp import fetch_meta
+    logged = []
+    with pytest.raises(ResolveError):
+        fetch_meta(Engine(Path("yt-dlp")), f"{ROOT}/watch?v=v1", run=lambda cmd: (1, "", "ERROR: Private video"),
+                   log=logged.append)
+    assert "meta failed" in logged[-1] and "code=private" in logged[-1]
+    fetch_meta(Engine(Path("yt-dlp")), f"{ROOT}/watch?v=v1",
+               run=lambda cmd: (0, json.dumps({"id": "v1", "title": "T"}), "WARNING: careful"), log=logged.append)
+    assert "WARNING: careful" in logged[-1]
+
+
+IG = "https://www.instagram.com"
+
+
+@pytest.mark.parametrize("stderr,code", [
+    ("ERROR: [Instagram] Dd8pP9yS3WB: Requested content is not available, rate-limit reached or login required. "
+     "Use --cookies-from-browser", "instagram_blocked"),
+    ("ERROR: [Instagram] x: This content is only available for registered users who follow this account", "instagram_blocked"),
+    ("ERROR: [Instagram] x: Instagram sent an empty media response. Check if this post is accessible in your "
+     "country/region", "instagram_blocked"),
+    ("ERROR: [Instagram] x: There is no video in this post", "no_video"),
+    ("ERROR: [Instagram] x: No video formats found!", "no_video"),
+    ("ERROR: [Instagram] x: Unable to download webpage: HTTP Error 429: Too Many Requests", "rate_limited"),
+    ("ERROR: [Instagram] x: Unable to download webpage: The read operation timed out", "network"),
+])
+def test_classify_instagram(stderr, code):
+    got, message = classify_error(stderr)
+    assert got == code and message
+    if code != "network":
+        assert "Instagram" in message and "YouTube" not in message
+
+
+def test_classify_instagram_login_message_says_what_to_do_and_never_mentions_cookies():
+    message = classify_error("ERROR: [Instagram] x: Requested content is not available, rate-limit reached or login "
+                             "required. Use --cookies-from-browser")[1]
+    assert message == "Instagram 要求登入才能看這則內容（可能是私人帳號，或 Instagram 暫時限制了未登入的存取），請稍後再試"
+
+
+def test_classify_instagram_ignores_the_youtube_deno_hint():
+    code, _ = classify_error("WARNING: No supported JavaScript runtime could be found\n"
+                             "ERROR: [Instagram] x: Unable to extract shared data")
+    assert code != "deno_missing"
+
+
+def test_resolve_names_an_instagram_reel_after_its_owner_and_caption_and_keeps_its_address():
+    run, calls = fake_run([{"id": "Dd8pP9yS3WB", "title": "Video by bluesky_1108", "uploader": "bluesky_1108",
+                            "description": "好天氣\n#sky #blue", "duration": 12.5,
+                            "webpage_url": f"{IG}/reel/Dd8pP9yS3WB/"}])
+    got = resolve(Engine(Path("yt-dlp")), [f"{IG}/reel/Dd8pP9yS3WB/?igsh=abc"], run=run)
+    assert got == [VideoRef("Dd8pP9yS3WB", "bluesky_1108 - 好天氣", f"{IG}/reel/Dd8pP9yS3WB/", 12)]
+    assert "--no-playlist" in calls[0]
+
+
+def test_resolve_instagram_without_a_caption_keeps_the_generic_title_and_drops_tracking_from_the_address():
+    run, _ = fake_run([{"id": "Dd8pP9yS3WB", "title": "Video by bluesky_1108", "uploader": "bluesky_1108"}])
+    got = resolve(Engine(Path("yt-dlp")), [f"{IG}/reel/Dd8pP9yS3WB/?igsh=abc"], run=run)
+    assert got == [VideoRef("Dd8pP9yS3WB", "Video by bluesky_1108", f"{IG}/reel/Dd8pP9yS3WB/")]
+
+
+def test_resolve_instagram_never_builds_a_youtube_address_from_an_id():
+    run, _ = fake_run([{"id": "a1", "title": "x", "webpage_url": "https://evil.example/x"},
+                       {"id": "a2", "title": "y", "webpage_url": f"{IG}/p/a2abcde/"}])
+    got = resolve(Engine(Path("yt-dlp")), [f"{IG}/p/Dd8pP9yS3WB/"], run=run)
+    assert [r.url for r in got] == [f"{IG}/p/a2abcde/"]
+
+
+def test_resolve_instagram_caption_is_cut_and_has_no_line_breaks():
+    run, _ = fake_run([{"id": "Dd8pP9yS3WB", "title": "Video by u", "uploader": "u", "description": "  " + "字" * 200}])
+    got = resolve(Engine(Path("yt-dlp")), [f"{IG}/reel/Dd8pP9yS3WB/"], run=run)
+    assert got[0].title == "u - " + "字" * 60
+
+
+def test_instagram_download_prefers_h264_first_and_youtube_does_not():
+    ig = build_download_args(Engine(Path("yt-dlp")), "https://www.instagram.com/reel/Dd8pP9yS3WB/", 1080,
+                             Path("/o/t.mp4"), Path("/o/.p/x"))
+    yt = build_download_args(Engine(Path("yt-dlp")), "https://youtu.be/x", 1080, Path("/o/t.mp4"), Path("/o/.p/x"))
+    assert ig[ig.index("-S") + 1] == format_sort(1080, h264_first=True)
+    assert yt[yt.index("-S") + 1] == format_sort(1080)
+
+
+def _audio_args(audio, url="https://youtu.be/x", target="/o/名字 100%.mp3"):
+    return build_download_args(Engine(Path("yt-dlp")), url, 1080, Path(target), Path("/o/.p/x"), audio=audio)
+
+
+def test_mp3_asks_for_the_best_audio_and_the_best_mp3_quality():
+    a = _audio_args("mp3")
+    assert a[a.index("-f") + 1] == "bestaudio/best"
+    assert "-x" in a and a[a.index("--audio-format") + 1] == "mp3" and a[a.index("--audio-quality") + 1] == "0"
+    assert "--merge-output-format" not in a and "-S" not in a
+
+
+def test_aac_is_an_m4a_file_that_copies_an_aac_source_and_otherwise_encodes_at_320k():
+    a = _audio_args("aac", target="/o/t.m4a")
+    assert a[a.index("--audio-format") + 1] == "m4a" and a[a.index("--audio-quality") + 1] == "320"
+
+
+def test_audio_output_name_leaves_the_extension_to_yt_dlp_and_escapes_percent():
+    # a fixed ".mp3" template would make the downloaded webm and the converted mp3 try to share one name
+    a = _audio_args("mp3")
+    assert a[a.index("-o") + 1] == "名字 100%%.%(ext)s"
+    assert [a[i + 1] for i, x in enumerate(a) if x == "-P"] == [f"home:{Path('/o')}", f"temp:{Path('/o/.p/x')}"]
+    assert a[-2:] == ["--", "https://youtu.be/x"] and "--no-playlist" in a
+
+
+def test_video_arguments_are_unchanged_without_audio():
+    a = _audio_args(None, target="/o/t.mp4")
+    assert a[a.index("-f") + 1] == format_selector(1080) and "-x" not in a and a[a.index("-o") + 1] == "t.mp4"
+
+
+# ---- the audio arguments against the real yt-dlp and ffmpeg, with the sources served from this computer ----
+
+def _served(tmp_path, makers):
+    """Serve generated media files over http on localhost; returns (base url, stop function)."""
+    import functools
+    import http.server
+    import shutil
+    import subprocess
+    if not (shutil.which("yt-dlp") and shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        pytest.skip("needs yt-dlp, ffmpeg and ffprobe")
+    root = tmp_path / "www"
+    root.mkdir()
+    for name, codec_args in makers.items():
+        made = subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+                               *codec_args, str(root / name)], capture_output=True)
+        if made.returncode != 0:
+            pytest.skip(f"this ffmpeg cannot write {name}")
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+    handler.log_message = lambda *a, **k: None
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{server.server_address[1]}", server.shutdown
+
+
+def _codec(path):
+    import subprocess
+    return subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name",
+                           "-of", "csv=p=0", str(path)], capture_output=True, text=True).stdout.strip()
+
+
+@pytest.mark.parametrize("source,audio,extension,codec", [
+    ("a.webm", "mp3", "mp3", "mp3"),      # opus source, mp3 asked for
+    ("a.m4a", "aac", "m4a", "aac"),       # aac source copied into an m4a
+    ("a.webm", "aac", "m4a", "aac"),      # opus source encoded to aac
+])
+def test_real_audio_download_makes_the_file_that_was_asked_for(tmp_path, source, audio, extension, codec):
+    import subprocess
+    makers = {"a.webm": ["-c:a", "libopus"], "a.m4a": ["-c:a", "aac"]}
+    base, stop = _served(tmp_path, makers)
+    try:
+        out = tmp_path / "out"
+        target = out / f"名字 100%.{extension}"
+        args = build_download_args(Engine(Path("yt-dlp")), f"{base}/{source}", 1080, target, out / ".p" / "x", audio=audio)
+        done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8")
+    finally:
+        stop()
+    assert done.returncode == 0, done.stderr
+    assert target.exists() and _codec(target) == codec
+    assert sorted(p.name for p in out.iterdir() if p.is_file()) == [target.name], "nothing else is left beside it"
+    line = next(ln for ln in done.stdout.splitlines() if ln.startswith("[ytdl-done]"))
+    assert parse_done_line(line).codec is None  # (no video)

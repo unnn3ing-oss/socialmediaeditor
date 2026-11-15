@@ -1,0 +1,4 @@
+# `python3 -m pytest -q` 需要的全部套件（下載助手與產生器只用標準函式庫）。
+# 相容版本範圍：Python 3.9 與 3.12 都用 pytest 8.x，CI 不會飄移。
+# 不需要 yt-dlp：測試用替身。
+pytest~=8.3

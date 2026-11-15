@@ -1,0 +1,439 @@
+"""Download jobs: sequential queue, resume bookkeeping and cancellation."""
+from __future__ import annotations
+
+import json
+import os
+import random
+import shutil
+import threading
+import time
+import traceback
+from collections import deque
+from pathlib import Path
+from typing import Callable
+
+from hidden import hide
+from hostlog import tail_lines
+from naming import PARTIAL_DIR, partial_dir, resolve_target
+from quality import audio_extension, is_h264, parse_audio, parse_quality
+from security import VIDEO_ID, is_allowed_url, is_instagram_url, safe_output_path
+from transcode import convert_to_h264
+from ytdlp import (Engine, ResolveError, build_download_args, classify_error, parse_done_line,
+                   parse_progress_line, resolve, stream_download)
+
+# A run of these means YouTube or Instagram (or the network) is pushing back: wait longer, then give up before it gets worse.
+THROTTLE_CODES = {"network", "rate_limited", "bot_check", "forbidden", "tls", "instagram_blocked"}
+FATAL_CODES = {"disk_full"}  # every following video would fail the same way
+MAX_THROTTLE_STREAK = 3
+# failures that say something about this computer, not about one video: the same one twice in a row stops the job
+# (a merge failure costs a full download each; a video that fails oddly on a machine without Deno is not proof)
+REPEAT_LIMITS = {"merge_failed": 2, "deno_missing": 2}
+MIN_BACKOFF, MAX_BACKOFF = 5.0, 120.0
+JITTER = 0.25  # the wait between two attempts gets up to a quarter extra, so the rhythm is not machine-regular
+ABORT_MESSAGES = {
+    "network": "網路連線連續失敗，已先停止下載；請確認網路正常後再繼續",
+    "rate_limited": "YouTube 或 Instagram 連續限制了請求，已先停止下載以免被封鎖；請等一個小時以上，並把「每支間隔」調高後再繼續",
+    "bot_check": "YouTube 連續要求驗證是否為機器人，已先停止下載；請稍後再試，或改用住宅或公司網路",
+    "forbidden": "YouTube 連續拒絕了請求（403），已先停止下載；請稍後再試，並把「每支間隔」調高",
+    "instagram_blocked": "Instagram 連續要求登入或限制了請求，已先停止下載以免被封鎖；請等一個小時以上，並把「每支間隔」調高後再繼續",
+    "tls": "公司網路可能攔截了加密連線（憑證驗證失敗），已先停止下載；請洽資訊人員",
+    "disk_full": "磁碟空間不足，已先停止下載；請清出空間，或到設定換一個資料夾後再繼續",
+    "deno_missing": "找不到 Deno（解開 YouTube 驗證需要），已先停止下載；請重新執行安裝檔，它會自動補齊後再繼續",
+    "merge_failed": "影片連續合併失敗（ffmpeg 可能無法使用），已先停止下載；請按「檢查環境」修復後再繼續",
+}
+
+PLACEHOLDER_TITLES = {
+    "[private video]": ("private", "這是私人影片，沒有權限下載"),
+    "[deleted video]": ("unavailable", "影片已被刪除"),
+}
+
+
+def _has_content(path: Path) -> bool:
+    try:
+        return path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+class Archive:
+    """Hidden per-folder record of video id -> file name, used only for resuming."""
+
+    FILENAME = ".ytdl-archive.json"
+
+    def __init__(self, directory: Path):
+        self.directory = Path(directory)
+        self.path = self.directory / self.FILENAME
+
+    def mapping(self) -> dict[str, str]:
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str)}
+
+    def lookup(self, video_id: str) -> str | None:
+        name = self.mapping().get(video_id)
+        return name if name and (self.directory / name).exists() else None
+
+    def record(self, video_id: str, filename: str) -> None:
+        data = self.mapping()
+        data[video_id] = filename
+        self.directory.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, self.path)
+        hide(self.path)  # the replace brought in a new file without the attribute
+
+
+def _hide_partial_root(output_dir: Path) -> None:
+    """The folder of unfinished files sits in the output folder, which may be Downloads itself."""
+    root = Path(output_dir) / PARTIAL_DIR
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return  # yt-dlp reports a folder it cannot write to
+    hide(root)
+
+
+def _ref(it) -> str | None:
+    """What an item is called in events and in remove: its own key (a video and its audio are separate items), else its id."""
+    if not isinstance(it, dict):
+        return None
+    key = it.get("key")
+    return key if isinstance(key, str) and key else it.get("id")
+
+
+def _item_audio(it: dict, default: str | None) -> str | None:
+    """The format this item asks for ('mp3', 'aac' or None for the video); the job's own when the item says nothing."""
+    if "audio" not in it:
+        return default
+    try:
+        return parse_audio(it["audio"])
+    except ValueError:
+        return default
+
+
+def _seen_key(it: dict, default: str | None) -> str | None:
+    vid = it.get("id")
+    audio = _item_audio(it, default)
+    return f"{vid}.{audio_extension(audio)}" if audio and vid else vid
+
+
+class JobRunner:
+    def __init__(self, engine: Engine, emit: Callable[[dict], None], stream=stream_download,
+                 resolve_fn=resolve, sleep=time.sleep, delay: float = 2.0, jitter=random.random,
+                 log: Callable[[str], None] | None = None):
+        self.engine = engine
+        self._emit = emit
+        self._stream = stream
+        self._resolve = resolve_fn
+        self._sleep = sleep
+        self._delay = delay
+        self._jitter = jitter
+        self._log = log or (lambda message: None)
+        self._cancel = threading.Event()
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._pending: deque = deque()
+        self._closing = False
+        self._current: tuple[str | None, threading.Event] | None = None
+        self.running = False
+        self.last_job: dict | None = None  # what the last finished job did (the diagnostics bundle shows it)
+
+    def start(self, job_id: str, items: list[dict], quality: int, output_dir: Path,
+              title_override: str | None = None, cooldown: float | None = None, audio: str | None = None) -> None:
+        quality = parse_quality(quality)
+        audio = parse_audio(audio)
+        seconds = self._delay if cooldown is None else float(cooldown)
+        with self._lock:
+            if self.running:
+                raise RuntimeError("busy")
+            self.running = True
+            self._closing = False
+            self._cancel.clear()
+            self._pending = deque(items)
+            self._current = None
+            self._thread = threading.Thread(
+                target=self._run,
+                args=(job_id, len(items), quality, Path(output_dir), title_override, seconds, audio),
+                daemon=True)
+            self._thread.start()
+
+    def enqueue(self, items: list[dict]) -> bool:
+        """Append to the running job; False when there is none (or it is already wrapping up)."""
+        with self._lock:
+            if not self.running or self._closing or self._cancel.is_set():
+                return False
+            self._pending.extend(items)
+            return True
+
+    def remove(self, item_id: str) -> str | None:
+        """Drop a waiting item, or cancel just the one being processed (downloading or cooling down)."""
+        with self._lock:
+            for it in list(self._pending):
+                if _ref(it) == item_id:
+                    self._pending.remove(it)
+                    return "pending"
+            if self._current and self._current[0] == item_id:
+                self._current[1].set()
+                return "current"
+        return None
+
+    def cancel(self) -> None:
+        with self._lock:
+            self._cancel.set()
+            if self._current:
+                self._current[1].set()
+
+    def join(self, timeout: float | None = None) -> None:
+        thread = self._thread
+        if thread:
+            thread.join(timeout)
+
+    def _run(self, job_id, count, quality, output_dir, title_override, cooldown, audio=None) -> None:
+        summary = {"ok": 0, "skipped": 0, "failed": 0, "cancelled": False, "aborted": None}
+        failures: list[dict] = []
+        last_code = None  # class of the failure the current item ended with
+        self._log(f"job start id={job_id} items={count} quality={quality}{f' audio={audio}' if audio else ''} cooldown={cooldown}")
+
+        def fail(item_id: str, code: str, reason: str, detail: str = "") -> None:
+            nonlocal last_code
+            last_code = code
+            summary["failed"] += 1
+            failures.append({"itemId": item_id, "code": code})
+            self._log(f"item_failed item={item_id} code={code} reason={reason}" + (f"\n{tail_lines(detail)}" if detail.strip() else ""))
+            self._emit({"type": "item_failed", "jobId": job_id, "itemId": item_id,
+                        "reason": reason, "code": code})
+
+        try:
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:  # no item was tried, so none gets an event: they stay waiting in the extension
+                with self._lock:
+                    self._closing = True
+                summary["aborted"] = {"code": "bad_path",
+                                      "message": f"無法建立輸出資料夾（{exc}）；請到設定換一個資料夾"}
+                return
+            try:
+                resolve_target(output_dir, "x", "x" * 11)  # a folder with no room left for a file name fails every item
+            except ValueError as exc:
+                with self._lock:
+                    self._closing = True
+                summary["aborted"] = {"code": "bad_path",
+                                      "message": f"輸出資料夾的路徑太長或無法使用（{exc}）；請到設定換一個比較短的資料夾"}
+                return
+            archive = Archive(output_dir)
+            seen: set[str] = set()
+            attempted = touched = False  # any earlier network attempt / this item's first one has begun
+            streak = same_run = 0  # throttle-class failures in a row, and failures of one REPEAT_LIMITS kind in a row
+            previous = None
+
+            def wait_turn(next_id: str, item_cancel: threading.Event) -> str | None:
+                """Called right before an item first touches the network: waits out the cooldown after an earlier try."""
+                nonlocal attempted, touched
+                if touched:
+                    return None
+                touched = True
+                if attempted:
+                    seconds = self._pause(cooldown, streak)
+                    if seconds > 0:
+                        self._log(f"cooldown {seconds:.1f}s before {next_id} (throttle streak {streak})")
+                        self._cooldown(job_id, next_id, seconds, item_cancel)
+                attempted = True
+                return self._stopped(job_id, next_id, item_cancel)
+
+            while True:
+                with self._lock:
+                    if self._cancel.is_set() and self._pending:
+                        summary["cancelled"] = True
+                    if self._cancel.is_set() or not self._pending:
+                        self._closing = True
+                        break
+                    it = self._pending.popleft()
+                    item_cancel = threading.Event()
+                    self._current = (_ref(it), item_cancel)
+                touched, last_code = False, None
+                try:
+                    outcome = self._one(job_id, it, quality, output_dir, archive, seen, fail,
+                                        count == 1 and title_override or None, wait_turn, item_cancel, audio)
+                except Exception as exc:  # one bad item must never end the batch
+                    fail(str(_ref(it) or it.get("url") or "?") if isinstance(it, dict) else "?",
+                         "unknown", f"內部錯誤：{exc}", traceback.format_exc())
+                    outcome = "failed"
+                finally:
+                    with self._lock:
+                        self._current = None
+                if outcome in ("failed", "removed") and isinstance(it, dict):
+                    seen.discard(_seen_key(it, audio))  # a retry or a re-added copy must be allowed to run in this job
+                if outcome == "ok":
+                    summary["ok"] += 1
+                elif outcome == "skipped":
+                    summary["skipped"] += 1
+                elif outcome == "cancelled":
+                    summary["cancelled"] = True
+                    break
+                if touched and outcome in ("ok", "failed"):  # an item that never reached the network proves nothing
+                    streak = streak + 1 if outcome == "failed" and last_code in THROTTLE_CODES else 0
+                    same_run = same_run + 1 if outcome == "failed" and last_code == previous else (1 if outcome == "failed" else 0)
+                    previous = last_code if outcome == "failed" else None
+                if outcome == "failed" and (last_code in FATAL_CODES or streak >= MAX_THROTTLE_STREAK
+                                            or same_run >= REPEAT_LIMITS.get(last_code, 0) > 0):
+                    summary["aborted"] = {"code": last_code, "message": ABORT_MESSAGES[last_code]}
+                    break  # the items still waiting were never tried: they get no event
+        except Exception:
+            self._log(f"job crashed id={job_id}\n{traceback.format_exc()}")
+            raise
+        finally:
+            with self._lock:
+                self._closing = True
+            aborted = (summary["aborted"] or {}).get("code")
+            self._log(f"job done id={job_id} ok={summary['ok']} skipped={summary['skipped']} failed={summary['failed']} "
+                      f"cancelled={summary['cancelled']} aborted={aborted}")
+            self.last_job = {"jobId": job_id, "items": count, "quality": quality, "audio": audio, "cooldown": cooldown,
+                             "summary": dict(summary), "failures": failures[-20:],
+                             "finishedAt": time.strftime("%Y-%m-%d %H:%M:%S")}
+            try:
+                self._emit({"type": "done", "jobId": job_id, "summary": summary})
+            finally:
+                self.running = False  # a failed send must not leave the runner stuck as busy
+
+    def _pause(self, cooldown: float, streak: int) -> float:
+        """Seconds before the next network attempt: the cooldown, doubling per throttle failure in a row."""
+        base = max(MIN_BACKOFF, cooldown) * 2 ** (streak - 1) if streak else cooldown
+        seconds = base * (1 + JITTER * self._jitter())
+        if streak:
+            seconds = min(seconds, MAX_BACKOFF)
+        return max(seconds, cooldown)  # never less than what the person asked for
+
+    def _stopped(self, job_id: str, item_id: str, item_cancel: threading.Event) -> str | None:
+        """'cancelled' when the whole job was stopped, 'removed' when only this item was."""
+        if self._cancel.is_set():
+            return "cancelled"
+        if item_cancel.is_set():
+            self._emit({"type": "item_removed", "jobId": job_id, "itemId": item_id})
+            return "removed"
+        return None
+
+    def _cooldown(self, job_id: str, next_id: str, seconds: float, item_cancel: threading.Event) -> None:
+        self._emit({"type": "cooldown", "jobId": job_id, "seconds": seconds, "nextId": next_id})
+        remaining = float(seconds)
+        while remaining > 0 and not self._cancel.is_set() and not item_cancel.is_set():
+            step = min(1.0, remaining)
+            self._sleep(step)
+            remaining -= step
+
+    def _one(self, job_id, it, quality, output_dir, archive, seen, fail, override, wait_turn, item_cancel, audio=None):
+        url = it.get("url")
+        vid, title = it.get("id"), it.get("title")
+        audio = _item_audio(it, audio)
+        item_id = _ref(it) or url or "?"
+        stopped = self._stopped(job_id, item_id, item_cancel)
+        if stopped:
+            return stopped
+        if not is_allowed_url(url):
+            fail(item_id, "bad_url", "不支援這個網址（只支援 YouTube 與 Instagram 貼文）")
+            return "failed"
+        if not vid or not title:
+            stopped = wait_turn(item_id, item_cancel)
+            if stopped:
+                return stopped
+            try:
+                refs = self._resolve(self.engine, [url], None)
+            except ResolveError as exc:
+                fail(item_id, exc.code, exc.message)
+                return "failed"
+            if not refs:
+                fail(item_id, "unavailable", "找不到這支影片")
+                return "failed"
+            vid, title = vid or refs[0].id, title or refs[0].title
+        if not isinstance(vid, str) or not VIDEO_ID.fullmatch(vid) or not isinstance(title, str):
+            fail(str(item_id), "bad_id", "影片資料不正確，已略過")
+            return "failed"
+        eid = it["key"] if isinstance(it.get("key"), str) and it["key"] else vid
+        ext = audio_extension(audio) if audio else "mp4"
+        key = f"{vid}.{ext}" if audio else vid  # a video and its audio are different downloads (the video keeps its old key)
+        if key in seen:
+            return "duplicate"
+        seen.add(key)
+        placeholder = PLACEHOLDER_TITLES.get(title.strip().lower())
+        if placeholder:
+            fail(eid, *placeholder)
+            return "failed"
+        existing = archive.lookup(key)
+        if existing:
+            self._emit({"type": "item_done", "jobId": job_id, "itemId": eid,
+                        "file": str(output_dir / existing), "height": None, "codec": None,
+                        "audio": audio, "skipped": True})
+            return "skipped"
+        try:
+            target = safe_output_path(
+                output_dir, resolve_target(output_dir, override or title, vid, ext,
+                                           {vid: archive.mapping()[key]} if key in archive.mapping() else {}).name)
+        except ValueError as exc:
+            fail(eid, "bad_path", f"輸出路徑太長：{exc}")
+            return "failed"
+        stopped = wait_turn(eid, item_cancel) or self._stopped(job_id, eid, item_cancel)
+        if stopped:
+            return stopped
+        info = None
+
+        def on_line(line: str) -> None:
+            nonlocal info
+            progress = parse_progress_line(line)
+            if progress:
+                self._emit({"type": "progress", "jobId": job_id, "itemId": eid,
+                            "percent": progress.percent, "speed": progress.speed,
+                            "eta": progress.eta, "stage": "download"})
+                return
+            done = parse_done_line(line)
+            if done:
+                info = done
+
+        _hide_partial_root(output_dir)
+        try:
+            result = self._stream(build_download_args(self.engine, url, quality, target,
+                                                      partial_dir(output_dir, vid), audio),
+                                  on_line, item_cancel)
+        except Exception as exc:  # engine missing, permission denied, ...
+            fail(eid, "unknown", f"無法執行下載引擎：{exc}", traceback.format_exc())
+            return "failed"
+        if result.cancelled:
+            return self._stopped(job_id, eid, item_cancel) or "cancelled"
+        if result.returncode != 0:
+            fail(eid, *classify_error(result.stderr), detail=result.stderr)
+            return "failed"
+        if info is None or not _has_content(target):
+            # with an unusable ffmpeg yt-dlp still exits 0 and prints its done line, but leaves "Title.f137.mp4" and
+            # "Title.f140.m4a" apart instead of "Title.mp4"
+            fail(eid, "merge_failed", "影片已下載但沒有合併成功（ffmpeg 可能無法使用），請按「檢查環境」", result.stderr)
+            return "failed"
+        codec = info.codec
+        if not audio and is_instagram_url(url) and not is_h264(codec):
+            # Instagram's best video is VP9: QuickTime, Finder previews and many editors cannot play it in an mp4
+            self._emit({"type": "progress", "jobId": job_id, "itemId": eid, "percent": None, "speed": None,
+                        "eta": None, "stage": "convert"})
+            outcome = convert_to_h264(self.engine, target, partial_dir(output_dir, vid) / "convert", item_cancel,
+                                      stream=self._stream)
+            self._log(f"convert item={vid} from={codec} result={outcome}")
+            if outcome == "cancelled":
+                return self._stopped(job_id, eid, item_cancel) or "cancelled"
+            if outcome == "ok":
+                codec = "avc1"
+        if result.stderr.strip():  # yt-dlp's warnings (a missing JavaScript runtime, ...) are only ever shown here
+            self._log(f"item_warnings item={vid}\n{tail_lines(result.stderr)}")
+        shutil.rmtree(partial_dir(output_dir, vid), ignore_errors=True)  # kept after a failure: a retry resumes there
+        try:
+            (output_dir / PARTIAL_DIR).rmdir()  # only goes while no other video has unfinished files in it
+        except OSError:
+            pass
+        try:
+            archive.record(key, target.name)
+        except OSError:
+            pass  # file is on disk; a locked record file only means a rerun cannot skip it
+        self._log(f"item_done item={vid} height={info.height if info else None}")
+        self._emit({"type": "item_done", "jobId": job_id, "itemId": eid, "file": str(target),
+                    "height": info.height if info else None, "codec": codec,
+                    "audio": audio, "skipped": False})
+        return "ok"
