@@ -4,7 +4,7 @@
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
 import { run, all } from './db.js';
-import { MAX_COMMENTS, EXTRA_DELAY_MIN, EXTRA_DELAY_MAX, MAX_PRESETS, PRESET_NAME_MAX, listPresets, savePresets, getMaxAttempts, setMaxAttempts, getPause, setPause, cleanReason, PAUSE_REASON_MAX, ATTEMPTS_MIN, ATTEMPTS_MAX, DEFAULT_ATTEMPTS, RETRY_GAP_MS, ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, extraCommentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost, attachmentTargets, linkPhotoComments } from './fbqueue.js';
+import { ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
 
 export const NEEDED_SCOPES = ['pages_show_list', 'pages_read_engagement', 'read_insights', 'pages_manage_posts', 'pages_manage_engagement'];
@@ -284,79 +284,6 @@ export async function adminPageMap(request, env, path) {
   return ok(request, env, { saved: clean.length });
 }
 
-// 管理頁：第 N 則留言預設文字。GET／POST /admin/fb/comment-presets（已通過 admin 驗證）；整份取代，順序＝下拉順序
-export function checkPresets(list) {
-  if (!Array.isArray(list)) return '資料格式不正確。';
-  if (list.length > MAX_PRESETS) return `最多 ${MAX_PRESETS} 筆。`;
-  const seen = new Set(), clean = [];
-  for (const it of list) {
-    if (!it || typeof it !== 'object' || typeof it.name !== 'string' || typeof it.text !== 'string') return '資料格式不正確。';
-    const name = it.name.trim(), text = it.text.trim();
-    if (!name && !text) continue;   // 整列空白略過
-    if (!name || name.length > PRESET_NAME_MAX) return `名稱要 1 到 ${PRESET_NAME_MAX} 個字。`;
-    if (!text) return `「${name}」沒有內容。`;
-    if (text.length > MAX_COMMENT) return `「${name}」內容太長（上限 ${MAX_COMMENT} 字）。`;
-    if (seen.has(name)) return `名稱「${name}」重複了。`;
-    seen.add(name);
-    clean.push({ name, text });
-  }
-  return clean;
-}
-export async function adminCommentPresets(request, env, path) {
-  if (path !== '/admin/fb/comment-presets') return null;
-  if (!env.DB) return fail(request, env, 'misconfigured');
-  if (request.method === 'GET') return ok(request, env, { items: await listPresets(env), max: MAX_PRESETS, nameMax: PRESET_NAME_MAX, textMax: MAX_COMMENT });
-  if (request.method !== 'POST') return null;
-  const buf = await readBody(request, 700 * 1024);
-  if (!buf) return fail(request, env, 'too_large');
-  let b;
-  try { b = JSON.parse(new TextDecoder().decode(buf)); } catch (e) { return fail(request, env, 'bad_request'); }
-  const clean = checkPresets(b && b.items);
-  if (typeof clean === 'string') return fail(request, env, 'bad_request', clean);
-  await savePresets(env, clean);
-  return ok(request, env, { saved: clean.length });
-}
-
-// 管理頁：留言嘗試次數。GET／POST /admin/fb/settings（已通過 admin 驗證）；到點嘗試最多幾次（含第 1 次），間隔固定 30 秒，限流不重試
-export async function adminFbSettings(request, env, path) {
-  if (path !== '/admin/fb/settings') return null;
-  if (!env.DB) return fail(request, env, 'misconfigured');
-  const view = async () => ({ maxAttempts: await getMaxAttempts(env), min: ATTEMPTS_MIN, max: ATTEMPTS_MAX, default: DEFAULT_ATTEMPTS, gapSec: Math.round(RETRY_GAP_MS / 1000) });
-  if (request.method === 'GET') return ok(request, env, await view());
-  if (request.method !== 'POST') return null;
-  const { body: b, error } = await readJson(request);
-  if (error) return fail(request, env, error);
-  const n = b && b.maxAttempts;
-  if (!Number.isInteger(n) || n < ATTEMPTS_MIN || n > ATTEMPTS_MAX) return fail(request, env, 'bad_request', `嘗試次數要是 ${ATTEMPTS_MIN}～${ATTEMPTS_MAX} 的整數。`);
-  await setMaxAttempts(env, n);
-  return ok(request, env, await view());
-}
-
-// 管理頁：暫時停用排程發布。GET／POST /admin/fb/pause（已通過 admin 驗證）；body { paused: boolean, reason?: string }
-export async function adminFbPause(request, env, path) {
-  if (path !== '/admin/fb/pause') return null;
-  if (!env.DB) return fail(request, env, 'misconfigured');
-  const view = (p) => ({ ...p, reasonMax: PAUSE_REASON_MAX });
-  if (request.method === 'GET') return ok(request, env, view(await getPause(env)));
-  if (request.method !== 'POST') return null;
-  const { body: b, error } = await readJson(request);
-  if (error) return fail(request, env, error);
-  if (!b || typeof b.paused !== 'boolean') return fail(request, env, 'bad_request', '缺少 paused（true／false）。');
-  if (b.reason !== undefined && b.reason !== null && typeof b.reason !== 'string') return fail(request, env, 'bad_request', '停用原因要是文字。');
-  const reason = cleanReason(b.reason);
-  if (reason.length > PAUSE_REASON_MAX) return fail(request, env, 'bad_request', `停用原因最多 ${PAUSE_REASON_MAX} 字。`);
-  await setPause(env, b.paused, reason);
-  await audit(env, b.paused ? 'fbpost-paused' : 'fbpost-resumed');
-  return ok(request, env, view(await getPause(env)));
-}
-
-// 停用中回 fb_paused（附原因與停用時間）；使用中或管理員憑證（前端用管理密碼登入，cred.adm）回 null。/fb/* 與 /rundown 共用
-export async function pausedFail(request, env, cred) {
-  if (cred && cred.adm) return null;
-  const p = await getPause(env);
-  return p.paused ? fail(request, env, 'fb_paused', null, { reason: p.reason, at: p.at }) : null;
-}
-
 // ---- 讀取 ----
 async function listPosts(request, env, q) {
   const page = q.get('page');
@@ -394,21 +321,16 @@ async function listScheduled(request, env, q) {
   if (!isId(page)) return fail(request, env, 'bad_request', '缺少粉專 ID（page）。');
   const token = await tokenFor(env, page);
   if (!token) return fail(request, env, 'fb_unknown_page');
-  const r = await getWithAttachments(env, token, `/${page}/scheduled_posts`, 'id,message,scheduled_publish_time,created_time,full_picture', { limit: 50 });
+  const r = await graphGet(env, token, `/${page}/scheduled_posts`, { fields: 'id,message,scheduled_publish_time,created_time,full_picture', limit: 50 });
   let cm = new Map();
-  let ex = new Map();
-  const ids = (r.data || []).map((p) => p.id).filter(isPostId);
-  for (const p of r.data || []) if (isPostId(p.id)) await linkPhotos(env, p.id, p);
-  try { cm = env.DB ? await commentsForPosts(env, ids) : cm; } catch (e) { /* 留言狀態讀不到不影響清單 */ }
-  try { ex = env.DB ? await extraCommentsForPosts(env, ids) : ex; } catch (e) { /* 同上 */ }
+  try { cm = env.DB ? await commentsForPosts(env, (r.data || []).map((p) => p.id).filter(isPostId)) : cm; } catch (e) { /* 留言狀態讀不到不影響清單 */ }
   return ok(request, env, {
     items: (r.data || []).map((p) => {
       const c = cm.get(p.id);
       return {
         id: p.id, message: p.message || '', created: p.created_time || '', picture: p.full_picture || '',
         at: typeof p.scheduled_publish_time === 'number' ? p.scheduled_publish_time : Number(p.scheduled_publish_time) || null,
-        comment: c ? { id: c.id, status: c.status, error: c.error, message: c.message } : null,
-        extras: ex.get(p.id) || []
+        comment: c ? { id: c.id, status: c.status, error: c.error, message: c.message } : null
       };
     })
   });
@@ -446,22 +368,6 @@ async function insights(request, env, q) {
 }
 
 // ---- 發文／排程 ----
-// 有圖排程的留言可能只記了照片 ID：在原本就會打的請求多要 attachments，用附件照片 ID 補上貼文 ID（不多打臉書）。
-// attachments 讀不到（錯誤碼 100）就退回原本的欄位再查一次，行為與修改前相同。
-const ATTACH_FIELD = 'attachments{target{id}}';   // 一次只發一張圖，不展開子附件（列表 50 篇時回應較小）
-async function getWithAttachments(env, token, path, fields, params = {}) {
-  try { return await graphGet(env, token, path, { ...params, fields: `${fields},${ATTACH_FIELD}` }); }
-  catch (e) {
-    if (!(e instanceof GraphError && e.fbCode === 100)) throw e;
-    return graphGet(env, token, path, { ...params, fields });
-  }
-}
-async function linkPhotos(env, post, info) {
-  if (!env.DB) return;
-  const ids = attachmentTargets(info);
-  if (!ids.length) return;
-  try { await linkPhotoComments(env, post.split('_')[0], post, ids); } catch (e) { /* 連不上 D1 不影響主要操作 */ }
-}
 // 本文可以是 JSON（page、message、link、imageUrl、scheduledAt）或 multipart（同欄位，另可附 image 檔）
 async function readPostInput(request) {
   const ct = (request.headers.get('content-type') || '').toLowerCase();
@@ -478,32 +384,12 @@ async function readPostInput(request) {
     try { fd = await new Response(buf, { headers: { 'content-type': request.headers.get('content-type') } }).formData(); }
     catch (e) { return { error: 'bad_request' }; }
     const body = {};
-    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset', 'comment', 'extraComments']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
+    for (const k of ['page', 'message', 'link', 'imageUrl', 'scheduledAt', 'textPreset', 'comment']) { const v = fd.get(k); if (typeof v === 'string') body[k] = v; }
     const img = fd.get('image');
     if (img && typeof img === 'object') body.image = img;
     return { body };
   }
   return { error: 'bad_request' };
-}
-
-// 第 2 則以後的留言：[{ message, delay(發布後幾分鐘) }]。純文字、不自動帶連結；空白的略過。回陣列（含 seq、delay 秒）或錯誤字串
-export function parseExtras(raw) {
-  if (raw === undefined || raw === null || raw === '') return [];
-  let list = raw;
-  if (typeof raw === 'string') { try { list = JSON.parse(raw); } catch (e) { return '額外留言格式不正確。'; } }
-  if (!Array.isArray(list)) return '額外留言格式不正確。';
-  const out = [];
-  for (const it of list) {
-    if (!it || typeof it !== 'object' || (it.message !== undefined && typeof it.message !== 'string')) return '額外留言格式不正確。';
-    const message = String(it.message || '').trim();
-    if (!message) continue;
-    if (message.length > MAX_COMMENT) return '留言太長（上限 8000 字）。';
-    const minutes = Number(it.delay);
-    if (!Number.isInteger(minutes) || minutes < EXTRA_DELAY_MIN || minutes > EXTRA_DELAY_MAX) return `第 N 則留言要在發布後 ${EXTRA_DELAY_MIN}～${EXTRA_DELAY_MAX} 分鐘內。`;
-    out.push({ message, delay: minutes * 60 });
-  }
-  if (out.length > MAX_COMMENTS - 1) return `留言最多 ${MAX_COMMENTS} 則（含第一則）。`;
-  return out.map((x, i) => ({ ...x, seq: i + 2 }));
 }
 
 export function checkPost(b, now = nowSec()) {
@@ -534,57 +420,38 @@ export function checkPost(b, now = nowSec()) {
   const comment = typeof b.comment === 'string' ? b.comment.trim() : '';
   if (b.comment !== undefined && b.comment !== null && typeof b.comment !== 'string') return '留言格式不正確。';
   if (comment.length > MAX_COMMENT) return '留言太長（上限 8000 字）。';
-  const extras = parseExtras(b.extraComments);
-  if (typeof extras === 'string') return extras;
   let at = null;
   if (b.scheduledAt !== undefined && b.scheduledAt !== null && b.scheduledAt !== '') {
     at = Number(b.scheduledAt);
     if (!Number.isInteger(at)) return '排程時間格式不正確（Unix 秒數）。';
     if (at < now + MIN_SCHEDULE || at > now + MAX_SCHEDULE) return '排程時間要在 10 分鐘後到 30 天內。';
   }
-  return { page, message, link, imageUrl, image, at, textPreset, comment, extras };
+  return { page, message, link, imageUrl, image, at, textPreset, comment };
 }
 
 // 發文時留言（文章連結等）。立即發布：馬上留，失敗就入列交給總管重試；排程：入列等發布。
 // 圖片貼文 /photos 回的是照片 ID：沒有 post_id 時用 page_story_id 換貼文 ID，換不到就在佇列記 photo_id 之後再換。
 // 需使用者實測確認：照片 ID 換貼文 ID、排程中的照片是否查得到 page_story_id、留言要掛在哪個 ID。
-// 第 2 則以後（v.extras）一律入列：due＝發布時間（排程用排程時間、立即用現在）＋各自的 delay。
-async function attachComments(env, token, v, r) {
+async function attachComment(env, token, v, r) {
   const isPhoto = !!(v.image || v.imageUrl);
   const photo = isPhoto ? r.id : null;
   let post = r.post_id || (isPhoto ? null : r.id);
   if (!post && photo) post = await photoToPost(env, token, photo);
-  const now = Date.now();
-  const base = v.at || Math.floor(now / 1000);
-  let comment = { status: 'none' };
-  if (v.comment) {
-    comment = null;
-    if (!v.at && post) {
-      try {
-        const c = await graphPost(env, token, `/${post}/comments`, { message: v.comment });
-        comment = { status: 'done', id: c && c.id ? String(c.id) : '' };
-      } catch (e) { /* 失敗不影響發文：入列重試 */ }
-    }
-    if (!comment) {
-      try {
-        await enqueueComment(env, {
-          page: v.page, post, photo, message: v.comment,
-          due: base, nextCheck: v.at ? (v.at + 1) * 1000 : now, nowMs: now
-        });
-        comment = { status: 'queued' };
-      } catch (e) { comment = { status: 'failed' }; }
-    }
-  }
-  const extras = [];
-  for (const x of v.extras || []) {
-    const due = base + x.delay;
+  if (!v.at && post) {
     try {
-      await enqueueComment(env, { page: v.page, post, photo, message: x.message, due, nextCheck: (due + 1) * 1000, seq: x.seq, delay: x.delay, nowMs: now });
-      extras.push({ seq: x.seq, status: 'queued' });
-    } catch (e) { extras.push({ seq: x.seq, status: 'failed' }); }
+      const c = await graphPost(env, token, `/${post}/comments`, { message: v.comment });
+      return { status: 'done', id: c && c.id ? String(c.id) : '' };
+    } catch (e) { /* 失敗不影響發文：入列重試 */ }
   }
-  if (comment.status === 'queued' || extras.some((x) => x.status === 'queued')) await kickHub(env);
-  return { comment, extras };
+  const now = Date.now();
+  try {
+    await enqueueComment(env, {
+      page: v.page, post, photo, message: v.comment,
+      due: v.at || Math.floor(now / 1000), nextCheck: v.at ? (v.at + 1) * 1000 : now, nowMs: now
+    });
+    await kickHub(env);
+    return { status: 'queued' };
+  } catch (e) { return { status: 'failed' }; }
 }
 
 async function createPost(request, env) {
@@ -606,8 +473,8 @@ async function createPost(request, env) {
       r = await graphPost(env, token, `/${v.page}/feed`, { message: v.message, link: v.link, text_format_preset_id: v.textPreset || undefined, ...sched });
     }
     await audit(env, v.at ? 'post-scheduled' : 'post-published');
-    const att = v.comment || v.extras.length ? await attachComments(env, token, v, r) : { comment: { status: 'none' }, extras: [] };
-    return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at, comment: att.comment, ...(att.extras.length ? { extras: att.extras } : {}) });
+    const comment = v.comment ? await attachComment(env, token, v, r) : { status: 'none' };
+    return ok(request, env, { id: r.post_id || r.id, scheduled: !!v.at, at: v.at, comment });
   } catch (e) {
     await audit(env, 'post-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;
@@ -624,9 +491,8 @@ async function cancelPost(request, env) {
   if (!isPostId(post)) return fail(request, env, 'bad_request', '貼文 ID 格式不正確（應為 粉專ID_貼文ID）。');
   const token = await tokenFor(env, post.split('_')[0]);
   if (!token) return fail(request, env, 'fb_unknown_page');
-  const info = await getWithAttachments(env, token, `/${post}`, 'is_published');
+  const info = await graphGet(env, token, `/${post}`, { fields: 'is_published' });
   if (info.is_published !== false) return fail(request, env, 'bad_request', '這篇已經發布，不能在這裡刪除。');
-  await linkPhotos(env, post, info);
   try {
     await graphDelete(env, token, `/${post}`);
     await audit(env, 'post-canceled');
@@ -656,9 +522,8 @@ async function reschedulePost(request, env) {
   if (time < now + MIN_SCHEDULE || time > now + MAX_SCHEDULE) return fail(request, env, 'bad_request', '排程時間要在 10 分鐘後到 30 天內。');
   const token = await tokenFor(env, post.split('_')[0]);
   if (!token) return fail(request, env, 'fb_unknown_page');
-  const info = await getWithAttachments(env, token, `/${post}`, 'is_published');
+  const info = await graphGet(env, token, `/${post}`, { fields: 'is_published' });
   if (info.is_published !== false) return fail(request, env, 'already_published', '這篇已經發布，不能改排程時間。');
-  await linkPhotos(env, post, info);
   try {
     await graphPost(env, token, `/${post}`, { scheduled_publish_time: String(time) });
     await audit(env, 'post-rescheduled');
@@ -666,26 +531,18 @@ async function reschedulePost(request, env) {
     await audit(env, 'reschedule-failed-' + (e && e.fbCode ? e.fbCode : (e && e.code) || 'x'));
     throw e;
   }
-  try { await rescheduleComments(env, post, time); await kickHub(env); } catch (e) { /* 佇列更新失敗：到預定時間時會查到臉書上的新時間並重設 */ }
+  try { await rescheduleComments(env, post, time); await kickHub(env); } catch (e) { /* 佇列更新失敗，下一分鐘 cron 對時會補上 */ }
   return ok(request, env, { post, time });
 }
 
 export async function handleFb(request, env, path) {
   if (path !== '/fb' && !path.startsWith('/fb/')) return null;
-  const cred = await bearer(request, env, 'company');
-  if (!cred) return fail(request, env, 'unauthorized');
-  const paused = await pausedFail(request, env, cred);
-  if (paused) return paused;
+  if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
   if (!pageTokens(env).length) return fail(request, env, 'fb_not_configured');
   const q = new URL(request.url).searchParams;
   try {
     if (path === '/fb/pages' && request.method === 'GET') {
       return ok(request, env, await pagesWithMap(env, await loadPages(env, { fresh: q.get('refresh') === '1' })));
-    }
-    if (path === '/fb/comment-presets' && request.method === 'GET') {
-      let items = [];
-      try { items = await listPresets(env); } catch (e) { /* 讀不到就當沒有，不影響發文 */ }
-      return ok(request, env, { items });
     }
     if (path === '/fb/posts' && request.method === 'GET') return await listPosts(request, env, q);
     if (path === '/fb/scheduled' && request.method === 'GET') return await listScheduled(request, env, q);

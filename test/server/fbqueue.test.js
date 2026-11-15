@@ -226,7 +226,7 @@ test('processDue：同粉專多篇合併成一次 ids 查詢；不同粉專各�
   assert.deepEqual(idCalls.map((c) => c.tok).sort(), [TOKEN_A, TOKEN_B].sort());
 });
 
-test('processDue：還沒到時間的不處理；第 1 次嘗試時還沒發布 → 約 30 秒後再試一次', async () => {
+test('processDue：還沒到時間的不處理；未發布就排下一個檢查點（第 3 秒）', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 1;
   await enqueue(env, { due, nextCheck: Date.now() + 60000 });
@@ -234,10 +234,9 @@ test('processDue：還沒到時間的不處理；第 1 次嘗試時還沒發布 
   assert.equal(calls.length, 0);
   env.DB.raw.prepare('UPDATE fb_comments SET next_check=?').run(Date.now() - 1);
   routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: due } })]);
-  const now = Date.now();
-  await q.processDue(env, now);
+  await q.processDue(env, Date.now());
   const [r] = rows(env);
-  assert.deepEqual([r.status, r.step, r.next_check], ['pending', 1, now + q.RETRY_GAP_MS]);
+  assert.deepEqual([r.status, r.step, r.next_check], ['pending', 1, due * 1000 + 3000]);
 });
 
 test('processDue：後台改晚了 → 重設 due，不算失敗；改早也一樣', async () => {
@@ -276,24 +275,17 @@ test('processDue：貼文被刪（ids 缺該 id）→ canceled 貼文已刪除�
   assert.deepEqual([rs[2].status, rs[2].error], ['canceled', '貼文已刪除']);
 });
 
-test('processDue：第 2 次嘗試仍未發布 → failed（已試 2 次），之後不再打臉書', async () => {
+test('processDue：超過 due+180 秒仍未發布 → failed（3 分鐘內沒偵測到貼文發布）', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 200;
   await enqueue(env, { due, nextCheck: 1 });
   routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: due } })]);
   await q.processDue(env, Date.now());
-  assert.equal(rows(env)[0].status, 'pending');
-  env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
-  await q.processDue(env, Date.now());
   const [r] = rows(env);
-  assert.deepEqual([r.status, r.error], ['failed', '沒偵測到貼文發布（已試 2 次）']);
-  const n = calls.length;
-  await q.processDue(env, Date.now() + 3600000);
-  await q.tickDue(env, Date.now() + 3600000);
-  assert.equal(calls.length, n);   // 已失敗：不再自動重試
+  assert.deepEqual([r.status, r.error], ['failed', '3 分鐘內沒偵測到貼文發布']);
 });
 
-test('processDue：留言失敗 → 先排下一次；第 2 次仍失敗 → failed 並寫「留言失敗：…（已試 2 次）」，訊息不含 token', async () => {
+test('processDue：留言失敗 → 先排下一次；超過 3 分鐘 failed 並寫「留言失敗：」，訊息不含 token', async () => {
   const env = mk(); const q = await Q();
   const due = nowSec() - 5;
   await enqueue(env, { due });
@@ -308,7 +300,7 @@ test('processDue：留言失敗 → 先排下一次；第 2 次仍失敗 → fai
   await q.processDue(env, Date.now());
   [r] = rows(env);
   assert.equal(r.status, 'failed');
-  assert.match(r.error, /^留言失敗：.*（已試 2 次）$/);
+  assert.match(r.error, /^留言失敗：/);
   assert.ok(!r.error.includes(TOKEN_A));
 });
 
@@ -323,116 +315,51 @@ test('processDue：只有照片 ID → 先換貼文 ID 再處理', async () => {
   assert.deepEqual([r.status, r.post_id], ['done', '111_77']);
 });
 
-// ---- tickDue（每分鐘 cron：只查 D1，沒到期不打臉書）----
-test('tickDue：等待期間（預定時間還沒到）整天跑也完全不打臉書', async () => {
+// ---- syncScheduled ----
+test('syncScheduled：時間被改 → 更新 due；只查有待留言的粉專', async () => {
   const env = mk(); const q = await Q();
-  const at = nowSec() + 48 * 3600;
-  for (const page of ['111', '222']) {
-    await enqueue(env, { page, post: page + '_5', due: at });
-    await enqueue(env, { page, post: null, photo: page + '00', due: at + 300, seq: 2, delay: 300, nextCheck: (at + 301) * 1000 });
-  }
-  const t0 = Date.now();
-  for (let m = 0; m < 1440; m++) await q.tickDue(env, t0 + m * 60000);
-  assert.equal(calls.length, 0);
-  assert.equal(rows(env).filter((r) => r.status === 'pending').length, 4);
-});
-
-test('tickDue：到了預定時間才問臉書並留言；沒有 DB 不報錯', async () => {
-  const env = mk(); const q = await Q();
-  await enqueue(env, { due: nowSec() - 5 });
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
-  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cm' })]);
-  await q.tickDue(env, Date.now());
-  assert.equal(rows(env)[0].status, 'done');
-  await q.tickDue({ ...env, DB: undefined }, Date.now());
-});
-
-test('processDue：限流（code 4）第 1 次就 failed，不排第 2 次', async () => {
-  const env = mk(); const q = await Q();
-  await enqueue(env, { due: nowSec() - 5 });
-  routes.push([/\/v26\.0\/$/, () => fbErr(4, 'Application request limit reached')]);
-  await q.processDue(env, Date.now());
+  const at = nowSec() + 3600, newAt = at + 1800;
+  await enqueue(env, { due: at });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: newAt }] })]);
+  await q.syncScheduled(env, Date.now());
   const [r] = rows(env);
-  assert.equal(r.status, 'failed');
-  assert.match(r.error, /^留言失敗：.*（不重試）$/);
-  const n = calls.length;
-  await q.tickDue(env, Date.now() + 3600000);
-  assert.equal(calls.length, n);
+  assert.deepEqual([r.due, r.step, r.next_check], [newAt, 0, (newAt + 1) * 1000]);
+  assert.equal(calls.filter((c) => c.path.endsWith('/scheduled_posts')).length, 1);
+  assert.ok(!calls.some((c) => c.path.startsWith('/v26.0/222')));
 });
 
-test('processDue：貼文未發布且臉書時間變了 → 以新時間重設、次數歸零；之後每次改都重設，超過上限才停', async () => {
+test('syncScheduled：從清單消失且已發布 → 立刻留言；已刪除 → canceled', async () => {
   const env = mk(); const q = await Q();
-  const due = nowSec() - 2;
-  await enqueue(env, { due });
-  env.DB.raw.prepare('UPDATE fb_comments SET step=1').run();   // 已試過 1 次
-  const later = nowSec() + 7200;
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: later } })]);
-  await q.processDue(env, Date.now());
-  let [r] = rows(env);
-  assert.deepEqual([r.status, r.due, r.step, r.retimes], ['pending', later, 0, 1]);
-  env.DB.raw.prepare('UPDATE fb_comments SET retimes=?, next_check=1').run(q.MAX_RETIMES);
-  routes.length = 0;
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: later + 600 } })]);
-  await q.processDue(env, Date.now());
-  [r] = rows(env);
-  assert.deepEqual([r.status, r.error], ['failed', '貼文排程時間被改太多次，已停止自動留言']);
+  const at = nowSec() + 3600;
+  await enqueue(env, { due: at, post: '111_5' });
+  await enqueue(env, { due: at, post: '111_6' });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [] })]);
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true, scheduled_publish_time: at } })]);
+  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cmx' })]);
+  await q.syncScheduled(env, Date.now());
+  const rs = rows(env);
+  assert.equal(rs[0].status, 'done');
+  assert.deepEqual([rs[1].status, rs[1].error], ['canceled', '貼文已刪除']);
 });
 
-test('scheduled()：每日 cron 只清理，每分鐘 cron 處理到期留言', async () => {
+test('syncScheduled：沒有待留言項目就不打 Graph；沒設 DO 也不報錯', async () => {
+  const env = mk(); const q = await Q();
+  await q.syncScheduled(env, Date.now());
+  assert.equal(calls.length, 0);
+  await q.syncScheduled({ ...env, DB: undefined }, Date.now());
+});
+
+test('scheduled()：每日 cron 照舊清理，其他字串跑對時', async () => {
   const w = await load(); const env = mk();
-  await enqueue(env, { due: nowSec() - 5 });
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
-  routes.push([/\/111_5\/comments$/, () => reply({ id: 'cm' })]);
+  const at = nowSec() + 3600;
+  await enqueue(env, { due: at });
+  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [{ id: '111_5', scheduled_publish_time: at + 60 }] })]);
   env.DB.raw.prepare("INSERT INTO fb_comments (page_id, post_id, message, due, next_check, status, created, updated) VALUES ('1','1_1','m',1,1,'done',1,1)").run();
   let p; await w.scheduled({ cron: '17 19 * * *' }, env, { waitUntil: (x) => { p = x; } }); await p;
   assert.equal(calls.length, 0);
   assert.equal(rows(env).length, 1);   // 30 天前已結束的被清掉
   await w.scheduled({ cron: '* * * * *' }, env, { waitUntil: (x) => { p = x; } }); await p;
-  assert.equal(rows(env)[0].status, 'done');
-});
-
-test('processDue：只有照片 ID、照片已不存在（貼文被取消）→ canceled，不算失敗；其他錯誤照失敗處理', async () => {
-  const env = mk(); const q = await Q();
-  await enqueue(env, { post: null, photo: '900' });
-  await enqueue(env, { post: null, photo: '901' });
-  routes.push([/\/900$/, () => fbErr(100, 'Unsupported get request. Object with ID 900 does not exist')]);
-  routes.push([/\/901$/, () => fbErr(100, '(#100) Tried accessing nonexisting field (page_story_id)')]);
-  await q.processDue(env, Date.now());
-  const [a, b] = rows(env);
-  assert.deepEqual([a.status, a.error], ['canceled', '貼文已刪除']);
-  assert.deepEqual([b.status, b.step], ['pending', 1]);
-});
-
-test('processDue：留言 POST 限流第 1 次就 failed 不重試；後端沒有該粉專 token 則照一般失敗流程', async () => {
-  const env = mk(); const q = await Q();
-  await enqueue(env, { due: nowSec() - 5 });
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
-  routes.push([/\/111_5\/comments$/, () => fbErr(32, 'Page request limit reached')]);
-  await q.processDue(env, Date.now());
-  let [r] = rows(env);
-  assert.deepEqual([r.status, /（不重試）$/.test(r.error)], ['failed', true]);
-  // 後端沒有這個粉專的 token：照一般失敗流程，第 1 次先 pending
-  await enqueue(env, { page: '999', post: '999_1', due: nowSec() - 5 });
-  await q.processDue(env, Date.now());
-  r = rows(env)[1];
-  assert.deepEqual([r.status, r.step], ['pending', 1]);
-});
-
-test('retimes：改時間每次遞增；工具內改時間（reschedule）與失敗後重試都會歸零', async () => {
-  const env = mk(); const q = await Q();
-  await enqueue(env, { due: nowSec() - 2 });
-  for (let i = 1; i <= 3; i++) {
-    env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
-    routes.length = 0;
-    routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: nowSec() + 1000 * i } })]);
-    await q.processDue(env, Date.now());
-    assert.equal(rows(env)[0].retimes, i);
-  }
-  await q.rescheduleComments(env, '111_5', nowSec() + 5000);
-  assert.equal(rows(env)[0].retimes, 0);
-  env.DB.raw.prepare("UPDATE fb_comments SET status='failed', retimes=4").run();
-  assert.equal(await q.retryComment(env, rows(env)[0].id), true);
-  assert.deepEqual([rows(env)[0].status, rows(env)[0].retimes, rows(env)[0].step], ['pending', 0, 0]);
+  assert.equal(rows(env)[0].due, at + 60);
 });
 
 // ---- 路由 ----
@@ -488,13 +415,13 @@ test('comments 清單、retry、dismiss', async () => {
   assert.equal((await api(env, 'GET', '/fb/comments?status=all')).body.data.items.length, 2);
   assert.deepEqual((await api(env, 'GET', '/fb/comments?status=pending&page=222')).body.data.items.map((i) => i.id), [id2]);
   assert.equal((await api(env, 'GET', '/fb/comments?status=zzz')).res.status, 400);
-  // retry：只有 failed；預定時間不動、嘗試次數歸零、馬上開始
+  // retry：只有 failed；due 太舊 → 重設為現在-1
   assert.equal((await api(env, 'POST', '/fb/comment/retry', { id: id2 })).res.status, 400);
   r = await api(env, 'POST', '/fb/comment/retry', { id: id1 });
   assert.deepEqual(r.body.data, { status: 'pending' });
   const row = rows(env).find((x) => x.id === id1);
   assert.deepEqual([row.status, row.step, row.error], ['pending', 0, null]);
-  assert.ok(Math.abs(row.due - (nowSec() - 3600)) <= 2);
+  assert.ok(Math.abs(row.due - (nowSec() - 1)) <= 2);
   assert.ok(row.next_check <= Date.now());
   // dismiss
   r = await api(env, 'POST', '/fb/comment/dismiss', { id: id1 });
@@ -548,376 +475,4 @@ test('cleanupComments：只刪 30 天前已結束的，待留言不動', async (
   env.DB.raw.prepare('UPDATE fb_comments SET updated=? WHERE id=?').run(old, b);
   await q.cleanupComments(env, Date.now());
   assert.deepEqual(rows(env).map((r) => r.id), [b]);
-});
-
-// ---- 第 N 則留言（發布後延遲） ----
-test('post：排程＋第 2、3 則 → 各入列，due＝排程時間＋延遲、seq 依序、第一則照舊', async () => {
-  const env = mk();
-  routes.push([/\/111\/feed$/, () => reply({ id: '111_6' })]);
-  const at = nowSec() + 3600;
-  const r = await post(env, { page: '111', message: 'x', scheduledAt: at, comment: '第一則', extraComments: [{ message: ' 活動連結 https://a.tw ', delay: 5 }, { message: '第三則😀', delay: 30 }] });
-  assert.equal(r.res.status, 200);
-  assert.deepEqual(r.body.data.comment, { status: 'queued' });
-  assert.deepEqual(r.body.data.extras, [{ seq: 2, status: 'queued' }, { seq: 3, status: 'queued' }]);
-  const rs = rows(env);
-  assert.deepEqual(rs.map((x) => [x.seq, x.delay, x.due, x.next_check, x.message]), [
-    [1, 0, at, (at + 1) * 1000, '第一則'],
-    [2, 300, at + 300, (at + 301) * 1000, '活動連結 https://a.tw'],
-    [3, 1800, at + 1800, (at + 1801) * 1000, '第三則😀']
-  ]);
-});
-
-test('post：立即發布、沒有第一則，只有第 2 則 → 只入列第 2 則，從現在起算', async () => {
-  const env = mk();
-  routes.push([/\/111\/feed$/, () => reply({ id: '111_5' })]);
-  const r = await post(env, { page: '111', message: 'x', extraComments: JSON.stringify([{ message: 'later', delay: 10 }]) });
-  assert.equal(r.res.status, 200);
-  assert.deepEqual(r.body.data.comment, { status: 'none' });
-  assert.ok(!calls.some((c) => c.path.endsWith('/comments')));
-  const [row] = rows(env);
-  assert.deepEqual([row.seq, row.delay, row.status], [2, 600, 'pending']);
-  assert.ok(Math.abs(row.due - (nowSec() + 600)) <= 2);
-});
-
-test('post：第 N 則驗證（延遲範圍、則數上限、格式、太長；空白略過）', async () => {
-  const env = mk();
-  routes.push([/\/111\/feed$/, () => reply({ id: '111_5' })]);
-  const bad = async (extraComments) => assert.equal((await post(env, { page: '111', message: 'x', extraComments })).res.status, 400, JSON.stringify(extraComments));
-  await bad([{ message: 'a', delay: 4 }]);
-  await bad([{ message: 'a', delay: 1441 }]);
-  await bad([{ message: 'a', delay: 5.5 }]);
-  await bad([{ message: 'a', delay: 5 }, { message: 'b', delay: 10 }, { message: 'c', delay: 15 }]);
-  await bad([{ message: 'a'.repeat(8001), delay: 5 }]);
-  await bad('not json');
-  await bad({ message: 'a', delay: 5 });
-  assert.equal(rows(env).length, 0);
-  const ok = await post(env, { page: '111', message: 'x', extraComments: [{ message: '   ', delay: 99999 }, { message: 'a', delay: 1440 }] });
-  assert.equal(ok.res.status, 200);
-  assert.deepEqual(rows(env).map((x) => [x.seq, x.delay]), [[2, 86400]]);
-});
-
-test('reschedule：第 N 則跟著新發布時間移動（保留各自延遲）', async () => {
-  const env = mk();
-  const at = nowSec() + 4000;
-  await enqueue(env, { post: '111_9', due: at });
-  await enqueue(env, { post: '111_9', due: at + 300, seq: 2, delay: 300 });
-  const t = nowSec() + 7200;
-  routes.push([/\/111_9$/, (u, init) => (init.method === 'POST' ? reply({ success: true }) : reply({ id: '111_9', is_published: false }))]);
-  assert.equal((await api(env, 'POST', '/fb/reschedule', { post: '111_9', time: t })).res.status, 200);
-  assert.deepEqual(rows(env).map((x) => [x.seq, x.due, x.next_check]), [[1, t, (t + 1) * 1000], [2, t + 300, (t + 301) * 1000]]);
-});
-
-test('processDue：第 N 則到期、貼文未發布且後台改了時間 → due＝新時間＋延遲，重設不算失敗', async () => {
-  const env = mk(); const q = await Q();
-  const newAt = nowSec() + 1800;   // 第 2 則（延遲 600 秒）剛到期，但後台把貼文改到之後
-  await enqueue(env, { due: nowSec() - 1, seq: 2, delay: 600, nextCheck: 1 });
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: newAt } })]);
-  await q.processDue(env, Date.now());
-  const [r] = rows(env);
-  assert.deepEqual([r.status, r.due, r.next_check, r.step], ['pending', newAt + 600, (newAt + 601) * 1000, 0]);
-});
-
-test('processDue：第 N 則到期且貼文已發布 → 留言成功；列表回 extras 與 seq', async () => {
-  const env = mk(); const q = await Q();
-  await enqueue(env, { due: nowSec() - 5, seq: 2, delay: 300, message: '第二則' });
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
-  routes.push([/\/111_5\/comments$/, () => reply({ id: 'c2' })]);
-  await q.processDue(env, Date.now());
-  assert.deepEqual([rows(env)[0].status, rows(env)[0].comment_id], ['done', 'c2']);
-  const ex = await q.extraCommentsForPosts(env, ['111_5']);
-  assert.deepEqual(ex.get('111_5'), [{ id: 1, seq: 2, delay: 5, status: 'done', error: '', message: '第二則' }]);
-  assert.equal((await q.commentsForPosts(env, ['111_5'])).size, 0);   // 第一則的狀態不被第 2 則蓋掉
-  const l = await q.listComments(env, {});
-  assert.deepEqual([l[0].seq, l[0].delay], [2, 5]);
-});
-
-test('舊資料表（沒有 seq／delay）會自動補欄位，舊資料視為第一則、延遲 0', async () => {
-  const env = mk(); const q = await Q();
-  env.DB.raw.exec('DROP TABLE fb_comments');   // 假 D1 照 schema.sql 建表，這裡換回舊版結構
-  env.DB.raw.exec(`CREATE TABLE fb_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, page_id TEXT NOT NULL, post_id TEXT, photo_id TEXT, message TEXT NOT NULL,
-    due INTEGER NOT NULL, next_check INTEGER NOT NULL, step INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', error TEXT, comment_id TEXT,
-    dismissed INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)`);
-  env.DB.raw.prepare("INSERT INTO fb_comments (page_id, post_id, message, due, next_check, created, updated) VALUES ('111','111_5','old',1,1,1,1)").run();
-  await q.ensureTables(env);
-  assert.deepEqual([rows(env)[0].seq, rows(env)[0].delay, rows(env)[0].retimes], [1, 0, 0]);
-});
-
-test('前後端第 N 則留言常數一致', async () => {
-  const q = await Q();
-  const c = await import('../../tools/fbpost/comments.js');
-  assert.deepEqual([c.MAX_COMMENTS, c.DELAY_MIN, c.DELAY_MAX], [q.MAX_COMMENTS, q.EXTRA_DELAY_MIN, q.EXTRA_DELAY_MAX]);
-});
-
-test('tickDue：貼文已準時發布、延遲留言還沒到 → 不打臉書、due 不動', async () => {
-  const env = mk(); const q = await Q();
-  const now = Date.now(), published = Math.floor(now / 1000) - 60;
-  await enqueue(env, { due: published + 300, seq: 2, delay: 300, nextCheck: (published + 301) * 1000 });
-  await q.tickDue(env, now);
-  await q.tickDue(env, now + 60000);
-  assert.equal(calls.length, 0);
-  assert.equal(rows(env)[0].due, published + 300);
-});
-
-test('補欄位：別的 Worker 剛補好（duplicate column）不讓 ensureTables 失敗', async () => {
-  const env = mk(); const q = await Q();
-  const real = env.DB;
-  // 第二個 Worker 查 table_info 時還看不到新欄位（舊快照），但資料表其實已有 seq／delay
-  const stale = { prepare: (sql) => (/PRAGMA table_info/.test(sql) ? { all: async () => ({ results: [] }) } : real.prepare(sql)) };
-  await q.ensureTables({ ...env, DB: stale });
-  assert.ok(real.raw.prepare('PRAGMA table_info(fb_comments)').all().some((c) => c.name === 'delay'));
-});
-
-// ---- 第 N 則留言預設文字（後台設定，發文工具下拉選用） ----
-test('預設文字：管理憑證讀寫；整份取代、順序保留、空白列略過、前後去空白', async () => {
-  const env = mk();
-  assert.deepEqual((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data.items, []);
-  const r = await api(env, 'POST', '/admin/fb/comment-presets', { items: [{ name: ' 活動宣傳 ', text: ' 追蹤粉專 https://a.tw 😀 ' }, { name: '', text: '' }, { name: '感謝', text: '謝謝大家' }] }, 'admin');
-  assert.equal(r.res.status, 200);
-  assert.deepEqual(r.body.data, { saved: 2 });
-  const g = (await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data;
-  assert.deepEqual(g.items, [{ name: '活動宣傳', text: '追蹤粉專 https://a.tw 😀' }, { name: '感謝', text: '謝謝大家' }]);
-  assert.deepEqual([g.max, g.nameMax, g.textMax], [20, 20, 8000]);
-  await api(env, 'POST', '/admin/fb/comment-presets', { items: [{ name: '只剩這個', text: 'x' }] }, 'admin');
-  assert.deepEqual((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data.items, [{ name: '只剩這個', text: 'x' }], '整份取代');
-});
-
-test('預設文字：驗證（名稱／內容／長度／重複／筆數／格式）', async () => {
-  const env = mk();
-  const bad = async (items, re) => {
-    const r = await api(env, 'POST', '/admin/fb/comment-presets', { items }, 'admin');
-    assert.equal(r.res.status, 400, JSON.stringify(items).slice(0, 60));
-    if (re) assert.match(r.body.error, re);
-  };
-  await bad([{ name: '無內容', text: '  ' }], /沒有內容/);
-  await bad([{ name: '', text: '有字沒名稱' }], /名稱/);
-  await bad([{ name: 'n'.repeat(21), text: 'x' }], /名稱/);
-  await bad([{ name: 'a', text: 'x'.repeat(8001) }], /太長/);
-  await bad([{ name: 'a', text: '1' }, { name: 'a', text: '2' }], /重複/);
-  await bad(Array.from({ length: 21 }, (_, i) => ({ name: 'n' + i, text: 'x' })), /最多/);
-  await bad('not array');
-  await bad([{ name: 1, text: 'x' }]);
-  assert.deepEqual((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.data.items, [], '驗證失敗不會寫入');
-  const ok20 = await api(env, 'POST', '/admin/fb/comment-presets', { items: Array.from({ length: 20 }, (_, i) => ({ name: 'n' + i, text: 'x' })) }, 'admin');
-  assert.equal(ok20.res.status, 200);
-});
-
-test('預設文字：公司憑證只能讀（給發文工具），不能寫；沒有憑證 401；管理端點擋公司憑證', async () => {
-  const env = mk();
-  await api(env, 'POST', '/admin/fb/comment-presets', { items: [{ name: '活動', text: '內容 https://a.tw' }] }, 'admin');
-  const g = await api(env, 'GET', '/fb/comment-presets');
-  assert.equal(g.res.status, 200);
-  assert.deepEqual(g.body.data.items, [{ name: '活動', text: '內容 https://a.tw' }]);
-  assert.equal((await api(env, 'POST', '/fb/comment-presets', { items: [] })).res.status, 404);
-  assert.equal((await api(env, 'GET', '/admin/fb/comment-presets')).res.status, 401, '公司憑證不能進管理端點');
-  assert.equal((await call('/fb/comment-presets', {}, env)).status, 401);
-});
-
-test('預設文字：沒有資料庫時公司端讀到空清單、管理端回 misconfigured', async () => {
-  const env = { ...mk(), DB: undefined };
-  assert.deepEqual((await api(env, 'GET', '/fb/comment-presets')).body.data.items, []);
-  assert.equal((await api(env, 'GET', '/admin/fb/comment-presets', undefined, 'admin')).body.code, 'misconfigured');
-});
-
-test('預設文字：寫入中途失敗不會把舊資料清掉（DELETE＋INSERT 同一個交易）', async () => {
-  const env = mk();
-  const q = await Q();
-  await q.savePresets(env, [{ name: '舊的', text: '舊內容' }]);
-  await assert.rejects(q.savePresets(env, [{ name: '新的', text: '新內容' }, { name: null, text: 'x' }]));
-  assert.deepEqual(await q.listPresets(env), [{ name: '舊的', text: '舊內容' }], '失敗後維持舊清單');
-});
-
-// ---- 後台設定：留言嘗試次數 ----
-const failOnce = async (q, env) => { env.DB.raw.prepare("UPDATE fb_comments SET next_check=1 WHERE status='pending'").run(); await q.processDue(env, Date.now()); return rows(env)[0]; };
-const unpublished = (due) => routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: false, scheduled_publish_time: due } })]);
-
-test('嘗試次數設定：預設 2、間隔 30 秒；管理憑證可讀寫，範圍 1～5 整數；公司憑證不能寫', async () => {
-  const env = mk();
-  let g = (await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data;
-  assert.deepEqual([g.maxAttempts, g.min, g.max, g.default, g.gapSec], [2, 1, 5, 2, 30]);
-  const r = await api(env, 'POST', '/admin/fb/settings', { maxAttempts: 4 }, 'admin');
-  assert.equal(r.res.status, 200);
-  assert.equal(r.body.data.maxAttempts, 4);
-  assert.equal((await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data.maxAttempts, 4);
-  for (const bad of [0, 6, 1.5, '3', null, -1, undefined]) {
-    assert.equal((await api(env, 'POST', '/admin/fb/settings', { maxAttempts: bad }, 'admin')).res.status, 400, String(bad));
-  }
-  assert.equal((await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data.maxAttempts, 4, '不合法的值不會改到設定');
-  assert.equal((await api(env, 'POST', '/admin/fb/settings', { maxAttempts: 3 }, 'company')).res.status, 401);
-  assert.equal((await api(env, 'GET', '/admin/fb/settings', undefined, 'admin')).body.data.maxAttempts, 4);
-  const q = await Q();
-  assert.equal(q.RETRY_GAP_MS, 30000);
-});
-
-test('嘗試次數設定：設 1 → 第 1 次失敗就標失敗（已試 1 次）', async () => {
-  const env = mk(); const q = await Q();
-  await q.setMaxAttempts(env, 1);
-  const due = nowSec() - 5;
-  await enqueue(env, { due });
-  unpublished(due);
-  const r = await failOnce(q, env);
-  assert.deepEqual([r.status, r.error], ['failed', '沒偵測到貼文發布（已試 1 次）']);
-});
-
-test('嘗試次數設定：設 3 → 第 1、2 次失敗都先排下一次（30 秒後），第 3 次才標失敗；已排隊的留言也適用', async () => {
-  const env = mk(); const q = await Q();
-  const due = nowSec() - 5;
-  await enqueue(env, { due });   // 先排隊，之後才改設定
-  await q.setMaxAttempts(env, 3);
-  unpublished(due);
-  const t = Date.now();
-  env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
-  await q.processDue(env, t);
-  let r = rows(env)[0];
-  assert.deepEqual([r.status, r.step, r.next_check], ['pending', 1, t + 30000]);
-  r = await failOnce(q, env);
-  assert.deepEqual([r.status, r.step], ['pending', 2]);
-  r = await failOnce(q, env);
-  assert.deepEqual([r.status, r.error], ['failed', '沒偵測到貼文發布（已試 3 次）']);
-});
-
-test('嘗試次數設定：設 5 也一樣，限流第 1 次就停（不受次數影響）', async () => {
-  const env = mk(); const q = await Q();
-  await q.setMaxAttempts(env, 5);
-  await enqueue(env, { due: nowSec() - 5 });
-  routes.push([/\/v26\.0\/$/, () => fbErr(4, 'Application request limit reached')]);
-  const r = await failOnce(q, env);
-  assert.deepEqual([r.status, /（不重試）$/.test(r.error)], ['failed', true]);
-});
-
-test('嘗試次數設定：讀不到或值壞掉一律退回預設 2；沒有資料庫也不報錯', async () => {
-  const env = mk(); const q = await Q();
-  env.DB.raw.prepare("INSERT INTO fb_settings (key, value, updated) VALUES ('max_attempts', 'abc', 1)").run();
-  assert.equal(await q.getMaxAttempts(env), 2);
-  env.DB.raw.prepare("UPDATE fb_settings SET value='99'").run();
-  assert.equal(await q.getMaxAttempts(env), 2);
-  assert.equal(await q.getMaxAttempts({ ...env, DB: undefined }), 2);
-  await assert.rejects(() => q.setMaxAttempts(env, 9));
-  const broken = { ...env, DB: { prepare() { throw new Error('d1 down'); } } };
-  assert.equal(await q.getMaxAttempts(broken), 2);
-});
-
-// ---- 暫時停用排程發布 ----
-test('停用：預設使用中；管理憑證停用／恢復，原因清理與長度限制；公司憑證不能讀寫', async () => {
-  const env = mk();
-  let g = (await api(env, 'GET', '/admin/fb/pause', undefined, 'admin')).body.data;
-  assert.deepEqual([g.paused, g.reason, g.at, g.reasonMax], [false, '', null, 100]);
-  assert.equal((await api(env, 'GET', '/admin/fb/pause', undefined, 'company')).res.status, 401);
-  assert.equal((await api(env, 'POST', '/admin/fb/pause', { paused: true }, 'company')).res.status, 401);
-  for (const bad of [{}, { paused: 'true' }, { paused: 1 }, { paused: true, reason: 3 }, { paused: true, reason: 'x'.repeat(101) }]) {
-    assert.equal((await api(env, 'POST', '/admin/fb/pause', bad, 'admin')).res.status, 400, JSON.stringify(bad).slice(0, 40));
-  }
-  assert.equal((await api(env, 'GET', '/admin/fb/pause', undefined, 'admin')).body.data.paused, false, '不合法的值不會停用');
-  const t0 = Date.now();
-  const r = await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '  權杖\n更換中\t15:00 恢復 ' }, 'admin');
-  assert.equal(r.res.status, 200);
-  assert.deepEqual([r.body.data.paused, r.body.data.reason], [true, '權杖 更換中 15:00 恢復']);
-  assert.ok(r.body.data.at >= t0);
-  const at = r.body.data.at;
-  const r2 = await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '改原因' }, 'admin');
-  assert.deepEqual([r2.body.data.reason, r2.body.data.at], ['改原因', at], '已停用時改原因不改停用時間');
-  const r3 = await api(env, 'POST', '/admin/fb/pause', { paused: false, reason: '忽略' }, 'admin');
-  assert.deepEqual([r3.body.data.paused, r3.body.data.reason, r3.body.data.at], [false, '', null]);
-});
-
-test('停用：/fb/* 與 /rundown 一律回 fb_paused（503，附原因），不打臉書；恢復後照常', async () => {
-  const env = mk({ RUNDOWN_URL: 'https://script.google.com/macros/s/abc/exec', RUNDOWN_TOKEN: 'rundown-token-123' });
-  await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '測試停用' }, 'admin');
-  calls = [];
-  const paths = [['GET', '/fb/pages'], ['GET', '/fb/scheduled?page=111'], ['GET', '/fb/posts?page=111'], ['GET', '/fb/comments'],
-    ['GET', '/fb/comment-presets'], ['POST', '/fb/post', { page: '111', message: 'x' }], ['POST', '/fb/cancel', { post: '111_1' }],
-    ['POST', '/fb/comment/retry', { id: 1 }], ['POST', '/rundown', { action: 'ping' }]];
-  for (const [m, p, b] of paths) {
-    const r = await api(env, m, p, b);
-    assert.equal(r.res.status, 503, p);
-    assert.equal(r.body.code, 'fb_paused', p);
-    assert.equal(r.body.detail.reason, '測試停用', p);
-    assert.ok(Number.isInteger(r.body.detail.at), p);
-  }
-  assert.equal(calls.length, 0, '停用時不呼叫臉書／Apps Script');
-  assert.equal((await call('/fb/pages', {}, env)).status, 401, '沒登入仍先回 401，不洩漏停用狀態');
-  await api(env, 'POST', '/admin/fb/pause', { paused: false }, 'admin');
-  assert.equal((await api(env, 'GET', '/fb/pages')).res.status, 200);
-});
-
-test('停用：留言佇列照常送；設定資料壞掉或讀不到當作使用中', async () => {
-  const env = mk(); const q = await Q();
-  await q.setPause(env, true, '停用中');
-  const due = nowSec() - 5;
-  await enqueue(env, { due });
-  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
-  routes.push([/\/111_5\/comments$/, () => reply({ id: '111_5_9' })]);
-  env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
-  await q.processDue(env, Date.now());
-  assert.equal(rows(env)[0].status, 'done', '停用不影響已排隊的留言');
-  env.DB.raw.prepare("UPDATE fb_settings SET value='壞掉' WHERE key='pause'").run();
-  assert.equal((await q.getPause(env)).paused, false);
-  assert.equal((await q.getPause({})).paused, false, '沒有 D1 也當作使用中');
-});
-
-test('停用：前端用管理密碼登入的憑證（adm）不受限制，/fb/* 與 /rundown 照常；普通公司憑證仍被擋', async () => {
-  const env = mk({ RUNDOWN_URL: 'https://script.google.com/macros/s/abc/exec', RUNDOWN_TOKEN: 'rundown-token-123' });
-  await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '停用' }, 'admin');
-  const tok = (await (await call('/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: env.ADMIN_PASSWORD }) }, env)).json()).data.token;
-  const asAdm = (path, init = {}) => call(path, { ...init, headers: { authorization: 'Bearer ' + tok, ...(init.headers || {}) } }, env);
-  assert.equal((await asAdm('/fb/pages')).status, 200);
-  routes.push([/exec$/, () => reply({ ok: true, title: 'RD', sheets: [] })]);
-  const rd = await asAdm('/rundown', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
-  assert.notEqual((await rd.json()).code, 'fb_paused');
-  assert.equal((await api(env, 'GET', '/fb/pages')).body.code, 'fb_paused', '普通公司憑證仍被擋');
-});
-
-// ---- 有圖排程：留言只記 photo_id 時，靠貼文附件的照片 ID 補上 post_id ----
-const photoPost = (id, photo, extra = {}) => ({ id, is_published: false, attachments: { data: [{ target: { id: photo } }] }, ...extra });
-
-test('照片留言（只有 photo_id）：改早時間 → 補 post_id、due 跟著新時間；第 N 則保留延遲', async () => {
-  const env = mk();
-  const at = nowSec() + 7200;
-  await enqueue(env, { post: null, photo: '77', due: at });
-  await enqueue(env, { post: null, photo: '77', due: at + 300, seq: 2, delay: 300 });
-  await enqueue(env, { post: null, photo: '88', due: at });   // 別張照片不受影響
-  const t = nowSec() + 1800;
-  routes.push([/\/111_9$/, (u, init) => (init.method === 'POST' ? reply({ success: true }) : reply(photoPost('111_9', '77')))]);
-  assert.equal((await api(env, 'POST', '/fb/reschedule', { post: '111_9', time: t })).res.status, 200);
-  const get = calls.find((c) => c.path.endsWith('/111_9') && c.method === 'GET');
-  assert.match(get.q.get('fields'), /^is_published,attachments\{target\{id\}/);
-  assert.equal(calls.filter((c) => c.path.endsWith('/111_9')).length, 2);   // 不多打臉書：一次 GET＋一次改時間
-  assert.deepEqual(rows(env).map((x) => [x.post_id, x.due]), [['111_9', t], ['111_9', t + 300], [null, at]]);
-});
-
-test('照片留言（只有 photo_id）：取消 → 留言跟著取消', async () => {
-  const env = mk();
-  await enqueue(env, { post: null, photo: '77', due: nowSec() + 7200 });
-  routes.push([/\/111_9$/, (u, init) => (init.method === 'DELETE' ? reply({ success: true }) : reply(photoPost('111_9', '77')))]);
-  assert.equal((await api(env, 'POST', '/fb/cancel', { post: '111_9' })).res.status, 200);
-  assert.deepEqual(rows(env).map((x) => [x.post_id, x.status]), [['111_9', 'canceled']]);
-});
-
-test('照片留言：已排程列表靠附件對上並顯示留言狀態（含第 N 則）；別的粉專不會被連結', async () => {
-  const env = mk();
-  await enqueue(env, { post: null, photo: '77', due: nowSec() + 7200, message: '第一則' });
-  await enqueue(env, { post: null, photo: '77', due: nowSec() + 7500, seq: 2, delay: 300, message: '第二則' });
-  await enqueue(env, { page: '222', post: null, photo: '77', due: nowSec() + 7200 });
-  routes.push([/\/111\/scheduled_posts$/, () => reply({ data: [photoPost('111_9', '77', { message: 'm', scheduled_publish_time: nowSec() + 7200 })] })]);
-  const r = await api(env, 'GET', '/fb/scheduled?page=111');
-  const it = r.body.data.items[0];
-  assert.equal(it.comment.message, '第一則');
-  assert.deepEqual(it.extras.map((x) => x.message), ['第二則']);
-  assert.deepEqual(rows(env).map((x) => x.post_id), ['111_9', '111_9', null]);
-});
-
-test('attachments 欄位被臉書拒絕（錯誤碼 100）→ 退回原欄位再查，取消／列表照常', async () => {
-  const env = mk();
-  await enqueue(env, { post: '111_9', due: nowSec() + 7200 });
-  const noAttach = (ok) => (u, init, tok, url) => (/attachments/.test(url.searchParams.get('fields') || '') ? fbErr(100, '(#100) Unknown field') : ok(init));
-  routes.push([/\/111_9$/, noAttach((init) => (init.method === 'DELETE' ? reply({ success: true }) : reply({ id: '111_9', is_published: false })))]);
-  routes.push([/\/111\/scheduled_posts$/, noAttach(() => reply({ data: [{ id: '111_9', message: 'm' }] }))]);
-  assert.equal((await api(env, 'GET', '/fb/scheduled?page=111')).body.data.items[0].comment.status, 'pending');
-  assert.equal((await api(env, 'POST', '/fb/cancel', { post: '111_9' })).res.status, 200);
-  assert.equal(rows(env)[0].status, 'canceled');
-});
-
-test('attachmentTargets：含子附件、略過非數字 ID', async () => {
-  const q = await Q();
-  assert.deepEqual(q.attachmentTargets({ attachments: { data: [{ target: { id: '1' }, subattachments: { data: [{ target: { id: '2' } }, { target: { id: 'x' } }] } }, {}] } }), ['1', '2']);
-  assert.deepEqual(q.attachmentTargets({}), []);
 });

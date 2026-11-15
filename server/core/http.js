@@ -16,13 +16,12 @@ export const MESSAGES = {
   fb_error: '臉書回傳錯誤。',
   fb_unreachable: '連不到臉書。',
   fb_unknown_page: '這個粉專不在後端設定的 token 裡。',
-  fb_paused: '排程發布暫時停用中。',
   rundown_off: '後端還沒設定 Rundown（RUNDOWN_URL／RUNDOWN_TOKEN）。',
   rundown_failed: 'Rundown 寫入失敗。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
   fb_not_configured: 503, fb_token_invalid: 502, fb_permission: 403, fb_rate_limited: 429, fb_bad_request: 400,
-  fb_error: 502, fb_unreachable: 502, fb_unknown_page: 404, fb_paused: 503, rundown_off: 503, rundown_failed: 502 };
+  fb_error: 502, fb_unreachable: 502, fb_unknown_page: 404, rundown_off: 503, rundown_failed: 502 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');
@@ -55,11 +54,8 @@ export function json(request, env, body, status = 200, extra = {}) {
   });
 }
 export const ok = (request, env, data, extra) => json(request, env, { ok: true, data }, 200, extra);
-// detail：給前端顯示用的附加資料（例：停用原因），選填
-export function fail(request, env, code, message, detail) {
-  const body = { ok: false, code, error: message || MESSAGES[code] || code };
-  if (detail !== undefined) body.detail = detail;
-  return json(request, env, body, STATUS[code] || 400);
+export function fail(request, env, code, message) {
+  return json(request, env, { ok: false, code, error: message || MESSAGES[code] || code }, STATUS[code] || 400);
 }
 
 export const sleep = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
