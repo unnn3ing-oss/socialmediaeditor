@@ -31,7 +31,7 @@ export function createApi({ fetchFn = (...a) => globalThis.fetch(...a), storage 
       }
       let j;
       try { j = await res.json(); } catch { throw Object.assign(new Error('伺服器回應格式不對'), { code: 'bad_response' }); }
-      if (!j || !j.ok) throw Object.assign(new Error(j?.error || '呼叫失敗'), { code: j?.code || `http_${res.status}` });
+      if (!j || !j.ok) throw Object.assign(new Error(j?.error || '呼叫失敗'), { code: j?.code || `http_${res.status}`, detail: j?.detail });
       if (j.data && j.data.renew && typeof j.data.renew.token === 'string') {
         try { storage.setItem(COMPANY_KEY, JSON.stringify({ token: j.data.renew.token, exp: j.data.renew.exp })); } catch { /* 靜默 */ }
       }

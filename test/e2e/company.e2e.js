@@ -30,10 +30,12 @@ async function open() {
     if (p === '/auth') {
       if (api.authDown) return r.abort();
       if (!api.authOk) return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'bad_password', error: 'x' } });
+      if (JSON.parse(req.postData()).password === 'admin-pw') return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'adm', exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true } } });
       return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'tok', exp } } });
     }
     if (p === '/auth/status') {
       if (api.statusCode === 401) return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'unauthorized', error: 'x' } });
+      if (/adm/.test(req.headers().authorization || '')) return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true } } });
       return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp } } });
     }
     return r.fulfill({ status: 404, headers: CORS, json: { ok: false, code: 'not_found' } });
@@ -125,4 +127,14 @@ test('logout hides company tool', async () => {
   await page.waitForFunction(() => !document.querySelector('#toolbar button[data-tool=secret]'));
   assert.equal(await page.locator('#status [data-status=company]').count(), 0);
   assert.equal(await page.evaluate(() => localStorage.getItem('tbx.company')), null);
+});
+
+test('管理密碼登入：解鎖公司工具，膠囊顯示（管理員）剩 12 小時，重新整理後仍是管理員', async () => {
+  const { page } = await open();
+  await unlock(page, 'admin-pw');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  assert.match(await page.textContent('#status [data-status=company]'), /公司素材已解鎖（管理員），剩 12 小時/);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tbx.company')).admin), true);
+  await page.reload();
+  await page.waitForFunction(() => /（管理員），剩 1[12] 小時/.test(document.querySelector('#status [data-status=company]')?.textContent || ''));
 });

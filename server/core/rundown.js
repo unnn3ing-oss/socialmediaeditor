@@ -3,6 +3,7 @@
 // 本文：{ action:'ping' } 或 { action:'add', entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
 import { ok, fail, readBody } from './http.js';
 import { bearer } from './auth.js';
+import { pausedFail } from './pause.js';   // 模組：暫停排程發布（掛點見 handleRundown）
 
 export const RUNDOWN_PAGES = ['news', 'ent', 'shaokang', 'intl'];
 const URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
@@ -34,7 +35,10 @@ async function readJson(request) {
 export async function handleRundown(request, env, path) {
   if (path !== '/rundown') return null;
   if (request.method !== 'POST') return fail(request, env, 'not_found');
-  if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
+  const cred = await bearer(request, env, 'company');
+  if (!cred) return fail(request, env, 'unauthorized');
+  const paused = await pausedFail(request, env, cred);   // 掛點：暫停排程發布
+  if (paused) return paused;
   if (!rundownReady(env)) return fail(request, env, 'rundown_off');
   const body = rundownBody(await readJson(request));
   if (!body) return fail(request, env, 'bad_request');

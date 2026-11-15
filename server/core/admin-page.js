@@ -102,6 +102,28 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <p class="msg" id="listMsg" role="status"></p>
     </section>
 
+    <section class="card" id="psCard">
+      <h2>暫停排程發布</h2>
+      <p>停用後，用公司密碼登入的人在排程發布工具只會看到停用公告（不能發文、排程、查詢、寫入 Rundown）；已排定的貼文照常由臉書發布。用管理密碼登入的人不受影響。只能在這裡手動恢復。</p>
+      <div class="row"><button id="psLoad" type="button">讀取目前狀態</button></div>
+      <p class="msg" id="psState" role="status"></p>
+      <div id="psForm" hidden>
+        <label for="psReason">停用原因（選填，最多 100 字，會顯示給同事）</label>
+        <input type="text" id="psReason" maxlength="100">
+        <div class="row">
+          <button id="psStop" class="danger" type="button">停用排程發布</button>
+          <button id="psSave" type="button" hidden>更新原因</button>
+          <button id="psResume" class="primary" type="button" hidden>恢復使用</button>
+        </div>
+        <div class="row" id="psConfirm" hidden role="alertdialog" aria-label="確認停用">
+          <span>確定要停用嗎？所有用公司密碼登入的同事會立刻無法使用排程發布。</span>
+          <button id="psYes" class="danger solid" type="button">確定停用</button>
+          <button id="psNo" type="button">先不要</button>
+        </div>
+      </div>
+      <p class="msg" id="psMsg" role="status"></p>
+    </section>
+
     <section class="card">
       <h2>臉書連線</h2>
       <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組 token（用戶 token 或粉專 token）能管哪些粉專（不會顯示 token 本身）。用戶 token 請留意「資料存取到」的日期，過了要重新授權。</p>
@@ -254,6 +276,31 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     }).catch(function () { say($('logMsg'), '讀取日誌失敗。', 'err'); })
       .then(function () { $('logBtn').disabled = false; });
   };
+
+  // ---- 暫停排程發布（模組 server/core/pause.js）：先讀取目前狀態才能操作 ----
+  function psShow(d) {
+    $('psForm').hidden = false; $('psConfirm').hidden = true;
+    $('psStop').hidden = d.paused; $('psSave').hidden = !d.paused; $('psResume').hidden = !d.paused;
+    if (d.paused) $('psReason').value = d.reason || '';
+    say($('psState'), d.paused ? '目前：停用中' + (d.at ? '（' + fmtTime(d.at) + ' 起）' : '') + (d.reason ? '，原因：' + d.reason : '') : '目前：使用中', d.paused ? 'err' : 'good');
+  }
+  function psCall(opts, okText) {
+    ['psLoad', 'psStop', 'psSave', 'psResume', 'psYes'].forEach(function (id) { $(id).disabled = true; });
+    return api('/admin/fb/pause', opts).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      psShow(res.data); say($('psMsg'), okText || '', 'good');
+    }).catch(function (e) { say($('psMsg'), '失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { ['psLoad', 'psStop', 'psSave', 'psResume', 'psYes'].forEach(function (id) { $(id).disabled = false; }); });
+  }
+  function psPost(paused, okText) {
+    return psCall({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: paused, reason: $('psReason').value }) }, okText);
+  }
+  $('psLoad').onclick = function () { say($('psMsg'), '讀取中'); psCall({}, ''); };
+  $('psStop').onclick = function () { $('psConfirm').hidden = false; $('psYes').focus(); };
+  $('psNo').onclick = function () { $('psConfirm').hidden = true; $('psStop').focus(); };
+  $('psYes').onclick = function () { psPost(true, '已停用排程發布。'); };
+  $('psSave').onclick = function () { psPost(true, '已更新停用原因。'); };
+  $('psResume').onclick = function () { psPost(false, '已恢復使用。'); };
 
   $('fbBtn').onclick = function () {
     $('fbBtn').disabled = true; say($('fbMsg'), '檢查中');

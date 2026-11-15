@@ -41,7 +41,7 @@ async function skipDuty(page) {
   await page.click('#dutySkip');
   await page.waitForSelector('#dutyDlg:not([open])', { state: 'attached' });
 }
-async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES } = {}) {
+async function open({ company = false, viewport = { width: 1280, height: 900 }, duty = 'skip', rundown = false, pages = PAGES, paused = null } = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -57,6 +57,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     },
     failedComments: [{ id: 'c1', page: '111', post: '111_8', message: '看更多新聞內容\nhttps://news.tvbs.com.tw/life/1', status: 'failed', error: '貼文沒有出現', due: now - 60, updated: now - 30, dismissed: false }],
   };
+  api.paused = paused;
   await page.addInitScript(({ duty, rundown }) => {
     try {
       if (duty && typeof duty === 'object') localStorage.setItem('tbx.fbpost.duty.v1', JSON.stringify(duty));
@@ -75,6 +76,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     api.requestPaths.push(u.pathname);
     const okJ = (data) => r.fulfill({ headers: CORS, json: { ok: true, data } });
     const bad = (code, error, status = 400) => r.fulfill({ status, headers: CORS, json: { ok: false, code, error } });
+    if (api.paused && (/^\/fb\//.test(u.pathname) || u.pathname === '/rundown')) return r.fulfill({ status: 503, headers: CORS, json: { ok: false, code: 'fb_paused', error: '排程發布暫時停用中。', detail: api.paused } });
     if (/^\/assets\//.test(u.pathname)) return company ? r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([30, 60, 120]) }) : r.fulfill({ status: 404, headers: CORS, body: '' });
     if (u.pathname === '/fb/pages') return okJ(pages);
     if (api.hold && /^\/fb\/(scheduled|insights)$/.test(u.pathname)) await api.hold;   // 測骨架屏：先卡住回應
@@ -150,6 +152,7 @@ async function open({ company = false, viewport = { width: 1280, height: 900 }, 
     return { page: fr, api, errors };
   }
   await page.goto(srv.url + 'tools/fbpost/index.html');
+  if (paused) { await page.waitForSelector('#pausedBox:not([hidden])'); return { page, api, errors }; }
   await page.waitForSelector('#pages .pg', { state: 'attached' });
   if (duty === 'skip') await skipDuty(page);
   return { page, api, errors };
@@ -1327,5 +1330,50 @@ test('生僻字：純文字底圖輸入就載入，送出前等字型載完才�
   assert.equal(api.posts[0].hasImage, true);
   const last = (await fontCalls(page)).filter(([s]) => /^900 76px/.test(s)).pop();
   assert.ok(last[1].includes('㙓'), '送出前載入了最後輸入的字');
+  assert.deepEqual(errors, []);
+});
+// ---- 暫停排程發布（管理頁開關）----
+const PAUSE = { reason: '臉書權杖更換中，預計 15:00 恢復', at: Date.UTC(2026, 10, 15, 6, 2) };
+const visibleKids = (page) => page.$$eval('main.fp > *', (els) => els.filter((e) => e.offsetParent !== null || getComputedStyle(e).display !== 'none').map((e) => e.id || e.className));
+
+test('停用：開啟就停用只顯示公告（原因、停用時間），重新檢查仍停用；恢復後回到工具', async () => {
+  const { page, api, errors } = await open({ paused: PAUSE });
+  assert.match(await page.textContent('#pausedReason'), /臉書權杖更換中，預計 15:00 恢復/);
+  assert.match(await page.textContent('#pausedAt'), /^停用時間：11\/15 \d\d:02$/);
+  assert.deepEqual(await visibleKids(page), ['pausedBox'], '除了公告其他都隱藏');
+  assert.equal(await page.isVisible('#newPost'), false);
+  await page.click('#pausedRecheck');
+  await page.waitForFunction(() => document.getElementById('pausedMsg').textContent === '仍在停用中。');
+  api.paused = null;
+  await page.click('#pausedRecheck');
+  await page.waitForSelector('#pausedBox', { state: 'hidden' });
+  await skipDuty(page);
+  assert.equal(await page.isVisible('#newPost'), true);
+  assert.equal(await page.locator('#pages .pg').count(), 2);
+  assert.deepEqual(errors, []);
+});
+
+test('停用：使用中途被停用，任何操作切成公告且關閉開著的視窗；恢復後原本內容還在', async () => {
+  const { page, api, errors } = await open();
+  await querySched(page);
+  await page.waitForSelector('#schedList .item');
+  await page.click('#newPost');
+  await page.waitForSelector('#modal[open]');
+  await page.fill('#url', '還沒送出的網址');
+  api.paused = { reason: '', at: null };
+  await page.$eval('#schedReload', (b) => b.click());   // 視窗開著時背景的呼叫被擋（例：留言輪詢）
+  await page.waitForSelector('#pausedBox:not([hidden])');
+  assert.equal(await page.textContent('#pausedReason'), '原因：管理員未填寫');
+  assert.equal(await page.isVisible('#pausedAt'), false);
+  assert.deepEqual(await visibleKids(page), ['pausedBox']);
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  api.paused = null;
+  await page.click('#pausedRecheck');
+  await page.waitForSelector('#pausedBox', { state: 'hidden' });
+  assert.equal(await page.isVisible('#tab-sched'), true, '回到原本的分頁');
+  assert.ok(await page.locator('#schedList .item').count() >= 1, '列表內容保留');
+  await page.click('#newPost');
+  await page.waitForSelector('#modal[open]');
+  assert.equal(await page.inputValue('#url'), '還沒送出的網址', '新增發文的內容保留');
   assert.deepEqual(errors, []);
 });

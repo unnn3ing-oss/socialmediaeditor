@@ -476,3 +476,81 @@ test('cleanupComments：只刪 30 天前已結束的，待留言不動', async (
   await q.cleanupComments(env, Date.now());
   assert.deepEqual(rows(env).map((r) => r.id), [b]);
 });
+
+// ---- 暫時停用排程發布 ----
+test('停用：預設使用中；管理憑證停用／恢復，原因清理與長度限制；公司憑證不能讀寫', async () => {
+  const env = mk();
+  let g = (await api(env, 'GET', '/admin/fb/pause', undefined, 'admin')).body.data;
+  assert.deepEqual([g.paused, g.reason, g.at, g.reasonMax], [false, '', null, 100]);
+  assert.equal((await api(env, 'GET', '/admin/fb/pause', undefined, 'company')).res.status, 401);
+  assert.equal((await api(env, 'POST', '/admin/fb/pause', { paused: true }, 'company')).res.status, 401);
+  for (const bad of [{}, { paused: 'true' }, { paused: 1 }, { paused: true, reason: 3 }, { paused: true, reason: 'x'.repeat(101) }]) {
+    assert.equal((await api(env, 'POST', '/admin/fb/pause', bad, 'admin')).res.status, 400, JSON.stringify(bad).slice(0, 40));
+  }
+  assert.equal((await api(env, 'GET', '/admin/fb/pause', undefined, 'admin')).body.data.paused, false, '不合法的值不會停用');
+  const t0 = Date.now();
+  const r = await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '  權杖\n更換中\t15:00 恢復 ' }, 'admin');
+  assert.equal(r.res.status, 200);
+  assert.deepEqual([r.body.data.paused, r.body.data.reason], [true, '權杖 更換中 15:00 恢復']);
+  assert.ok(r.body.data.at >= t0);
+  const at = r.body.data.at;
+  const r2 = await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '改原因' }, 'admin');
+  assert.deepEqual([r2.body.data.reason, r2.body.data.at], ['改原因', at], '已停用時改原因不改停用時間');
+  const r3 = await api(env, 'POST', '/admin/fb/pause', { paused: false, reason: '忽略' }, 'admin');
+  assert.deepEqual([r3.body.data.paused, r3.body.data.reason, r3.body.data.at], [false, '', null]);
+});
+
+test('停用：/fb/* 與 /rundown 一律回 fb_paused（503，附原因），不打臉書；恢復後照常', async () => {
+  const env = mk({ RUNDOWN_URL: 'https://script.google.com/macros/s/abc/exec', RUNDOWN_TOKEN: 'rundown-token-123' });
+  await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '測試停用' }, 'admin');
+  calls = [];
+  const paths = [['GET', '/fb/pages'], ['GET', '/fb/scheduled?page=111'], ['GET', '/fb/posts?page=111'], ['GET', '/fb/comments'],
+    ['POST', '/fb/post', { page: '111', message: 'x' }], ['POST', '/fb/cancel', { post: '111_1' }],
+    ['POST', '/fb/comment/retry', { id: 1 }], ['POST', '/rundown', { action: 'ping' }]];
+  for (const [m, p, b] of paths) {
+    const r = await api(env, m, p, b);
+    assert.equal(r.res.status, 503, p);
+    assert.equal(r.body.code, 'fb_paused', p);
+    assert.equal(r.body.detail.reason, '測試停用', p);
+    assert.ok(Number.isInteger(r.body.detail.at), p);
+  }
+  assert.equal(calls.length, 0, '停用時不呼叫臉書／Apps Script');
+  assert.equal((await call('/fb/pages', {}, env)).status, 401, '沒登入仍先回 401，不洩漏停用狀態');
+  await api(env, 'POST', '/admin/fb/pause', { paused: false }, 'admin');
+  assert.equal((await api(env, 'GET', '/fb/pages')).res.status, 200);
+});
+
+test('停用：留言佇列照常送；設定資料壞掉或讀不到當作使用中', async () => {
+  const env = mk(); const q = await Q(); const P = await import('../../server/core/pause.js');
+  await P.setPause(env, true, '停用中');
+  const due = nowSec() - 5;
+  await enqueue(env, { due });
+  routes.push([/\/v26\.0\/$/, states({ '111_5': { is_published: true } })]);
+  routes.push([/\/111_5\/comments$/, () => reply({ id: '111_5_9' })]);
+  env.DB.raw.prepare('UPDATE fb_comments SET next_check=1').run();
+  await q.processDue(env, Date.now());
+  assert.equal(rows(env)[0].status, 'done', '停用不影響已排隊的留言');
+  env.DB.raw.prepare("UPDATE fb_settings SET value='壞掉' WHERE key='pause'").run();
+  assert.equal((await P.getPause(env)).paused, false);
+  assert.equal((await P.getPause({})).paused, false, '沒有 D1 也當作使用中');
+});
+
+test('停用：前端用管理密碼登入的憑證（adm）不受限制，/fb/* 與 /rundown 照常；普通公司憑證仍被擋', async () => {
+  const env = mk({ RUNDOWN_URL: 'https://script.google.com/macros/s/abc/exec', RUNDOWN_TOKEN: 'rundown-token-123' });
+  await api(env, 'POST', '/admin/fb/pause', { paused: true, reason: '停用' }, 'admin');
+  const tok = (await (await call('/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: env.ADMIN_PASSWORD }) }, env)).json()).data.token;
+  const asAdm = (path, init = {}) => call(path, { ...init, headers: { authorization: 'Bearer ' + tok, ...(init.headers || {}) } }, env);
+  assert.equal((await asAdm('/fb/pages')).status, 200);
+  routes.push([/exec$/, () => reply({ ok: true, title: 'RD', sheets: [] })]);
+  const rd = await asAdm('/rundown', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'ping' }) });
+  assert.notEqual((await rd.json()).code, 'fb_paused');
+  assert.equal((await api(env, 'GET', '/fb/pages')).body.code, 'fb_paused', '普通公司憑證仍被擋');
+});
+
+test('停用模組：後端 /admin 頁面有「暫停排程發布」卡片，腳本可解析', async () => {
+  const { ADMIN_HTML } = await import('../../server/core/admin-page.js');
+  for (const id of ['psCard', 'psLoad', 'psReason', 'psStop', 'psSave', 'psResume', 'psConfirm', 'psYes', 'psNo']) assert.ok(ADMIN_HTML.includes('id="' + id + '"'), id);
+  const js = ADMIN_HTML.split('<script>')[1].split('</script>')[0];
+  assert.doesNotThrow(() => new Function(js));
+  assert.ok(js.includes("'/admin/fb/pause'"));
+});
