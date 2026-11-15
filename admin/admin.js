@@ -202,9 +202,12 @@ if (window.top !== window.self) {
 
 
   var pmItems = [];
-  $('pmLoad').onclick = function () {
+  var PM_CODES = [['', '自動'], ['news', '新聞'], ['ent', '娛樂'], ['shaokang', '少康'], ['intl', '國際＋'], ['jkk', '擠看看（無 RD 區）'], ['weather', '氣象（無 RD 區）']];
+  var PM_NAMES = { news: '新聞', ent: '娛樂', shaokang: '少康', intl: '國際＋', jkk: '擠看看', weather: '氣象' };
+  var RD_OK = ['news', 'ent', 'shaokang', 'intl'];
+  function pmLoad(doneMsg) {
     $('pmLoad').disabled = true; say($('pmMsg'), '讀取中');
-    api('/admin/fb/pagemap').then(function (res) {
+    return api('/admin/fb/pagemap').then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       pmItems = res.data.items; var tb = $('pmRows'); tb.textContent = '';
       pmItems.forEach(function (it, i) {
@@ -217,21 +220,40 @@ if (window.top !== window.self) {
           if (type === 'number') { inp.min = 0; inp.max = 999; inp.step = 1; inp.style.width = '90px'; }
           c.appendChild(inp); tr.appendChild(c);
         }
-        cell('text', it.label, '簡稱', 'pmL' + i); cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
+        cell('text', it.label, '簡稱', 'pmL' + i);
+        // RD 區段：決定排入 Rundown 寫到哪一區；空白＝自動（依粉專名稱猜）
+        var rc = document.createElement('td'), sel = document.createElement('select');
+        sel.id = 'pmC' + i; sel.setAttribute('aria-label', it.name + ' RD 區段');
+        PM_CODES.forEach(function (o) {
+          var op = document.createElement('option'); op.value = o[0];
+          op.textContent = o[0] ? o[1] : '自動（' + (PM_NAMES[it.auto] || '對不到') + '）';
+          sel.appendChild(op);
+        });
+        sel.value = PM_NAMES[it.codeSet] ? it.codeSet : '';
+        var hint = document.createElement('div'); hint.className = 'pm-hint';
+        function rcHint() {
+          var code = sel.value || it.auto || '';
+          var ok = RD_OK.indexOf(code) >= 0;
+          rc.className = ok ? '' : 'err'; hint.textContent = ok ? '' : '不會寫入 RD';
+        }
+        sel.onchange = rcHint; rcHint();
+        rc.appendChild(sel); rc.appendChild(hint); tr.appendChild(rc);
+        cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
         tb.appendChild(tr);
       });
       $('pmWrap').hidden = !pmItems.length; $('pmSave').hidden = !pmItems.length;
-      say($('pmMsg'), pmItems.length ? '' : '還沒有任何粉專（請先設定 FB_TOKEN）。', pmItems.length ? '' : 'err');
+      say($('pmMsg'), pmItems.length ? (doneMsg || '') : '還沒有任何粉專（請先設定 FB_TOKEN）。', pmItems.length ? (doneMsg ? 'good' : '') : 'err');
     }).catch(function (e) { say($('pmMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('pmLoad').disabled = false; });
-  };
+  }
+  $('pmLoad').onclick = function () { pmLoad(); };
   $('pmSave').onclick = function () {
     var items = pmItems.map(function (it, i) {
-      return { id: it.id, label: $('pmL' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
+      return { id: it.id, label: $('pmL' + i).value, code: $('pmC' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
     });
     $('pmSave').disabled = true; say($('pmMsg'), '儲存中');
     api('/admin/fb/pagemap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
-      if (res.ok) { say($('pmMsg'), '已儲存。', 'good'); $('pmLoad').click(); }
+      if (res.ok) pmLoad('已儲存。');   // 重新讀取後再顯示，避免「已儲存」被讀取訊息蓋掉
       else if (res.code === 'unauthorized') expired();
       else say($('pmMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('pmMsg'), '連不上後端，請稍後再試。', 'err'); })
@@ -245,7 +267,19 @@ if (window.top !== window.self) {
   $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
 
   // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #fb 等記住目前分類
-  var TABS = ['fb', 'assets', 'logs'];
+
+  // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
+  $('rdPing').onclick = function () {
+    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
+    api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
+      if (res.ok) say($('rdMsg'), '連線正常：' + (res.data.title || '') + (res.data.sheets && res.data.sheets.length ? '（分頁：' + res.data.sheets.join('、') + '）' : ''), 'good');
+      else if (res.code === 'unauthorized') expired();
+      else say($('rdMsg'), res.error || '測試失敗。', 'err');
+    }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('rdPing').disabled = false; });
+  };
+
+  var TABS = ['fb', 'rd', 'assets', 'logs'];
   var assetsLoaded = false;
   function tabFromHash() { var t = location.hash.slice(1); return TABS.indexOf(t) >= 0 ? t : TABS[0]; }
   function showTab(id, focus) {

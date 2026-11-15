@@ -1190,14 +1190,29 @@ test('Rundown：粉專對應缺漏要顯示原因，不顯示完成', async () =
   assert.match(await page.textContent('#dnBody'), /未寫入 RD：少康.*請檢查粉專對應/);
 });
 
-test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功；⚙ 測試連線', async () => {
+for (const width of [1280, 400]) test(`Rundown：在底列清空頁面左側，左開關右 SLUG，沒有 ⚙ 設定，寬度 ${width}`, async () => {
+  const { page, errors } = await open({ rundown: true, viewport: { width, height: 900 } });
+  await page.click('#newPost');
+  assert.equal(await page.$('#rdSetBtn'), null);
+  assert.equal(await page.$('#rdDlg'), null);
+  assert.equal(await page.$eval('#rdBox', (el) => !!el.closest('.m-foot')), true);
+  const box = async (sel) => page.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { x: r.left, r: r.right, y: r.top, b: r.bottom, w: r.width }; });
+  const sw = await box('.rd-sw'), slug = await box('#slug'), clear = await box('#clearBtn'), dlg = await box('#modal');
+  assert.ok(sw.r <= slug.x, '開關在 SLUG 左邊');
+  assert.ok(slug.w >= 120, 'SLUG 框夠寬：' + slug.w);
+  assert.ok(slug.r <= dlg.r && clear.r <= dlg.r + 1, '不超出視窗');
+  if (width > 800) {
+    assert.ok(slug.r <= clear.x, 'SLUG 在清空頁面左邊');
+    assert.ok(Math.abs((sw.y + sw.b) / 2 - (clear.y + clear.b) / 2) < 12, '與清空頁面同一列');
+  } else {
+    assert.ok(slug.b <= clear.y + 1, '手機寬度：排入 Rundown 在按鈕上方');
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('Rundown：關著不寫；寫入失敗顯示原因但發文算成功', async () => {
   const { page, api, errors } = await open({ rundown: true });
   await page.click('#newPost');
-  await page.click('#rdSetBtn');
-  await page.click('#rdTest');
-  await page.waitForFunction(() => /連線成功/.test(document.getElementById('rdHint').textContent));
-  assert.match(await page.textContent('#rdHint'), /FB RUNDOWN\(2026\)/);
-  await page.click('#rdClose');
   api.rundownFail = 'Rundown：08:00 時段已滿';
   await fillUrl(page, URL1);
   await pick(page, '111');

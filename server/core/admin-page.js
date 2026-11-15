@@ -38,6 +38,7 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 .msg{min-height:24px;margin:8px 0 0;font-weight:600}
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
+.pm-hint{font-size:13px;margin-top:4px}
 .msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e6ecf6;vertical-align:middle}
@@ -136,12 +137,20 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <section class="card">
       <h2>粉專對應</h2>
-      <p>排程發布工具用的粉專簡稱、文章連結的 utm 參數與排序（數字小的排前面）。沒有存過的粉專會依名稱套用預設值。</p>
+      <p>排程發布工具用的粉專簡稱、排入 Rundown 的區段、文章連結的 utm 參數與排序（數字小的排前面）。RD 區段選「自動」時依粉專名稱判斷（名稱含「少康」就是少康，依此類推）；判斷錯了就直接選。沒有存過的粉專會依名稱套用預設值。</p>
       <div class="row"><button id="pmLoad" type="button">讀取粉專對應</button><button id="pmSave" class="primary" type="button" hidden>儲存</button></div>
       <p class="msg" id="pmMsg" role="status"></p>
       <div class="scroll" id="pmWrap" hidden>
-        <table><thead><tr><th>粉專名稱</th><th>簡稱</th><th>utm</th><th>排序</th></tr></thead><tbody id="pmRows"></tbody></table>
+        <table><thead><tr><th>粉專名稱</th><th>簡稱</th><th>RD 區段</th><th>utm</th><th>排序</th></tr></thead><tbody id="pmRows"></tbody></table>
       </div>
+    </section>
+
+    <section class="card" id="rdCard">
+      <h2>Rundown 連線</h2>
+      <p>排程發布工具打開「排入 Rundown」後，送出成功會把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段。只寫 RD 區段是新聞、娛樂、少康、國際＋的粉專（區段在「粉專對應」設定）；擠看看、氣象沒有區段，略過。</p>
+      <p>純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。</p>
+      <div class="row"><button id="rdPing" type="button">測試連線</button></div>
+      <p class="msg" id="rdMsg" role="status"></p>
     </section>
 
     <section class="card">
@@ -344,9 +353,12 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   };
 
   var pmItems = [];
-  $('pmLoad').onclick = function () {
+  var PM_CODES = [['', '自動'], ['news', '新聞'], ['ent', '娛樂'], ['shaokang', '少康'], ['intl', '國際＋'], ['jkk', '擠看看（無 RD 區）'], ['weather', '氣象（無 RD 區）']];
+  var PM_NAMES = { news: '新聞', ent: '娛樂', shaokang: '少康', intl: '國際＋', jkk: '擠看看', weather: '氣象' };
+  var RD_OK = ['news', 'ent', 'shaokang', 'intl'];
+  function pmLoad(doneMsg) {
     $('pmLoad').disabled = true; say($('pmMsg'), '讀取中');
-    api('/admin/fb/pagemap').then(function (res) {
+    return api('/admin/fb/pagemap').then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       pmItems = res.data.items; var tb = $('pmRows'); tb.textContent = '';
       pmItems.forEach(function (it, i) {
@@ -359,25 +371,55 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
           if (type === 'number') { inp.min = 0; inp.max = 999; inp.step = 1; inp.style.width = '90px'; }
           c.appendChild(inp); tr.appendChild(c);
         }
-        cell('text', it.label, '簡稱', 'pmL' + i); cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
+        cell('text', it.label, '簡稱', 'pmL' + i);
+        // RD 區段：決定排入 Rundown 寫到哪一區；空白＝自動（依粉專名稱猜）
+        var rc = document.createElement('td'), sel = document.createElement('select');
+        sel.id = 'pmC' + i; sel.setAttribute('aria-label', it.name + ' RD 區段');
+        PM_CODES.forEach(function (o) {
+          var op = document.createElement('option'); op.value = o[0];
+          op.textContent = o[0] ? o[1] : '自動（' + (PM_NAMES[it.auto] || '對不到') + '）';
+          sel.appendChild(op);
+        });
+        sel.value = PM_NAMES[it.codeSet] ? it.codeSet : '';
+        var hint = document.createElement('div'); hint.className = 'pm-hint';
+        function rcHint() {
+          var code = sel.value || it.auto || '';
+          var ok = RD_OK.indexOf(code) >= 0;
+          rc.className = ok ? '' : 'err'; hint.textContent = ok ? '' : '不會寫入 RD';
+        }
+        sel.onchange = rcHint; rcHint();
+        rc.appendChild(sel); rc.appendChild(hint); tr.appendChild(rc);
+        cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
         tb.appendChild(tr);
       });
       $('pmWrap').hidden = !pmItems.length; $('pmSave').hidden = !pmItems.length;
-      say($('pmMsg'), pmItems.length ? '' : '還沒有任何粉專（請先設定 FB_TOKEN）。', pmItems.length ? '' : 'err');
+      say($('pmMsg'), pmItems.length ? (doneMsg || '') : '還沒有任何粉專（請先設定 FB_TOKEN）。', pmItems.length ? (doneMsg ? 'good' : '') : 'err');
     }).catch(function (e) { say($('pmMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('pmLoad').disabled = false; });
-  };
+  }
+  $('pmLoad').onclick = function () { pmLoad(); };
   $('pmSave').onclick = function () {
     var items = pmItems.map(function (it, i) {
-      return { id: it.id, label: $('pmL' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
+      return { id: it.id, label: $('pmL' + i).value, code: $('pmC' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
     });
     $('pmSave').disabled = true; say($('pmMsg'), '儲存中');
     api('/admin/fb/pagemap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
-      if (res.ok) { say($('pmMsg'), '已儲存。', 'good'); $('pmLoad').click(); }
+      if (res.ok) pmLoad('已儲存。');   // 重新讀取後再顯示，避免「已儲存」被讀取訊息蓋掉
       else if (res.code === 'unauthorized') expired();
       else say($('pmMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('pmMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('pmSave').disabled = false; });
+  };
+
+  // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
+  $('rdPing').onclick = function () {
+    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
+    api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
+      if (res.ok) say($('rdMsg'), '連線正常：' + (res.data.title || '') + (res.data.sheets && res.data.sheets.length ? '（分頁：' + res.data.sheets.join('、') + '）' : ''), 'good');
+      else if (res.code === 'unauthorized') expired();
+      else say($('rdMsg'), res.error || '測試失敗。', 'err');
+    }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('rdPing').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };

@@ -11,12 +11,18 @@ let srv, browser;
 test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
 
+let PM_SAVED = null;
 let PZ = { paused: false, reason: '', at: null };
 const DATA = {
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
   'GET /admin/fb': { configured: false },
-  'GET /admin/fb/pagemap': { items: [{ id: '1', name: '新聞粉', label: '新聞', utm: 'utm_source=fb', sort: 1, saved: true }] },
+  'GET /admin/fb/pagemap': { items: [
+    { id: '1', name: '新聞粉', label: '新聞', code: 'news', codeSet: '', auto: 'news', utm: 'utm_source=fb', sort: 1, saved: true },
+    { id: '3', name: 'TVBS 少康戰情室', label: '少康', code: 'shaokang', codeSet: '', auto: 'shaokang', utm: '', sort: 3, saved: true },
+    { id: '9', name: '隨便粉專', label: '隨便', code: '', codeSet: '', auto: '', utm: '', sort: 9, saved: false }] },
+  'POST /admin/fb/pagemap': (b) => { PM_SAVED = b; return { saved: b.items.length }; },
+  'POST /admin/rundown/ping': { title: 'FB RUNDOWN(2026)', sheets: ['2026/11'] },
   'GET /admin/fb/pause': () => ({ ...PZ, reasonMax: 100 }),
   'POST /admin/fb/pause': (b) => { PZ = b.paused ? { paused: true, reason: b.reason.trim(), at: PZ.at || Date.UTC(2026, 10, 15, 6, 2) } : { paused: false, reason: '', at: null }; return { ...PZ, reasonMax: 100 }; },
 };
@@ -63,9 +69,9 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   assert.ok(page.url().endsWith('#fb'));
   assert.equal(await page.isVisible('#logout'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/assets'), '沒進素材分類前不讀素材');
-  // 只有 3 個分類；沒有後端 API 的卡片（Rundown、預設文字、嘗試次數）不出現
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['臉書發文', '素材', '錯誤日誌']);
-  for (const id of ['#panel-rd', '#cpLoad', '#atLoad', '#rdPing']) assert.equal(await page.locator(id).count(), 0, id);
+  // 4 個分類；沒有後端 API 的卡片（預設文字、嘗試次數）不出現
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['臉書發文', 'Rundown', '素材', '錯誤日誌']);
+  for (const id of ['#cpLoad', '#atLoad']) assert.equal(await page.locator(id).count(), 0, id);
 
   await page.click('#pmLoad');
   await page.waitForSelector('#pmWrap:not([hidden])');
@@ -82,7 +88,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   await page.waitForSelector('#tableWrap:not([hidden])');
   assert.match(await page.textContent('#rows'), /logo\.png/);
 
-  // 方向鍵切換分類
+  // 方向鍵切換分類（Rundown → 素材 → 錯誤日誌）
   await page.focus('#tab-assets');
   await page.keyboard.press('ArrowDown');
   assert.equal(await page.getAttribute('#tab-logs', 'aria-selected'), 'true');
@@ -149,4 +155,32 @@ test('暫停排程發布：先讀取才能操作，停用前確認（先不要�
   assert.equal(await page.isVisible('#pzSaveReason'), false);
   assert.ok(calls.filter((c) => c.key && c.key.endsWith('/admin/fb/pause')).every((c) => c.auth === 'Bearer T'), '帶管理 token');
   assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
+});
+
+test('粉專對應：RD 區段下拉（自動顯示判斷結果、對不到標紅），儲存帶 code', async () => {
+  const { page } = await open({ width: 1280, height: 860 });
+  await login(page);
+  await page.click('#pmLoad');
+  await page.waitForSelector('#pmWrap:not([hidden])');
+  assert.equal(await page.inputValue('#pmC1'), '');
+  assert.match(await page.$eval('#pmC1 option[value=""]', (o) => o.textContent), /自動（少康）/);
+  assert.match(await page.$eval('#pmC2 option[value=""]', (o) => o.textContent), /自動（對不到）/);
+  assert.match(await page.textContent('#pmRows tr:nth-child(3)'), /不會寫入 RD/);
+  assert.doesNotMatch(await page.textContent('#pmRows tr:nth-child(2)'), /不會寫入 RD/);
+  await page.selectOption('#pmC2', 'intl');
+  assert.doesNotMatch(await page.textContent('#pmRows tr:nth-child(3)'), /不會寫入 RD/);
+  await page.selectOption('#pmC1', 'jkk');
+  assert.match(await page.textContent('#pmRows tr:nth-child(2)'), /不會寫入 RD/);
+  await page.click('#pmSave');
+  await page.waitForFunction(() => /已儲存/.test(document.getElementById('pmMsg').textContent));
+  assert.deepEqual(PM_SAVED.items.map((i) => [i.id, i.code]), [['1', ''], ['3', 'jkk'], ['9', 'intl']]);
+});
+
+test('Rundown 分類：測試連線打 /admin/rundown/ping 並顯示試算表名稱', async () => {
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#rd');
+  await login(page);
+  assert.equal(await page.isVisible('#panel-rd'), true);
+  await page.click('#rdPing');
+  await page.waitForFunction(() => /連線正常：FB RUNDOWN\(2026\)/.test(document.getElementById('rdMsg').textContent));
+  assert.ok(calls.some((c) => c.key === 'POST /admin/rundown/ping' && c.auth === 'Bearer T'));
 });

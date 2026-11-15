@@ -1177,22 +1177,11 @@ function syncRd() {
 }
 function updateSlugHint() {
   const ds = RD.defaultSlug(getLines());
-  $('slug').placeholder = ds ? `空白＝${ds}（標題前 4 字）` : '空白＝標題前 4 字';
+  $('slug').placeholder = ds ? `SLUG（空白＝${ds}）` : 'SLUG（空白＝標題前 4 字）';
 }
 $('rdOn').checked = RD.rundownOn();
 syncRd();
 $('rdOn').addEventListener('change', () => { RD.setRundownOn($('rdOn').checked); syncRd(); });
-$('rdSetBtn').addEventListener('click', () => { $('rdHint').textContent = ''; $('rdHint').className = 'hint'; $('rdDlg').showModal(); });
-$('rdClose').addEventListener('click', () => $('rdDlg').close());
-$('rdTest').addEventListener('click', async () => {
-  const h = $('rdHint');
-  $('rdTest').disabled = true; h.className = 'hint'; h.textContent = '測試中…';
-  try {
-    const j = await fbCall('/rundown', { method: 'POST', body: { action: 'ping' } });
-    h.className = 'hint ok'; h.textContent = `連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).slice(0, 3).join('、')}…）`;
-  } catch (e) { h.className = 'hint bad'; h.textContent = e.code === 'unauthorized' ? '請先輸入公司密碼' : errText(e); }
-  finally { $('rdTest').disabled = false; }
-});
 
 // ---------- 完成、關閉、清空 ----------
 function showDone(body) {
