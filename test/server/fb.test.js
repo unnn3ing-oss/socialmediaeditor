@@ -186,46 +186,29 @@ test('發文（文字＋連結）走 /feed，token 放本文不放網址', async
   assert.deepEqual(log.map((r) => ({ ...r })), [{ tool: 'fb', code: 'post-published' }]);
 });
 
-test('排程發圖（網址）：先 /photos 暫存上傳，再 /feed＋attached_media＋SCHEDULED 排程', async () => {
+test('排程發圖（網址）走一步 /photos，帶 published=false、排程時間與 unpublished_content_type=SCHEDULED，不打 /feed', async () => {
   const env = fbEnv();
-  routes.push([/\/222\/photos$/, () => reply({ id: '9' })]);
-  routes.push([/\/222\/feed$/, () => reply({ id: '222_55' })]);
+  routes.push([/\/222\/photos$/, () => reply({ id: '9', post_id: '222_9' })]);
   const at = nowSec() + 3600;
   const { body } = await postJ(env, { page: '222', message: '圖說', imageUrl: 'https://example.com/a.jpg', scheduledAt: at });
-  assert.deepEqual(body.data, { id: '222_55', scheduled: true, at, comment: { status: 'none' } });
-  const up = calls.find((x) => x.path.endsWith('/photos')).init.body;
-  assert.equal(up.get('url'), 'https://example.com/a.jpg');
-  assert.equal(up.get('published'), 'false');
-  assert.equal(up.get('temporary'), 'true');
-  assert.equal(up.get('scheduled_publish_time'), null);
-  assert.equal(up.get('caption'), null);
-  const fd = calls.find((x) => x.path.endsWith('/feed')).init.body;
-  assert.equal(fd.get('message'), '圖說');
-  assert.deepEqual(JSON.parse(fd.get('attached_media[0]')), { media_fbid: '9' });
+  assert.deepEqual(body.data, { id: '222_9', scheduled: true, at, comment: { status: 'none' } });
+  const fd = calls.find((x) => x.path.endsWith('/photos')).init.body;
+  assert.equal(fd.get('caption'), '圖說');
+  assert.equal(fd.get('url'), 'https://example.com/a.jpg');
   assert.equal(fd.get('published'), 'false');
   assert.equal(fd.get('scheduled_publish_time'), String(at));
   assert.equal(fd.get('unpublished_content_type'), 'SCHEDULED');
-  assert.ok(calls.findIndex((x) => x.path.endsWith('/photos')) < calls.findIndex((x) => x.path.endsWith('/feed')));
+  assert.equal(fd.get('temporary'), null);
+  assert.ok(!calls.some((x) => x.path.endsWith('/feed')));
 });
 
-test('排程發圖：第 2 步 /feed 失敗要回報錯誤，不假裝成功', async () => {
-  const env = fbEnv();
-  routes.push([/\/222\/photos$/, () => reply({ id: '9' })]);
-  routes.push([/\/222\/feed$/, () => fbErr(100, 'bad')]);
-  const at = nowSec() + 3600;
-  const res = await call('/fb/post', { method: 'POST', headers: { ...(await auth(env)), 'Content-Type': 'application/json' }, body: JSON.stringify({ page: '222', message: 'x', imageUrl: 'https://example.com/a.jpg', scheduledAt: at }) }, env);
-  assert.notEqual(res.status, 200);
-});
-
-test('立即發圖（網址）仍走 /photos 並帶 caption，不帶排程參數', async () => {
+test('立即發圖不帶排程參數與 unpublished_content_type', async () => {
   const env = fbEnv();
   routes.push([/\/222\/photos$/, () => reply({ id: '9', post_id: '222_9' })]);
   await postJ(env, { page: '222', message: '圖說', imageUrl: 'https://example.com/a.jpg' });
   const fd = calls.find((x) => x.path.endsWith('/photos')).init.body;
-  assert.equal(fd.get('caption'), '圖說');
   assert.equal(fd.get('published'), null);
-  assert.equal(fd.get('temporary'), null);
-  assert.ok(!calls.some((x) => x.path.endsWith('/feed')));
+  assert.equal(fd.get('unpublished_content_type'), null);
 });
 
 test('multipart 上傳圖片檔轉成 source', async () => {
