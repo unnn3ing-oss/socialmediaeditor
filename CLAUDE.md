@@ -92,13 +92,14 @@
 - **有圖排程還原成最初的一步做法已併入 main**：兩步驟（`27c7183`）部署後，臉書後台「已排定」列表顯示「無法取得預覽」（編輯貼文內容正常），使用者表示最初這工具排程時列表預覽正常 → `git revert 27c7183`（`95348a4`），`createPost`／`attachComment` 與 11/07 版逐字相同（git 比對：有圖排程請求自 11/06 第一版到 `27c7183` 前未變）。使用者確認 FB_TOKEN、臉書 App、權限都沒換過。RD 底列、RD 區段、管理頁 Rundown 保留。npm test 358、build --check 通過。**後端需重新部署**。另查明：`-schedulenewnet` 不直接呼叫臉書（交給網新後端 `digi-social-post.tvbs.ai` 的 `/schedule`，臉書 App「TVBS社群自動發文排程」），其粉專代號寫死在設定檔；本工具 RD 只有主粉成功的根因推論為粉專名稱比對失敗（代號空白被略過），已由 RD 區段自動判斷修正，待線上確認。交接：`docs/handoff/2026-11-15-photo-sched-onestep-back.md`。
 - **有圖排程測試原因③（一步做法加 SCHEDULED）已併入 main**：一步做法部署後仍不出現在「已排定」（11/15 第二次）。使用者要求：先回兩步驟當基準（`b982e4d`），再測原因③ → `543c0de`：排程有圖改一步 `/photos` 帶 caption、source、published=false、scheduled_publish_time＋`unpublished_content_type=SCHEDULED`（Meta /photos 參數表有列、文件無範例）；**線上用 ③**。③ 不行就 `git revert 543c0de` 回兩步驟，再測原因②（兩步驟改用圖片網址上傳，R2 暫存公開網址，做法先列給使用者確認）。另查：token 權限齊全；App 模式未知（token 屬主管帳號），Meta 文件：開發模式建立的內容只有 App 角色看得到。npm test 359、build --check 通過。**後端需重新部署**。交接：`docs/handoff/2026-11-15-photo-sched-variants.md`。
 - **有圖排程測試原因②（兩步驟改給臉書 R2 暫存圖片網址）已併入 main**：原因③實測「已排定」列表沒出現（工具已排程讀得到）→ revert（`b57dd28`）回兩步驟。原因②：新模組 `server/core/fbimg.js`，排程＋圖片檔時存 R2 `toolbox-files` 的 `tmp/fbimg/<32 hex>.<ext>`，公開 `GET /fbimg/<名>`（嚴格正則，讀不到 `assets/`），兩步驟第 1 步 `/photos` 改帶 `url`（不帶 `source`）；R2 沒綁或寫入失敗退回直接上傳；每天 03:17 cron 刪超過 24 小時（實際留 1～2 天）。掛點：`fb.js` createPost、`index.js` 路由與 cron。立即發圖、純文字不變。不行就 revert `cc31865`、`8218868` 回兩步驟直接上傳。npm test 367、build --check、獨立審查通過。**後端需重新部署**。交接：`docs/handoff/2026-11-15-photo-sched-variants.md`。
-- **下一步**：**使用者部署後端並排一篇有圖排程**：「已排定」出現且列表有預覽＝定案；否則 revert ② 回兩步驟，剩下線索：請主管確認 App 模式（Meta 文件：開發模式內容只有 App 角色看得到）、問網新後端參數。其他實測（RD 各粉專寫入、管理頁 Rundown 測試連線、暫停）照前。之後：依使用者要求後端模組化（先列做法確認）。
+- **有圖排程定案為兩步驟直接上傳（原因②已拿掉）已併入 main**：原因②實測「已排定」有出現但仍無預覽，且後台編輯「排定時間」跳「無法編輯貼文」→ `fd93cf3` 撤銷 `cc31865`、`8218868`（刪 `fbimg.js`、`/fbimg` 路由與 cron 清理），`fb.js` 與兩步驟基準 `b982e4d` 逐字相同。**現況**：有圖排程＝`/photos`（source、published=false、temporary=true）→ `/feed`（attached_media、published=false、scheduled_publish_time、unpublished_content_type=SCHEDULED）；會出現在「已排定」，列表無預覽、後台不能改時間（用工具「已排程」看縮圖、改時間、取消）。四種做法實測與 11/07 程式比對見交接檔；程式自 11/07 未變卻結果不同，推論原因在 App 狀態或臉書端（待主管確認 App 模式），使用者決定**先維持現狀**，網新排程不做。R2 `tmp/fbimg/` 若有殘留可手動刪。npm test 361、build --check 通過。**後端需重新部署**。交接：`docs/handoff/2026-11-15-photo-sched-variants.md`。
+- **下一步**：**P2 外掛（不含網新排程）**，開新對話：外掛模組機制（第一個模組接通 `ext.js`→`build.js`→`extension/routes.gen.js`）＋YT 下載工具 `tools/ytdl/`（網頁遙控＋外掛 `nativeMessaging` 連 videodownload 本機下載助手）＋videodownload repo `host/installer.py:401`、`build.py:48` 的 `allowed_origins` 加新外掛 ID（需使用者同意改另一個 repo）。待使用者決定：videodownload 可否改、外掛版號 3.00 或 2.10。先列計畫給使用者確認。
 - **待辦**：
   - [ ] 使用者部署後端並實測：排程一篇有圖片貼文 → 發出後 10 秒內留言、留在正確貼文（照片 ID 換貼文 ID 需實測）；臉書後台改時間留言跟隨；工具內改時間／取消；token 需有 `pages_manage_engagement`；臉書原生背景代碼需實測
   - [ ] 使用者在後端管理頁上傳公司素材 16 個檔（代號見 `assets-public/README.md`），上傳後實測有密碼畫面（§5.3）
   - [ ] fb 版本 2：OAuth 半自動續期（2027-01 前，token 存 KV＋AES-GCM、`FB_TOKEN_KEY`；提醒管道未定，見 `docs/superpowers/specs/2026-11-06-fb-page-token.md`）
   - [ ] 使用者設定 Rundown Secrets 並實測寫入（v8）
-  - [ ] P2：網新排程（最後再考慮，搬入時管理頁保留「發文方式」切換）、YT 下載、外掛模組（§9）
+  - [ ] P2：YT 下載、外掛模組（§9）；網新排程使用者決定不做（2026-11-15）
   - [ ] P3（§9）
   - [ ] 規格待確認事項（§12）
   - 擱置：LINE 推播的推送／排程／訊息中心（P1 只搬做圖，使用者表示暫時不需要）
