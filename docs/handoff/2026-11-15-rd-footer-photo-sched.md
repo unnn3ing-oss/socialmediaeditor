@@ -15,17 +15,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/fb.js` | createPost 排程有圖兩步驟；attachComment 排程有圖不當照片；defaultMap 包含比對；mapFor 空 code 自動；pagemap POST 收 code | ⬜ |
-| `server/core/rundown.js`、`server/index.js` | `adminRundown`＋掛點 | ⬜ |
-| `server/core/admin-page.js`、`admin/` | Rundown 連線卡片；粉專對應 RD 區段下拉 | ⬜ |
-| `tools/fbpost/index.html`、`tool.css`、`tool.js` | RD 搬到底列、移除設定視窗 | ⬜ |
-| 測試 | fb.test、rundown 測試、fbpost e2e、admin e2e | ⬜ |
+| `server/core/fb.js` | createPost 排程有圖兩步驟；attachComment 排程有圖不當照片；defaultMap 包含比對；mapFor 空 code 自動；pagemap POST 收 code | ✅ |
+| `server/core/rundown.js`、`server/index.js` | `adminRundown`＋掛點 | ✅ |
+| `server/core/admin-page.js`、`admin/` | Rundown 連線卡片；粉專對應 RD 區段下拉 | ✅ |
+| `tools/fbpost/index.html`、`tool.css`、`tool.js` | RD 搬到底列、移除設定視窗 | ✅ |
+| 測試 | fb.test、rundown 測試、fbpost e2e、admin e2e | ✅ |
 
 ## 下一步
-- [ ] 後端三項（各自 commit）
-- [ ] 管理頁兩處
-- [ ] fbpost 底列
-- [ ] npm test、e2e、build --check、截圖、獨立審查
+- [x] 後端三項（27c7183 有圖排程、6c40c75 RD 區段、363bfc4 管理頁 Rundown API）
+- [x] 管理頁兩處、fbpost 底列（40bb55b、836d296）
+- [x] npm test 361、e2e 126、build --check、截圖、獨立審查（Sonnet）通過
+- [ ] 使用者說「推」才併入 main，同 commit 更新 CLAUDE.md「目前進度」
+- [ ] 部署後端後實測：排一篇有圖排程（Meta 後台「已排定」出現、到點發布、留言）；管理頁「粉專對應」確認少康 RD 區段＝自動（少康），排入 RD；管理頁 Rundown 測試連線
 
 ## 測試
 `npm test`；`npx playwright test test/e2e/fbpost.e2e.js test/e2e/admin.e2e.js --trace off`；`node build.js --check`。
