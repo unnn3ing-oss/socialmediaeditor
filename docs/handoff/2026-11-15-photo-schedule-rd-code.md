@@ -1,5 +1,5 @@
 # 有圖排程改走 /feed attached_media ＋ RD 區段（code）可在管理頁編輯
-- 狀態：已完成（獨立審查通過，使用者選「現在就推」併入 main；線上有圖排程與 RD 待部署後實測）　- 分支：claude/confident-keller-edllg4　- 最後更新：2026-11-15
+- 狀態：已被使用者要求還原（還原 e11700e、a8174bc，回到 c013279 的後端／管理頁狀態）　- 分支：claude/confident-keller-edllg4　- 最後更新：2026-11-15
 - 使用者原始需求：「檢查目前 少康 無法寫入RD的問題」；「工具新增在少康的貼文沒有成功排在臉書後台的已排定發布中」；確認後說「開始，用方案 A」。
 
 ## 已知事實（調查結果）
@@ -45,3 +45,9 @@
 ## 進度紀錄
 - 有圖排程 commit：e11700e；RD code 可編輯另一個 commit。npm test 376 項、admin e2e 4 項、`node build.js --check` 通過。
 - 實作細節：`createPost` 排程有圖＝/photos(published=false,temporary=true)→/feed(attached_media[0]、published=false、scheduled_publish_time、unpublished_content_type=SCHEDULED)；`attachComments` 排程時 isPhoto=false；pagemap `code` 選填，值限 news/ent/shaokang/jkk/intl/weather/空。
+
+## 還原紀錄（2026-11-15）
+- 使用者要求把後端還原到 c013279（昨晚狀態）。做法：`git revert` e11700e（有圖排程改 /feed）與 a8174bc（RD 區段下拉），不動其他功能；保留本交接檔當紀錄。
+- 還原後的行為：有圖排程回到 `/photos` 直接排程（最初回報「排不進已排定」的狀態）；管理頁沒有 RD 區段下拉。已在管理頁存進 D1 的 `code` 仍有效（舊版 `mapFor` 同樣讀 `fb_page_map.code`）。
+- 已查證：發文（createPost）只用粉專 ID 取 token，不讀簡稱／code／utm。立即發圖 `/photos` 路徑在 94bef59 與還原前完全相同，所以「立即發圖只進相簿」不是這次改動造成的，還原後預期仍會發生；已請使用者做 T1（同圖立即發到其他粉專）、T2（純文字立即發到少康）判斷範圍。
+- 兩步驟排程（/feed attached_media）上線後觀察：Meta Business Suite「已排定」有出現（類型相片、火箭圖示），預覽顯示「無法取得預覽」，工具「已排程」讀得到縮圖；準時發布結果未驗證。
