@@ -55,8 +55,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     submit.disabled = true;
     try {
       const data = await api.call('/auth', { method: 'POST', body: { password: input.value } });
-      storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp }));
-      unlocked(data.exp);
+      storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.admin ? { admin: true } : {}) }));
+      unlocked(data.exp, !!data.admin);
       dlg.close();
     } catch (ex) {
       err.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試' : '密碼不對，請再試一次';
@@ -84,10 +84,13 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     for (const t of internal.getCatalog()) if (t.tier === 'company') internal.panes.setLocked(t.id, locked);
   }
 
-  function unlocked(exp) {
+  // admin：前端用管理密碼登入（12 小時、不受暫停排程發布限制），剩餘時間改用小時
+  function unlocked(exp, admin = false) {
     internal.setCompany({ unlocked: true, exp });
-    const days = Math.max(0, Math.ceil((exp * 1000 - Date.now()) / 86400000));
-    shell.setStatus('company', { state: 'ok', text: `公司素材已解鎖，剩 ${days} 天` });
+    const left = exp * 1000 - Date.now();
+    const text = admin ? `公司素材已解鎖（管理員），剩 ${Math.max(0, Math.ceil(left / 3600000))} 小時`
+      : `公司素材已解鎖，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`;
+    shell.setStatus('company', { state: 'ok', text });
     button.hidden = true;
     setLocks(false);
   }
@@ -126,7 +129,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     try {
       const data = await api.call('/auth/status');
       const now = readCompany(storage); // api.call 若收到 renew 會已更新
-      unlocked(now ? now.exp : data.exp);
+      unlocked(now ? now.exp : data.exp, !!data.admin);
     } catch (e) {
       if (isNetworkFailure(e)) {
         if (!shell.company().unlocked) shell.setStatus('company', { state: 'warn', text: '無法確認公司密碼' });

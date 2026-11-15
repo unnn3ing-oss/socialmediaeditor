@@ -3,6 +3,7 @@
 // 原則：token 只在後端；網頁只能呼叫這裡寫好的動作，不能指定任意 Graph 路徑。
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
+import { pausedFail } from './pause.js';   // 模組：暫停排程發布（掛點見 handleFb）
 import { run, all } from './db.js';
 import { ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
 import { pageTokens, graphGet, graphPost, graphDelete, GraphError, scrub, graphBase, rememberSecret } from './graph.js';
@@ -537,7 +538,10 @@ async function reschedulePost(request, env) {
 
 export async function handleFb(request, env, path) {
   if (path !== '/fb' && !path.startsWith('/fb/')) return null;
-  if (!(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
+  const cred = await bearer(request, env, 'company');
+  if (!cred) return fail(request, env, 'unauthorized');
+  const paused = await pausedFail(request, env, cred);   // 掛點：暫停排程發布
+  if (paused) return paused;
   if (!pageTokens(env).length) return fail(request, env, 'fb_not_configured');
   const q = new URL(request.url).searchParams;
   try {

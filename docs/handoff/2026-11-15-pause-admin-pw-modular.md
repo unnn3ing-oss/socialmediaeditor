@@ -14,14 +14,14 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/pause.js` | getPause／setPause（D1 fb_settings key='pause'）、pausedFail、adminFbPause | ⬜ |
-| `server/core/fb.js`、`rundown.js`、`index.js` | 掛點 | ⬜ |
-| `server/core/http.js` | fail() detail、fb_paused | ⬜ |
-| `server/core/token.js`、`auth.js` | adm 旗標、管理密碼登入 | ⬜ |
-| `server/core/admin-page.js` | 暫停卡片 | ⬜ |
-| `sdk/api.js`、`shell/company.js` | detail、管理員膠囊 | ⬜ |
-| `tools/fbpost/` | 停用公告 | ⬜ |
-| 測試 | pause、auth、fbpost e2e、company e2e、admin 頁 | ⬜ |
+| `server/core/pause.js` | getPause／setPause（D1 fb_settings key='pause'）、pausedFail、adminFbPause | ✅ |
+| `server/core/fb.js`、`rundown.js`、`index.js` | 掛點 | ✅ |
+| `server/core/http.js` | fail() detail、fb_paused | ✅ |
+| `server/core/token.js`、`auth.js` | adm 旗標、管理密碼登入 | ✅ |
+| `server/core/admin-page.js` | 暫停卡片 | ✅ |
+| `sdk/api.js`、`shell/company.js` | detail、管理員膠囊 | ✅ |
+| `tools/fbpost/` | 停用公告 | ✅ |
+| 測試 | pause、auth、fbpost e2e、company e2e、admin 頁 | ✅ |
 
 ## 下一步
 - [ ] 實作、測試、獨立審查、給使用者看、等「推」
