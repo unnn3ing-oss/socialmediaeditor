@@ -3,6 +3,7 @@
 // 原則：token 只在後端；網頁只能呼叫這裡寫好的動作，不能指定任意 Graph 路徑。
 import { ok, fail, readBody, MESSAGES } from './http.js';
 import { bearer } from './auth.js';
+import { putTempImage } from './fbimg.js';   // 模組：排程有圖的暫存圖片網址（原因②）
 import { pausedFail } from './pause.js';   // 模組：暫停排程發布（掛點見 handleFb）
 import { run, all } from './db.js';
 import { ensureTables, enqueueComment, cancelForPost, rescheduleComments, commentsForPosts, listComments, retryComment, dismissComment, kickHub, photoToPost } from './fbqueue.js';
@@ -485,7 +486,10 @@ async function createPost(request, env) {
         // 排程有圖：照 Meta 文件（graph-api/reference/page/photos「Uploading an unpublished photo」），
         // 先上傳暫存照片（published=false、temporary=true），再用 /feed＋attached_media 排程，必帶 published、scheduled_publish_time、unpublished_content_type。
         // /feed 直接回貼文 ID，留言不必再用照片 ID 換貼文 ID。
-        const photo = await graphPost(env, token, `/${v.page}/photos`, { ...file, published: 'false', temporary: 'true' });
+        // 原因②：圖片檔先存 R2 暫存並給臉書公開網址（url），不直接上傳檔案（source）；沒綁 R2 就照舊上傳檔案
+        const tmpUrl = v.image ? await putTempImage(env, new URL(request.url).origin, v.image) : null;
+        const up = tmpUrl ? { url: tmpUrl } : file;
+        const photo = await graphPost(env, token, `/${v.page}/photos`, { ...up, published: 'false', temporary: 'true' });
         if (!photo || !photo.id) throw new GraphError('fb_bad_request', '臉書沒有回傳照片 ID，無法排程。', null);
         r = await graphPost(env, token, `/${v.page}/feed`, {
           message: v.message, 'attached_media[0]': JSON.stringify({ media_fbid: String(photo.id) }),
