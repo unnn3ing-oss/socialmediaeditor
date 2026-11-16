@@ -86,7 +86,14 @@
               <button type="button" data-frame="news">新聞（藍框）</button>
               <button type="button" data-frame="entertainment">娛樂（粉框）</button>
             </div>
-            <div class="swatches" id="swatches" role="group" aria-label="底色" hidden></div>
+            <div class="swatch-box" id="swatchBox" hidden>
+              <div class="sw-head"><strong>底色</strong><span id="colorCode"></span></div>
+              <div class="shelf">
+                <button type="button" class="shelf-nav" id="swPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
+                <div class="swatches" id="swatches" role="group" aria-label="底色"></div>
+                <button type="button" class="shelf-nav" id="swNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
+              </div>
+            </div>
             <div class="fx-bar" id="fxBar">
               <div class="fx-bar-head"><strong>貼圖與馬賽克</strong><span class="fx-count" id="fxCount"></span></div>
               <div id="fxSlot"></div>

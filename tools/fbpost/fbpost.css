@@ -126,3 +126,17 @@ body.no-scroll { overflow: hidden; }
 .canvas-wrap .cv-title { position: absolute; z-index: 5; box-sizing: border-box; resize: none; overflow: hidden; padding: 12px 0; margin: 0; border: 2px dashed rgba(255, 255, 255, .9); border-radius: 6px; background: rgba(0, 0, 0, .25); color: #fff; text-align: center; font-family: "Noto Sans TC", sans-serif; font-weight: 900; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); outline: none; }
 .canvas-wrap .cv-title.on-light { color: #111; border-color: rgba(17, 17, 17, .7); background: rgba(255, 255, 255, .3); text-shadow: none; }
 @media (max-width: 640px) { .compose { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- 底色展示窗：一排左右滑 ---- */
+.swatch-box { margin: 12px 0 4px; }
+.sw-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 6px; font-size: 13px; }
+.sw-head span { color: var(--accent); font-weight: 500; font-variant-numeric: tabular-nums; }
+.shelf { display: flex; align-items: center; gap: 6px; padding: 8px; border: 1px solid rgba(0, 74, 173, .18); border-radius: 18px; background: rgba(0, 74, 173, .05); }
+.shelf-nav { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line-strong); background: #fff; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
+.shelf-nav svg { width: 12px; height: 12px; fill: none; stroke: var(--text); stroke-width: 1.8; }
+.shelf-nav:disabled { opacity: .35; cursor: default; }
+.shelf .swatches { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: nowrap; gap: 10px; margin: 0; padding: 4px 2px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.shelf .swatches::-webkit-scrollbar { display: none; }
+.shelf .swatches .sw { flex: none; width: 52px; height: 52px; border-radius: 14px; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); scroll-snap-align: start; position: relative; }
+.shelf .swatches .sw.is-on { box-shadow: 0 0 0 3px var(--accent); }
+.shelf .swatches .sw.is-on::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 20px; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }

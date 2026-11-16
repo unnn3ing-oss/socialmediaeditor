@@ -87,7 +87,8 @@ export function createComposer({ tb, assets }) {
     $('imgArea').hidden = st.mode === 'text';
     $('noImg').hidden = st.mode !== 'text';
     $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
-    $('swatches').hidden = st.mode !== 'color';
+    $('swatchBox').hidden = st.mode !== 'color';
+    if (st.mode === 'color') requestAnimationFrame(showColor);
     $('cvEmpty').textContent = '貼上文章網址自動帶入，或在這裡按 Ctrl+V 貼上照片';
     draw(); syncFx();
   }
@@ -101,8 +102,36 @@ export function createComposer({ tb, assets }) {
     b.type = 'button'; b.className = 'sw'; b.style.background = c; b.dataset.color = c; b.title = c; b.setAttribute('aria-label', '底色 ' + c);
     $('swatches').append(b);
   });
-  const setColor = segmented($('swatches'), 'color', (v) => { st.color = v; draw(); });
+  const setColor = segmented($('swatches'), 'color', (v) => { st.color = v; showColor(); draw(); });
   setColor(st.color);
+
+  // ---- 底色展示窗：一排左右滑（觸控滑、滾輪、兩側鈕），選到的捲到看得見 ----
+  const track = $('swatches');
+  const syncNav = () => {
+    // 逐格對齊會停在第一格的起點（留白 2px），所以容許幾 px
+    $('swPrev').disabled = track.scrollLeft <= 4;
+    $('swNext').disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
+  };
+  function showColor() {
+    $('colorCode').textContent = st.color;
+    const on = track.querySelector('.is-on');
+    if (on && track.clientWidth) {
+      const l = on.offsetLeft - track.offsetLeft, r = l + on.offsetWidth;
+      // 看不到就捲到它在最左（和逐格對齊一致，不會被對齊推回去）
+      if (l < track.scrollLeft || r > track.scrollLeft + track.clientWidth) track.scrollTo({ left: l, behavior: 'instant' });
+    }
+    syncNav();
+  }
+  const page = (dir) => track.scrollBy({ left: dir * Math.max(60, track.clientWidth * 0.8), behavior: 'smooth' });
+  $('swPrev').addEventListener('click', () => page(-1));
+  $('swNext').addEventListener('click', () => page(1));
+  track.addEventListener('scroll', syncNav, { passive: true });
+  track.addEventListener('wheel', (e) => {   // 滑鼠滾輪上下 → 左右捲
+    if (track.scrollWidth <= track.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    e.preventDefault(); track.scrollLeft += e.deltaY;
+  }, { passive: false });
+  new ResizeObserver(syncNav).observe(track);
+  showColor();
 
   // ---- 標題：改了先畫，缺的字型段載好再重畫；旁邊顯示每行字數（超過只提醒） ----
   function titleChanged() {

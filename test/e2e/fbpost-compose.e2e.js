@@ -243,3 +243,26 @@ test('預覽上編輯標題時帶入：編輯框收起，標題是文章標題',
   assert.equal((await frame.inputValue('#title')).replace(/\n/g, ''), TITLE.replace(/\s/g, ''));
   await page.close();
 });
+
+test('底色展示窗：一排可左右滑、按右側鈕往右捲、點色塊換底色並顯示色碼', async () => {
+  const { page, frame } = await openFb();
+  await frame.click('#modeSeg [data-mode=color]');
+  await frame.waitForSelector('#swatchBox:not([hidden])');
+  const t = await frame.$eval('#swatches', (el) => ({ sw: el.scrollWidth, cw: el.clientWidth, rows: new Set([...el.children].map((c) => c.offsetTop)).size }));
+  assert.equal(t.rows, 1, '只有一排');
+  assert.ok(t.sw > t.cw, '比可視寬度長，可以左右滑');
+  await frame.waitForFunction(() => { const el = document.getElementById('swatches'), b = el.querySelector('.is-on'), l = b.offsetLeft - el.offsetLeft; return l >= el.scrollLeft - 1 && l + b.offsetWidth <= el.scrollLeft + el.clientWidth + 1; }, null, { timeout: 3000 });   // 選到的底色捲到看得見
+  await frame.$eval('#swatches', (el) => { el.scrollLeft = 0; });
+  await frame.waitForFunction(() => document.getElementById('swPrev').disabled, null, { timeout: 3000 });   // 最左邊時左鈕停用
+  await frame.click('#swNext');
+  await frame.waitForFunction(() => document.getElementById('swatches').scrollLeft > 50 && !document.getElementById('swPrev').disabled, null, { timeout: 3000 });   // 往右捲了一頁，左鈕恢復
+  assert.match(await frame.textContent('#colorCode'), /#c80000/i);
+  const before = await canvasHash(frame, '#cv');
+  const c = await frame.locator('#swatches [data-color]:not(.is-on)').first().getAttribute('data-color');
+  const btn = frame.locator(`#swatches [data-color="${c}"]`);   // 用色碼固定住，點完它變成選取也找得到
+  await btn.click();
+  assert.equal(await btn.getAttribute('aria-pressed'), 'true');
+  assert.equal((await frame.textContent('#colorCode')).toLowerCase(), c.toLowerCase());
+  assert.notEqual(await canvasHash(frame, '#cv'), before);
+  await page.close();
+});
