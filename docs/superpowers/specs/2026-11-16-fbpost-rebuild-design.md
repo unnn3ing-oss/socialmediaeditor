@@ -179,7 +179,15 @@ https://news.tvbs.com.tw/sports/4051394?&utm_source=facebook&utm_medium=2100room
 - **多粉專送出**：依序逐一送（不並行），避免臉書限流；`/feed` 失敗時暫存照片不清理（臉書約 24 小時自動刪）。
 - **Token 狀態**：用 `GET /me/permissions` 顯示缺少的權限；到期日嘗試用 `debug_token`，查不到就顯示「到期日不明」。不新增 `FB_APP_ID`／`FB_APP_SECRET`。
 
-## 9. 留給實作決定
+## 9. 第一段追加（2026-11-16，使用者要求測試期就能用）
+- 測試畫面直接貼網址帶入＋套版（作圖框／純文字底圖、新聞／娛樂框、貼圖、馬賽克），版面仍是測試版；照截圖重排、值班、RD 底列留第二段。
+- 套版採**共用畫圖核心**（使用者選 A）：`ui/compose/render.js`、`ui/compose/fx.js`；「圖片套版」改接，輸出像素不變。
+- **留言開頭文字**可改：預設「看更多新聞內容」，文字框可手動輸入；留言＝文字＋換行＋連結＋UTM，清空時只放連結。
+- **模組化**：共用模組不讀工具 DOM、不寫死規則；排程發布前端拆 `rules.js`／`compose.js`／`targets.js`／`send.js`／`manage.js`／`app.js`；後端 `server/fb/` 各檔單一職責，掛點只有 `server/index.js` 3 行＋`wrangler.toml` 綁定。
+- 管理頁網站版與後端版各一份是既有狀況，本次不動（列待辦）。
+- 實作計畫：`docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1b.md`。
+
+## 10. 留給實作決定
 - 「圖片套版」的繪圖程式怎麼讓本工具共用（抽成共用模組或其他方式），前提是**圖片套版的行為與測試完全不變**。
 - 列表分頁大小、縮圖來源欄位、錯誤訊息文字、page token 暫存位置與時效。
 - 外掛側邊欄嵌入的 `panel.html?tool=fbpost` 會自動顯示新版，版面在窄寬度下的排列。
