@@ -13,6 +13,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 
 let PG_SAVED = null;
 let PS_SAVED = null;
+let TOK_SAVED = null;
 const PAGES = [
   { id: '1', name: 'TVBS 新聞', short: '新聞', utm: '', rd: 'news', order: 0, show: 1 },
   { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', rd: 'ent', order: 1, show: 1 },
@@ -26,6 +27,8 @@ const DATA = {
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
   'POST /admin/fb/refresh': {},
+  'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP' }; },
+  'DELETE /admin/fb/token': { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'secret', app: 'DEV-TOOL' },
   'GET /admin/rundown': { configured: true },
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN(2026)', sheets: ['2026/11'] },
 };
@@ -238,4 +241,26 @@ test('活動留言：手機 390px 不橫向捲動', async () => {
   await page.waitForSelector('#psRows .ps-row');
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(over <= 0, '橫向捲動 ' + over);
+});
+
+test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後清空輸入框）；改回 Secret 打 DELETE', async () => {
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  await login(page);
+  await page.waitForSelector('#pgWrap:not([hidden])');
+  assert.equal(await page.isVisible('#fbTokClear'), false, '來源不是管理頁時不顯示「改回 Secret」');
+  await page.click('#fbTokSave');
+  assert.match(await page.textContent('#fbTokMsg'), /請先貼上權杖/);
+  await page.fill('#fbTok', '  EAAnew123  ');
+  await page.click('#fbTokSave');
+  await page.waitForFunction(() => /已換成新權杖/.test(document.getElementById('fbTokMsg').textContent));
+  assert.deepEqual(TOK_SAVED, { token: 'EAAnew123' });
+  assert.match(await page.textContent('#fbTokMsg'), /（App：NEW-APP），粉專 6 個/);
+  assert.equal(await page.inputValue('#fbTok'), '', '成功後清空');
+  assert.equal(await page.getAttribute('#fbTok', 'type'), 'password');
+  page.once('dialog', (d) => d.accept());
+  await page.evaluate(() => { document.getElementById('fbTokClear').hidden = false; });
+  await page.click('#fbTokClear');
+  await page.waitForFunction(() => /已改回 Secret/.test(document.getElementById('fbTokMsg').textContent));
+  assert.ok(calls.some((c) => c.key === 'DELETE /admin/fb/token' && c.auth === 'Bearer T'));
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });

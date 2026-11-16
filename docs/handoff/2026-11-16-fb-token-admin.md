@@ -1,5 +1,5 @@
 # 排程發布：管理頁可換臉書權杖
-- 狀態：進行中　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
+- 狀態：完成，待使用者說「推」　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
 - 背景：實測立即發圖只出現在相簿（貼文 is_published、公開、有 page_story_id，App＝DEV-TOOL `901534349620430`），推論 App 被切回開發模式；主管明天確認，使用者想到時在管理頁直接換權杖。
 - 使用者選方案 A，說「開始」。
 
@@ -14,6 +14,11 @@
 | 不做 | 短期換長期（需 App 密鑰，已刪） |
 
 ## 進度
-- [ ] 後端 tokenstore＋pages 讀取順序＋路由＋測試
-- [ ] 管理頁兩份＋e2e
-- [ ] 審查、截圖；使用者說「推」才併入；後端需部署
+- [x] 後端 `server/fb/tokenstore.js`＋`pages.js`（`fetchPages`／`checkNewToken`／`tokenStatus` 多回 source、app）＋路由＋測試（npm test 609）
+- [x] 管理頁兩份（`admin/`、`server/core/admin-page.js`）＋e2e（admin 12 項）
+- [x] 獨立審查通過（無 Critical／Important）、截圖
+- [ ] 使用者說「推」才併入；後端需部署（`fb_settings` 會自動建立，不必重跑 schema）
+
+## 已知未處理（Minor）
+- 權杖都刪光時，粉專快取最多 1 小時內仍可用（換權杖／改回 Secret 都會清快取）。
+- 短期權杖無法延長（App 密鑰已刪）；管理頁顯示到期日。

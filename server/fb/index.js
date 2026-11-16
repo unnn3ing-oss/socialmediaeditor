@@ -1,7 +1,8 @@
 // 排程發布後端：/fb/*（測試期間只給管理員，見 access.js）與管理路由 /admin/fb/*、/admin/rundown*
 import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess } from './access.js';
-import { listPages, validPages, savePages, clearPageCache, tokenStatus, FbSetupError } from './pages.js';
+import { listPages, validPages, savePages, clearPageCache, tokenStatus, checkNewToken, FbSetupError } from './pages.js';
+import { saveToken, clearToken } from './tokenstore.js';
 import { GraphError } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
@@ -103,6 +104,22 @@ adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
   if (!list) return fail(request, env, 'bad_request');
   await savePresets(env, list);
   return ok(request, env, await listPresets(env));
+});
+// 管理頁換權杖：先驗證才存；回傳狀態，不回傳權杖
+adminRoute('POST', /^\/admin\/fb\/token$/, async (request, env) => {
+  const body = await readJsonBody(request, 8192);
+  const token = body && typeof body.token === 'string' ? body.token.trim() : '';
+  if (!token || token.length > 1000 || /\s/.test(token)) return fail(request, env, 'bad_request', '請貼上完整的權杖。');
+  const c = await checkNewToken(env, token);
+  if (!c.ok) return fail(request, env, 'fb_token', c.error);
+  await saveToken(env, token);
+  await clearPageCache(env);
+  return ok(request, env, await tokenStatus(env));
+});
+adminRoute('DELETE', /^\/admin\/fb\/token$/, async (request, env) => {
+  await clearToken(env);
+  await clearPageCache(env);
+  return ok(request, env, await tokenStatus(env));
 });
 adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => { await clearPageCache(env); return ok(request, env, { cleared: true }); });
 

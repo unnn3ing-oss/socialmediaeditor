@@ -166,3 +166,56 @@ test('GET /admin/fb/status：expires_at 0＝永不過期（回 0）', async (t) 
   assert.equal(data.expires, 0);
   assert.equal(data.pages, 3);
 });
+
+// ---- 管理頁換權杖 ----
+const DEBUG_OK = (type = 'USER') => ({ data: { type, is_valid: true, expires_at: 0, application: 'NEW-APP', scopes: ['pages_show_list', 'pages_manage_posts'] } });
+test('POST /admin/fb/token：驗證通過才加密存進 D1，之後優先用它；不回傳權杖；DELETE 改回 Secret', async (t) => {
+  const seen = [];
+  const f = installFetch({
+    'GET /debug_token': (c) => { seen.push(c.query.access_token); return DEBUG_OK(); },
+    'GET /me/accounts': (c) => (c.query.access_token === 'NEWTOKEN' ? ACCOUNTS : { data: [ACCOUNTS.data[0]] }),
+    'GET /me/permissions': () => ({ data: [] })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  const post = (body) => call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  // 公司憑證不能換
+  assert.equal((await call(env, '/admin/fb/token', { method: 'POST', headers: await auth(env, 'company', true), body: '{}' })).status, 401);
+  assert.equal((await post({ token: '' })).status, 400);
+  const r = await post({ token: 'NEWTOKEN' });
+  assert.equal(r.status, 200);
+  const txt = await r.text();
+  assert.ok(!txt.includes('NEWTOKEN'), '回應不含權杖');
+  const d = JSON.parse(txt).data;
+  assert.equal(d.source, 'admin'); assert.equal(d.app, 'NEW-APP'); assert.equal(d.pages, 3); assert.equal(d.expires, 0);
+  const row = await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'user_token'").first();
+  assert.ok(row && row.v.startsWith('v1.') && !row.v.includes('NEWTOKEN'), 'D1 裡是加密後的值');
+  assert.ok(f.calls.filter((c) => c.path === '/me/accounts').every((c) => c.query.access_token === 'NEWTOKEN'), '存好後改用新權杖');
+  const del = await call(env, '/admin/fb/token', { method: 'DELETE', headers: adm });
+  const dd = (await del.json()).data;
+  assert.equal(dd.source, 'secret'); assert.equal(dd.pages, 1, '改回 Secret 後重新讀粉專');
+});
+
+test('POST /admin/fb/token：權杖類型不對、沒有粉專、無效都不存', async (t) => {
+  let mode = 'page';
+  const f = installFetch({
+    'GET /debug_token': () => (mode === 'bad' ? gErr(190, 400, 'expired') : DEBUG_OK(mode === 'page' ? 'PAGE' : 'USER')),
+    'GET /me/accounts': () => ({ data: [] })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  const post = () => call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'X' }) });
+  let b = await (await post()).json(); assert.equal(b.code, 'fb_token'); assert.match(b.error, /使用者權杖/);
+  mode = 'user'; b = await (await post()).json(); assert.match(b.error, /換不到任何粉專/);
+  mode = 'bad'; b = await (await post()).json(); assert.match(b.error, /無效或已過期/);
+  const row = await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'user_token'").first().catch(() => null);
+  assert.ok(!row, '都沒存');
+});
+
+test('tokenstore：加解密來回一致；SESSION_SECRET 不同就解不開', async () => {
+  const { encryptToken, decryptToken } = await import('../../server/fb/tokenstore.js');
+  const blob = await encryptToken({ SESSION_SECRET: 'a'.repeat(40) }, 'EAAB-token');
+  assert.equal(await decryptToken({ SESSION_SECRET: 'a'.repeat(40) }, blob), 'EAAB-token');
+  assert.equal(await decryptToken({ SESSION_SECRET: 'b'.repeat(40) }, blob), null);
+  assert.equal(await decryptToken({ SESSION_SECRET: 'a'.repeat(40) }, 'junk'), null);
+});

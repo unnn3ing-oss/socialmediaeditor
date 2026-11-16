@@ -46,11 +46,17 @@
 
       <section class="card" id="fbCard">
         <h2>臉書連線</h2>
-        <p>後端用 Secret <code>FB_USER_TOKEN</code>（用戶 token）取得各粉專的發文權限。這裡看連線狀態、到期日與缺少的權限（不會顯示 token 本身）。</p>
+        <p>後端用「使用者權杖」取得各粉專的發文權限：管理頁換過的優先，沒有就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、App、到期日與缺少的權限（不會顯示權杖本身）。</p>
         <p class="fb-state" id="fbState">狀態：尚未讀取</p>
         <ul class="fb-missing" id="fbMissing" hidden></ul>
         <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
         <p class="msg" id="fbMsg" role="status"></p>
+        <div class="fb-tok">
+          <label for="fbTok">換權杖：貼上新的「使用者權杖」，先向臉書驗證，通過才換（存在資料庫前會加密，不會再顯示）</label>
+          <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
+          <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
+          <p class="msg" id="fbTokMsg" role="status"></p>
+        </div>
       </section>
 
       <section class="card" id="pgCard">
