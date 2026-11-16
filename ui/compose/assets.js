@@ -8,17 +8,18 @@ async function urlOf(tb, key) {
   try { return (await tb.assets.get(key))?.url || null; } catch { return null; }
 }
 
+// 回傳 { ok, error }：error 是載入失敗的原因（給工具顯示，方便查字型檔問題）
 async function loadTitleFont(url) {
-  if (!url) return false;
+  if (!url) return { ok: false, error: '拿不到字型檔' };
   try {
     const face = new FontFace('WHZ-Heavy', `url(${url})`);
     await face.load();
     document.fonts.add(face);
-    return true;
-  } catch { return false; }
+    return { ok: true, error: '' };
+  } catch (e) { return { ok: false, error: '字型檔無法載入' + (e && e.message ? '（' + e.message + '）' : '') }; }
 }
 
-// 回傳 { company, ribbonEnt, ribbonNews, logo, fontLoaded, stickers: { id: url } }
+// 回傳 { company, ribbonEnt, ribbonNews, logo, fontLoaded, fontError, stickers: { id: url } }
 export async function loadComposeAssets(tb) {
   const [ribbonEnt, ribbonNews, logo, fontUrl, ...stickerUrls] = await Promise.all([
     urlOf(tb, 'frame.ent.ribbon'),
@@ -27,7 +28,8 @@ export async function loadComposeAssets(tb) {
     urlOf(tb, 'font.title'),
     ...STICKER_IDS.map((id) => urlOf(tb, 'sticker.' + id)),
   ]);
-  const fontLoaded = await loadTitleFont(fontUrl);
+  const font = await loadTitleFont(fontUrl);
+  const fontLoaded = font.ok;
   if (!fontLoaded) {
     // Canvas 畫字不會等字型，先明確載入；離線時最多等 3 秒，之後退回系統字型
     await withTimeout(Promise.all([
@@ -37,5 +39,5 @@ export async function loadComposeAssets(tb) {
   }
   const stickers = {};
   STICKER_IDS.forEach((id, i) => { if (stickerUrls[i]) stickers[id] = stickerUrls[i]; });
-  return { company: Boolean(ribbonEnt || ribbonNews), ribbonEnt, ribbonNews, logo, fontLoaded, stickers };
+  return { company: Boolean(ribbonEnt || ribbonNews), ribbonEnt, ribbonNews, logo, fontLoaded, fontError: font.error, stickers };
 }

@@ -85,6 +85,9 @@ export const GEN_L1 = 72, GEN_L2 = 50, GEN_L1_BASE = 915, GEN_L2_BASE = 995;
 export const BOX_CENTER = 880;      // 標題區塊固定的垂直中心（實測 TVBS 輸出，1～3 行都對齊這裡）
 export const LINE_HEIGHT_RATIO = 93 / 67;
 export const MAX_TITLE_LINES = 4;     // 標題最多 4 行，第 5 行起不畫
+// 「排程發布」的套版排法（照舊版排程發布）：最後一行中心固定在 y 931、往上長；行距 93（66px 時，隨字級等比）；左右留白 30
+export const BOTTOM_TITLE = { lastY: 931, lineHeight: 93, basePx: 66, padX: 30 };
+export const bottomLineHeight = (px) => BOTTOM_TITLE.lineHeight * px / BOTTOM_TITLE.basePx;
 // 1～3 行以 BOX_CENTER 置中；4 行時最後一行對齊 3 行的底線、整塊往上長
 export const anchorY = (centerY, n, lineHeight) => (centerY === BOX_CENTER && n > 3 ? centerY - (n - 3) * lineHeight / 2 : centerY);
 
@@ -239,6 +242,20 @@ export function createRenderer({ ribbonEnt = null, ribbonNews = null, logo = nul
     }
   }
 
+  // 排程發布用：最後一行固定在 BOTTOM_TITLE.lastY，往上排（不影響「圖片套版」的置中排法）
+  function drawTitleBottom(targetCtx, lines, baseSize, color = TITLE_LIGHT) {
+    lines = lines.slice(0, MAX_TITLE_LINES);
+    if (lines.length === 0) return;
+    const fontSize = fitFontSize(targetCtx, lines, SIZE - BOTTOM_TITLE.padX * 2, baseSize);
+    const lh = bottomLineHeight(fontSize);
+    const n = lines.length;
+    targetCtx.textAlign = 'center';
+    targetCtx.textBaseline = 'middle';
+    targetCtx.font = titleFont(fontSize);
+    targetCtx.fillStyle = color;
+    lines.forEach((line, i) => targetCtx.fillText(line, SIZE / 2, BOTTOM_TITLE.lastY - (n - 1 - i) * lh));
+  }
+
   function drawTitle(targetCtx, lines, baseSize, centerY, color = TITLE_LIGHT) {
     lines = lines.slice(0, MAX_TITLE_LINES);
     if (lines.length === 0) return;
@@ -259,7 +276,7 @@ export function createRenderer({ ribbonEnt = null, ribbonNews = null, logo = nul
   }
 
   // fontSize 是畫布 px（用 canvaToPx 換算）
-  function renderComposite(targetCtx, source, titleText, fontSize, frame, fx, gen) {
+  function renderComposite(targetCtx, source, titleText, fontSize, frame, fx, gen, opts = {}) {
     targetCtx.clearRect(0, 0, SIZE, SIZE);
     targetCtx.canvas.classList.toggle('pannable', !!(source && source.type === 'image' && source.image));
     if (source && source.type === 'color') {
@@ -280,7 +297,8 @@ export function createRenderer({ ribbonEnt = null, ribbonNews = null, logo = nul
       } else {
         drawGradient(targetCtx);
         drawRibbon(targetCtx, frame);
-        drawTitle(targetCtx, parseLines(titleText), fontSize, BOX_CENTER);
+        if (opts.titleAnchor === 'bottom') drawTitleBottom(targetCtx, parseLines(titleText), fontSize);
+        else drawTitle(targetCtx, parseLines(titleText), fontSize, BOX_CENTER);
       }
     }
     if (fx && fx.stickers) fx.stickers(targetCtx);

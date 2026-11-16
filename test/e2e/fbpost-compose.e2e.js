@@ -97,7 +97,7 @@ test('已有內容時帶入先確認，按返回不覆蓋', async () => {
   await page.close();
 });
 
-test('同樣的輸入與字級，排程發布與圖片套版畫出來的圖完全相同（選套版 66px、純文字圖 76px）', async () => {
+test('同樣的輸入與字級，排程發布與共用畫圖核心畫出來的圖完全相同（選套版 66px＋標題靠下排法、純文字圖 76px）', async () => {
   const { page, frame } = await openFb();
   // 作圖框：帶入（新聞框）
   await frame.fill('#link', 'https://news.tvbs.com.tw/politics/4046330');
@@ -120,7 +120,7 @@ test('同樣的輸入與字級，排程發布與圖片套版畫出來的圖完�
     await PATTERN.renderer.ready;
     await PATTERN.compose.loadTitleGlyphs('藍營大老拋兩岸統一「10年計畫」關中、丁守中急切割快訊／蔣萬安激戰沈伯洋TVBS封關民調出爐！');
     const mk = () => { const c = document.createElement('canvas'); c.width = c.height = 1080; return c.getContext('2d'); };
-    const a = mk(); renderComposite(a, { type: 'image', image: im, view: newView() }, '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割', 66, 'news', null);
+    const a = mk(); renderComposite(a, { type: 'image', image: im, view: newView() }, '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割', 66, 'news', null, undefined, { titleAnchor: 'bottom' });
     const b = mk(); renderComposite(b, { type: 'color', color: '#c80000' }, '快訊／\n蔣萬安激戰沈伯洋\nTVBS封關民調出爐！', 76, 'news', null);
     return [await hash(a), await hash(b)];
   }, PHOTO.toString('base64'));
@@ -267,5 +267,31 @@ test('底色展示窗：一排可左右滑、按右側鈕往右捲、點色塊�
   assert.equal(await btn.getAttribute('aria-pressed'), 'true');
   assert.equal((await frame.textContent('#colorCode')).toLowerCase(), c.toLowerCase());
   assert.notEqual(await canvasHash(frame, '#cv'), before);
+  await page.close();
+});
+
+test('選套版標題照舊版排法：最後一行中心在 y 931、行距 93、往上長；公司字型沒載入時顯示原因', async () => {
+  const { page, frame } = await openFb();
+  await frame.fill('#link', 'https://news.tvbs.com.tw/politics/4046330');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  // 測試的假素材不是字型檔 → 提示原因
+  assert.equal(await frame.isVisible('#fontWarn'), true);
+  assert.match(await frame.textContent('#fontWarn'), /公司標題字型沒載入.*字型檔無法載入/);
+  // 單色一字「一」：橫畫中心就是該行中心，好量
+  const rows = async (title) => {
+    await frame.fill('#title', title);
+    await frame.evaluate(async () => { await (await import('../../ui/compose/render.js')).loadTitleGlyphs(document.getElementById('title').value); await new Promise((r) => setTimeout(r, 100)); });
+    return frame.evaluate(() => {
+      const d = document.getElementById('cv').getContext('2d').getImageData(500, 600, 80, 480).data;
+      const hit = []; for (let y = 0; y < 480; y++) { let n = 0; for (let x = 0; x < 80; x++) { const i = (y * 80 + x) * 4; if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) n++; } if (n > 20) hit.push(600 + y); }
+      const runs = []; for (const y of hit) { const r = runs[runs.length - 1]; if (r && y - r[1] <= 1) r[1] = y; else runs.push([y, y]); }
+      return runs.map(([a, b]) => (a + b) / 2);
+    });
+  };
+  const one = await rows('一');
+  assert.equal(one.length, 1); assert.ok(Math.abs(one[0] - 931) <= 8, '一行：' + one);
+  const three = await rows('一\n一\n一');
+  assert.equal(three.length, 3, String(three));
+  assert.ok(Math.abs(three[2] - 931) <= 8 && Math.abs(three[1] - 838) <= 8 && Math.abs(three[0] - 745) <= 8, '三行：' + three);
   await page.close();
 });

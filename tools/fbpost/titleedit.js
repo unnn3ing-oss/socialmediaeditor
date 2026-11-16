@@ -1,6 +1,6 @@
 // 在預覽上點兩下直接改標題：疊一個輸入框在標題位置（DOM，不會輸出），編輯中畫布暫時不畫標題、避免字疊兩層。
 // 和右欄的標題欄同一份內容。Esc 或點別處結束。
-import { SIZE, BOX_CENTER, LINE_HEIGHT_RATIO } from '../../ui/compose/render.js';
+import { SIZE, LINE_HEIGHT_RATIO, BOTTOM_TITLE, bottomLineHeight } from '../../ui/compose/render.js';
 
 // host：{ canvas, input（右欄標題 textarea）, mode()（'image'|'color'|'text'）, px()（標題字級，畫布 px）, ready(), redraw() }
 export function createTitleEditor(host) {
@@ -16,12 +16,15 @@ export function createTitleEditor(host) {
   function layout() {
     const k = host.canvas.clientWidth / SIZE;
     const lines = Math.max(1, Math.min(4, box.value.split('\n').length));
-    const lh = host.px() * LINE_HEIGHT_RATIO;
-    const center = host.mode() === 'color' ? SIZE / 2 : (lines > 3 ? BOX_CENTER - (lines - 3) * lh / 2 : BOX_CENTER);
+    const color = host.mode() === 'color';
+    // 純文字圖：整塊置中；套版：最後一行固定在 BOTTOM_TITLE.lastY、往上長（和畫布同一套排法）
+    const lh = color ? host.px() * LINE_HEIGHT_RATIO : bottomLineHeight(host.px());
     const h = lines * lh + 24;
-    box.style.left = `${60 * k}px`;
-    box.style.width = `${(SIZE - 120) * k}px`;
-    box.style.top = `${(center - h / 2) * k}px`;
+    const pad = color ? 60 : BOTTOM_TITLE.padX;
+    const top = color ? SIZE / 2 - h / 2 : BOTTOM_TITLE.lastY - (lines - 1) * lh - lh / 2 - 12;
+    box.style.left = `${pad * k}px`;
+    box.style.width = `${(SIZE - pad * 2) * k}px`;
+    box.style.top = `${top * k}px`;
     box.style.height = `${h * k}px`;
     box.style.fontSize = `${host.px() * k}px`;
     box.style.lineHeight = `${lh * k}px`;

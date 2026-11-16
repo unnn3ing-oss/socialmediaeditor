@@ -30,6 +30,11 @@ export function createComposer({ tb, assets }) {
 
   const source = () => (st.mode === 'color' ? { type: 'color', color: st.color }
     : st.mode === 'image' && st.photo ? { type: 'image', image: st.photo, view: st.view } : null);
+  // 有公司素材但公司標題字型沒載入：標題會改用 Noto Sans TC，提示原因
+  if (assets.company && !assets.fontLoaded) {
+    $('fontWarn').textContent = `公司標題字型沒載入，標題暫用 Noto Sans TC：${assets.fontError || '原因不明'}`;
+    $('fontWarn').hidden = false;
+  }
   const ready = () => !!source();
   const px = () => (st.mode === 'color' ? TITLE_PX.color : TITLE_PX.image);
   let titleEd = null;
@@ -39,7 +44,7 @@ export function createComposer({ tb, assets }) {
     $('cvEmpty').hidden = !!src;
     if (!src) { ctx.clearRect(0, 0, SIZE, SIZE); return; }
     const title = titleEd && titleEd.editing() ? '' : $('title').value;   // 預覽上編輯中：標題由輸入框顯示
-    renderer.renderComposite(ctx, src, title, px(), st.frame, kit.drawFx(st.fx));
+    renderer.renderComposite(ctx, src, title, px(), st.frame, kit.drawFx(st.fx), undefined, { titleAnchor: 'bottom' });
   }
 
   // ---- 貼圖／馬賽克 ----
