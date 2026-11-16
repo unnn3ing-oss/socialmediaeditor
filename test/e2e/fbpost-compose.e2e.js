@@ -53,8 +53,7 @@ const canvasHash = (frame, sel) => frame.evaluate(async (s) => {
 test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼文內容與 hashtag', async () => {
   const { page, frame, posts, errors } = await openFb();
   assert.equal(await frame.isVisible('#frameSeg'), true, '公司模式有新聞／娛樂框');
-  await frame.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
-  await frame.click('#pullBtn');
+  await frame.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');   // 打完新聞網址就自動帶入，不用按鈕
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
   assert.match(await frame.textContent('#pullHint'), /娛樂粉框.*標題.*貼文內容.*主圖/);
   assert.equal(await frame.getAttribute('#frameSeg [data-frame=entertainment]', 'aria-pressed'), 'true');
@@ -66,7 +65,9 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   assert.match(msg, /（圖／TVBS）/);
   assert.match(msg, /#監視器 #吃到飽 #詐欺/);
   assert.equal(await frame.isHidden('#cvEmpty'), true, '預覽已有圖');
-  assert.equal(await frame.inputValue('#lead'), '看更多新聞內容');
+  assert.equal(await frame.inputValue('#lead'), '', '留言內容不預先填字，避免誤刪');
+  assert.match(await frame.getAttribute('#lead', 'placeholder'), /看更多新聞內容/);
+  assert.equal(await frame.locator('#pullBtn, #img, #photo, [data-mode=own]').count(), 0, '沒有帶入鈕、上傳與自己的圖');
 
   await frame.fill('#lead', '完整報導看這裡');
   await frame.click('#pages .chip[data-page="111"] .chip-l');
@@ -84,7 +85,7 @@ test('已有內容時帶入先確認，按返回不覆蓋', async () => {
   const { page, frame } = await openFb();
   await frame.fill('#title', '我自己打的標題');
   await frame.fill('#link', 'https://news.tvbs.com.tw/politics/1');
-  await frame.click('#pullBtn');
+  await frame.press('#link', 'Enter');
   await frame.waitForSelector('#cfDlg[open]');
   await frame.click('#cfNo');
   await frame.waitForFunction(() => /已取消帶入/.test(document.getElementById('pullHint').textContent));
@@ -92,11 +93,10 @@ test('已有內容時帶入先確認，按返回不覆蓋', async () => {
   await page.close();
 });
 
-test('同樣的輸入，排程發布與圖片套版畫出來的圖完全相同（作圖框、純文字底圖）', async () => {
+test('同樣的輸入與字級，排程發布與圖片套版畫出來的圖完全相同（選套版 66px、純文字圖 76px）', async () => {
   const { page, frame } = await openFb();
   // 作圖框：帶入（新聞框）
   await frame.fill('#link', 'https://news.tvbs.com.tw/politics/4046330');
-  await frame.click('#pullBtn');
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
   await frame.fill('#title', '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割');
   await frame.evaluate(async () => { await (await import('../../ui/compose/render.js')).loadTitleGlyphs(document.getElementById('title').value); await new Promise((r) => setTimeout(r, 100)); });
@@ -116,8 +116,8 @@ test('同樣的輸入，排程發布與圖片套版畫出來的圖完全相同�
     await PATTERN.renderer.ready;
     await PATTERN.compose.loadTitleGlyphs('藍營大老拋兩岸統一「10年計畫」關中、丁守中急切割快訊／蔣萬安激戰沈伯洋TVBS封關民調出爐！');
     const mk = () => { const c = document.createElement('canvas'); c.width = c.height = 1080; return c.getContext('2d'); };
-    const a = mk(); renderComposite(a, { type: 'image', image: im, view: newView() }, '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割', canvaToPx(50), 'news', null);
-    const b = mk(); renderComposite(b, { type: 'color', color: '#c80000' }, '快訊／\n蔣萬安激戰沈伯洋\nTVBS封關民調出爐！', canvaToPx(60), 'news', null);
+    const a = mk(); renderComposite(a, { type: 'image', image: im, view: newView() }, '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割', 66, 'news', null);
+    const b = mk(); renderComposite(b, { type: 'color', color: '#c80000' }, '快訊／\n蔣萬安激戰沈伯洋\nTVBS封關民調出爐！', 76, 'news', null);
     return [await hash(a), await hash(b)];
   }, PHOTO.toString('base64'));
   assert.equal(fbImage, ptImage, '作圖框');
@@ -139,13 +139,46 @@ test('貼圖與馬賽克：加到預覽，畫布跟著改變', async () => {
   await page.close();
 });
 
-test('在「自己的圖」模式按帶入：自動切回作圖框', async () => {
+test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍可送', async () => {
+  const { page, frame, posts } = await openFb();
+  await frame.fill('#title', '一二三四五六七八九十一二三四五六\n第二行');
+  assert.match(await frame.textContent('#titleCount'), /第 1 行 16 字，超過 15 字（仍可送出）/);
+  assert.match(await frame.getAttribute('#titleCount', 'class'), /\bbad\b/);
+  await frame.click('#modeSeg [data-mode=text]');
+  assert.equal(await frame.isHidden('#imgArea'), true);
+  assert.equal(await frame.isVisible('#noImg'), true);
+  await frame.fill('#msg', '只有文字');
+  await frame.click('#pages .chip[data-page="111"] .chip-l');
+  await frame.click('#sendBtn');
+  await frame.waitForSelector('#results li');
+  const body = posts[0].toString('utf8');
+  assert.doesNotMatch(body, /name="image"/, '純文字不附圖');
+  assert.match(body, /name="message"\r\n\r\n只有文字/);
+  assert.doesNotMatch(body, /name="commentLead"/, '沒網址就沒有留言欄位');
+  await page.close();
+});
+
+test('Ctrl+V 貼上照片（純文字圖時自動切回選套版）；預覽點兩下改標題', async () => {
   const { page, frame } = await openFb();
-  await frame.click('#modeSeg [data-mode=own]');
-  await frame.fill('#link', 'https://news.tvbs.com.tw/politics/1');
-  await frame.click('#pullBtn');
-  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  await frame.click('#modeSeg [data-mode=color]');
+  await frame.evaluate((b64) => {
+    const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer(); dt.items.add(new File([u8], 'x.png', { type: 'image/png' }));
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+  }, PHOTO.toString('base64'));
+  await frame.waitForFunction(() => /已貼上照片/.test(document.getElementById('pullHint').textContent));
   assert.equal(await frame.getAttribute('#modeSeg [data-mode=image]', 'aria-pressed'), 'true');
-  assert.equal(await frame.isVisible('#cvWrap'), true);
+  assert.equal(await frame.isHidden('#cvEmpty'), true);
+  // 點兩下預覽 → 出現輸入框，打字同步到右欄標題
+  await frame.dblclick('#cv');
+  await frame.waitForSelector('#cvWrap .cv-title:not([hidden])');
+  await frame.fill('#cvWrap .cv-title', '預覽上改的標題');
+  assert.equal(await frame.inputValue('#title'), '預覽上改的標題');
+  await frame.press('#cvWrap .cv-title', 'Escape');
+  assert.equal(await frame.isHidden('#cvWrap .cv-title'), true);
+  // 一般文字貼上不受影響
+  await frame.focus('#msg');
+  await frame.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', 'abc'); document.getElementById('msg').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true })); });
+  assert.match(await frame.textContent('#pullHint'), /已貼上照片/, '文字貼上不會被當成照片');
   await page.close();
 });

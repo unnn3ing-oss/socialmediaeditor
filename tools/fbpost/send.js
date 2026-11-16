@@ -35,11 +35,15 @@ export function createSender({ tb, composer, targets, rd }) {
     try {
       const image = await composer.image();
       const msg = $('msg').value;
-      if (!msg.trim() && !image) { err.textContent = '請輸入貼文內容或準備圖片。'; return; }
+      if (!msg.trim() && !image) { err.textContent = '請輸入貼文內容，或貼上網址帶入照片。'; return; }
       const fd = new FormData();
       fd.append('message', msg);
       const link = $('link').value.trim();
-      if (link) { fd.append('link', link); fd.append('commentLead', $('lead').value); }
+      if (link) {
+        fd.append('link', link);
+        const lead = $('lead').value.trim();
+        if (lead) fd.append('commentLead', lead);   // 沒輸入＝後端預設「看更多新聞內容」
+      }
       if (image) fd.append('image', image, image.name);
       fd.append('targets', JSON.stringify(c.targets));
       const sentAt = Date.now();

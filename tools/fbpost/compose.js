@@ -1,16 +1,19 @@
-// 做圖＋帶入：貼文章網址 → 標題、主圖、貼文內容、框自動帶入；作圖框／純文字底圖／自己的圖。
-// 畫圖用共用核心 ui/compose（和「圖片套版」同一份，輸出一模一樣）；框的判斷用本工具的 rules.js。
+// 做圖＋帶入：貼上文章網址就自動帶入標題、主圖、貼文內容、框；[選套版｜純文字圖｜純文字]。
+// 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：選套版 66px、純文字圖 76px。框的判斷用 rules.js。
 import { $, errText, say, confirmBox, segmented } from './util.js';
 import { frameForUrl } from './rules.js';
+import { titleCheck } from './title.js';
+import { createTitleEditor } from './titleedit.js';
 import { autoLines } from '../../sdk/news-rules.js';
 import { parseArticle, formatCopy, mainCaption } from '../../sdk/news-article.js';
 import {
-  SIZE, PRESET_COLORS, newView, clampView, coverGeometry, MAX_ZOOM, canvaToPx,
-  DEFAULT_CANVA_SIZE_IMAGE, DEFAULT_CANVA_SIZE_COLOR, createRenderer, loadTitleGlyphs
+  SIZE, PRESET_COLORS, newView, clampView, coverGeometry, MAX_ZOOM, usesDarkTitle, createRenderer, loadTitleGlyphs
 } from '../../ui/compose/render.js';
 import { createFxKit } from '../../ui/compose/fx.js';
 
 const MAX_IMAGES = 3;
+export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級（只用在排程發布）
+const ARTICLE_RE = /^https?:\/\/\S+\/\d{6,9}\/?(?:[?#]\S*)?$/i;   // 打完一個新聞網址（結尾是文章編號）就自動帶入
 
 export function createComposer({ tb, assets }) {
   const renderer = createRenderer(assets);
@@ -18,23 +21,25 @@ export function createComposer({ tb, assets }) {
   const canvas = $('cv');
   const ctx = canvas.getContext('2d');
   const st = {
-    mode: 'image',                               // image＝作圖框｜color＝純文字底圖｜own＝自己的圖
+    mode: 'image',                               // image＝選套版｜color＝純文字圖｜text＝純文字（不附圖）
     frame: assets.company ? 'news' : 'generic',  // 沒有公司素材時只有通用框
     photo: null, view: newView(),
     color: PRESET_COLORS.includes('#c80000') ? '#c80000' : PRESET_COLORS[0],
-    own: null,                                   // 自己的圖（File）
-    fx: [],                                      // 貼圖／馬賽克清單（作圖框與純文字底圖共用一份）
+    fx: [],                                      // 貼圖／馬賽克清單（選套版與純文字圖共用一份）
   };
 
-  const source = () => (st.mode === 'color' ? { type: 'color', color: st.color } : st.photo ? { type: 'image', image: st.photo, view: st.view } : null);
+  const source = () => (st.mode === 'color' ? { type: 'color', color: st.color }
+    : st.mode === 'image' && st.photo ? { type: 'image', image: st.photo, view: st.view } : null);
   const ready = () => !!source();
+  const px = () => (st.mode === 'color' ? TITLE_PX.color : TITLE_PX.image);
+  let titleEd = null;
 
   function draw() {
     const src = source();
     $('cvEmpty').hidden = !!src;
     if (!src) { ctx.clearRect(0, 0, SIZE, SIZE); return; }
-    const size = canvaToPx(st.mode === 'color' ? DEFAULT_CANVA_SIZE_COLOR : DEFAULT_CANVA_SIZE_IMAGE);
-    renderer.renderComposite(ctx, src, $('title').value, size, st.frame, kit.drawFx(st.fx));
+    const title = titleEd && titleEd.editing() ? '' : $('title').value;   // 預覽上編輯中：標題由輸入框顯示
+    renderer.renderComposite(ctx, src, title, px(), st.frame, kit.drawFx(st.fx));
   }
 
   // ---- 貼圖／馬賽克 ----
@@ -47,6 +52,8 @@ export function createComposer({ tb, assets }) {
   $('fxSlot').append(fxRow.row);
   $('fxHint').textContent = kit.hintText;
   const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); };
+
+  titleEd = createTitleEditor({ canvas, input: $('title'), mode: () => st.mode, px, ready, redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
   // ---- 照片拖曳移動、滾輪縮放 ----
   let drag = null;
@@ -77,18 +84,15 @@ export function createComposer({ tb, assets }) {
 
   // ---- 模式、框、底色 ----
   function showMode() {
-    $('imageOpts').hidden = st.mode !== 'image';
-    $('colorOpts').hidden = st.mode !== 'color';
-    $('ownOpts').hidden = st.mode !== 'own';
-    $('cvWrap').hidden = st.mode === 'own';
-    $('fxBar').hidden = st.mode === 'own';
-    $('titleBox').hidden = st.mode === 'own';
-    $('imgPrev').hidden = st.mode !== 'own' || !st.own;
+    $('imgArea').hidden = st.mode === 'text';
+    $('noImg').hidden = st.mode !== 'text';
+    $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
+    $('swatches').hidden = st.mode !== 'color';
+    $('cvEmpty').textContent = '貼上文章網址自動帶入，或在這裡按 Ctrl+V 貼上照片';
     draw(); syncFx();
   }
-  const setMode = segmented($('modeSeg'), 'mode', (v) => { st.mode = v; showMode(); });
+  const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
   const setFrame = segmented($('frameSeg'), 'frame', (v) => { st.frame = v; draw(); });
-  $('frameSeg').hidden = !assets.company;
   setMode(st.mode);
   if (assets.company) setFrame(st.frame);
 
@@ -100,11 +104,16 @@ export function createComposer({ tb, assets }) {
   const setColor = segmented($('swatches'), 'color', (v) => { st.color = v; draw(); });
   setColor(st.color);
 
-  // 標題改了先畫，缺的字型段載好再重畫一次
-  const titleChanged = () => { draw(); loadTitleGlyphs($('title').value).then(draw); };
+  // ---- 標題：改了先畫，缺的字型段載好再重畫；旁邊顯示每行字數（超過只提醒） ----
+  function titleChanged() {
+    const c = titleCheck($('title').value);
+    $('titleCount').textContent = c.text;
+    $('titleCount').classList.toggle('bad', !c.ok);
+    draw(); loadTitleGlyphs($('title').value).then(draw);
+  }
   $('title').addEventListener('input', titleChanged);
 
-  // ---- 照片／自己的圖 ----
+  // ---- 照片：帶入的主圖，或在新增發文視窗裡按 Ctrl+V 貼上 ----
   function loadPhoto(blob) {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(blob);
@@ -114,20 +123,17 @@ export function createComposer({ tb, assets }) {
       im.src = url;
     });
   }
-  $('photo').addEventListener('change', async () => {
-    const f = $('photo').files[0]; if (!f) return;
-    if (!(await loadPhoto(f))) say('pullHint', '照片讀取失敗', true);
-  });
-  $('img').addEventListener('change', () => {
-    const f = $('img').files[0], pv = $('imgPrev');
-    if (pv.dataset.url) { URL.revokeObjectURL(pv.dataset.url); pv.dataset.url = ''; }
-    st.own = f || null;
-    if (f) { const u = URL.createObjectURL(f); pv.dataset.url = u; pv.src = u; st.mode = 'own'; setMode('own'); }
-    showMode();
+  document.addEventListener('paste', async (e) => {
+    if ($('postDlg').hidden) return;
+    const file = [...((e.clipboardData && e.clipboardData.files) || [])].find((f) => /^image\//.test(f.type));
+    if (!file) return;               // 不是圖片：照常貼文字
+    e.preventDefault();
+    if (st.mode !== 'image') { st.mode = 'image'; setMode('image'); showMode(); }   // 貼照片就是要套版
+    if (await loadPhoto(file)) say('pullHint', '已貼上照片'); else say('pullHint', '照片讀取失敗', true);
   });
 
-  // ---- 帶入 ----
-  let busy = false;
+  // ---- 帶入：貼上或打完新聞網址就自動帶入；Enter 也可以重新帶入 ----
+  let busy = false, lastPulled = '', typingTimer = 0;
   async function firstImage(images) {
     for (const im of images.slice(0, MAX_IMAGES)) {
       if (!im || !im.url) continue;
@@ -140,10 +146,9 @@ export function createComposer({ tb, assets }) {
     return false;
   }
   async function pull() {
-    if (busy) return;
     const url = $('link').value.trim();
-    if (!/^https?:\/\//i.test(url)) { say('pullHint', '請貼文章網址（https:// 開頭）', true); return; }
-    busy = true; $('pullBtn').disabled = true;
+    if (busy || !/^https?:\/\//i.test(url)) return;
+    busy = true; lastPulled = url;
     say('pullHint', '讀取中…');
     try {
       let article;
@@ -157,46 +162,49 @@ export function createComposer({ tb, assets }) {
         say('pullHint', '已取消帶入'); return;
       }
       const done = [];
-      if (st.mode === 'own') { st.mode = 'image'; setMode('image'); showMode(); }   // 帶入的是要套版的照片，切回作圖框
       if (assets.company) { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
-      $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'color' ? '' : mainCaption(article), tags: article.tags });
+      $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags });
       done.push('貼文內容');
       let imgFail = false;
       if (article.images.length) { if (await firstImage(article.images)) done.push('主圖'); else imgFail = true; } else imgFail = true;
       draw();
-      say('pullHint', '已帶入：' + done.join('、') + (imgFail ? '（主圖讀取失敗，請手動選照片）' : ''));
+      say('pullHint', '已帶入：' + done.join('、') + (imgFail ? '（主圖讀取失敗，請在預覽按 Ctrl+V 貼上照片）' : ''));
     } finally {
-      busy = false; $('pullBtn').disabled = false;
+      busy = false;
     }
   }
-  $('pullBtn').addEventListener('click', pull);
   $('link').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pull(); } });
   $('link').addEventListener('paste', () => setTimeout(() => { if (/^https?:\/\//i.test($('link').value.trim())) pull(); }, 0));
+  $('link').addEventListener('input', () => {
+    clearTimeout(typingTimer);
+    const url = $('link').value.trim();
+    if (ARTICLE_RE.test(url) && url !== lastPulled) typingTimer = setTimeout(pull, 700);
+  });
 
   renderer.ready.then(draw);
+  titleChanged();
   showMode();
 
   return {
-    // 清空：網址、照片、自己的圖、標題、貼文內容、貼圖馬賽克；留言文字回預設；模式與框保留
+    // 清空：網址、照片、標題、貼文內容、留言內容、貼圖馬賽克；模式與框保留
     reset() {
-      $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = '看更多新聞內容';
-      $('photo').value = ''; $('img').value = '';
-      st.photo = null; st.view = newView(); st.own = null; st.fx.length = 0; st.fx.gray = false;
-      const pv = $('imgPrev'); if (pv.dataset.url) { URL.revokeObjectURL(pv.dataset.url); pv.dataset.url = ''; }
-      if (st.mode === 'own') { st.mode = 'image'; setMode('image'); }
+      if (titleEd) titleEd.end();
+      $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = '';
+      st.photo = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = '';
       say('pullHint', '');
-      showMode();
+      titleChanged(); showMode();
     },
-    // 送出用的圖：自己的圖原檔；作圖框／純文字底圖輸出 1080 PNG；沒有圖回 null
+    // 送出用的圖：選套版／純文字圖輸出 1080 PNG；純文字或還沒有照片回 null
     async image() {
-      if (st.mode === 'own') return st.own;
       if (!ready()) return null;
+      if (titleEd) titleEd.end();
       await Promise.all([renderer.ready, loadTitleGlyphs($('title').value)]);
       draw();
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       if (!blob) throw new Error('產生圖片失敗');
       return new File([blob], 'fbpost.png', { type: 'image/png' });
-    }
+    },
+    mode: () => st.mode
   };
 }

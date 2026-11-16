@@ -94,6 +94,13 @@ async function openPost(page) {
   await page.waitForSelector('#postDlg:not([hidden])');
 }
 const chip = (id) => `#pages .chip[data-page="${id}"]`;
+// 模擬在新增發文視窗按 Ctrl+V 貼上圖片
+const pasteImage = (target, buf) => target.evaluate((b64) => {
+  const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const dt = new DataTransfer();
+  dt.items.add(new File([u8], 'p.png', { type: 'image/png' }));
+  document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+}, buf.toString('base64'));
 
 test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊、排程時間小視窗、送出、改時間、取消、刪除', async () => {
   const { page, errors, api } = await newPage('admin');
@@ -138,8 +145,8 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   await page.waitForSelector('#timePop', { state: 'hidden' });
   assert.equal(await page.isVisible('#postDlg'), true, 'Esc 先關小視窗，不關彈出視窗');
 
-  await page.setInputFiles('#img', { name: 'p.png', mimeType: 'image/png', buffer: fakeAsset() });
-  await page.waitForSelector('#imgPrev:not([hidden])');
+  await pasteImage(page, fakeAsset());
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
   await page.fill('#msg', '測試貼文');
   await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-new-desktop.png') });
@@ -152,7 +159,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   assert.equal(targets[1].page, '222');
   assert.equal(targets[1].at, Math.floor((want + 600000) / 1000));
   assert.match(body, /name="message"\r\n\r\n測試貼文/);
-  assert.match(body, /name="image"; filename="p\.png"/);
+  assert.match(body, /name="image"; filename="fbpost\.png"/);
   const rows = await page.locator('#results li').allTextContents();
   assert.match(rows[0], /新聞：發布成功；已留言/);
   assert.match(rows[1], /娛樂：失敗（臉書拒絕）/);
@@ -280,7 +287,7 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.close();
 });
 
-test('清空：確認後清掉內容與勾選，留言文字回預設', async () => {
+test('清空：確認後清掉內容與勾選，留言內容清空', async () => {
   const { page } = await newPage('admin');
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await openPost(page);
@@ -291,7 +298,7 @@ test('清空：確認後清掉內容與勾選，留言文字回預設', async ()
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfYes');
   assert.equal(await page.inputValue('#msg'), '');
-  assert.equal(await page.inputValue('#lead'), '看更多新聞內容');
+  assert.equal(await page.inputValue('#lead'), '', '留言內容清空（沒輸入＝預設文字）');
   assert.doesNotMatch(await page.getAttribute(chip(111), 'class'), /\bon\b/);
   assert.equal(await page.textContent('#sendBtn'), '全部送出（0 個粉專）');
   await page.close();

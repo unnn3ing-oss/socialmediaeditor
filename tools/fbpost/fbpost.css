@@ -40,8 +40,6 @@
 .dlg .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
 /* ---- 做圖 ---- */
-.pullrow { display: flex; gap: 8px; }
-.pullrow input { flex: 1 1 auto; min-width: 0; }
 .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 4px; }
 .seg button { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font: 14px var(--font); cursor: pointer; color: var(--btn-text); }
 .seg button.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
@@ -52,13 +50,10 @@
 .canvas-wrap canvas { display: block; width: 100%; height: auto; touch-action: none; }
 .canvas-wrap canvas.pannable { cursor: grab; }
 .cv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; color: var(--muted); font-size: 14px; pointer-events: none; }
-#imgPrev { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
-#imgPrev[hidden] { display: none; }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .swatches .sw { width: 30px; height: 30px; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); cursor: pointer; padding: 0; }
 .swatches .sw.is-on { box-shadow: 0 0 0 2px var(--accent); }
 .card input[type=text] { width: 100%; max-width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; color: var(--text); }
-.pullrow .btn { flex: none; white-space: nowrap; }
 
 /* ---- 版面改版：列表頁＋新增發文彈出視窗 ---- */
 .fp-head .grow, .post-head .grow { flex: 1; }
@@ -117,3 +112,17 @@ body.no-scroll { overflow: hidden; }
 .tp-hint.bad { color: var(--bad-text); font-weight: 500; }
 .tp-quick { display: flex; gap: 6px; flex-wrap: wrap; }
 .tp-quick button { height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--fill); font: 500 14px var(--font); cursor: pointer; color: var(--text); }
+
+/* ---- 版面 v3：左＝圖片類型／預覽／套版／貼圖；右＝網址／標題／貼文內容／留言 ---- */
+.compose { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; margin-top: 0; }
+.compose .left .seg:first-child { margin-top: 0; }
+.compose .right .lbl:first-child { margin-top: 0; }
+.lbl small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+.lbl small.bad { color: var(--bad-text); font-weight: 600; }
+.noimg { border: 1px dashed var(--line-strong); border-radius: 14px; padding: 28px 16px; text-align: center; color: var(--muted); background: var(--fill); margin: 0; }
+.swatches { margin: 12px 0 4px; }
+.post-body .hint { margin: 6px 0 0; }
+/* 預覽上直接改標題（DOM 輸入框，不會輸出） */
+.canvas-wrap .cv-title { position: absolute; z-index: 5; box-sizing: border-box; resize: none; overflow: hidden; padding: 12px 0; margin: 0; border: 2px dashed rgba(255, 255, 255, .9); border-radius: 6px; background: rgba(0, 0, 0, .25); color: #fff; text-align: center; font-family: "Noto Sans TC", sans-serif; font-weight: 900; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); outline: none; }
+.canvas-wrap .cv-title.on-light { color: #111; border-color: rgba(17, 17, 17, .7); background: rgba(255, 255, 255, .3); text-shadow: none; }
+@media (max-width: 640px) { .compose { grid-template-columns: minmax(0, 1fr); } }

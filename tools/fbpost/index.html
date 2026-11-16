@@ -69,61 +69,44 @@
       <button type="button" class="xbtn" id="dlgClose" aria-label="關閉">×</button>
     </header>
     <div class="post-body">
-    <label class="lbl" for="link">文章網址</label>
-    <div class="pullrow">
-      <input id="link" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/...">
-      <button type="button" class="btn btn-secondary" id="pullBtn">帶入</button>
-    </div>
-    <p class="hint" id="pullHint" role="status">貼上公司新聞網址會自動帶入標題、主圖與貼文內容；發布後第一則留言會放這個連結＋該粉專的 UTM。</p>
-
-    <div class="seg" id="modeSeg" role="group" aria-label="圖片">
-      <button type="button" data-mode="image">作圖框</button>
-      <button type="button" data-mode="color">純文字底圖</button>
-      <button type="button" data-mode="own">自己的圖</button>
-    </div>
-
-    <div class="compose">
-      <div class="preview">
-        <div class="canvas-wrap" id="cvWrap">
-          <canvas id="cv" width="1080" height="1080" aria-label="圖片預覽"></canvas>
-          <p class="cv-empty" id="cvEmpty">貼網址帶入，或選一張照片</p>
-        </div>
-        <img id="imgPrev" alt="自己的圖預覽" hidden>
-        <div class="fx-bar" id="fxBar">
-          <div class="fx-bar-head"><strong>貼圖與馬賽克</strong><span class="fx-count" id="fxCount"></span></div>
-          <div id="fxSlot"></div>
-          <div class="fx-hint" id="fxHint"></div>
-        </div>
-      </div>
-      <div class="opts">
-        <div id="imageOpts">
-          <label class="lbl" for="photo">照片</label>
-          <input type="file" id="photo" accept="image/*">
-          <div class="seg" id="frameSeg" role="group" aria-label="框">
-            <button type="button" data-frame="news">新聞（藍框）</button>
-            <button type="button" data-frame="entertainment">娛樂（粉框）</button>
+      <div class="compose">
+        <div class="left">
+          <div class="seg" id="modeSeg" role="group" aria-label="圖片">
+            <button type="button" data-mode="image">選套版</button>
+            <button type="button" data-mode="color">純文字圖</button>
+            <button type="button" data-mode="text">純文字</button>
           </div>
+          <div id="imgArea">
+            <div class="canvas-wrap" id="cvWrap">
+              <canvas id="cv" width="1080" height="1080" aria-label="圖片預覽（點兩下改標題、Ctrl+V 貼上照片）"></canvas>
+              <p class="cv-empty" id="cvEmpty">貼上文章網址自動帶入，或在這裡按 Ctrl+V 貼上照片</p>
+            </div>
+            <p class="hint">點兩下預覽可直接改標題；拖曳移動、滾輪縮放照片；Ctrl+V 換照片。</p>
+            <div class="seg" id="frameSeg" role="group" aria-label="套版">
+              <button type="button" data-frame="news">新聞（藍框）</button>
+              <button type="button" data-frame="entertainment">娛樂（粉框）</button>
+            </div>
+            <div class="swatches" id="swatches" role="group" aria-label="底色" hidden></div>
+            <div class="fx-bar" id="fxBar">
+              <div class="fx-bar-head"><strong>貼圖與馬賽克</strong><span class="fx-count" id="fxCount"></span></div>
+              <div id="fxSlot"></div>
+              <div class="fx-hint" id="fxHint"></div>
+            </div>
+          </div>
+          <p class="noimg" id="noImg" hidden>純文字：這則貼文不附圖，只發貼文內容。</p>
         </div>
-        <div id="colorOpts" hidden>
-          <span class="lbl">底色</span>
-          <div class="swatches" id="swatches" role="group" aria-label="底色"></div>
-        </div>
-        <div id="ownOpts" hidden>
-          <label class="lbl" for="img">自己的圖（jpeg／png，直接上傳不套版）</label>
-          <input type="file" id="img" accept="image/jpeg,image/png">
-        </div>
-        <div id="titleBox">
-          <label class="lbl" for="title">標題（Enter 換行，最多 4 行）</label>
+        <div class="right">
+          <label class="lbl" for="link">文章網址 <small>貼上就自動帶入</small></label>
+          <input id="link" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/...">
+          <p class="hint" id="pullHint" role="status"></p>
+          <label class="lbl" for="title">標題 <small id="titleCount"></small></label>
           <textarea id="title" rows="4" placeholder="帶入時自動換行"></textarea>
+          <label class="lbl" for="msg">貼文內容</label>
+          <textarea id="msg" rows="7" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
+          <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
+          <input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）">
         </div>
       </div>
-    </div>
-
-    <label class="lbl" for="msg">貼文內容</label>
-    <textarea id="msg" rows="6" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
-    <label class="lbl" for="lead">留言文字</label>
-    <input id="lead" type="text" maxlength="200" value="看更多新聞內容">
-    <p class="hint">留言＝這段文字＋換行＋文章連結＋各粉專 UTM；清空就只放連結。</p>
     </div>
     <footer class="post-foot">
       <div class="chips" id="pages" role="group" aria-label="發到哪些粉專"></div>
