@@ -72,7 +72,17 @@ function fakeD1() {
       return col ? row[col] : row;
     }
   });
-  return { raw: db, prepare: (sql) => stmt(sql, []) };
+  // batch：依序執行，任一失敗整批還原（同 D1 的交易語意）
+  async function batch(list) {
+    db.exec('BEGIN');
+    try {
+      const out = [];
+      for (const s of list) out.push(await s.run());
+      db.exec('COMMIT');
+      return out;
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  return { raw: db, prepare: (sql) => stmt(sql, []), batch };
 }
 
 // 一組完整的測試環境

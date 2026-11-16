@@ -7,9 +7,17 @@ export const MESSAGES = {
   not_found: '找不到。',
   too_large: '內容太大。',
   bad_request: '請求內容不正確。',
-  misconfigured: '後端設定不完整，請檢查 Secrets。'
+  misconfigured: '後端設定不完整，請檢查 Secrets。',
+  fb_off: '後端尚未設定 FB_USER_TOKEN。',
+  fb_token: '臉書 token 無效或過期。',
+  fb_forbidden: '目前只有管理員可以使用排程發布。',
+  fb_error: '臉書回應錯誤。',
+  fb_bad_time: '排程時間必須在 10 分鐘到 30 天之間。',
+  rundown_off: '後端尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN。',
+  rundown_failed: '連不上 Rundown 的 Apps Script。'
 };
-export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500 };
+export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
+  fb_off: 503, fb_token: 502, fb_forbidden: 403, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');
