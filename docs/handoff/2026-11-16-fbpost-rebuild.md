@@ -1,5 +1,5 @@
 # 排程發布重寫（第一段：後端＋管理頁＋工具最小發文／管理）
-- 狀態：進行中　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
+- 狀態：第一段完成，等使用者實測　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
 - 使用者原始需求：「重建新『排程發布』功能」；「全部都不可以參考過往任何紀錄來重寫」。
 - 設計（已確認）：`docs/superpowers/specs/2026-11-16-fbpost-rebuild-design.md`。實作計畫：`docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1.md`（寫好後）。
 
@@ -20,17 +20,19 @@
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
 | 實作計畫 | `docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1.md`（Task 1～8） | ✅ 待使用者確認 |
-| 後端臉書模組 | 粉專清單、發文（立即／排程有圖）、列表、改時間、取消、刪除、留言 | ⬜ |
-| 後端留言 DO | 排程貼文發布後補第一則留言 | ⬜ |
-| 後端 RD 轉送 | `POST /rundown`、管理頁 ping | ⬜ |
-| 管理頁 | 臉書連線、粉專設定、Rundown 連線（`admin/` 與後端 `/admin`） | ⬜ |
-| 工具 `tools/fbpost/` | 測試期間：adm 才進得去；最小發文（圖＋文字＋粉專＋立即／排程）、已排程／已發佈管理 | ⬜ |
-| 文件 | README、deploy.md（Secrets、DO migration v3）、規格、CLAUDE.md | ⬜ |
+| 後端臉書模組 | `server/fb/`（graph、access、pages、post、comment、manage、index） | ✅ |
+| 後端留言 DO | `server/fb/timer.js` `FbCommentTimer`，`wrangler.toml` 綁 `FB_TIMER`＋migration v3 | ✅ |
+| 後端 RD 轉送 | `server/fb/rundown.js` | ✅ |
+| 管理頁 | 臉書連線、粉專設定、Rundown 連線（`admin/` 與後端 `/admin`） | ✅ |
+| 工具 `tools/fbpost/` | 測試期間：adm 才進得去；最小發文、已排程／已發佈管理；token 問題在停用頁顯示原因 | ✅ |
+| 文件 | deploy.md 步驟 6-2、規格路由表（CLAUDE.md 進度等併入 main 時更新） | ✅ |
 
 ## 下一步
 - [x] 寫實作計畫（writing-plans）
-- [ ] 使用者確認計畫與執行方式
-- [ ] 依計畫實作、測試、獨立審查、截圖給使用者
+- [x] 使用者確認計畫與執行方式（A 混合）
+- [x] 第一段實作、測試（npm test 578、e2e 87、build --check）、獨立審查（3 Important＋1 升級已修）、截圖
+- [ ] 使用者部署並實測（清單見下）；結果回報後決定第二段或調整
+- [ ] 使用者說「推」才併入 main，同 commit 更新 CLAUDE.md「目前進度」
 
 ## 測試
 `npm test`、`npm run e2e`（Chromium 在 `/opt/pw-browsers/chromium`，不要 `playwright install`）、`node build.js --check`。臉書與 Apps Script 一律用替身測試；真實臉書只能部署後由使用者實測。
@@ -39,3 +41,16 @@
 - 不推 main、不開 PR；使用者說「推」才併入。
 - 公司素材不進 repo。產生檔不要手改，改來源後跑 `node build.js`。
 - DO 類別名稱不可用已刪除的 `CommentHub`；使用者公司電腦 `wrangler.toml` 已有 migrations v1、v2。
+
+## 第一段實測清單（使用者）
+1. 部署：`docs/deploy.md` 步驟 6-2（schema、三個 Secrets、本機 `wrangler.toml` 加 `FB_TIMER`＋v3）→ `npx wrangler deploy`
+2. 管理頁「臉書發文」：狀態正常、沒有缺少權限 → 填簡稱、UTM、RD 區段、順序、顯示 → 儲存；「Rundown」測試連線
+3. 網站用**管理密碼**登入 → 排程發布：
+   - 立即＋有圖（作圖框）→ 貼文出現、第一則留言連結＋UTM 正確
+   - 排程＋作圖框、排程＋純文字底圖 → **臉書後台「已排定」與工具「已排程」都看得到圖片預覽**（通過標準）
+   - 改時間、取消、刪除已發佈
+   - 排程時間到後約 1 分鐘內補第一則留言
+4. 用公司密碼登入 → 只看到「功能停用」
+
+## 已知未處理（審查 Minor，使用者決定是否要修）
+token 無效時管理頁仍列五項缺權限；Safari 解析 `+0000` 時間；開啟連結未檢查 https；重查留言只看 50 則；逾時重按送出可能重複發文；「遲遲未發布」失敗後改時間不會復活。
