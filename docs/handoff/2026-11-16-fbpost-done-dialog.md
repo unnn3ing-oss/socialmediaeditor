@@ -38,7 +38,7 @@
 - [x] 管理頁：`admin/`、`server/core/admin-page.js`（同一支腳本改兩邊：卡片 `.pg-card`、`#acCard`、素材順序＋`autoKey`）
 - [x] fbpost 前端：app.js 改看 `st.company`＋`/fb/pages` 403、`.test-pill` 依 `/fb/access` 隱藏；send.js 純文字送出前 confirmBox
 - [x] npm test 613、e2e 116、build --check 通過；截圖已拍
-- [ ] 獨立審查
+- [x] 獨立審查通過（未改檔）；等使用者說「推」
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`
