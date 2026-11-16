@@ -32,6 +32,12 @@
 - [x] 使用者確認計畫與執行方式（A 混合）
 - [x] 第一段實作、測試（npm test 578、e2e 87、build --check）、獨立審查（3 Important＋1 升級已修）、截圖
 - [x] 第一段追加（測試期就能帶入＋套版、留言文字可改、全部模組化）：共用畫圖核心 `ui/compose/{render,fx,assets}.js`＋`fx.css`，圖片套版改接（改前後 7 情境＋貼圖畫布雜湊、桌機手機整頁截圖完全相同）；fbpost 前端拆 util／rules／targets／send／manage／compose／app；留言文字 `commentLead`；標題缺字型段先載入（`loadTitleGlyphs`）。npm test 580、e2e 92、獨立審查無 Critical／Important
+- [ ] 第一段版面改版（使用者 11/16 確認示意圖後說「開始」）：
+  - 進入工具＝已排程／已發佈（預設已排程），「＋ 新增發文」開彈出視窗（× 或 Esc 關閉、內容保留、底部「清空」）
+  - 粉專＝膠囊：未勾外框；已勾藍底，左半勾選、右半「立即▾／排程 HH:MM▾」開「排程時間」小視窗（立即／排程、日期、時間；打 4 碼 2130＝21:30、↑↓ 10 分、+30 分／+1 小時／明天；超出 10 分～30 天紅字）
+  - 版面：上排粉專膠囊；下排左「排入 RD」開關（localStorage，預設關）＋SLUG，右側約 1/5「全部送出（N 個粉專）」文字上下左右置中、最窄 220px，兩排間無分隔線
+  - RD：臉書成功且粉專有 RD 區段才寫，`文章ID/圖文/SLUG`，時間＝各粉專發布時間（立即＝送出當下）；SLUG 規則 A：手填只留文字數字；留空取標題第一行（有／取斜線後，只有「快訊／最新／新」標籤改下一行）去標點前 4 字；`/fb/pages` 多回 `rd`
+  - 新模組：`time.js`（純函式）、`slug.js`（純函式）、`timepop.js`、`dialog.js`、`rd.js`；改 `targets.js`、`send.js`、`app.js`、`index.html`、`fbpost.css`
 - [ ] 使用者部署並實測（清單見下）；結果回報後決定第二段或調整
 - [ ] 使用者說「推」才併入 main，同 commit 更新 CLAUDE.md「目前進度」
 
