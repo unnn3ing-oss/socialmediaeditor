@@ -134,6 +134,8 @@ test('貼圖與馬賽克：加到預覽，畫布跟著改變', async () => {
   await frame.click('#modeSeg [data-mode=color]');
   await frame.fill('#title', '貼圖測試');
   const before = await canvasHash(frame, '#cv');
+  assert.equal(await frame.isVisible('#fxBar'), false, '貼圖列預設收起');
+  await frame.click('#fxBtn');
   // 純色底上的馬賽克平均後還是同色、標題又畫在上面，所以用貼圖（最後畫、蓋在最上面）驗證
   await frame.click('#fxSlot .fx-mosaic-tile');
   await frame.click('#fxSlot .fx-sticker-tile >> nth=0');

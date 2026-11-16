@@ -22,10 +22,12 @@ export function createManage({ tb }) {
     const page = $('schedPage').value; if (!page) return;
     say('schedHint', '查詢中…');
     try {
-      const items = await tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page));
+      const items = (await tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page))).slice();
+      const dir = $('schedSort').value === 'far' ? -1 : 1;
+      items.sort((a, b) => dir * ((Number(a.at) || Infinity) - (Number(b.at) || Infinity)));
       const ul = $('schedList'); ul.textContent = '';
       for (const it of items) {
-        const li = rowBase(it, it.at * 1000);
+        const li = rowBase(it, it.at * 1000); li.dataset.at = String(it.at || '');
         const acts = document.createElement('div'); acts.className = 'acts';
         const edit = document.createElement('div'); edit.className = 'edit'; edit.hidden = true;
         const dt = document.createElement('input'); dt.type = 'datetime-local';
@@ -75,6 +77,11 @@ export function createManage({ tb }) {
   }
 
   $('schedReload').onclick = loadSched;
+  // 排序只重排畫面上的列，不重查臉書
+  $('schedSort').onchange = () => {
+    const dir = $('schedSort').value === 'far' ? -1 : 1, ul = $('schedList');
+    [...ul.children].sort((a, b) => dir * ((Number(a.dataset.at) || Infinity) - (Number(b.dataset.at) || Infinity))).forEach((li) => ul.append(li));
+  };
   $('pubReload').onclick = () => loadPub(false);
   $('pubMore').onclick = () => loadPub(true);
 

@@ -29,60 +29,64 @@
 <main class="fp" id="fbpostApp" hidden>
   <header class="fp-head">
     <h1>排程發布</h1>
+    <span class="pill ok" id="pagesState">已連線 0 個粉專</span>
     <span class="pill warn">測試模式（僅管理員）</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="pagesRefresh">重新整理粉專</button>
     <span class="grow"></span>
-    <button type="button" class="btn btn-primary" id="newBtn">＋ 新增發文</button>
+    <button type="button" class="btn btn-primary new-btn" id="newBtn">＋ 新增發文</button>
   </header>
-  <div class="tabs" role="tablist" aria-label="分頁" id="tabs">
-    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
-    <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
-  </div>
 
-  <section id="tab-sched" class="card">
-    <div class="bar">
-      <label class="inline">粉專 <select id="schedPage"></select></label>
-      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
+  <section class="card">
+    <div class="seg tabs" role="tablist" aria-label="分頁" id="tabs">
+      <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
     </div>
-    <p class="hint" id="schedHint" role="status"></p>
-    <ul class="list" id="schedList"></ul>
-  </section>
 
-  <section id="tab-pub" class="card" hidden>
-    <div class="bar">
-      <label class="inline">粉專 <select id="pubPage"></select></label>
-      <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
+    <div id="tab-sched">
+      <div class="bar">
+        <label class="inline">粉專 <select id="schedPage"></select></label>
+        <label class="inline">排序 <select id="schedSort"><option value="near">時間最近</option><option value="far">時間最遠</option></select></label>
+        <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
+        <p class="hint" id="schedHint" role="status">按「刷新」讀取 Facebook 排程</p>
+      </div>
+      <ul class="list" id="schedList"></ul>
     </div>
-    <p class="hint" id="pubHint" role="status"></p>
-    <ul class="list" id="pubList"></ul>
-    <button type="button" class="btn btn-secondary btn-sm" id="pubMore" hidden>載入更多</button>
+
+    <div id="tab-pub" hidden>
+      <div class="bar">
+        <label class="inline">粉專 <select id="pubPage"></select></label>
+        <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
+        <p class="hint" id="pubHint" role="status">按「刷新」讀取 Facebook 已發佈貼文</p>
+      </div>
+      <ul class="list" id="pubList"></ul>
+      <button type="button" class="btn btn-secondary btn-sm" id="pubMore" hidden>載入更多</button>
+    </div>
   </section>
 </main>
 
-<!-- 新增發文：彈出視窗（隱藏切換，關閉後內容保留） -->
+<!-- 新增發文：彈出視窗（隱藏切換，關閉後內容保留）。頂部／中間捲動／底列固定 -->
 <div class="veil" id="postDlg" hidden>
   <section class="post" role="dialog" aria-modal="true" aria-labelledby="postTitle" id="tab-new">
     <header class="post-head">
       <h2 id="postTitle">新增發文</h2>
+      <div class="seg" id="modeSeg" role="group" aria-label="圖片">
+        <button type="button" data-mode="image">選套版</button>
+        <button type="button" data-mode="color">純文字圖</button>
+        <button type="button" data-mode="text">純文字</button>
+      </div>
       <span class="pill warn">測試模式</span>
       <span class="grow"></span>
-      <button type="button" class="btn btn-secondary btn-sm" id="clearBtn">清空</button>
       <button type="button" class="xbtn" id="dlgClose" aria-label="關閉">×</button>
     </header>
     <div class="post-body">
       <div class="compose">
         <div class="left">
-          <div class="seg" id="modeSeg" role="group" aria-label="圖片">
-            <button type="button" data-mode="image">選套版</button>
-            <button type="button" data-mode="color">純文字圖</button>
-            <button type="button" data-mode="text">純文字</button>
-          </div>
           <div id="imgArea">
             <div class="canvas-wrap" id="cvWrap">
               <canvas id="cv" width="1080" height="1080" aria-label="圖片預覽（點兩下改標題、Ctrl+V 貼上照片）"></canvas>
               <p class="cv-empty" id="cvEmpty">貼上文章網址自動帶入，或在這裡按 Ctrl+V 貼上照片</p>
             </div>
-            <p class="hint">點兩下預覽可直接改標題；拖曳移動、滾輪縮放照片；Ctrl+V 換照片。</p>
-            <div class="seg" id="frameSeg" role="group" aria-label="套版">
+            <div class="seg wide" id="frameSeg" role="group" aria-label="套版">
               <button type="button" data-frame="news">新聞（藍框）</button>
               <button type="button" data-frame="entertainment">娛樂（粉框）</button>
             </div>
@@ -94,8 +98,11 @@
                 <button type="button" class="shelf-nav" id="swNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
               </div>
             </div>
-            <div class="fx-bar" id="fxBar">
-              <div class="fx-bar-head"><strong>貼圖與馬賽克</strong><span class="fx-count" id="fxCount"></span></div>
+            <p class="hint">預覽就是實際送出的圖；點兩下預覽可直接改標題。拖曳移動、滾輪縮放照片；Ctrl+V 換照片。</p>
+            <div class="tools-row">
+              <button type="button" class="soft-btn" id="fxBtn" aria-expanded="false" aria-controls="fxBar">T寶／馬賽克<span class="fx-count" id="fxCount"></span></button>
+            </div>
+            <div class="fx-bar" id="fxBar" hidden>
               <div id="fxSlot"></div>
               <div class="fx-hint" id="fxHint"></div>
             </div>
@@ -107,13 +114,17 @@
           <input id="link" type="url" inputmode="url" required aria-required="true" placeholder="https://news.tvbs.com.tw/...">
           <p class="hint" id="pullHint" role="status"></p>
           <label class="lbl" for="title">標題 <small id="titleCount"></small></label>
-          <textarea id="title" rows="4" placeholder="帶入時自動換行"></textarea>
-          <label class="lbl" for="msg">貼文內容</label>
-          <textarea id="msg" rows="7" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
+          <div class="title-row">
+            <textarea id="title" rows="4" placeholder="帶入時自動換行"></textarea>
+            <div class="title-lines" id="titleLines" aria-hidden="true"></div>
+          </div>
+          <label class="lbl" for="msg">貼文內容 <small id="msgCount"></small></label>
+          <textarea id="msg" rows="6" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
           <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
           <input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）">
           <div id="extras" class="extras"></div>
           <button type="button" class="add-comment" id="addComment">＋ 再新增一則留言（最多 3 則）</button>
+          <ul class="results" id="results" aria-live="polite"></ul>
         </div>
       </div>
     </div>
@@ -124,10 +135,10 @@
           <label class="rd-switch"><input type="checkbox" id="rdOn"><span class="track" aria-hidden="true"></span><span class="rd-lbl">排入 RD</span></label>
           <input type="text" id="rdSlug" maxlength="40" placeholder="SLUG（空白＝標題前 4 字）" aria-label="SLUG">
         </div>
+        <button type="button" class="btn btn-secondary clear-btn" id="clearBtn">清空頁面</button>
         <button type="button" class="send" id="sendBtn" disabled>全部送出（0 個粉專）</button>
       </div>
       <p class="hint bad" id="sendErr" role="alert"></p>
-      <ul class="results" id="results" aria-live="polite"></ul>
     </footer>
   </section>
 </div>

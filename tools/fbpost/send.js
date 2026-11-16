@@ -6,6 +6,7 @@ export function createSender({ tb, composer, targets, rd, comments }) {
     const n = targets.count();
     $('sendBtn').textContent = `全部送出（${n} 個粉專）`;
     $('sendBtn').disabled = n === 0;
+    if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = n ? '' : '請先勾選要發的粉專'; $('sendErr').dataset.auto = n ? '' : '1'; }
   }
 
   function renderResults(rs, rdLines) {
@@ -29,7 +30,7 @@ export function createSender({ tb, composer, targets, rd, comments }) {
   }
 
   $('sendBtn').addEventListener('click', async () => {
-    const err = $('sendErr'); err.textContent = '';
+    const err = $('sendErr'); err.textContent = ''; err.dataset.auto = '';
     const c = targets.collect();
     if (c.error) { err.textContent = c.error; return; }
     const extra = comments.collect();
@@ -57,6 +58,7 @@ export function createSender({ tb, composer, targets, rd, comments }) {
       const results = data.results || [];
       const rdLines = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
       renderResults(results, rdLines);
+      $('results').scrollIntoView({ block: 'nearest' });
     } catch (e) {
       err.textContent = errText(e);
     } finally {

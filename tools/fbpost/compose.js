@@ -2,7 +2,7 @@
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：選套版 66px、純文字圖 76px。框的判斷用 rules.js。
 import { $, errText, say, confirmBox, segmented } from './util.js';
 import { frameForUrl } from './rules.js';
-import { titleCheck } from './title.js';
+import { titleCheck, LINE_MAX } from './title.js';
 import { createTitleEditor } from './titleedit.js';
 import { autoLines } from '../../sdk/news-rules.js';
 import { parseArticle, formatCopy, mainCaption } from '../../sdk/news-article.js';
@@ -51,6 +51,10 @@ export function createComposer({ tb, assets }) {
   const fxRow = kit.buildRow(editor);
   $('fxSlot').append(fxRow.row);
   $('fxHint').textContent = kit.hintText;
+  // 「T寶／馬賽克」按鈕：點了才展開貼圖列（隱藏切換）
+  $('fxBtn').addEventListener('click', () => { const open = $('fxBar').hidden; $('fxBar').hidden = !open; $('fxBtn').setAttribute('aria-expanded', String(open)); if (open) editor.sync(); });
+  const msgCount = () => { $('msgCount').textContent = `${[...$('msg').value].length} 字`; };
+  $('msg').addEventListener('input', msgCount); msgCount();
   const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); };
 
   titleEd = createTitleEditor({ canvas, input: $('title'), mode: () => st.mode, px, ready, redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
@@ -138,6 +142,8 @@ export function createComposer({ tb, assets }) {
     const c = titleCheck($('title').value);
     $('titleCount').textContent = c.text;
     $('titleCount').classList.toggle('bad', !c.ok);
+    const box = $('titleLines'); box.textContent = '';   // 每行右側字數（和圖上的行一致）
+    c.widths.forEach((w) => { const d = document.createElement('div'); d.textContent = `${w}/${LINE_MAX}`; d.classList.toggle('bad', w > LINE_MAX); box.append(d); });
     draw(); loadTitleGlyphs($('title').value).then(draw);
   }
   $('title').addEventListener('input', titleChanged);
@@ -201,7 +207,7 @@ export function createComposer({ tb, assets }) {
       const done = [];
       if (assets.company) { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
-      $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags });
+      $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags }); msgCount();
       done.push('貼文內容');
       let imgFail = false;
       if (article.images.length) { if (await firstImage(article.images)) done.push('主圖'); else imgFail = true; } else imgFail = true;
@@ -229,7 +235,7 @@ export function createComposer({ tb, assets }) {
     // 清空：網址、照片、標題、貼文內容、留言內容、貼圖馬賽克；模式與框保留
     reset() {
       if (titleEd) titleEd.end();
-      $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = '';
+      $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = ''; msgCount();
       st.photo = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = '';
       say('pullHint', '');
       titleChanged(); showMode();

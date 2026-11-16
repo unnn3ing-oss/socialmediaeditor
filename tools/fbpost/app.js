@@ -43,6 +43,11 @@ $('tabs').addEventListener('click', (e) => {
   const targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
   sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }) });
   const manage = createManage({ tb });
-  targets.setPages(pages);
-  manage.setPages(pages);
+  const showPages = (list) => { $('pagesState').textContent = `已連線 ${list.length} 個粉專`; targets.setPages(list); manage.setPages(list); };
+  showPages(pages);
+  $('pagesRefresh').addEventListener('click', async () => {
+    const b = $('pagesRefresh'); b.disabled = true;
+    try { showPages(await tb.api.call('/fb/pages')); } catch (e) { $('pagesState').textContent = '讀取粉專失敗：' + errText(e); }
+    finally { b.disabled = false; }
+  });
 })();

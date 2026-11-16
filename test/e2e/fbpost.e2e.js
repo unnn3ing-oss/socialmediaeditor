@@ -395,3 +395,17 @@ test('文章網址必填：沒填按送出會提示、不送出', async () => {
   assert.equal(api.posts.length, 0);
   await page.close();
 });
+
+test('舊版版面：1280×800 與窄寬度下，新增發文底列（粉專、送出）都在畫面內', async () => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 400, height: 760 }]) {
+    const { page } = await newPage('admin', viewport);
+    await page.goto(srv.url + 'tools/fbpost/index.html');
+    await openPost(page);
+    for (const sel of ['#pages .chip', '#sendBtn', '#clearBtn', '#rdOn + .track']) {
+      const box = await page.locator(sel).first().boundingBox();
+      assert.ok(box && box.y >= 0 && box.y + box.height <= viewport.height + 0.5, `${viewport.width}px：${sel} 在畫面內`);
+    }
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, '沒有橫向捲動');
+    await page.close();
+  }
+});
