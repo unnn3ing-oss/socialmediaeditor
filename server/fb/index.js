@@ -3,6 +3,7 @@ import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess } from './access.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, FbSetupError } from './pages.js';
 import { GraphError } from './graph.js';
+import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
 export function fbFail(request, env, e) {
@@ -23,6 +24,18 @@ export function route(method, re, handler) { routes.push([method, re, handler]);
 route('GET', /^\/fb\/pages$/, async (request, env) => {
   const pages = await listPages(env);
   return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order })));
+});
+
+route('POST', /^\/fb\/post$/, async (request, env) => {
+  const ct = request.headers.get('content-type') || '';
+  if (!ct.includes('multipart/form-data')) return fail(request, env, 'bad_request');
+  const buf = await readBody(request, MAX_IMAGE + 512 * 1024);
+  if (!buf) return fail(request, env, 'too_large');
+  let fd;
+  try { fd = await new Response(buf, { headers: { 'content-type': ct } }).formData(); } catch { return fail(request, env, 'bad_request'); }
+  const form = parsePostForm(fd);
+  if (!form) return fail(request, env, 'bad_request');
+  return ok(request, env, { results: await createPosts(env, form) });
 });
 
 export async function handleFb(request, env, ctx, path) {
