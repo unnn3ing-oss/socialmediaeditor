@@ -4,6 +4,7 @@ import { fbAccess } from './access.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, FbSetupError } from './pages.js';
 import { GraphError } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
+import { rundownAdd, adminRundown } from './rundown.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
@@ -67,6 +68,8 @@ route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete
   return ok(request, env, { ok: true });
 });
 
+route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)));
+
 export async function handleFb(request, env, ctx, path) {
   if (!path.startsWith('/fb/') && path !== '/rundown') return null;
   for (const [method, re, handler] of routes) {
@@ -95,6 +98,8 @@ adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => { await cle
 
 // 掛在 core/admin.js 的 adminExtras（已通過管理憑證）
 export async function adminFb(request, env, path) {
+  const rd = await adminRundown(request, env, path);
+  if (rd) return rd;
   for (const [method, re, handler] of adminRoutes) {
     const m = re.exec(path);
     if (!m || request.method !== method) continue;
