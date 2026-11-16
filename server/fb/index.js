@@ -25,7 +25,7 @@ export function route(method, re, handler) { routes.push([method, re, handler]);
 
 route('GET', /^\/fb\/pages$/, async (request, env) => {
   const pages = await listPages(env);
-  return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order })));
+  return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order, rd: p.rd })));
 });
 
 route('POST', /^\/fb\/post$/, async (request, env) => {

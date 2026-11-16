@@ -47,6 +47,7 @@ test('/fb/pages：只回顯示的、依順序排；/me/accounts 走快取', asyn
   assert.equal(save.status, 200, JSON.stringify(await save.clone().json()));
   const { data } = await (await call(env, '/fb/pages', { headers: await auth(env, 'company', true) })).json();
   assert.deepEqual(data.map((p) => [p.id, p.short]), [['222', '少康'], ['111', '新聞']]);
+  assert.deepEqual(data.map((p) => p.rd), ['shaokang', 'news'], '帶出 RD 區段（前端排入 RD 用）');
   const all = (await (await call(env, '/admin/fb/pages', { headers: adm })).json()).data;
   assert.equal(all.length, 3);
   assert.deepEqual(all.find((p) => p.id === '111'), { id: '111', name: 'TVBS 新聞', short: '新聞', utm: '?&utm_source=facebook&utm_medium=fbarticlepic', rd: 'news', order: 1, show: true });
