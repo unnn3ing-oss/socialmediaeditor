@@ -271,3 +271,10 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 .ds-btn:disabled { background: #eceef0; color: #6b7077; opacity: 1; }
 .ds-close { width: 44px; height: 44px; font-size: 22px; box-shadow: none; border-color: var(--line-strong, #c4c7cc); }
 .ds-close:focus-visible { outline: 2px solid var(--accent); }
+
+/* 步驟 1：也要 YT 批量下載 */
+.ds-yt-opt { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 2px; font-size: 14px; line-height: 1.6; cursor: pointer; }
+.ds-yt-opt input { width: 18px; height: 18px; margin: 3px 0 0; flex: none; accent-color: var(--accent); }
+.ds-yt-hint { margin: 0 0 10px 28px; font-size: 13px; color: var(--muted); }
+.ds-yt-mac { margin: 0 0 10px; }
+.ds-yt-mac p { margin: 0 0 6px; font-size: 14px; }

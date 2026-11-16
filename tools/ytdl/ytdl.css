@@ -1,0 +1,117 @@
+/* YT 批量下載：套用工具箱的 ui/tokens.css，清單的列樣式在 web/queue-view.css。
+   下面先把清單與診斷區用到的名稱對到工具箱的顏色，之後一律只用工具箱的字型與色票。 */
+:root {
+  --ink: var(--text);
+  --surface-2: var(--fill);
+  --accent-ink: #ffffff;
+  --ok: var(--ok-text); --ok-soft: var(--ok-bg);
+  --warn: var(--warn-text); --warn-soft: var(--warn-bg);
+  --err: var(--bad-text); --err-soft: var(--bad-bg);
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Noto Sans Mono", monospace;
+  --cover-w: 118px;
+}
+.yt { max-width: 960px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.yt h1, .yt h2, .yt h3, .yt p { margin: 0; }
+.yt-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.yt-head h1 { font-size: 20px; font-weight: 700; }
+.grow { flex: 1; }
+.yt-legal { font-size: 12.5px; color: var(--muted); }
+.yt-legal b { color: var(--warn-text); }
+
+.btn-danger { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-text); }
+.btn-danger:hover { border-color: var(--bad-text); }
+
+.yt-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow); min-width: 0; }
+.yt-card.setup, .yt-card.settings { padding: 18px 20px; }
+.yt-card h2 { font-size: 16px; font-weight: 700; }
+.settings h2 { margin-bottom: 12px; }
+
+.st-note { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.st-note[data-kind="error"] { color: var(--bad-text); }
+.st-note[data-kind="ok"] { color: var(--ok-text); }
+.notice { padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--line); font-size: 13.5px; }
+.notice[data-kind="error"] { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-text); }
+.notice[data-kind="ok"] { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok-text); }
+.update-banner { display: grid; gap: 4px; }
+.ub-hint { font-size: 12.5px; color: var(--muted); }
+.ub-bar { height: 4px; border-radius: 999px; background: var(--accent-tint); overflow: hidden; }
+.update-banner:not([data-busy="true"]) .ub-bar { display: none; }
+.ub-bar i { display: block; height: 100%; width: 38%; border-radius: inherit; background: var(--accent); animation: ub-slide 1.4s ease-in-out infinite; }
+@keyframes ub-slide { from { transform: translateX(-100%); } to { transform: translateX(263%); } }
+@media (prefers-reduced-motion: reduce) { .ub-bar i { animation: none; width: 100%; opacity: .5; } }
+
+/* 設定步驟 */
+.connect-status { margin: 6px 0 12px; font-size: 13.5px; color: var(--warn-text); }
+.connect-status[data-ok="true"] { color: var(--ok-text); }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.step { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; }
+.step-dot { width: 22px; height: 22px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); position: relative; }
+.step[data-s="now"] .step-dot { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.step[data-s="done"] .step-dot { background: var(--ok-text); border-color: var(--ok-text); }
+.step[data-s="done"] .step-dot::after { content: ""; position: absolute; left: 6px; top: 2px; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.step[data-s="todo"] .step-body h3 { color: var(--muted); }
+.step-body { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.step-body h3 { font-size: 14.5px; font-weight: 700; }
+.step-body p { font-size: 13.5px; }
+.step-actions { display: grid; gap: 8px; justify-items: start; min-width: 0; max-width: 100%; }
+.step-ok { font-size: 13px; color: var(--ok-text); font-weight: 500; }
+.name-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 100%; }
+.name-row code { flex: 1 1 220px; min-width: 0; padding: 8px 10px; border-radius: 10px; background: var(--fill); border: 1px solid var(--line); font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+
+/* 增加影片 */
+.addc { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
+.addc .in { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 12px; background: var(--fill); border: 1px solid var(--line); color: var(--muted); }
+.addc .in:focus-within { border-color: var(--accent); background: var(--surface); }
+.addc .in input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 11px 0; font: inherit; color: var(--text); outline: none; }
+.add-note { flex-basis: 100%; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.add-note[data-kind="error"] { color: var(--bad-text); }
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; gap: 3px; background: var(--accent-tint); border-radius: 999px; }
+.segmented label { display: block; cursor: pointer; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span { display: grid; place-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; font: 500 13px var(--font); color: var(--muted); }
+.segmented input:checked + span { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 43, 102, .18); }
+.segmented input:disabled + span { opacity: .55; cursor: not-allowed; }
+.segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.addc .segmented { flex: none; }
+
+/* 下載清單 */
+.qh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.qh h2 { font-size: 15px; }
+.stats { font: 500 12px var(--mono); color: var(--muted); }
+.qh .act { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cool-chip { font: 700 12px var(--mono); padding: 4px 10px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-text); }
+.queue-empty { padding: 32px 16px; text-align: center; color: var(--muted); }
+.yt-card .qlist { padding: 6px 8px 8px; }
+.yt-card .qrow { padding: 10px; gap: 14px; }
+.yt-card > .clear-ask { margin: 8px 12px 4px; }
+.is-locked .addc, .is-locked #queue-card { opacity: .55; } /* 兩張卡也設了 inert：不能點、不能用鍵盤 */
+
+/* 設定與檢查 */
+.field { display: grid; gap: 6px; margin-bottom: 14px; min-width: 0; }
+.field-label { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--accent); }
+.slide { display: flex; align-items: center; gap: 10px; }
+.slide input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.slide output { min-width: 3.2em; text-align: right; font: 700 13px var(--mono); }
+.settings input[type="text"], .settings input[type="number"] { width: 100%; min-width: 0; padding: 8px 12px; min-height: 40px; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; }
+.settings input:disabled { opacity: .6; cursor: not-allowed; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row input { flex: 1 1 160px; }
+.suffix { display: flex; align-items: center; gap: 8px; }
+.suffix input { max-width: 140px; font-family: var(--mono); }
+.suffix span { color: var(--muted); font-size: 13px; }
+.versions { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; font-size: 13px; }
+.versions dt { color: var(--muted); }
+.versions dd { margin: 0; font-family: var(--mono); overflow-wrap: anywhere; }
+
+@media (max-width: 520px) {
+  :root { --cover-w: 92px; }
+  .yt { padding: 14px 10px 36px; }
+  .yt-card.setup, .yt-card.settings { padding: 14px; }
+  .addc .in { flex-basis: 100%; }
+  .addc .segmented { flex: 1; }
+  .addc .segmented span { padding: 0 8px; }
+  .qh .act { width: 100%; margin: 0; }
+  .qh .act .btn { flex: 1; }
+}

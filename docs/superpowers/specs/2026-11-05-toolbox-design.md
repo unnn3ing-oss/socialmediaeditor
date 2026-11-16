@@ -339,7 +339,8 @@ socialmediaeditor/
   - 舊外掛只注入自己的網址，在新站不會重複回應。
   - 新外掛**不注入**熱門新聞庫。
   - facebook.com 相關功能留到 P3，到時再設計「偵測到舊外掛就讓給舊外掛」的機制。
-- **YT 下載助手**（已知事實）：`videodownload/host/installer.py` 的 `allowed_origins` 只寫一個外掛 ID。要改成同時允許新舊兩個外掛，已裝的人重跑一次安裝程式。**這會改到 videodownload repo，P2 時另外請你確認。**
+- **YT 下載助手**（2026-11-15 定案）：videodownload 整套**複製**到 `tools/ytdl/`，不改 videodownload repo。新下載助手 `com.tbx.ytdl`（小編工具箱下載助手），`allowed_origins` 只允許本外掛；安裝資料夾 `TbxYtdl`，與舊工具並存。下載助手自動更新來源固定本 repo `main` 的 `tools/ytdl/host/`（git blob SHA 驗證）；外掛本身由核心 updater 更新。協定見 `tools/ytdl/PROTOCOL.md`。
+- **工具外掛模組**：`tool.json` 的 `ext.dir` 可帶整個資料夾（複製到 `extension/tools/<id>/`）；模組可匯出 `init(ctx)`，`ctx.push`／`ctx.onSubscribe` 推播給網頁，網頁用 `tb.ext.on(tool, cb)` 訂閱（訂閱後才開 port `tbx-push`）。
 - **固定外掛 ID**：`manifest.json` 加 `key`（比照 videodownload），每台電腦的外掛 ID 都相同，下載助手的 `allowed_origins` 才能寫死。
 - **側邊欄**（外掛 2.00 起，版面照網新快速排程）：頂列「網頁版」＋分頁「發文／狀態與更新」。發文分頁嵌入網站的 `panel.html?tool=fbpost`（單一工具外殼，提供 tbxShell、可在側邊欄輸入公司密碼，後端 `toolbox-api`）；狀態分頁有公司模式、一鍵檢測（後端／憑證／粉專／外掛橋接，嵌入頁以 postMessage 回報，只回覆固定外掛 ID）、版本更新。網新 cookie、網新後台、Rundown 都不帶過來。`host_permissions` 有網站網址，嵌入頁才能和網站共用公司憑證。
 - **版本**：從 `1.00` 開始，規則比照 QuickPatterntool（`manifest.json`、`changelog.json`）。
@@ -358,7 +359,7 @@ socialmediaeditor/
 | 自動更新 | 每小時、Chrome 啟動、打開側邊欄時檢查 GitHub；有新版時圖示顯示紅色「新」，側邊欄跳出彈窗。按「立即更新」第一次選外掛資料夾（之後記住），只寫入有變動的檔案，完成後重新載入外掛 |
 
 - `build.js` 產生的 `extension/manifest.json` 要一起提交，安裝檔和自動更新才抓得到。
-- YT 下載的**本機下載助手**仍用 videodownload 自己的安裝程式；P2 再評估是否併進同一個安裝檔。
+- YT 下載的**本機下載助手**有自己的安裝檔（`tools/ytdl/installers/`，`python3 tools/ytdl/build_installers.py` 產生）。工具箱安裝教學步驟 1 有「我也要用 YT 批量下載」勾選（預設不勾），勾了另外下載 YT 下載助手安裝檔／顯示 Mac 一行指令；YT 工具頁內也有三步驟設定。Python 測試只在 CI（`.github/workflows/ytdl-host.yml`）。
 
 ---
 
@@ -368,7 +369,7 @@ socialmediaeditor/
 |---|---|---|
 | **P0 地基** | 外殼（櫥窗、工具列、並排、取代、狀態列）、`tokens.css`、SDK 第 1 版、`registry.json`＋`tool.json`＋`build.js`、`_template`、外掛核心、後端核心（auth、assets、admin、logs、fetch、cron）與部署說明、規格卡檢查、e2e | 可操作的外殼＋一個示範工具；後端在你帳號部署成功 |
 | **P1 通用做圖工具** | 先出通用版素材設計稿（套版框、四格、表情貼圖）給你選；再搬入拼圖、尺寸、設計、浮水印、圖片套版、LINE 推播，接上公司素材，並逐一測試工具內切換功能不會清掉內容 | 六個工具可用；有密碼／沒密碼兩種畫面 |
-| **P2 外掛＋發文工具** | 網新排程（含圖床、Rundown 模組）、YT 下載、外掛模組、videodownload 安裝程式 ID 調整（另一個 repo） | 同事只要裝一個外掛 |
+| **P2 外掛＋發文工具** | YT 下載＋外掛模組（外掛 3.00）；網新排程使用者決定不做（2026-11-15）；videodownload repo 不改 | 同事只要裝一個外掛 |
 | **P3 補齊** | 側邊欄功能、facebook 相關功能（與舊外掛的重複回應處理） | 舊外掛功能都有對應 |
 
 - 舊工具分兩步接上：先「包」進來，只換外掛呼叫和素材，並確認工具內切換功能不會清掉內容；工具內部完全改用 SDK，等之後修改那個工具時再做。

@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=de7b4c9c50"
+      "entry": "tools/pattern/index.html?v=72cc969dae"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=1ff0bd16ab"
+      "entry": "tools/linepush/index.html?v=40a0a2fa76"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=a711105b0a"
+      "entry": "tools/collage/index.html?v=50005a48d4"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=af5aff3436"
+      "entry": "tools/watermark/index.html?v=0ab68a476f"
     },
     {
       "id": "resize",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=12b86a7942"
+      "entry": "tools/resize/index.html?v=fc76906311"
     },
     {
       "id": "design",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=123e464656"
+      "entry": "tools/design/index.html?v=18f2fa71bb"
     },
     {
       "id": "fbpost",
@@ -75,7 +75,21 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=88f5debb0a"
+      "entry": "tools/fbpost/index.html?v=ef21312f83"
+    },
+    {
+      "id": "ytdl",
+      "name": "YT 批量下載",
+      "group": "發文與素材",
+      "desc": "公司 YouTube／IG Reel 公開影片批量下載到本機（720p／1080p）",
+      "tier": "public",
+      "requires": [
+        "extension",
+        "helper"
+      ],
+      "icon": "tools/ytdl/icon.svg",
+      "thumb": "tools/ytdl/thumb.svg",
+      "entry": "tools/ytdl/index.html?v=94c927d700"
     }
   ]
 }

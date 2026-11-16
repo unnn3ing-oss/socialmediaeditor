@@ -54,6 +54,7 @@ function setupBridge() {
   setGlobal('location', { origin: SITE });
   setGlobal('chrome', {
     runtime: {
+      id: 'self',
       lastError: null,
       getManifest: () => ({ version: '1.00' }),
       sendMessage: (msg, cb) => { sent.push(msg); respond(msg, cb); },
@@ -114,6 +115,7 @@ function setupBackground() {
       id: 'self',
       getManifest: () => ({ version: '1.0', version_name: '1.00', name: '小編工具箱' }),
       onMessage: { addListener: (fn) => { state.onMessage = fn; } },
+      onConnect: { addListener: (fn) => { state.onConnect = fn; } },
       onInstalled: { addListener: noop },
       onStartup: { addListener: noop },
     },
@@ -156,6 +158,58 @@ test('background：只接受自己的內容腳本；onMessage 回傳非同步結
       assert.equal(keep, true);
     });
     assert.equal(got.ok, true);
+  } finally { delGlobal('chrome', 'self'); }
+});
+
+test('bridge：subscribe 後才開推播 port，背景推來的轉成 type=push；外掛失效時回 ok:false', async () => {
+  const h = setupBridge();
+  const ports = [];
+  chrome.runtime.connect = ({ name }) => {
+    const port = { name, msg: [], disc: [], onMessage: { addListener: (f) => port.msg.push(f) }, onDisconnect: { addListener: (f) => port.disc.push(f) }, disconnect() {} };
+    ports.push(port);
+    return port;
+  };
+  try {
+    await import(url('extension/core/bridge.js') + '&push');
+    assert.equal(ports.length, 0);
+    const fire = (data) => h.listeners[0]({ source: h.win, origin: SITE, data });
+    fire({ source: 'tbx-web', type: 'subscribe' });
+    assert.equal(ports.length, 1);
+    assert.equal(ports[0].name, 'tbx-push');
+    ports[0].msg[0]({ tool: 'ytdl', data: { n: 1 } });
+    assert.deepEqual(h.posted.at(-1).data, { source: 'tbx-ext', type: 'push', tool: 'ytdl', data: { n: 1 } });
+    delete chrome.runtime.id;   // 外掛重新載入：這份內容腳本失效
+    fire({ source: 'tbx-web', nonce: 'q', op: 'ping' });
+    assert.equal(h.posted.find((p) => p.data.nonce === 'q').data.ok, false);
+    assert.equal(h.sent.length, 0);
+  } finally { delGlobal('window', 'location', 'chrome'); }
+});
+
+test('background：工具 init(ctx) 的 push 只送到 tbx-push port；onSubscribe 在新連線時送快照；別的 port 斷開', async () => {
+  const st = setupBackground();
+  try {
+    const bg = await import(url('extension/core/background.js') + '&push');
+    const mk = (name, id) => {
+      const p = { name, sender: { id }, posted: [], closed: false, onDisconnect: { addListener() {} } };
+      p.postMessage = (m) => p.posted.push(m);
+      p.disconnect = () => { p.closed = true; };
+      return p;
+    };
+    const other = mk('other', 'self');
+    st.onConnect(other);
+    assert.equal(other.closed, true);
+    const evil = mk('tbx-push', 'evil');
+    st.onConnect(evil);
+    assert.equal(evil.closed, true);
+    const good = mk('tbx-push', 'self');
+    st.onConnect(good);
+    // ytdl 的 onSubscribe：新連線先送連線狀態快照
+    assert.equal(good.posted[0].tool, 'ytdl');
+    assert.equal(good.posted[0].data.type, 'status');
+    bg.push('ytdl', { a: 1 });
+    assert.deepEqual(good.posted.at(-1), { tool: 'ytdl', data: { a: 1 } });
+    assert.deepEqual(evil.posted, []);
+    assert.deepEqual(other.posted, []);
   } finally { delGlobal('chrome', 'self'); }
 });
 

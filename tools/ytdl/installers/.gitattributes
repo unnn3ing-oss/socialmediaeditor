@@ -1,0 +1,2 @@
+# 產生物：build_installers.py 輸出，逐位元組比對（.cmd 刻意為 CRLF，zip 為二進位），不要轉換換行或當文字比對。
+* -text -diff

@@ -1,0 +1,127 @@
+# YT 下載助手（tools/ytdl/host，Python）與安裝檔產生器的 CI。
+#
+# main 是更新來源：下載助手會從 main 的 tools/ytdl/host/ 自己更新，網站與 Mac 一行指令也從這裡取安裝檔。
+# 所以下面每個 job 都建議設成 main 分支保護的必要檢查。job 名稱就是檢查名稱：
+#
+#   linux (3.9／3.12)  pytest（host/tests 與 tests）。3.9 是 Mac 內建的 Python，3.12 是最新支援版。
+#   build-fresh        重跑 build_installers.py，已提交的 installers/ 必須和剛產生的一樣
+#                      （安裝檔內嵌 host/*.py，忘了重跑就會發出舊程式）。
+#   windows            pytest、Windows 安裝檔的 PowerShell 解析、Chrome 登錄機碼來回測試。
+#   macos              pytest。
+#
+# CI 證明不了的（真正的 Windows／Mac 電腦、Chrome、防毒、公司代理）見 tools/ytdl/HOST.md。
+
+name: ytdl-host
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "tools/ytdl/host/**"
+      - "tools/ytdl/tests/**"
+      - "tools/ytdl/build_installers.py"
+      - "tools/ytdl/installer-templates/**"
+      - "tools/ytdl/installers/**"
+      - "tools/ytdl/pytest.ini"
+      - "tools/ytdl/requirements-dev.txt"
+      - "extension/core/manifest.base.json"
+      - ".github/workflows/ytdl-host.yml"
+  pull_request:
+    paths:
+      - "tools/ytdl/host/**"
+      - "tools/ytdl/tests/**"
+      - "tools/ytdl/build_installers.py"
+      - "tools/ytdl/installer-templates/**"
+      - "tools/ytdl/installers/**"
+      - "tools/ytdl/pytest.ini"
+      - "tools/ytdl/requirements-dev.txt"
+      - "extension/core/manifest.base.json"
+      - ".github/workflows/ytdl-host.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ytdl-host-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: tools/ytdl
+
+jobs:
+  linux:
+    name: linux (${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python3 -m pip install -r requirements-dev.txt
+      - run: python3 -m pytest -q
+
+  build-fresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 重新產生安裝檔
+        run: python3 build_installers.py
+      - name: 已提交的安裝檔必須和剛產生的一樣
+        run: |
+          if ! git diff --exit-code --stat -- installers || [ -n "$(git status --porcelain -- installers)" ]; then
+            echo "::error title=安裝檔過期::tools/ytdl/installers 和 build_installers.py 產生的不同。請執行 'python3 tools/ytdl/build_installers.py' 並提交 tools/ytdl/installers（安裝檔內嵌 host/*.py）。"
+            exit 1
+          fi
+          echo "installers 是最新的"
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/ytdl
+    steps:
+      - name: 不讓 git 轉換換行（由 .gitattributes 決定）
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Python 測試
+        run: python -m pytest -q -rfs --tb=short host/tests tests  # -rf：失敗的測試名稱列在最後幾行
+      - name: Windows 安裝檔的 PowerShell 必須能解析（不能被略過）
+        run: |
+          code=0
+          python -m pytest -q -rs "tests/test_build.py::test_windows_installer_script_parses" > pwsh-parse.log 2>&1 || code=$?
+          cat pwsh-parse.log
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          if grep -q "SKIPPED" pwsh-parse.log; then
+            echo "::error::PowerShell 解析測試被略過（有裝 pwsh 嗎？）"
+            exit 1
+          fi
+      - name: 登錄下載助手會寫入真正的登錄機碼，doctor 讀得回來
+        run: python tests/win_registry_smoke.py
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install -r requirements-dev.txt
+      - run: python3 -m pytest -q host/tests

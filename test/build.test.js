@@ -117,3 +117,46 @@ test('外掛版號：Chrome 用的 version 去掉開頭的 0，version_name 保�
   assert.equal(m.version, chromeVersion(base.version));
   for (const part of m.version.split('.')) assert.ok(part === '0' || !part.startsWith('0'), m.version);
 });
+
+test('ext.dir：整個資料夾複製進外掛，入口在資料夾裡，移除後連資料夾一起清掉', async () => {
+  const root = tmpRepo();
+  const t = readJson(root, 'tools/sample/tool.json');
+  t.ext = { permissions: ['downloads'], hosts: [], dir: 'ext', background: 'ext/index.js' };
+  writeJson(root, 'tools/sample/tool.json', t);
+  fs.mkdirSync(path.join(root, 'tools/sample/ext/lib'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'tools/sample/ext/index.js'), "export { a } from './lib/a.js';\n");
+  fs.writeFileSync(path.join(root, 'tools/sample/ext/lib/a.js'), 'export const a = () => ({ ok: true });\n');
+  assert.deepEqual((await build(root)).errors, []);
+  assert.ok(fs.existsSync(path.join(root, 'extension/tools/sample/index.js')));
+  assert.ok(fs.existsSync(path.join(root, 'extension/tools/sample/lib/a.js')));
+  assert.match(fs.readFileSync(path.join(root, 'extension/routes.gen.js'), 'utf8'), /from '\.\/tools\/sample\/index\.js'/);
+  assert.deepEqual((await build(root, { check: true })).errors, []);
+  // 資料夾裡多一個舊檔 → check 抓得到、build 會刪
+  fs.writeFileSync(path.join(root, 'extension/tools/sample/lib/old.js'), '');
+  assert.ok((await build(root, { check: true })).errors.some((e) => e.includes('lib/old.js')));
+  writeJson(root, 'tools/registry.json', []);
+  assert.deepEqual((await build(root)).errors, []);
+  assert.equal(fs.existsSync(path.join(root, 'extension/tools/sample')), false);
+});
+
+test('ext.dir：background 不在資料夾裡要報錯', async () => {
+  const root = tmpRepo();
+  const t = readJson(root, 'tools/sample/tool.json');
+  fs.mkdirSync(path.join(root, 'tools/sample/ext'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'tools/sample/other.js'), '');
+  t.ext = { permissions: [], hosts: [], dir: 'ext', background: 'other.js' };
+  writeJson(root, 'tools/sample/tool.json', t);
+  const { errors } = await build(root);
+  assert.ok(errors.some((e) => e.includes('ext.dir')), JSON.stringify(errors));
+});
+
+test('entry 版本號：Python 快取（__pycache__、.pyc）不影響', async () => {
+  const root = tmpRepo();
+  await build(root);
+  const before = readJson(root, 'shell/catalog.json').tools[0].entry;
+  fs.mkdirSync(path.join(root, 'tools/sample/__pycache__'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'tools/sample/__pycache__/x.cpython-313.pyc'), 'x');
+  fs.writeFileSync(path.join(root, 'tools/sample/y.pyc'), 'y');
+  await build(root);
+  assert.equal(readJson(root, 'shell/catalog.json').tools[0].entry, before);
+});

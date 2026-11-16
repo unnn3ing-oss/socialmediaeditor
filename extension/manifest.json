@@ -1,17 +1,27 @@
 {
   "manifest_version": 3,
   "name": "小編工具箱",
-  "version": "2.0",
+  "version": "3.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqt6bAZTDToOtnjvNORMB9tWa915ttflwIQYBgGy8bFfV6ZBOVvHmlx8+mC2fwJjoduvIuAK2qBlHbX3lgEovTfkIBOzDxgRAiUrD7Qvg7mCch1iV/wsEZ/ZHGITI1DlKaEfuDobnqAWeGAuKvDH5xkCg0yKp3hOMdulZ2BIrxnLoXXVE1Dum+PTgBuucejrb3j3GE/4uRVTwJfS2hmhToUFMGDpaTB3fpK7JfFow/iYABDIAezoz+dUM7bcQ5DL8czo6PUjMIVuD6YWrXViMjJuW5Ho/4xuJR7aaduM9vbUhZjGdkUct82I8XF8yt9bxiqRBYR5iqWxLCbtCDEKlSwIDAQAB",
   "permissions": [
     "alarms",
+    "downloads",
+    "nativeMessaging",
+    "scripting",
     "sidePanel",
     "storage"
   ],
   "host_permissions": [
     "https://api.github.com/*",
+    "https://i.ytimg.com/*",
+    "https://instagram.com/*",
+    "https://m.youtube.com/*",
+    "https://music.youtube.com/*",
     "https://raw.githubusercontent.com/*",
-    "https://unnn3ing-oss.github.io/*"
+    "https://unnn3ing-oss.github.io/*",
+    "https://www.instagram.com/*",
+    "https://www.youtube.com/*",
+    "https://youtu.be/*"
   ],
   "background": {
     "service_worker": "core/background.js",
@@ -43,5 +53,5 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "version_name": "2.00"
+  "version_name": "3.00"
 }

@@ -33,6 +33,12 @@ export function validateTool(tool, ctx) {
     const e = tool.ext;
     if (!e || typeof e !== 'object' || !isStrArr(e.permissions) || !isStrArr(e.hosts) || !isStr(e.background)) {
       errs.push('ext 必須是 null 或 { permissions: [], hosts: [], background: "ext.js" }');
+    } else if (e.dir !== undefined) {
+      // 帶整個資料夾：dir 底下的檔案全部複製進外掛，background 是資料夾裡的入口
+      if (!isStr(e.dir) || !/^[a-z0-9_-]+$/i.test(e.dir)) errs.push('ext.dir 必須是工具資料夾裡的一個資料夾名稱（例如 "ext"）');
+      else if (!ctx.folderExists(e.dir)) errs.push(`ext.dir 指定的資料夾「${e.dir}」不存在`);
+      else if (!e.background.startsWith(e.dir + '/')) errs.push(`ext.background 必須在 ext.dir「${e.dir}」裡面`);
+      else if (!ctx.fileExists(e.background)) errs.push(`ext.background 指定的檔案「${e.background}」不存在`);
     } else if (!ctx.fileExists(e.background)) {
       errs.push(`ext.background 指定的檔案「${e.background}」不存在`);
     }

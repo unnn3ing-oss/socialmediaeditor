@@ -72,6 +72,7 @@ window.tbxShell = {
   company: () => ({ ...companyState }),
   onCompany(fn) { companySubs.add(fn); return () => companySubs.delete(fn); },
   focusTool: (id) => { if (byId(id)) set(L.openSingle(state, id)); },
+  openInstall: () => openInstall(),
   // 內部掛點：給 company.js 等外殼模組使用，不屬於 SDK。
   _internal: {
     panes,
