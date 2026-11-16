@@ -4,6 +4,7 @@ import { fbAccess } from './access.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, FbSetupError } from './pages.js';
 import { GraphError } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
+import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
 export function fbFail(request, env, e) {
@@ -36,6 +37,34 @@ route('POST', /^\/fb\/post$/, async (request, env) => {
   const form = parsePostForm(fd);
   if (!form) return fail(request, env, 'bad_request');
   return ok(request, env, { results: await createPosts(env, form) });
+});
+
+route('GET', /^\/fb\/scheduled$/, async (request, env) => {
+  const page = new URL(request.url).searchParams.get('page') || '';
+  const token = await pageToken(env, page);
+  if (!token) return fail(request, env, 'bad_request');
+  return ok(request, env, await listScheduled(env, page, token));
+});
+route('GET', /^\/fb\/published$/, async (request, env) => {
+  const q = new URL(request.url).searchParams;
+  const page = q.get('page') || '';
+  const after = q.get('after') || '';
+  const token = await pageToken(env, page);
+  if (!token || after.length > 500) return fail(request, env, 'bad_request');
+  return ok(request, env, await listPublished(env, page, token, after));
+});
+route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete)$/, async (request, env, ctx, m) => {
+  const body = await readJsonBody(request, 4096);
+  if (!body) return fail(request, env, 'bad_request');
+  if (m[2] === 'reschedule' && !timeOk(body.at)) return fail(request, env, 'fb_bad_time');   // 先檢查時間，不碰臉書
+  const token = await pageToken(env, body.page);
+  if (!token) return fail(request, env, 'bad_request');
+  if (m[2] === 'reschedule') {
+    await reschedule(env, m[1], token, body.at);
+  } else {
+    await removePost(env, m[1], token);
+  }
+  return ok(request, env, { ok: true });
 });
 
 export async function handleFb(request, env, ctx, path) {

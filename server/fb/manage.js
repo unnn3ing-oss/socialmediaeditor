@@ -1,0 +1,50 @@
+// 已排程／已發佈列表，改時間、取消、刪除（一律以臉書為準，按刷新才查）
+import { graph } from './graph.js';
+import { pageTokens } from './pages.js';
+import { timeOk } from './post.js';
+import { retimeTimer, cancelTimer, timerStatus } from './timer.js';
+
+const toSec = (v) => (typeof v === 'number' ? v : Number.isFinite(Date.parse(v)) ? Math.floor(Date.parse(v) / 1000) : null);
+
+// 粉專必須是 token 管得到的；不是回 null
+export async function pageToken(env, pageId) {
+  if (typeof pageId !== 'string' || !/^\d{1,30}$/.test(pageId)) return null;
+  const p = (await pageTokens(env)).get(pageId);
+  return p ? p.token : null;
+}
+
+async function commentState(env, id) {
+  if (!env.FB_TIMER) return 'none';
+  try { return (await timerStatus(env, id)).status || 'none'; } catch { return 'none'; }
+}
+
+export async function listScheduled(env, page, token) {
+  const d = await graph(env, 'GET', '/' + page + '/scheduled_posts', { fields: 'id,message,scheduled_publish_time,full_picture,created_time', limit: 50 }, token);
+  const out = [];
+  for (const p of d.data || []) {
+    out.push({ id: String(p.id), message: p.message || '', at: toSec(p.scheduled_publish_time), picture: p.full_picture || null, comment: await commentState(env, String(p.id)) });
+  }
+  return out;
+}
+
+export async function listPublished(env, page, token, after) {
+  const d = await graph(env, 'GET', '/' + page + '/published_posts', { fields: 'id,message,created_time,full_picture,permalink_url', limit: 25, after: after || undefined }, token);
+  const items = [];
+  for (const p of d.data || []) {
+    items.push({ id: String(p.id), message: p.message || '', time: p.created_time || null, picture: p.full_picture || null, url: p.permalink_url || null, comment: await commentState(env, String(p.id)) });
+  }
+  const next = d.paging && d.paging.next && d.paging.cursors ? d.paging.cursors.after || null : null;
+  return { items, next };
+}
+
+export async function reschedule(env, id, token, at) {
+  await graph(env, 'POST', '/' + id, { scheduled_publish_time: at }, token);
+  if (env.FB_TIMER) await retimeTimer(env, id, at);   // 沒有等待中的留言時計時器回 ok:false，忽略
+}
+
+export async function removePost(env, id, token) {
+  await graph(env, 'DELETE', '/' + id, {}, token);
+  if (env.FB_TIMER) await cancelTimer(env, id);
+}
+
+export { timeOk };
