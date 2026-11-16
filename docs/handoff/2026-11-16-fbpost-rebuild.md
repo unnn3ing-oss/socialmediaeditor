@@ -87,3 +87,9 @@ token 無效時管理頁仍列五項缺權限；Safari 解析 `+0000` 時間；�
 
 ## 第 2 步的已知未處理（審查 Minor）
 - 計時器正在留言時剛好按取消，極小機率之後還會再試幾次才標失敗（留言送去已刪貼文會失敗，不會留出去）。
+
+## 部署後修正（2026-11-16，併入 main 後）
+- 實測：`/me/accounts` 回空（粉專經企業管理平台指派），但 token 精細範圍有 6 個粉專，`/{粉專ID}?fields=access_token` 拿得到粉專 token。
+- `pages.js`：`/me/accounts` 後再查 `debug_token` 精細範圍（優先 `pages_manage_posts`，最多 50 個），沒列到的逐一 `/{id}` 換粉專 token；拿不到全部時記 `fb:accounts:none` 60 秒（「重新讀取粉專」清掉）；`expires_at` 0 回 0（管理頁顯示永不過期）。
+- `rundown.js`：網址與金鑰去前後空白、接受 Workspace `/a/macros/<網域>/s/<ID>/exec`、金鑰只要非空；`GET /admin/rundown` 多回 `state`（ok／missing／url／token），管理頁顯示細分原因。
+- npm test 606、admin e2e 11、build --check、獨立審查（1 Important 已修：空結果短暫快取）。後端需重新部署。

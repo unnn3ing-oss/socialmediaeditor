@@ -113,5 +113,56 @@ test('/me/accounts 回空：不快取，回 fb_no_pages', async (t) => {
   const b = await r1.json();
   assert.equal(b.code, 'fb_no_pages'); assert.match(b.error, /權限/);
   const r2 = await call(env, '/fb/pages', { headers: h });
-  assert.equal(r2.status, 200, '空結果沒被快取，第二次重抓');
+  assert.equal(r2.status, 503, '60 秒內不重查');
+  assert.equal(n, 1);
+  await call(env, '/admin/fb/refresh', { method: 'POST', headers: await auth(env, 'admin') });
+  const r3 = await call(env, '/fb/pages', { headers: h });
+  assert.equal(r3.status, 200, '重新讀取後清掉空結果記錄');
+});
+
+test('/me/accounts 回空：改用精細範圍的粉專 ID 換粉專 token（去重、拿不到的略過）', async (t) => {
+  const f = installFetch({
+    'GET /me/accounts': () => ({ data: [{ id: '111', name: 'TVBS 新聞', access_token: 'PT111' }] }),
+    'GET /debug_token': () => ({ data: { expires_at: 0, granular_scopes: [
+      { scope: 'pages_show_list', target_ids: ['111', '222', '333', '444'] },
+      { scope: 'pages_manage_posts', target_ids: ['111', '222', '444'] }] } }),
+    'GET /222': () => ({ id: '222', name: '少康戰情室', access_token: 'PT222' }),
+    'GET /444': () => gErr(10, 403, 'no permission')
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const r = await call(env, '/fb/pages', { headers: await auth(env, 'company', true) });
+  assert.equal(r.status, 200);
+  const { data } = await r.json();
+  assert.deepEqual(data.map((p) => p.id), ['111', '222'], '只取有發文權限的；111 不重複；444 拿不到略過');
+  assert.ok(!f.calls.some((c) => c.path === '/111'), '/me/accounts 已有的不再查');
+  assert.ok(!f.calls.some((c) => c.path === '/333'), '沒有 pages_manage_posts 的不查');
+});
+
+test('/me/accounts 完全空、精細範圍有粉專 → 照樣拿到；token 失效 → fb_token', async (t) => {
+  const f = installFetch({
+    'GET /me/accounts': () => ({ data: [] }),
+    'GET /debug_token': () => ({ data: { granular_scopes: [{ scope: 'pages_manage_posts', target_ids: ['259369087577045'] }] } }),
+    'GET /259369087577045': () => ({ id: '259369087577045', name: 'TVBS 少康戰情室', access_token: 'PTSK' })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const r = await call(env, '/fb/pages', { headers: await auth(env, 'company', true) });
+  assert.equal(r.status, 200);
+  assert.deepEqual((await r.json()).data.map((p) => p.short), ['TVBS 少康戰情室']);
+  f.restore();
+  const g = installFetch({ 'GET /me/accounts': () => ({ data: [] }), 'GET /debug_token': () => gErr(190, 400, 'expired') }); t.after(g.restore);
+  const env2 = fbEnv();
+  const r2 = await call(env2, '/fb/pages', { headers: await auth(env2, 'company', true) });
+  assert.equal((await r2.json()).code, 'fb_token');
+});
+
+test('GET /admin/fb/status：expires_at 0＝永不過期（回 0）', async (t) => {
+  const f = installFetch({
+    'GET /me/accounts': () => ACCOUNTS,
+    'GET /me/permissions': () => ({ data: [] }),
+    'GET /debug_token': () => ({ data: { expires_at: 0 } })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const { data } = await (await call(env, '/admin/fb/status', { headers: await auth(env, 'admin') })).json();
+  assert.equal(data.expires, 0);
+  assert.equal(data.pages, 3);
 });

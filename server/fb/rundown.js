@@ -1,10 +1,21 @@
 // 排入 Rundown：驗格式後補 RUNDOWN_TOKEN 轉給 FB RUNDOWN 的 Apps Script（gas/rundown.gs，在 -schedulenewnet，不改）
 import { ok, fail } from '../core/http.js';
 
-const URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+// 個人帳號 …/macros/s/<ID>/exec；Google Workspace 帳號 …/a/macros/<網域>/s/<ID>/exec
+const URL_RE = /^https:\/\/script\.google\.com\/(?:a\/macros\/[A-Za-z0-9.-]+\/|macros\/)s\/[\w-]+\/exec$/;
 const PAGES = ['news', 'ent', 'shaokang', 'intl'];
 
-export const rundownReady = (env) => URL_RE.test(env.RUNDOWN_URL || '') && typeof env.RUNDOWN_TOKEN === 'string' && env.RUNDOWN_TOKEN.length >= 12;
+const rdUrl = (env) => String(env.RUNDOWN_URL || '').trim();
+const rdToken = (env) => String(env.RUNDOWN_TOKEN || '').trim();
+// 設定狀態：'ok'｜'missing'（兩個都沒設）｜'url'（網址沒設或格式不對）｜'token'（金鑰空白）；不回傳值本身
+export function rundownState(env) {
+  const u = rdUrl(env), t = rdToken(env);
+  if (!u && !t) return 'missing';
+  if (!URL_RE.test(u)) return 'url';
+  if (!t) return 'token';
+  return 'ok';
+}
+export const rundownReady = (env) => rundownState(env) === 'ok';
 
 // 只留格式正確的欄位；不合法回 null
 export function rundownBody(body) {
@@ -24,7 +35,7 @@ async function forward(env, body) {
   let j = null;
   try {
     // Apps Script 會 302 到 googleusercontent 再回 JSON
-    const r = await fetch(env.RUNDOWN_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: env.RUNDOWN_TOKEN, ...body }) });
+    const r = await fetch(rdUrl(env), { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ token: rdToken(env), ...body }) });
     j = await r.json().catch(() => null);
   } catch { j = null; }
   if (!j || typeof j !== 'object') return { code: 'rundown_failed', error: 'Rundown 的 Apps Script 沒有回 JSON（確認部署的「誰可以存取」是「所有人」）。' };
@@ -43,7 +54,7 @@ export async function rundownAdd(request, env, body) {
 
 // 管理頁（已通過管理憑證）
 export async function adminRundown(request, env, path) {
-  if (path === '/admin/rundown' && request.method === 'GET') return ok(request, env, { configured: rundownReady(env) });
+  if (path === '/admin/rundown' && request.method === 'GET') { const state = rundownState(env); return ok(request, env, { configured: state === 'ok', state }); }
   if (path === '/admin/rundown/ping' && request.method === 'POST') {
     if (!rundownReady(env)) return fail(request, env, 'rundown_off');
     const r = await forward(env, { action: 'ping' });

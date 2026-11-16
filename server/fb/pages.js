@@ -1,8 +1,10 @@
-// 粉專清單：FB_USER_TOKEN → /me/accounts 取各粉專 token（KV 快取 1 小時）＋ D1 fb_pages 的顯示設定
+// 粉專清單：FB_USER_TOKEN → /me/accounts（不足時用精細範圍逐一查）取各粉專 token（KV 快取 1 小時）＋ D1 fb_pages 的顯示設定
 import { graph, isTokenError } from './graph.js';
 
 const CACHE_KEY = 'fb:accounts';
 const CACHE_TTL = 3600;
+const NONE_KEY = 'fb:accounts:none';
+const NONE_TTL = 60;
 export const RD_CODES = ['', 'news', 'ent', 'shaokang', 'intl'];
 export const NEEDED_PERMS = ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content'];
 
@@ -10,12 +12,27 @@ export class FbSetupError extends Error {
   constructor(code, message) { super(message || code); this.code = code; }
 }
 
+// 精細範圍（授權時勾選的粉專）裡有發文權限的粉專 ID；讀不到回 []
+const MAX_GRANULAR = 50;
+async function granularPageIds(env) {
+  const d = await graph(env, 'GET', '/debug_token', { input_token: env.FB_USER_TOKEN }, env.FB_USER_TOKEN);
+  const scopes = (d && d.data && Array.isArray(d.data.granular_scopes)) ? d.data.granular_scopes : [];
+  const pick = (name) => { const g = scopes.find((x) => x && x.scope === name); return g && Array.isArray(g.target_ids) ? g.target_ids.map(String) : []; };
+  const ids = pick('pages_manage_posts');
+  return [...new Set(ids.length ? ids : pick('pages_show_list'))].filter((id) => /^\d{1,30}$/.test(id)).slice(0, MAX_GRANULAR);
+}
+
 // 取各粉專 { id, name, token }；沒設 token → fb_off；token 壞了 → fb_token
+// 先走 /me/accounts，再查一次 debug_token；精細範圍裡 /me/accounts 沒列到的（例：從企業管理平台指派的粉專，/me/accounts 回空），
+// 改用精細範圍的粉專 ID 逐一查 /{id}?fields=name,access_token 換粉專 token
 export async function pageTokens(env) {
   if (!env.FB_USER_TOKEN) throw new FbSetupError('fb_off');
   let list = null;
   try { list = env.CACHE ? await env.CACHE.get(CACHE_KEY, 'json') : null; } catch { list = null; }
   if (!Array.isArray(list)) {
+    let none = null;
+    try { none = env.CACHE ? await env.CACHE.get(NONE_KEY) : null; } catch { none = null; }
+    if (none) throw new FbSetupError('fb_no_pages');   // 剛查過是空的：60 秒內不再逐頁查，避免限流
     list = [];
     let after;
     try {
@@ -29,13 +46,26 @@ export async function pageTokens(env) {
       if (isTokenError(e)) throw new FbSetupError('fb_token', e.message);
       throw e;
     }
-    if (!list.length) throw new FbSetupError('fb_no_pages');   // 空的不快取，補權限後馬上生效
+    let ids = [];
+    try { ids = await granularPageIds(env); } catch (e) { if (isTokenError(e)) throw new FbSetupError('fb_token', e.message); ids = []; }
+    const have = new Set(list.map((p) => p.id));
+    for (const id of ids) {
+      if (have.has(id)) continue;
+      try {
+        const p = await graph(env, 'GET', '/' + id, { fields: 'id,name,access_token' }, env.FB_USER_TOKEN);
+        if (p && p.access_token) { list.push({ id, name: String(p.name || id), token: p.access_token }); have.add(id); }
+      } catch (e) { if (isTokenError(e)) throw new FbSetupError('fb_token', e.message); }   // 單一粉專拿不到就略過
+    }
+    if (!list.length) {   // 空的只記 60 秒（補權限後很快生效；「重新讀取粉專」會清掉）
+      if (env.CACHE) { try { await env.CACHE.put(NONE_KEY, '1', { expirationTtl: NONE_TTL }); } catch { /* 記不了就算了 */ } }
+      throw new FbSetupError('fb_no_pages');
+    }
     if (env.CACHE) await env.CACHE.put(CACHE_KEY, JSON.stringify(list), { expirationTtl: CACHE_TTL });
   }
   return new Map(list.map((p) => [p.id, p]));
 }
 
-export async function clearPageCache(env) { if (env.CACHE) await env.CACHE.delete(CACHE_KEY); }
+export async function clearPageCache(env) { if (env.CACHE) { await env.CACHE.delete(CACHE_KEY); await env.CACHE.delete(NONE_KEY); } }
 
 async function settings(env) {
   const { results } = await env.DB.prepare('SELECT id, short, utm, rd, ord, show FROM fb_pages').all();
@@ -103,8 +133,9 @@ export async function tokenStatus(env) {
   if (valid) {
     try {
       const d = await graph(env, 'GET', '/debug_token', { input_token: env.FB_USER_TOKEN }, env.FB_USER_TOKEN);
-      const exp = d && d.data && Number(d.data.expires_at);
-      expires = exp > 0 ? exp : null;
+      const raw = d && d.data ? d.data.expires_at : undefined;
+      const exp = Number(raw);
+      expires = raw === undefined || raw === null || !Number.isFinite(exp) ? null : exp;   // 0＝永不過期
     } catch { expires = null; }
     try { pages = (await pageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; else if (e.code !== 'fb_no_pages') throw e; }
   }

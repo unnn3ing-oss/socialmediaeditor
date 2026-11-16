@@ -168,7 +168,7 @@ npx wrangler deploy
    ```
 
    - token 需要的權限：`pages_show_list`、`pages_manage_posts`、`pages_read_engagement`、`pages_manage_engagement`、`pages_read_user_content`（管理頁「臉書連線」會列出缺少的）。
-   - `RUNDOWN_URL`＝FB RUNDOWN 試算表 Apps Script 的 `/exec` 網址；`RUNDOWN_TOKEN`＝同一支 Apps Script 指令碼屬性 `TOKEN`（至少 12 字）。
+   - `RUNDOWN_URL`＝FB RUNDOWN 試算表 Apps Script 的 `/exec` 網址；`RUNDOWN_TOKEN`＝同一支 Apps Script 指令碼屬性 `TOKEN`（前後空白會自動去掉）。
 
 3. **本機 `server/wrangler.toml` 加留言計時器**（repo 版已有，照抄到本機那份）。公司電腦已有的 `v1`、`v2` 兩段 `[[migrations]]` **保留**，`v3` 接在後面：
 

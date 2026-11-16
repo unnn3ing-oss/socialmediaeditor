@@ -64,10 +64,23 @@ test('未設定或網址不對 → rundown_off；Apps Script 錯誤 → rundown_
 test('管理頁：GET /admin/rundown 不回網址；ping 只給管理憑證', async (t) => {
   const { f, h, call } = await setup(t, () => ({ ok: true, title: 'FB RUNDOWN', sheets: ['2026/11'] }));
   const s = await call('/admin/rundown', await h('admin'));
-  assert.deepEqual(s.body.data, { configured: true });
+  assert.deepEqual(s.body.data, { configured: true, state: 'ok' });
   assert.ok(!JSON.stringify(s.body).includes('script.google'));
   assert.equal((await call('/admin/rundown/ping', await h('company', true), {})).status, 401);
   const p = await call('/admin/rundown/ping', await h('admin'), {});
   assert.deepEqual(p.body.data, { title: 'FB RUNDOWN', sheets: ['2026/11'] });
   assert.deepEqual(f.calls[0].body, { token: 'rd-token-123456', action: 'ping' });
+});
+
+test('設定檢查：Workspace 網址可用、前後空白去掉、金鑰不限長度；狀態細分不回傳值', async () => {
+  const { rundownState } = await import('../../server/fb/rundown.js');
+  const U = 'https://script.google.com/macros/s/AKfy-123_x/exec';
+  assert.equal(rundownState({}), 'missing');
+  assert.equal(rundownState({ RUNDOWN_URL: U, RUNDOWN_TOKEN: 'abc' }), 'ok');
+  assert.equal(rundownState({ RUNDOWN_URL: '  ' + U + '\n', RUNDOWN_TOKEN: ' abc\n' }), 'ok');
+  assert.equal(rundownState({ RUNDOWN_URL: 'https://script.google.com/a/macros/tvbs.com.tw/s/AKfy123/exec', RUNDOWN_TOKEN: 'k' }), 'ok');
+  assert.equal(rundownState({ RUNDOWN_URL: U + '?x=1', RUNDOWN_TOKEN: 'k' }), 'url');
+  assert.equal(rundownState({ RUNDOWN_URL: 'https://evil.example/macros/s/a/exec', RUNDOWN_TOKEN: 'k' }), 'url');
+  assert.equal(rundownState({ RUNDOWN_TOKEN: 'k' }), 'url');
+  assert.equal(rundownState({ RUNDOWN_URL: U, RUNDOWN_TOKEN: '   ' }), 'token');
 });

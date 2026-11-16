@@ -129,7 +129,7 @@ if (window.top !== window.self) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
       if (!d.configured) { $('fbState').textContent = '狀態：後端尚未設定 FB_USER_TOKEN'; $('fbState').className = 'fb-state off'; return; }
-      $('fbState').textContent = '狀態：' + (d.valid ? '連線正常' : 'token 無效，請重新授權') + '；' + fmtExp(d.expires) + '；粉專 ' + (d.pages || 0) + ' 個';
+      $('fbState').textContent = '狀態：' + (d.valid ? '連線正常' : 'token 無效，請重新授權') + '；' + fmtExp(d.expires) + '；粉專 ' + (d.pages || 0) + ' 個' + (d.valid && !d.pages ? '（token 讀不到可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts）' : '');
       $('fbState').className = 'fb-state ' + (d.valid ? 'on' : 'off');
       (d.missing || []).forEach(function (m) { var li = document.createElement('li'); li.textContent = '缺少權限：' + m; ul.appendChild(li); });
       ul.hidden = !(d.missing && d.missing.length);
@@ -293,7 +293,8 @@ if (window.top !== window.self) {
     rdLoaded = true;
     api('/admin/rundown').then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      $('rdState').textContent = res.data.configured ? '狀態：已設定' : '狀態：尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN';
+      var RD_STATE = { missing: '狀態：尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN', url: '狀態：RUNDOWN_URL 沒設定或格式不對（要是 https://script.google.com/…/exec）', token: '狀態：RUNDOWN_TOKEN 是空的' };
+      $('rdState').textContent = res.data.configured ? '狀態：已設定' : (RD_STATE[res.data.state] || RD_STATE.missing);
       $('rdState').className = 'fb-state ' + (res.data.configured ? 'on' : 'off');
     }).catch(function () { say($('rdMsg'), '讀取設定狀態失敗。', 'err'); });
   }
