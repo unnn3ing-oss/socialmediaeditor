@@ -30,5 +30,7 @@
 ## 部署後使用者要做
 - 後端重新部署；D1 DROP 三張表、`wrangler secret delete` 五個（指令見 docs/deploy.md 步驟 6-2）
 
+- [x] 2026-11-16 使用者已部署（加 migration v1→v2 刪 CommentHub）、DROP D1 舊表、刪 Secrets
+
 ## 注意事項
 - repo `wrangler.toml` 沒綁 Durable Object，移除 `CommentHub` 不需 migration（使用者本機若有綁需加 `deleted_classes`）。

@@ -97,7 +97,7 @@
 - **⚠ 排程發布整套移除（2026-11-16）已併入 main**：使用者要求「全清除、重新撰寫」。`tools/fbpost/` 只剩 tool.json（改 **tier public**、assets 清空）、icon、thumb 與停用頁 `index.html`（「排程發布 功能停用」，不呼叫後端）；網站卡片人人看得到，外掛側邊欄發文分頁顯示停用頁（外掛不改、不升版）。後端刪 `fb.js`、`fbqueue.js`、`graph.js`、`pause.js`、`rundown.js`、`fb_*`／`rundown_*` 錯誤碼、每分鐘 cron 與 `CommentHub`；`schema.sql` 不再建 `fb_*` 表。管理頁（`admin/` 與後端 `/admin`）只剩素材、錯誤日誌；一鍵檢測拿掉臉書粉專。**前端管理密碼登入（`adm:1`）保留**。舊程式參考 git `ebce125`；上面各條排程發布紀錄僅供重寫參考。npm test 540、e2e 76、獨立審查通過。**後端需重新部署**，之後使用者手動 DROP D1 `fb_page_map`／`fb_comments`／`fb_settings` 並 `wrangler secret delete` FB_TOKEN、FB_APP_ID、FB_APP_SECRET、RUNDOWN_URL、RUNDOWN_TOKEN（指令見 `docs/deploy.md` 步驟 6-2）。交接：`docs/handoff/2026-11-16-fbpost-removed.md`。
 - **下一步**：排程發布重寫（新對話，先列做法給使用者確認）；使用者實機冒煙測試 YT 下載（Windows／Mac：更新外掛 3.00 → 執行 YT 下載助手安裝檔 → 下載一支公開影片），並確認 CI `ytdl-host` 結果；有問題開新對話修。其餘見待辦（P3、fb OAuth 續期等）。
 - **待辦**：
-  - [ ] 使用者部署後端＋清 D1 舊表與 Secrets（排程發布移除，2026-11-16）
+  - [x] 使用者部署後端＋清 D1 舊表與 Secrets（排程發布移除，2026-11-16 完成；公司電腦 `wrangler.toml` 加了 `[[migrations]]` v1 new_sqlite_classes／v2 deleted_classes `CommentHub` 才部署成功，該段保留；Secrets 只剩 COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET）
   - [ ] 排程發布重寫（需求重新確認）
   - [ ] 使用者在後端管理頁上傳公司素材 16 個檔（代號見 `assets-public/README.md`），上傳後實測有密碼畫面（§5.3）
   - [ ] YT 下載實機驗證（真實 YouTube、Windows／Mac 安裝檔）＋CI pytest 第一次結果；P2 其餘完成，網新排程不做（2026-11-15）
