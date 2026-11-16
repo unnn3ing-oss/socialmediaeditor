@@ -1,5 +1,6 @@
 // 排程發布（測試版，只給管理員）：只負責組裝各模組與切換分頁。
-//   compose.js 做圖＋帶入、targets.js 粉專勾選、send.js 送出、manage.js 已排程／已發佈、rules.js 本工具規則、util.js 共用小工具
+//   進入是已排程／已發佈（manage.js）；「＋ 新增發文」開彈出視窗（dialog.js），裡面是 compose.js 做圖＋帶入、
+//   targets.js 粉專膠囊＋timepop.js 排程時間、rd.js 排入 RD、send.js 送出；time.js、slug.js、rules.js 是純規則，util.js 共用小工具
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
 import { loadComposeAssets } from '../../ui/compose/assets.js';
@@ -8,6 +9,9 @@ import { createComposer } from './compose.js';
 import { createTargets } from './targets.js';
 import { createSender } from './send.js';
 import { createManage } from './manage.js';
+import { createTimePop } from './timepop.js';
+import { createDialog } from './dialog.js';
+import { createRd } from './rd.js';
 
 tb.init('fbpost');
 
@@ -32,10 +36,11 @@ $('tabs').addEventListener('click', (e) => {
   }
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;
+  createDialog();   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
   const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
   let sender;
-  const targets = createTargets({ onChange: () => sender && sender.updateButton() });
-  sender = createSender({ tb, composer, targets });
+  const targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
+  sender = createSender({ tb, composer, targets, rd: createRd({ tb }) });
   const manage = createManage({ tb });
   targets.setPages(pages);
   manage.setPages(pages);

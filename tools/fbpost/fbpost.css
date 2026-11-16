@@ -59,3 +59,61 @@
 .swatches .sw.is-on { box-shadow: 0 0 0 2px var(--accent); }
 .card input[type=text] { width: 100%; max-width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; color: var(--text); }
 .pullrow .btn { flex: none; white-space: nowrap; }
+
+/* ---- 版面改版：列表頁＋新增發文彈出視窗 ---- */
+.fp-head .grow, .post-head .grow { flex: 1; }
+body.no-scroll { overflow: hidden; }
+.veil { position: fixed; inset: 0; z-index: 50; background: rgba(20, 30, 50, .45); overflow-y: auto; padding: 24px 16px; }
+.post { position: relative; max-width: 1000px; margin: 0 auto; background: var(--surface); border-radius: 22px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .45); }
+.post-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.post-head h2 { margin: 0; font-size: 1.25rem; }
+.xbtn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
+.post-body { padding: 16px 20px 4px; }
+.post-body textarea, .post-body input[type=url], .post-body input[type=file], .post-body input[type=text] { width: 100%; max-width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; color: var(--text); }
+.post-foot { padding: 12px 20px 18px; }
+/* 粉專膠囊 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: stretch; height: 40px; border-radius: 999px; border: 1.5px solid var(--accent); background: var(--surface); overflow: hidden; }
+.chip button { border: 0; background: none; font: 600 15px var(--font); color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; }
+.chip .box { width: 16px; height: 16px; border: 1.5px solid currentColor; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; }
+.chip.on { background: var(--accent); }
+.chip.on button { color: #fff; }
+.chip.on .box { background: #fff; border-color: #fff; color: var(--accent); }
+.chip.on .box::after { content: '✓'; }
+.chip .chip-r { border-left: 1px solid rgba(255, 255, 255, .4); font-weight: 500; }
+.chip .chip-r.bad { background: var(--bad-text); }
+/* 下排：左 RD、右 送出（約 1/5，文字置中） */
+.sendrow { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
+.rd { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 12px; }
+.rd #rdSlug { flex: 0 1 300px; min-width: 0; }
+.rd #rdSlug:disabled { background: var(--fill); color: var(--muted); }
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; white-space: nowrap; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { width: 46px; height: 26px; border-radius: 999px; background: var(--line-strong); position: relative; transition: background .15s; flex: none; }
+.switch .track::after { content: ''; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(20px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rd-lbl { font-weight: 600; color: var(--accent); }
+.send { flex: 0 0 20%; min-width: 220px; height: 50px; display: inline-flex; align-items: center; justify-content: center; text-align: center; padding: 0 12px; white-space: nowrap; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: 700 16px var(--font); box-shadow: var(--shadow-btn); cursor: pointer; }
+.send:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+@media (max-width: 640px) {
+  .sendrow { flex-wrap: wrap; }
+  .send { flex: 1 1 100%; min-width: 0; }
+  .veil { padding: 0; }
+  .post { border-radius: 0; min-height: 100%; }
+}
+.results li.rd { background: var(--accent-soft); border-color: var(--line); color: var(--accent); }
+/* 排程時間小視窗 */
+.timepop { position: fixed; z-index: 60; width: min(340px, calc(100vw - 16px)); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; box-shadow: 0 20px 50px -18px rgba(0, 43, 102, .45); }
+.timepop h3 { margin: 0 0 8px; font-size: 15px; }
+.timepop .tp-mode { margin: 0 0 10px; }
+.tp-row { display: flex; gap: 8px; }
+.tp-row input { min-width: 0; height: 44px; font: 17px var(--font); padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 12px; background: #fff; color: var(--text); }
+.tp-row #tpDate { flex: 1.4; }
+.tp-row #tpTime { flex: 1; background: var(--accent-tint); text-align: center; }
+.tp-hint { font-size: 13px; margin: 8px 0 10px; color: var(--muted); }
+.tp-hint.ok { color: var(--ok-text); font-weight: 500; }
+.tp-hint.bad { color: var(--bad-text); font-weight: 500; }
+.tp-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.tp-quick button { height: 34px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--fill); font: 500 14px var(--font); cursor: pointer; color: var(--text); }

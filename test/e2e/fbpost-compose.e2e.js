@@ -40,7 +40,9 @@ async function openFb() {
   });
   await page.goto(srv.url + 'test/fixtures/company-host.html?tool=fbpost');
   const frame = await (await page.waitForSelector('iframe[name=tool]')).contentFrame();
-  await frame.waitForSelector('#pages li');
+  await frame.waitForSelector('#pages .chip', { state: 'attached' });
+  await frame.click('#newBtn');
+  await frame.waitForSelector('#postDlg:not([hidden])');
   return { page, frame, posts, errors };
 }
 const canvasHash = (frame, sel) => frame.evaluate(async (s) => {
@@ -67,7 +69,7 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   assert.equal(await frame.inputValue('#lead'), '看更多新聞內容');
 
   await frame.fill('#lead', '完整報導看這裡');
-  await frame.check('#pages li[data-page="111"] input[type=checkbox]');
+  await frame.click('#pages .chip[data-page="111"] .chip-l');
   await frame.click('#sendBtn');
   await frame.waitForSelector('#results li');
   const body = posts[0].toString('latin1');

@@ -1,14 +1,14 @@
-// 送出：組 FormData（圖、內文、文章網址、留言文字、各粉專目標）→ /fb/post，顯示每個粉專的結果
-import { $, fmt, errText, COMMENT } from './util.js';
+// 送出：組 FormData（圖、內文、文章網址、留言文字、各粉專目標）→ /fb/post → 排入 RD → 顯示每個粉專的結果
+import { $, fmt, errText, COMMENT, confirmBox } from './util.js';
 
-export function createSender({ tb, composer, targets }) {
+export function createSender({ tb, composer, targets, rd }) {
   function updateButton() {
     const n = targets.count();
     $('sendBtn').textContent = `全部送出（${n} 個粉專）`;
     $('sendBtn').disabled = n === 0;
   }
 
-  function renderResults(rs) {
+  function renderResults(rs, rdLines) {
     const ul = $('results'); ul.textContent = '';
     for (const r of rs) {
       const li = document.createElement('li'); li.className = r.ok ? 'ok' : 'err';
@@ -19,6 +19,10 @@ export function createSender({ tb, composer, targets }) {
         t += '；' + (COMMENT[r.comment] || '') + (r.comment === 'failed' && r.commentError ? '（' + r.commentError + '）' : '');
       } else t += '失敗（' + (r.error === 'fb_bad_time' ? '排程時間必須在 10 分鐘到 30 天之間' : (r.error || '未知原因')) + '）';
       li.textContent = t; ul.append(li);
+    }
+    for (const line of rdLines) {
+      const li = document.createElement('li'); li.className = /失敗|未寫入/.test(line) ? 'err' : 'rd';
+      li.textContent = line; ul.append(li);
     }
   }
 
@@ -38,13 +42,22 @@ export function createSender({ tb, composer, targets }) {
       if (link) { fd.append('link', link); fd.append('commentLead', $('lead').value); }
       if (image) fd.append('image', image, image.name);
       fd.append('targets', JSON.stringify(c.targets));
+      const sentAt = Date.now();
       const data = await tb.api.call('/fb/post', { method: 'POST', body: fd });
-      renderResults(data.results || []);
+      const results = data.results || [];
+      const rdLines = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
+      renderResults(results, rdLines);
     } catch (e) {
       err.textContent = errText(e);
     } finally {
       updateButton();
     }
+  });
+
+  $('clearBtn').addEventListener('click', async () => {
+    if (!(await confirmBox('清空這則發文', '網址、圖片、標題、貼文內容、粉專勾選和結果都會清掉。'))) return;
+    composer.reset(); targets.reset(); rd.reset();
+    $('results').textContent = ''; $('sendErr').textContent = '';
   });
 
   return { updateButton };

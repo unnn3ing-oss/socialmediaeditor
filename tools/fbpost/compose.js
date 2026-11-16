@@ -178,6 +178,16 @@ export function createComposer({ tb, assets }) {
   showMode();
 
   return {
+    // 清空：網址、照片、自己的圖、標題、貼文內容、貼圖馬賽克；留言文字回預設；模式與框保留
+    reset() {
+      $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = '看更多新聞內容';
+      $('photo').value = ''; $('img').value = '';
+      st.photo = null; st.view = newView(); st.own = null; st.fx.length = 0; st.fx.gray = false;
+      const pv = $('imgPrev'); if (pv.dataset.url) { URL.revokeObjectURL(pv.dataset.url); pv.dataset.url = ''; }
+      if (st.mode === 'own') { st.mode = 'image'; setMode('image'); }
+      say('pullHint', '');
+      showMode();
+    },
     // 送出用的圖：自己的圖原檔；作圖框／純文字底圖輸出 1080 PNG；沒有圖回 null
     async image() {
       if (st.mode === 'own') return st.own;

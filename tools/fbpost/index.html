@@ -30,14 +30,45 @@
   <header class="fp-head">
     <h1>排程發布</h1>
     <span class="pill warn">測試模式（僅管理員）</span>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-primary" id="newBtn">＋ 新增發文</button>
   </header>
   <div class="tabs" role="tablist" aria-label="分頁" id="tabs">
-    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="new">新增發文</button>
-    <button type="button" role="tab" aria-selected="false" data-tab="sched">已排程</button>
+    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
     <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
   </div>
 
-  <section id="tab-new" class="card">
+  <section id="tab-sched" class="card">
+    <div class="bar">
+      <label class="inline">粉專 <select id="schedPage"></select></label>
+      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
+    </div>
+    <p class="hint" id="schedHint" role="status"></p>
+    <ul class="list" id="schedList"></ul>
+  </section>
+
+  <section id="tab-pub" class="card" hidden>
+    <div class="bar">
+      <label class="inline">粉專 <select id="pubPage"></select></label>
+      <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
+    </div>
+    <p class="hint" id="pubHint" role="status"></p>
+    <ul class="list" id="pubList"></ul>
+    <button type="button" class="btn btn-secondary btn-sm" id="pubMore" hidden>載入更多</button>
+  </section>
+</main>
+
+<!-- 新增發文：彈出視窗（隱藏切換，關閉後內容保留） -->
+<div class="veil" id="postDlg" hidden>
+  <section class="post" role="dialog" aria-modal="true" aria-labelledby="postTitle" id="tab-new">
+    <header class="post-head">
+      <h2 id="postTitle">新增發文</h2>
+      <span class="pill warn">測試模式</span>
+      <span class="grow"></span>
+      <button type="button" class="btn btn-secondary btn-sm" id="clearBtn">清空</button>
+      <button type="button" class="xbtn" id="dlgClose" aria-label="關閉">×</button>
+    </header>
+    <div class="post-body">
     <label class="lbl" for="link">文章網址</label>
     <div class="pullrow">
       <input id="link" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/...">
@@ -93,32 +124,34 @@
     <label class="lbl" for="lead">留言文字</label>
     <input id="lead" type="text" maxlength="200" value="看更多新聞內容">
     <p class="hint">留言＝這段文字＋換行＋文章連結＋各粉專 UTM；清空就只放連結。</p>
-    <h2>粉專</h2>
-    <ul class="pages" id="pages"></ul>
-    <button type="button" class="btn btn-primary" id="sendBtn" disabled>全部送出（0 個粉專）</button>
-    <p class="hint bad" id="sendErr" role="alert"></p>
-    <ul class="results" id="results" aria-live="polite"></ul>
-  </section>
-
-  <section id="tab-sched" class="card" hidden>
-    <div class="bar">
-      <label class="inline">粉專 <select id="schedPage"></select></label>
-      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
     </div>
-    <p class="hint" id="schedHint" role="status"></p>
-    <ul class="list" id="schedList"></ul>
+    <footer class="post-foot">
+      <div class="chips" id="pages" role="group" aria-label="發到哪些粉專"></div>
+      <div class="sendrow">
+        <div class="rd">
+          <label class="switch"><input type="checkbox" id="rdOn"><span class="track" aria-hidden="true"></span><span class="rd-lbl">排入 RD</span></label>
+          <input type="text" id="rdSlug" maxlength="40" placeholder="SLUG（空白＝標題前 4 字）" aria-label="SLUG">
+        </div>
+        <button type="button" class="send" id="sendBtn" disabled>全部送出（0 個粉專）</button>
+      </div>
+      <p class="hint bad" id="sendErr" role="alert"></p>
+      <ul class="results" id="results" aria-live="polite"></ul>
+    </footer>
   </section>
+</div>
 
-  <section id="tab-pub" class="card" hidden>
-    <div class="bar">
-      <label class="inline">粉專 <select id="pubPage"></select></label>
-      <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
-    </div>
-    <p class="hint" id="pubHint" role="status"></p>
-    <ul class="list" id="pubList"></ul>
-    <button type="button" class="btn btn-secondary btn-sm" id="pubMore" hidden>載入更多</button>
-  </section>
-</main>
+<!-- 排程時間小視窗（貼在點到的粉專膠囊上方） -->
+<div class="timepop" id="timePop" role="dialog" aria-label="排程時間" hidden>
+  <h3>排程時間</h3>
+  <div class="seg tp-mode"><button type="button" data-tp="now">立即</button><button type="button" data-tp="sched">排程</button></div>
+  <div class="tp-row">
+    <input type="date" id="tpDate" aria-label="日期">
+    <input type="text" id="tpTime" inputmode="numeric" maxlength="5" aria-label="時間">
+  </div>
+  <p class="tp-hint" id="tpHint" role="status"></p>
+  <div class="tp-quick"><button type="button" data-q="30">+30 分</button><button type="button" data-q="60">+1 小時</button><button type="button" data-q="tomorrow">明天</button></div>
+</div>
+
 
 <dialog class="dlg" id="cfDlg" aria-labelledby="cfTitle">
   <h2 id="cfTitle"></h2>
