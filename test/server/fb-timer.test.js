@@ -76,7 +76,7 @@ test('posting 中斷後重跑：臉書上已有相同留言 → done，不再留
     'GET /111_5/comments': () => ({ data: [{ id: 'C1', from: { id: '111' }, message: '看更多新聞內容\nhttps://x' }] })
   });
   await post('arm', REC(nowSec() - 60));
-  const rec = await state.storage.get('rec'); rec.status = 'posting'; await state.storage.put('rec', rec);
+  const rec = await state.storage.get('rec'); rec.items[0].status = 'posting'; await state.storage.put('rec', rec);
   await obj.alarm();
   const s = await post('status');
   assert.equal(s.status, 'done'); assert.equal(s.commentId, 'C1');
@@ -95,7 +95,7 @@ test('一般錯誤重試 30/60/120/240 秒，第 5 次失敗 → failed', async 
     const before = Date.now();
     await obj.alarm();
     gaps.push(Math.round(((await state.storage.getAlarm()) - before) / 1000));
-    assert.equal((await post('status')).status, 'posting');
+    assert.equal((await post('status')).items[0].status, 'posting');
   }
   assert.deepEqual(gaps, [30, 60, 120, 240]);
   await obj.alarm();
@@ -152,7 +152,7 @@ test('留言送出後回應遺失：重試前先查，臉書上已有就不再�
   });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
-  assert.equal((await post('status')).status, 'posting', '狀態保持 posting，下次先查');
+  assert.equal((await post('status')).items[0].status, 'posting', '狀態保持 posting，下次先查');
   await obj.alarm();
   const s = await post('status');
   assert.equal(s.status, 'done'); assert.equal(s.commentId, 'C7');
@@ -173,4 +173,75 @@ test('code 100 subcode 33（物件不存在）→ canceled', async (t) => {
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   assert.equal((await post('status')).status, 'canceled');
+});
+
+// ---- 多則留言：第 1 則＋第 2、3 則（各自距發布 offset 分鐘） ----
+const MULTI = (at) => ({ pageId: '111', postId: '111_5', at, items: [{ message: '看更多\nhttps://x', offset: 0 }, { message: '第二則', offset: 5 }, { message: '第三則', offset: 15 }] });
+
+test('多則留言：到點的依序留，沒到的排下一個鬧鐘；全部留完 done', async (t) => {
+  let n = 0;
+  const { f, state, obj, post } = await mk(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => ({ id: 'C' + (++n) })
+  });
+  const at = nowSec() - 120;                        // 第 1 則已到點；第 2 則在 at+60+300
+  await post('arm', MULTI(at));
+  assert.equal(await state.storage.getAlarm(), (at + 60) * 1000);
+  await obj.alarm();
+  let s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['done', 'pending', 'pending']);
+  assert.equal(s.status, 'pending', '還有沒留的');
+  assert.equal(await state.storage.getAlarm(), (at + 60 + 300) * 1000);
+  assert.deepEqual(comments(f).map((c) => c.body.message), ['看更多\nhttps://x']);
+  // 時間快轉：全部到點
+  const rec = await state.storage.get('rec'); rec.at = nowSec() - 2000; await state.storage.put('rec', rec);
+  await obj.alarm();
+  s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['done', 'done', 'done']);
+  assert.equal(s.status, 'done');
+  assert.deepEqual(comments(f).map((c) => c.body.message), ['看更多\nhttps://x', '第二則', '第三則'], '依序留');
+  assert.equal(await state.storage.getAlarm(), null);
+  assert.equal(f.calls.filter((c) => c.method === 'GET' && c.path === '/111_5').length, 1, '確認發布後不再重複查');
+});
+
+test('多則留言：中間一則失敗重試，不影響已留的；取消後剩下的不留', async (t) => {
+  let fail = true;
+  const { f, obj, state, post } = await mk(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': (c) => (c.body.message === '第二則' && fail ? gErr(2, 500, 'temp') : { id: 'C' }),
+    'GET /111_5/comments': () => ({ data: [] })
+  });
+  await post('arm', MULTI(nowSec() - 1000));
+  await obj.alarm();
+  let s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['done', 'posting', 'pending']);
+  assert.equal(s.items[1].attempts, 1);
+  fail = false;
+  await obj.alarm();
+  s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['done', 'done', 'done']);
+  // 新的一組：取消後不留
+  const st2 = await mk(t, { 'GET /111_5': () => ({ is_published: true }), 'POST /111_5/comments': () => ({ id: 'C' }) });
+  await st2.post('arm', MULTI(nowSec() - 120));
+  await st2.obj.alarm();
+  await st2.post('cancel');
+  const s2 = await st2.post('status');
+  assert.deepEqual(s2.items.map((x) => x.status), ['done', 'canceled', 'canceled']);
+  assert.equal(await st2.state.storage.getAlarm(), null);
+});
+
+test('多則留言：改時間後全部跟著平移', async (t) => {
+  const { state, post } = await mk(t, {});
+  const at = nowSec() + 3600, at2 = nowSec() + 7200;
+  await post('arm', MULTI(at));
+  await post('retime', { at: at2 });
+  assert.equal((await post('status')).at, at2);
+  assert.equal(await state.storage.getAlarm(), (at2 + 60) * 1000);
+});
+
+test('arm 驗證：最多 3 則、offset 不可倒退', async (t) => {
+  const { post } = await mk(t, {});
+  const at = nowSec() + 3600;
+  assert.equal((await post('arm', { ...MULTI(at), items: [...MULTI(at).items, { message: 'x', offset: 20 }] })).ok, false);
+  assert.equal((await post('arm', { ...MULTI(at), items: [{ message: 'a', offset: 10 }, { message: 'b', offset: 5 }] })).ok, false);
 });

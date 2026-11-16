@@ -12,6 +12,7 @@ test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
 
 let PG_SAVED = null;
+let PS_SAVED = null;
 const PAGES = [
   { id: '1', name: 'TVBS 新聞', short: '新聞', utm: '', rd: 'news', order: 0, show: 1 },
   { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', rd: 'ent', order: 1, show: 1 },
@@ -22,6 +23,8 @@ const DATA = {
   'GET /admin/fb/status': { configured: true, valid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3 },
   'GET /admin/fb/pages': PAGES,
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
+  'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
+  'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
   'POST /admin/fb/refresh': {},
   'GET /admin/rundown': { configured: true },
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN(2026)', sheets: ['2026/11'] },
@@ -191,4 +194,48 @@ test('Rundown 分類：測試連線打 /admin/rundown/ping 並顯示試算表名
   await page.click('#rdPing');
   await page.waitForFunction(() => /連線正常：FB RUNDOWN\(2026\)/.test(document.getElementById('rdMsg').textContent));
   assert.ok(calls.some((c) => c.key === 'POST /admin/rundown/ping' && c.auth === 'Bearer T'));
+});
+
+test('活動留言：顯示既有兩則；新增、刪除後儲存，body 依順序', async () => {
+  PS_SAVED = null;
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  await login(page);
+  await page.waitForSelector('#psRows .ps-row');
+  assert.match(await page.textContent('#psCard'), /第 2、3 則留言可以選這裡的內容帶入/);
+  assert.ok(calls.some((c) => c.key === 'GET /admin/fb/presets' && c.auth === 'Bearer T'));
+  assert.deepEqual(await page.$$eval('#psRows .ps-name', (els) => els.map((e) => e.value)), ['雙11抽獎', '訂閱']);
+  await page.click('#psRows .ps-row:nth-child(1) .ps-del');   // 刪掉第一則
+  await page.click('#psAdd');
+  await page.fill('#psRows .ps-row:nth-child(2) .ps-name', '新活動');
+  await page.fill('#psRows .ps-row:nth-child(2) .ps-body', '新活動內容');
+  await page.click('#psSave');
+  await page.waitForFunction(() => document.getElementById('psMsg').textContent === '已儲存');
+  assert.deepEqual(PS_SAVED, { presets: [{ name: '訂閱', body: '歡迎訂閱' }, { name: '新活動', body: '新活動內容' }] });
+});
+
+test('活動留言：名稱空白不送出並標出哪一則；滿 20 則停用新增', async () => {
+  PS_SAVED = null;
+  const { page } = await open({ width: 1280, height: 860 }, '#fb');
+  await login(page);
+  await page.waitForSelector('#psRows .ps-row');
+  await page.fill('#psRows .ps-row:nth-child(2) .ps-name', '  ');
+  await page.click('#psSave');
+  assert.match(await page.textContent('#psMsg'), /第 2 則的名稱要 1～20 字/);
+  assert.equal(PS_SAVED, null);
+  await page.fill('#psRows .ps-row:nth-child(2) .ps-name', '訂閱');
+  await page.fill('#psRows .ps-row:nth-child(2) .ps-body', '');
+  await page.click('#psSave');
+  assert.match(await page.textContent('#psMsg'), /第 2 則的內容要 1～8000 字/);
+  assert.equal(PS_SAVED, null);
+  for (let i = 0; i < 18; i++) await page.click('#psAdd');
+  assert.equal(await page.locator('#psRows .ps-row').count(), 20);
+  assert.equal(await page.isDisabled('#psAdd'), true);
+});
+
+test('活動留言：手機 390px 不橫向捲動', async () => {
+  const { page } = await open({ width: 390, height: 800 }, '#fb');
+  await login(page);
+  await page.waitForSelector('#psRows .ps-row');
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert.ok(over <= 0, '橫向捲動 ' + over);
 });

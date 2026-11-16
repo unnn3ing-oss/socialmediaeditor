@@ -42,6 +42,9 @@ td.err{color:var(--danger);font-weight:600}
 .fb-missing{margin:8px 0 0;padding-left:20px;color:var(--danger);font-weight:600}
 #pgRows select{min-width:120px}#pgRows .pg-short{min-width:110px}#pgRows .pg-utm{min-width:260px}
 #pgRows input[type=checkbox]{width:22px;height:22px;min-height:0}
+textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit;resize:vertical}
+.ps-row{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr) auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid #e6ecf6}
+@media (max-width:760px){.ps-row{grid-template-columns:minmax(0,1fr)}}
 .mv{display:flex;gap:6px;white-space:nowrap}
 .msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
@@ -125,6 +128,14 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       </div>
       <div class="row"><button id="pgSave" class="primary" type="button" hidden>儲存</button></div>
     </section>
+
+<section class="card" id="psCard">
+<h2>活動留言</h2>
+<p>發文時第 2、3 則留言可以選這裡的內容帶入（例如活動宣傳），帶入後還能再改。最多 20 則。</p>
+<p class="msg" id="psMsg" role="status"></p>
+<div id="psRows"></div>
+<div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
+</section>
 
     <section class="card" id="rdCard">
       <h2>Rundown 連線</h2>
@@ -335,7 +346,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   }
   function fbLoad() {
     say($('fbMsg'), '');
-    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad()]);
+    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad()]);
   }
   $('fbRefresh').onclick = function () {
     $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
@@ -345,6 +356,60 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbRefresh').disabled = false; });
   };
+  // ---- 活動留言（/admin/fb/presets）----
+  var psItems = [];   // { name, body }
+  var PS_MAX = 20;
+  function psSync() {
+    var rows = $('psRows').children;
+    psItems.forEach(function (it, i) {
+      var r = rows[i]; if (!r) return;
+      it.name = r.querySelector('.ps-name').value; it.body = r.querySelector('.ps-body').value;
+    });
+  }
+  function psRender() {
+    var box = $('psRows'); box.textContent = '';
+    psItems.forEach(function (it, i) {
+      var r = document.createElement('div'); r.className = 'ps-row';
+      var n = document.createElement('input'); n.type = 'text'; n.className = 'ps-name'; n.maxLength = 20; n.placeholder = '例：雙11抽獎'; n.value = it.name || '';
+      n.setAttribute('aria-label', '第 ' + (i + 1) + ' 則名稱');
+      var b = document.createElement('textarea'); b.className = 'ps-body'; b.rows = 3; b.maxLength = 8000; b.value = it.body || '';
+      b.setAttribute('aria-label', '第 ' + (i + 1) + ' 則內容');
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'ps-del danger'; d.textContent = '刪除'; d.setAttribute('aria-label', '刪除第 ' + (i + 1) + ' 則');
+      d.onclick = function () { psSync(); psItems.splice(i, 1); psRender(); say($('psMsg'), ''); };
+      r.appendChild(n); r.appendChild(b); r.appendChild(d); box.appendChild(r);
+    });
+    $('psAdd').disabled = psItems.length >= PS_MAX;
+  }
+  function psLoad() {
+    say($('psMsg'), '讀取中');
+    return api('/admin/fb/presets').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      psItems = res.data.map(function (p) { return { name: p.name, body: p.body }; }); psRender();
+      say($('psMsg'), psItems.length ? '' : '還沒有活動留言，按「＋ 新增一則」。');
+    }).catch(function (e) { say($('psMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('psAdd').onclick = function () {
+    psSync(); if (psItems.length >= PS_MAX) return;
+    psItems.push({ name: '', body: '' }); psRender(); say($('psMsg'), '');
+    var ns = $('psRows').querySelectorAll('.ps-name'); ns[ns.length - 1].focus();
+  };
+  $('psSave').onclick = function () {
+    psSync();
+    for (var i = 0; i < psItems.length; i++) {
+      var n = psItems[i].name.trim().length, b = psItems[i].body.trim().length, row = $('psRows').children[i];
+      if (n < 1 || n > 20) { row.querySelector('.ps-name').focus(); return say($('psMsg'), '第 ' + (i + 1) + ' 則的名稱要 1～20 字。', 'err'); }
+      if (b < 1 || b > 8000) { row.querySelector('.ps-body').focus(); return say($('psMsg'), '第 ' + (i + 1) + ' 則的內容要 1～8000 字。', 'err'); }
+    }
+    var body = { presets: psItems.map(function (it) { return { name: it.name.trim(), body: it.body.trim() }; }) };
+    $('psSave').disabled = true; say($('psMsg'), '儲存中');
+    api('/admin/fb/presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (res.ok) { psItems = res.data.map(function (p) { return { name: p.name, body: p.body }; }); psRender(); say($('psMsg'), '已儲存', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('psMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('psMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('psSave').disabled = false; });
+  };
+
   $('pgSave').onclick = function () {
     pgSync();
     for (var i = 0; i < pgItems.length; i++) {

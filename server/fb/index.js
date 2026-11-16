@@ -5,6 +5,7 @@ import { listPages, validPages, savePages, clearPageCache, tokenStatus, FbSetupE
 import { GraphError } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
+import { listPresets, validPresets, savePresets } from './presets.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
@@ -27,6 +28,8 @@ route('GET', /^\/fb\/pages$/, async (request, env) => {
   const pages = await listPages(env);
   return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order, rd: p.rd })));
 });
+
+route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
 route('POST', /^\/fb\/post$/, async (request, env) => {
   const ct = request.headers.get('content-type') || '';
@@ -93,6 +96,13 @@ adminRoute('POST', /^\/admin\/fb\/pages$/, async (request, env) => {
   if (!pages) return fail(request, env, 'bad_request');
   await savePages(env, pages);
   return ok(request, env, await listPages(env, { all: true }));
+});
+adminRoute('GET', /^\/admin\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
+adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
+  const list = validPresets(await readJsonBody(request, 400000));
+  if (!list) return fail(request, env, 'bad_request');
+  await savePresets(env, list);
+  return ok(request, env, await listPresets(env));
 });
 adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => { await clearPageCache(env); return ok(request, env, { cleared: true }); });
 

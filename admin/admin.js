@@ -187,7 +187,7 @@ if (window.top !== window.self) {
   var fbLoaded = false;
   function fbLoad() {
     fbLoaded = true; say($('fbMsg'), '');
-    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad()]);
+    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad()]);
   }
   $('fbRefresh').onclick = function () {
     $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
@@ -197,6 +197,60 @@ if (window.top !== window.self) {
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbRefresh').disabled = false; });
   };
+  // ---- 活動留言（/admin/fb/presets）----
+  var psItems = [];   // { name, body }
+  var PS_MAX = 20;
+  function psSync() {
+    var rows = $('psRows').children;
+    psItems.forEach(function (it, i) {
+      var r = rows[i]; if (!r) return;
+      it.name = r.querySelector('.ps-name').value; it.body = r.querySelector('.ps-body').value;
+    });
+  }
+  function psRender() {
+    var box = $('psRows'); box.textContent = '';
+    psItems.forEach(function (it, i) {
+      var r = document.createElement('div'); r.className = 'ps-row';
+      var n = document.createElement('input'); n.type = 'text'; n.className = 'ps-name'; n.maxLength = 20; n.placeholder = '例：雙11抽獎'; n.value = it.name || '';
+      n.setAttribute('aria-label', '第 ' + (i + 1) + ' 則名稱');
+      var b = document.createElement('textarea'); b.className = 'ps-body'; b.rows = 3; b.maxLength = 8000; b.value = it.body || '';
+      b.setAttribute('aria-label', '第 ' + (i + 1) + ' 則內容');
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'ps-del danger'; d.textContent = '刪除'; d.setAttribute('aria-label', '刪除第 ' + (i + 1) + ' 則');
+      d.onclick = function () { psSync(); psItems.splice(i, 1); psRender(); say($('psMsg'), ''); };
+      r.appendChild(n); r.appendChild(b); r.appendChild(d); box.appendChild(r);
+    });
+    $('psAdd').disabled = psItems.length >= PS_MAX;
+  }
+  function psLoad() {
+    say($('psMsg'), '讀取中');
+    return api('/admin/fb/presets').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      psItems = res.data.map(function (p) { return { name: p.name, body: p.body }; }); psRender();
+      say($('psMsg'), psItems.length ? '' : '還沒有活動留言，按「＋ 新增一則」。');
+    }).catch(function (e) { say($('psMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('psAdd').onclick = function () {
+    psSync(); if (psItems.length >= PS_MAX) return;
+    psItems.push({ name: '', body: '' }); psRender(); say($('psMsg'), '');
+    var ns = $('psRows').querySelectorAll('.ps-name'); ns[ns.length - 1].focus();
+  };
+  $('psSave').onclick = function () {
+    psSync();
+    for (var i = 0; i < psItems.length; i++) {
+      var n = psItems[i].name.trim().length, b = psItems[i].body.trim().length, row = $('psRows').children[i];
+      if (n < 1 || n > 20) { row.querySelector('.ps-name').focus(); return say($('psMsg'), '第 ' + (i + 1) + ' 則的名稱要 1～20 字。', 'err'); }
+      if (b < 1 || b > 8000) { row.querySelector('.ps-body').focus(); return say($('psMsg'), '第 ' + (i + 1) + ' 則的內容要 1～8000 字。', 'err'); }
+    }
+    var body = { presets: psItems.map(function (it) { return { name: it.name.trim(), body: it.body.trim() }; }) };
+    $('psSave').disabled = true; say($('psMsg'), '儲存中');
+    api('/admin/fb/presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (res.ok) { psItems = res.data.map(function (p) { return { name: p.name, body: p.body }; }); psRender(); say($('psMsg'), '已儲存', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('psMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('psMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('psSave').disabled = false; });
+  };
+
   $('pgSave').onclick = function () {
     pgSync();
     for (var i = 0; i < pgItems.length; i++) {
@@ -217,7 +271,7 @@ if (window.top !== window.self) {
   function signOut() {
     token = ''; pending = '';
     $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('login').hidden = false;
-    fbLoaded = false; rdLoaded = false; pgItems = [];
+    fbLoaded = false; rdLoaded = false; pgItems = []; psItems = [];
   }
   $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
 

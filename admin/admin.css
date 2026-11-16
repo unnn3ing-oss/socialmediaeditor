@@ -66,3 +66,6 @@ nav.side .sep{height:1px;background:var(--edge);margin:8px 4px}
 #pgRows select{min-width:120px}#pgRows .pg-short{min-width:110px}#pgRows .pg-utm{min-width:260px}
 #pgRows input[type=checkbox]{width:22px;height:22px;min-height:0}
 .mv{display:flex;gap:6px;white-space:nowrap}
+textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit;resize:vertical}
+.ps-row{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr) auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid #e6ecf6}
+@media (max-width:760px){.ps-row{grid-template-columns:minmax(0,1fr)}}

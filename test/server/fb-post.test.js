@@ -87,7 +87,7 @@ test('有圖排程：暫存照片 → /feed attached_media＋SCHEDULED；不留�
   assert.ok(!f.calls.some((c) => /comments/.test(c.path)));
   assert.equal(RecTimer.log.length, 1);
   assert.equal(RecTimer.log[0][0], '/arm');
-  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', at });
+  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }] });
 });
 
 test('純文字（無圖）排程走 /feed；沒 link 不留言', async (t) => {
@@ -139,7 +139,7 @@ test('排程成功後真的計時器有紀錄（整合）', async (t) => {
   const r = await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]) });
   assert.equal(r.body.data.results[0].comment, 'armed');
   const { state } = env.FB_TIMER.instances.get('111_8');
-  assert.equal((await state.storage.get('rec')).status, 'pending');
+  assert.equal((await state.storage.get('rec')).items[0].status, 'pending');
   assert.equal(await state.storage.getAlarm(), (at + 60) * 1000);
 });
 
@@ -160,4 +160,40 @@ test('留言開頭文字：預設、自訂、空白只放連結、太長 400', a
   assert.equal(f.calls.filter((c) => /comments$/.test(c.path)).pop().body.message, LINK + '?&utm_source=facebook&utm_medium=fbarticlepic');
   const long = await send(env, headers, { message: 'm', link: LINK, commentLead: '字'.repeat(201), image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
   assert.equal(long.status, 400);
+});
+
+test('第 2、3 則留言：立即發布＝第 1 則馬上留、其餘交給計時器（距上一則累加）', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => ({ id: 'C1' })
+  });
+  const before = nowSec();
+  const r = await send(env, headers, { message: 'm', link: LINK, image: img(), targets: JSON.stringify([{ page: '111', at: null }]), comments: JSON.stringify([{ message: '第二則', delay: 5 }, { message: '第三則', delay: 10 }]) });
+  const x = r.body.data.results[0];
+  assert.equal(x.comment, 'done'); assert.equal(x.extra, 2);
+  assert.equal(f.calls.filter((c) => /comments$/.test(c.path)).length, 1, '只馬上留第 1 則');
+  assert.equal(RecTimer.log.length, 1);
+  const arm = RecTimer.log[0][1];
+  assert.ok(arm.at >= before && arm.at <= nowSec());
+  assert.deepEqual(arm.items, [{ message: '第二則', offset: 5 }, { message: '第三則', offset: 15 }]);
+});
+
+test('第 2、3 則留言：排程＝三則一起交給計時器；沒網址時從發布時間算', async (t) => {
+  const at = nowSec() + 3600;
+  const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_7' }) });
+  await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]), comments: JSON.stringify([{ message: '二', delay: 5 }]) });
+  assert.deepEqual(RecTimer.log[0][1].items, [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }, { message: '二', offset: 5 }]);
+  assert.equal(RecTimer.log[0][1].at, at);
+  RecTimer.log = [];
+  const r = await send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at }]), comments: JSON.stringify([{ message: '二', delay: 10 }]) });
+  assert.equal(r.body.data.results[0].comment, 'none');
+  assert.deepEqual(RecTimer.log[0][1].items, [{ message: '二', offset: 10 }]);
+});
+
+test('第 2、3 則留言驗證：最多 2 則、5 分鐘倍數、5～1440、內容不可空白', async (t) => {
+  const { env, headers } = await setup(t, {});
+  const go = (comments) => send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at: null }]), comments: JSON.stringify(comments) });
+  for (const c of [[{ message: 'a', delay: 7 }], [{ message: 'a', delay: 0 }], [{ message: 'a', delay: 1445 }], [{ message: ' ', delay: 5 }], [{ message: 'a', delay: 5 }, { message: 'b', delay: 5 }, { message: 'c', delay: 5 }]]) {
+    assert.equal((await go(c)).status, 400, JSON.stringify(c));
+  }
 });

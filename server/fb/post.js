@@ -14,6 +14,26 @@ const MAX_MESSAGE = 63206;
 export const timeOk = (at, now = Math.floor(Date.now() / 1000)) => Number.isInteger(at) && at >= now + MIN_LEAD && at <= now + MAX_LEAD;
 
 // 驗證表單；不合法回 null
+// 第 2、3 則留言：[{ message, delay（距上一則幾分鐘，5 的倍數，5～1440） }] → [{ message, offset（距發布幾分鐘） }]；不合法回 null
+export const MAX_EXTRAS = 2;
+export function parseExtras(raw) {
+  if (raw === null || raw === undefined || raw === '') return [];
+  let list;
+  try { list = JSON.parse(String(raw)); } catch { return null; }
+  if (!Array.isArray(list) || list.length > MAX_EXTRAS) return null;
+  let offset = 0;
+  const out = [];
+  for (const c of list) {
+    const message = c && typeof c.message === 'string' ? c.message.trim() : '';
+    const delay = c && c.delay;
+    if (!message || [...message].length > 8000) return null;
+    if (!Number.isInteger(delay) || delay < 5 || delay > 1440 || delay % 5) return null;
+    offset += delay;
+    out.push({ message, offset });
+  }
+  return out;
+}
+
 export function parsePostForm(fd) {
   const message = String(fd.get('message') || '');
   const link = String(fd.get('link') || '').trim();
@@ -37,7 +57,9 @@ export function parsePostForm(fd) {
     if (t.at !== null && !Number.isInteger(t.at)) return null;
     seen.add(t.page);
   }
-  return { message, link, lead, file, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  const extras = parseExtras(fd.get('comments'));
+  if (!extras) return null;
+  return { message, link, lead, file, extras, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
 async function publishOne(env, page, token, { message, file, at }) {
@@ -88,14 +110,31 @@ export async function createPosts(env, form) {
       r.error = String(e.message).slice(0, 200);
       continue;
     }
-    if (!form.link) continue;
-    const text = commentText(form.link, await pageUtm(env, t.page), form.lead);
-    try {
-      if (scheduled) { await armTimer(env, { pageId: t.page, postId: r.postId, message: text, at: t.at }); r.comment = 'armed'; }
-      else { await postComment(env, p.token, r.postId, text); r.comment = 'done'; }
-    } catch (e) {
-      r.comment = 'failed';
-      r.commentError = String((e && e.message) || e).slice(0, 200);
+    const extras = form.extras || [];
+    const first = form.link ? commentText(form.link, await pageUtm(env, t.page), form.lead) : null;
+    const errText = (e) => String((e && e.message) || e).slice(0, 200);
+    if (scheduled) {
+      // 排程：第 1 則（有網址才有）與第 2、3 則一起交給計時器，發布後依序留
+      const items = [...(first ? [{ message: first, offset: 0 }] : []), ...extras];
+      if (!items.length) continue;
+      try {
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items });
+        if (first) r.comment = 'armed';
+        if (extras.length) r.extra = extras.length;
+      } catch (e) {
+        if (first) { r.comment = 'failed'; r.commentError = errText(e); }
+        if (extras.length) r.extraError = errText(e);
+      }
+      continue;
+    }
+    // 立即：第 1 則馬上留；第 2、3 則交給計時器（從現在算）
+    if (first) {
+      try { await postComment(env, p.token, r.postId, first); r.comment = 'done'; }
+      catch (e) { r.comment = 'failed'; r.commentError = errText(e); }
+    }
+    if (extras.length) {
+      try { await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items: extras }); r.extra = extras.length; }
+      catch (e) { r.extraError = errText(e); }
     }
   }
   return results;
