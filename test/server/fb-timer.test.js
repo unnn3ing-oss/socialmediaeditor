@@ -245,3 +245,35 @@ test('arm 驗證：最多 3 則、offset 不可倒退', async (t) => {
   assert.equal((await post('arm', { ...MULTI(at), items: [...MULTI(at).items, { message: 'x', offset: 20 }] })).ok, false);
   assert.equal((await post('arm', { ...MULTI(at), items: [{ message: 'a', offset: 10 }, { message: 'b', offset: 5 }] })).ok, false);
 });
+
+test('兩則內容相同：第 2 則中斷後重查，不能把第 1 則當成它', async (t) => {
+  let n = 0;
+  const { f, state, obj, post } = await mk(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'GET /111_5/comments': () => ({ data: [{ id: 'C1', from: { id: '111' }, message: '一樣' }] }),
+    'POST /111_5/comments': () => ({ id: 'C' + (++n + 1) })
+  });
+  await post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 1000, items: [{ message: '一樣', offset: 0 }, { message: '一樣', offset: 5 }] });
+  const rec = await state.storage.get('rec');
+  Object.assign(rec.items[0], { status: 'done', commentId: 'C1' });
+  rec.items[1].status = 'posting'; rec.published = true;
+  await state.storage.put('rec', rec);
+  await obj.alarm();
+  const s = await post('status');
+  assert.equal(s.items[1].status, 'done');
+  assert.notEqual(s.items[1].commentId, 'C1', '不能沿用第 1 則的留言');
+  assert.equal(comments(f).length, 1, '第 2 則真的有留');
+});
+
+test('前一則失敗（例如限流）：後面的也標失敗，不跳著留', async (t) => {
+  const { f, obj, post } = await mk(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': (c) => (c.body.message === '第二則' ? gErr(32, 400, 'page rate limit') : { id: 'C' })
+  });
+  await post('arm', MULTI(nowSec() - 2000));
+  await obj.alarm();
+  const s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['done', 'failed', 'failed']);
+  assert.match(s.items[2].error, /前一則/);
+  assert.ok(!comments(f).some((c) => c.body.message === '第三則'), '第三則沒有留');
+});

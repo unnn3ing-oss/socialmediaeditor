@@ -142,8 +142,10 @@ export class FbCommentTimer {
       try {
         if (it.status === 'posting') {
           // 上次留言途中中斷：先確認是否已經留過，避免重複
-          const d = await graph(this.env, 'GET', '/' + rec.postId + '/comments', { fields: 'from{id},message', limit: 50 }, page.token);
-          const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && c.message === it.message);
+          const d = await graph(this.env, 'GET', '/' + rec.postId + '/comments', { fields: 'from{id},message', limit: 100 }, page.token);
+          // 同樣內容的另一則已經留過的不算（兩則可能一字不差）
+          const used = new Set(rec.items.filter((x) => x !== it && x.commentId).map((x) => String(x.commentId)));
+          const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && c.message === it.message && !used.has(String(c.id)));
           if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); await s.put('rec', rec); continue; }
         }
         it.status = 'posting';
@@ -167,6 +169,8 @@ export class FbCommentTimer {
     it.error = msg;
     if (isRateLimit(e) || it.attempts >= MAX_ATTEMPTS) {
       it.status = 'failed';
+      // 留言要依序：前一則失敗，後面還沒留的也不留
+      rec.items.slice(rec.items.indexOf(it) + 1).forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '前一則留言失敗，未留'; } });
       await s.put('rec', rec);
       return this.schedule(rec);
     }

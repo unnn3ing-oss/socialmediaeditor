@@ -153,7 +153,7 @@ npx wrangler deploy
 
 測試期間只有在網站用**管理密碼**登入的人能用（其他人看到「功能停用」）。
 
-1. **D1 建新表 `fb_pages`**（粉專簡稱／UTM／RD 區段／順序／顯示；在 `server` 資料夾執行，重跑不會動到舊資料）：
+1. **D1 建新表 `fb_pages`、`fb_presets`**（粉專簡稱／UTM／RD 區段／順序／顯示；活動留言；在 `server` 資料夾執行，重跑不會動到舊資料）：
 
    ```bash
    npx wrangler d1 execute toolbox --remote --file=./schema.sql
@@ -184,7 +184,7 @@ npx wrangler deploy
 
    `crons` 維持 `["17 19 * * *"]`（留言靠計時器，不需要每分鐘的 cron）。
 
-4. `npx wrangler deploy`，到管理頁「臉書發文」：看 token 狀態 → 粉專設定填簡稱、UTM、RD 區段、順序、顯示 → 儲存；「Rundown」按「測試連線」。
+4. `npx wrangler deploy`，到管理頁「臉書發文」：看 token 狀態 → 粉專設定填簡稱、UTM、RD 區段、順序、顯示 → 儲存；需要的話在「活動留言」存好第 2、3 則留言要用的內容；「Rundown」按「測試連線」。
 
 ---
 

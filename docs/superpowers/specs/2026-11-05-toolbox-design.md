@@ -290,7 +290,7 @@ socialmediaeditor/
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
 | fetch | `GET /fetch?url=`、`GET /fetch/image?url=`、`GET /fetch/article?url=`（文章 HTML，≤2 MB） | 代抓公開網頁的標題與 OG 圖；圖片代理（只收 JPG／PNG／GIF／WebP、≤10 MB，讓網頁能把主圖畫進畫布）；只允許白名單網域、轉址逐跳檢查 | KV 快取（網頁資訊） |
-| fb | `GET /fb/pages`、`POST /fb/post`、`GET /fb/scheduled`、`GET /fb/published`、`POST /fb/posts/:id/{reschedule,cancel,delete}`；管理 `GET /admin/fb/status`、`GET/POST /admin/fb/pages`、`POST /admin/fb/refresh` | 臉書發文（`server/fb/`）；測試期間只給 `adm` 憑證（`access.js` 的 `FB_ACCESS`）；排程留言用 Durable Object `FbCommentTimer` | Secret `FB_USER_TOKEN`；D1 `fb_pages` |
+| fb | `GET /fb/pages`、`GET /fb/presets`、`POST /fb/post`、`GET /fb/scheduled`、`GET /fb/published`、`POST /fb/posts/:id/{reschedule,cancel,delete}`；管理 `GET /admin/fb/status`、`GET/POST /admin/fb/pages`、`GET/POST /admin/fb/presets`、`POST /admin/fb/refresh` | 臉書發文（`server/fb/`）；測試期間只給 `adm` 憑證（`access.js` 的 `FB_ACCESS`）；排程留言用 Durable Object `FbCommentTimer` | Secret `FB_USER_TOKEN`；D1 `fb_pages`、`fb_presets` |
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
 | rundown | `POST /rundown`；管理 `GET /admin/rundown`、`POST /admin/rundown/ping` | 補金鑰轉送 FB RUNDOWN Apps Script（不改 Apps Script） | Secrets `RUNDOWN_URL`、`RUNDOWN_TOKEN` |
 | cron | 每日 03:17（UTC 19:17） | 清理過期圖床檔案、日誌、30 天前已結束的留言 | — |
