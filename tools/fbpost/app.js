@@ -26,17 +26,21 @@ $('tabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab);
 });
 
-// 啟動：只有管理員才顯示、才呼叫 /fb/*
+// 啟動：有公司憑證才問 /fb/pages；開放範圍由後端決定（管理頁切換「只開放管理員／開放給公司帳號」），403 就維持停用
 (async () => {
   let st;
   try { st = await tb.api.call('/auth/status'); } catch { return; }
-  if (!st || st.admin !== true) return;
+  if (!st || !st.company) return;
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
     // 權限不足維持單純停用；其他（token 過期、沒設定、沒有粉專）把原因顯示出來
     if (e && e.code !== 'fb_forbidden') { $('offReason').textContent = '原因：' + errText(e); $('offReason').hidden = false; }
     return;
   }
+  // 已開放給公司帳號就不顯示「測試模式」標籤（讀不到維持顯示）
+  tb.api.call('/fb/access').then((a) => {
+    if (a && a.mode === 'company') for (const el of document.querySelectorAll('.test-pill')) el.hidden = true;
+  }).catch(() => {});
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;
   const dialog = createDialog();   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸

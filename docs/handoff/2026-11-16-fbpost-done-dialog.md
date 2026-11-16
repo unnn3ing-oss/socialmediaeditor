@@ -34,14 +34,15 @@
 | 開放切換 | 兩段：只開放管理員（預設）／開放給公司帳號；存 `fb_settings` k=`access`；`/admin/fb/access` GET/POST；`GET /fb/access` 回 mode；開放時隱藏「測試模式」標籤；前端不再只看 admin，改看 `/fb/pages` 是否 403 |
 | 部署 | **後端需重新部署** |
 
-- [ ] 後端：pages.js／post.js／access.js／index.js／schema.sql＋單元測試
-- [ ] 管理頁：`admin/`、`server/core/admin-page.js`
-- [ ] fbpost 前端：app.js 閘門、送出前文字 UTM 提醒
-- [ ] 測試、審查、截圖
+- [x] 後端：pages.js（`ensureCols` 依 D1 綁定 WeakSet 補欄位）／post.js（`pageUtm(env, id, !form.file)`）／access.js（`accessMode`／`setAccessMode`）／index.js（`/fb/access`、`/admin/fb/access`、`/fb/pages` 加 `noTextUtm`）／schema.sql＋單元測試
+- [x] 管理頁：`admin/`、`server/core/admin-page.js`（同一支腳本改兩邊：卡片 `.pg-card`、`#acCard`、素材順序＋`autoKey`）
+- [x] fbpost 前端：app.js 改看 `st.company`＋`/fb/pages` 403、`.test-pill` 依 `/fb/access` 隱藏；send.js 純文字送出前 confirmBox
+- [x] npm test 613、e2e 116、build --check 通過；截圖已拍
+- [ ] 獨立審查
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`
 
 ## 注意事項
-- 純前端，不需部署 Worker、不升外掛版號。
+- 送出完成視窗是純前端；追加部分**後端需重新部署**（自動補 `utm_text` 欄位、`fb_settings` 已存在）。不升外掛版號。
 - 工具內切換一律 hidden；不推 main，使用者說「推」才併。

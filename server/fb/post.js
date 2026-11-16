@@ -111,7 +111,7 @@ export async function createPosts(env, form) {
       continue;
     }
     const extras = form.extras || [];
-    const first = form.link ? commentText(form.link, await pageUtm(env, t.page), form.lead) : null;
+    const first = form.link ? commentText(form.link, await pageUtm(env, t.page, !form.file), form.lead) : null;
     const errText = (e) => String((e && e.message) || e).slice(0, 200);
     if (scheduled) {
       // 排程：第 1 則（有網址才有）與第 2、3 則一起交給計時器，發布後依序留

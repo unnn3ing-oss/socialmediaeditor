@@ -50,7 +50,7 @@ test('/fb/pages：只回顯示的、依順序排；/me/accounts 走快取', asyn
   assert.deepEqual(data.map((p) => p.rd), ['shaokang', 'news'], '帶出 RD 區段（前端排入 RD 用）');
   const all = (await (await call(env, '/admin/fb/pages', { headers: adm })).json()).data;
   assert.equal(all.length, 3);
-  assert.deepEqual(all.find((p) => p.id === '111'), { id: '111', name: 'TVBS 新聞', short: '新聞', utm: '?&utm_source=facebook&utm_medium=fbarticlepic', rd: 'news', order: 1, show: true });
+  assert.deepEqual(all.find((p) => p.id === '111'), { id: '111', name: 'TVBS 新聞', short: '新聞', utm: '?&utm_source=facebook&utm_medium=fbarticlepic', utmText: '', rd: 'news', order: 1, show: true });
   assert.equal(f.calls.filter((c) => c.path === '/me/accounts').length, 1, '第二次起走快取');
   assert.equal((await call(env, '/admin/fb/refresh', { method: 'POST', headers: adm })).status, 200);
   await call(env, '/admin/fb/pages', { headers: adm });
@@ -218,4 +218,55 @@ test('tokenstore：加解密來回一致；SESSION_SECRET 不同就解不開', a
   assert.equal(await decryptToken({ SESSION_SECRET: 'a'.repeat(40) }, blob), 'EAAB-token');
   assert.equal(await decryptToken({ SESSION_SECRET: 'b'.repeat(40) }, blob), null);
   assert.equal(await decryptToken({ SESSION_SECRET: 'a'.repeat(40) }, 'junk'), null);
+});
+
+test('UTM 文字欄：存取、/fb/pages 只回有沒有設定（noTextUtm），不外露 UTM；格式驗證', async (t) => {
+  const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  const post = (pages) => call(env, '/admin/fb/pages', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ pages }) });
+  const r = await post([
+    { id: '111', short: '新聞', utm: '?&utm_medium=pic', utmText: '?&utm_medium=text', rd: 'news', order: 0, show: true },
+    { id: '222', short: '少康', utm: '?&utm_medium=pic2', rd: '', order: 1, show: true }
+  ]);
+  assert.equal(r.status, 200);
+  const all = (await r.json()).data;
+  assert.equal(all.find((p) => p.id === '111').utmText, '?&utm_medium=text');
+  assert.equal(all.find((p) => p.id === '222').utmText, '');
+  const { data } = await (await call(env, '/fb/pages', { headers: await auth(env, 'company', true) })).json();
+  assert.deepEqual(data.filter((p) => p.id !== '333').map((p) => [p.id, p.noTextUtm]), [['111', false], ['222', true]]);
+  for (const p of data) assert.ok(!('utmText' in p));
+  assert.equal((await post([{ id: '111', short: '新聞', utm: '', utmText: 'a b', rd: '', order: 0, show: true }])).status, 400);
+  assert.equal((await post([{ id: '111', short: '新聞', utm: '', utmText: 'x'.repeat(201), rd: '', order: 0, show: true }])).status, 400);
+});
+
+test('舊資料表沒有 utm_text 欄位：自動補上', async (t) => {
+  const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
+  const env = fbEnv();
+  env.DB.raw.exec("DROP TABLE fb_pages; CREATE TABLE fb_pages (id TEXT PRIMARY KEY, short TEXT NOT NULL, utm TEXT NOT NULL DEFAULT '', rd TEXT NOT NULL DEFAULT '', ord INTEGER NOT NULL DEFAULT 999, show INTEGER NOT NULL DEFAULT 1, updated INTEGER NOT NULL); INSERT INTO fb_pages VALUES ('111','新聞','?&a=1','news',0,1,0);");
+  const mod = await import('../../server/fb/pages.js');
+  const s = await mod.pageSetting(env, '111');
+  assert.deepEqual(s, { utm: '?&a=1', utmText: '', rd: 'news' });
+});
+
+test('開放切換：預設只開放管理員；管理頁切成 company 後公司憑證可用；值壞掉退回 admin', async (t) => {
+  const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  const company = await auth(env, 'company');
+  const set = (mode, h = adm) => call(env, '/admin/fb/access', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ mode }) });
+  assert.deepEqual((await (await call(env, '/admin/fb/access', { headers: adm })).json()).data, { mode: 'admin' });
+  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
+  assert.equal((await set('company', company)).status, 401, '公司憑證不能切換');
+  assert.equal((await set('everyone')).status, 400);
+  const r = await set('company');
+  assert.deepEqual((await r.json()).data, { mode: 'company' });
+  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 200);
+  assert.deepEqual((await (await call(env, '/fb/access', { headers: company })).json()).data, { mode: 'company' });
+  assert.equal((await call(env, '/fb/pages')).status, 401, '沒登入仍不行');
+  await set('admin');
+  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
+  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company', true) })).status, 200, '管理員一直可用');
+  env.DB.raw.prepare("UPDATE fb_settings SET v = 'bogus' WHERE k = 'access'").run();
+  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
 });

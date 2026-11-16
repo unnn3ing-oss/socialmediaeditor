@@ -22,6 +22,7 @@ async function setup(t, handlers) {
   env = mkEnv({ FB_USER_TOKEN: 'U', FB_TIMER: fakeNamespace(RecTimer, () => env) });
   RecTimer.log = [];
   env.DB.raw.prepare("INSERT INTO fb_pages (id, short, utm, rd, ord, show, updated) VALUES ('111','新聞','?&utm_source=facebook&utm_medium=fbarticlepic','news',0,1,0), ('222','少康','?&utm_source=facebook&utm_medium=2100roompic','shaokang',1,1,0)").run();
+  env.DB.raw.prepare("UPDATE fb_pages SET utm_text = '?&utm_source=facebook&utm_medium=fbarticletext' WHERE id = '111'").run();
   const { signToken } = await tok();
   const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true)) };
   return { f, env, headers };
@@ -200,7 +201,7 @@ test('第 2、3 則留言：排程＝三則一起交給計時器', async (t) => 
   const at = nowSec() + 3600;
   const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_7' }) });
   await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]), comments: JSON.stringify([{ message: '二', delay: 5 }]) });
-  assert.deepEqual(RecTimer.log[0][1].items, [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }, { message: '二', offset: 5 }]);
+  assert.deepEqual(RecTimer.log[0][1].items, [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticletext', offset: 0 }, { message: '二', offset: 5 }]);
   assert.equal(RecTimer.log[0][1].at, at);
 
 });
@@ -211,4 +212,17 @@ test('第 2、3 則留言驗證：最多 2 則、5 分鐘倍數、5～1440、內
   for (const c of [[{ message: 'a', delay: 7 }], [{ message: 'a', delay: 0 }], [{ message: 'a', delay: 1445 }], [{ message: ' ', delay: 5 }], [{ message: 'a', delay: 5 }, { message: 'b', delay: 5 }, { message: 'c', delay: 5 }]]) {
     assert.equal((await go(c)).status, 400, JSON.stringify(c));
   }
+});
+
+test('純文字（沒附圖）第 1 則留言用「文字」UTM，沒設定就不加 UTM', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/feed': () => ({ id: '111_5' }),
+    'POST /222/feed': () => ({ id: '222_5' }),
+    'POST /111_5/comments': () => ({ id: 'C1' }),
+    'POST /222_5/comments': () => ({ id: 'C2' })
+  });
+  const r = await send(env, headers, { message: '只有字', link: LINK, targets: JSON.stringify([{ page: '111', at: null }, { page: '222', at: null }]) });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(f.calls.find((c) => c.path === '/111_5/comments').body.message, '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticletext');
+  assert.equal(f.calls.find((c) => c.path === '/222_5/comments').body.message, '看更多新聞內容\n' + LINK, '少康沒設文字 UTM：不加');
 });

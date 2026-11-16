@@ -1,6 +1,6 @@
-// 排程發布後端：/fb/*（測試期間只給管理員，見 access.js）與管理路由 /admin/fb/*、/admin/rundown*
+// 排程發布後端：/fb/*（權限見 access.js：管理頁切換只開放管理員／開放公司帳號）與管理路由 /admin/fb/*、/admin/rundown*
 import { ok, fail, readBody } from '../core/http.js';
-import { fbAccess } from './access.js';
+import { fbAccess, accessMode, setAccessMode, ACCESS_MODES } from './access.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, checkNewToken, FbSetupError } from './pages.js';
 import { saveToken, clearToken } from './tokenstore.js';
 import { GraphError } from './graph.js';
@@ -27,8 +27,9 @@ export function route(method, re, handler) { routes.push([method, re, handler]);
 
 route('GET', /^\/fb\/pages$/, async (request, env) => {
   const pages = await listPages(env);
-  return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order, rd: p.rd })));
+  return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order, rd: p.rd, noTextUtm: !p.utmText })));
 });
+route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: await accessMode(env) }));
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
@@ -120,6 +121,13 @@ adminRoute('DELETE', /^\/admin\/fb\/token$/, async (request, env) => {
   await clearToken(env);
   await clearPageCache(env);
   return ok(request, env, await tokenStatus(env));
+});
+adminRoute('GET', /^\/admin\/fb\/access$/, async (request, env) => ok(request, env, { mode: await accessMode(env) }));
+adminRoute('POST', /^\/admin\/fb\/access$/, async (request, env) => {
+  const body = await readJsonBody(request, 1024);
+  if (!body || !ACCESS_MODES.includes(body.mode)) return fail(request, env, 'bad_request');
+  await setAccessMode(env, body.mode);
+  return ok(request, env, { mode: await accessMode(env) });
 });
 adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => { await clearPageCache(env); return ok(request, env, { cleared: true }); });
 

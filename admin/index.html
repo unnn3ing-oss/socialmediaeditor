@@ -44,6 +44,14 @@
       <h1>臉書發文</h1>
       <p>排程發布工具的臉書連線與粉專設定。</p>
 
+      <section class="card" id="acCard">
+        <h2>排程發布開放範圍</h2>
+        <p>「只開放管理員」：只有在網站用管理密碼登入的人能用排程發布（測試期間）。「開放給公司帳號」：用公司密碼登入的人也能用。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <p class="fb-state" id="acState">狀態：尚未讀取</p>
+        <div class="row ac-row"><button id="acAdmin" type="button" aria-pressed="false">只開放管理員</button><button id="acCompany" type="button" aria-pressed="false">開放給公司帳號</button></div>
+        <p class="msg" id="acMsg" role="status"></p>
+      </section>
+
       <section class="card" id="fbCard">
         <h2>臉書連線</h2>
         <p>後端用「使用者權杖」取得各粉專的發文權限：管理頁換過的優先，沒有就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、App、到期日與缺少的權限（不會顯示權杖本身）。</p>
@@ -61,10 +69,10 @@
 
       <section class="card" id="pgCard">
         <h2>粉專設定</h2>
-        <p>簡稱只影響網頁上的顯示；UTM 只影響留言裡的文章連結；RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序依表格由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>
+        <p>簡稱只影響網頁上的顯示；UTM 只影響第 1 則留言裡的文章連結：「圖文」用在選套版、純文字圖，「文字」用在純文字貼文（空白就不加 UTM，發文時會提醒）。RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>
         <p class="msg" id="pgMsg" role="status"></p>
-        <div class="scroll" id="pgWrap" hidden>
-          <table id="pgTable"><thead><tr><th>序號</th><th>臉書名稱</th><th>簡稱</th><th>UTM</th><th>RD 區段</th><th>顯示</th><th>順序</th></tr></thead><tbody id="pgRows"></tbody></table>
+        <div id="pgWrap" hidden>
+          <div id="pgRows" class="pg-list"></div>
         </div>
         <div class="row"><button id="pgSave" class="primary" type="button" hidden>儲存</button></div>
       </section>
@@ -99,13 +107,13 @@
         <h2>上傳或替換素材</h2>
         <p>素材名稱相同就會替換掉舊的。只接受 PNG、JPEG、WebP、SVG、WOFF2，每個最大 10 MB。</p>
         <form id="upForm">
-          <label for="key">素材名稱</label>
-          <input id="key" type="text" placeholder="例如 logo-white.png" pattern="[a-z0-9][a-z0-9._\-]{0,63}" autocapitalize="off" required>
           <label for="tier">等級</label>
           <select id="tier">
             <option value="company">company（公司專屬，要密碼才拿得到）</option>
             <option value="public">public（所有人都看得到）</option>
           </select>
+          <label for="key">素材名稱</label>
+          <input id="key" type="text" placeholder="選檔案後自動帶入檔名（例如 logo-white）" pattern="[a-z0-9][a-z0-9._\-]{0,63}" autocapitalize="off" required>
           <label for="file">檔案</label>
           <input id="file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,font/woff2,.woff2" required>
           <div class="row"><button class="primary" type="submit" id="upBtn">上傳</button></div>

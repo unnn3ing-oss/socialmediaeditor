@@ -12,7 +12,7 @@ test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
-const PAGES = [{ id: '111', short: '新聞', order: 1, rd: 'news' }, { id: '222', short: '娛樂', order: 2, rd: 'ent' }, { id: '333', short: '國際', order: 3, rd: '' }];
+const PAGES = [{ id: '111', short: '新聞', order: 1, rd: 'news', noTextUtm: false }, { id: '222', short: '娛樂', order: 2, rd: 'ent', noTextUtm: true }, { id: '333', short: '國際', order: 3, rd: '', noTextUtm: true }];
 const SHOT = process.env.SHOT_DIR;
 
 // mode: 'admin' | 'company'（無 admin）| 'denied'（401）| 'tokenbad'（管理員，但 /fb/pages 回 fb_token）
@@ -30,6 +30,9 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
       if (mode === 'denied') return json({ ok: false, code: 'unauthorized', error: '請先登入' }, 401);
       return json(mode === 'admin' || mode === 'tokenbad' ? { company: true, exp: soon, admin: true } : { company: true, exp: soon });
     }
+    // 開放範圍：company＝只開放管理員時的公司帳號（403）；companyOpen＝已開放給公司帳號
+    if (mode === 'company' && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_forbidden', error: '目前只有管理員可以使用排程發布。' }, 403);
+    if (p === '/fb/access') return json({ mode: mode === 'companyOpen' ? 'company' : 'admin' });
     if (p === '/fb/pages') return mode === 'tokenbad' ? json({ ok: false, code: 'fb_token', error: '臉書 token 無效或過期。' }, 502) : json(PAGES);
     if (p === '/fb/post') {
       const body = req.postData() || '';
@@ -61,7 +64,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
 for (const mode of ['company', 'denied']) {
-  test(`非管理員（${mode}）只顯示功能停用，不呼叫 /fb/*`, async () => {
+  test(`只開放管理員時，公司帳號（${mode}）只顯示功能停用`, async () => {
     const { page, errors, fbCalls } = await newPage(mode, { width: 390, height: 700 });
     await page.goto(srv.url + 'tools/fbpost/index.html');
     const box = page.locator('#fbpostOff');
@@ -69,11 +72,67 @@ for (const mode of ['company', 'denied']) {
     assert.match(await box.textContent(), /排程發布 功能停用/);
     await page.waitForTimeout(400);
     assert.equal(await page.locator('#fbpostApp').isVisible(), false);
-    assert.deepEqual(fbCalls, []);
+    assert.deepEqual(fbCalls, mode === 'company' ? ['/fb/pages'] : [], '公司帳號只問一次 /fb/pages（403），沒登入不問');
+    assert.equal(await page.isHidden('#offReason'), true, '權限不足不顯示原因');
     assert.deepEqual(errors, []);
     await page.close();
   });
 }
+
+test('已開放給公司帳號：公司帳號可以用，不顯示「測試模式」標籤；管理員在只開放管理員時有標籤', async () => {
+  const { page, errors } = await newPage('companyOpen');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.waitForFunction(() => [...document.querySelectorAll('.test-pill')].every((e) => e.hidden));
+  await page.click('#newBtn');
+  assert.equal(await page.locator('.test-pill:visible').count(), 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+  const a = await newPage('admin');
+  await a.page.goto(srv.url + 'tools/fbpost/index.html');
+  await a.page.waitForSelector('#fbpostApp:not([hidden])');
+  await a.page.waitForTimeout(200);
+  assert.equal(await a.page.isVisible('.fp-head .test-pill'), true);
+  await a.page.close();
+});
+
+test('純文字貼文：勾到沒設定文字 UTM 的粉專會先提醒，返回不送、確定才送', async () => {
+  const { page, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('#modeSeg [data-mode=text]');
+  await page.fill('#msg', '只有文字');
+  await page.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
+  await page.click(chip(111) + ' .chip-l');
+  await page.click(chip(333) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#cfDlg[open]');
+  assert.match(await page.textContent('#cfBody'), /^國際 沒有設定純文字貼文的 UTM/);
+  await page.click('#cfNo');
+  await page.waitForTimeout(200);
+  assert.equal(api.posts.length, 0);
+  await page.click('#sendBtn');
+  await page.waitForSelector('#cfDlg[open]');
+  await page.click('#cfYes');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 1);
+  await page.close();
+});
+
+test('有圖貼文不提醒文字 UTM', async () => {
+  const { page, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await pasteImage(page, fakeAsset());
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+  await page.fill('#msg', 'm');
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.click(chip(333) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 1);
+  await page.close();
+});
 
 test('網站首頁不用登入就看得到排程發布卡片，點進去顯示功能停用', async () => {
   const { page, errors, fbCalls } = await newPage('denied', { width: 1280, height: 800 });
@@ -269,6 +328,8 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.click(chip(333) + ' .chip-l');
   const before = Date.now();
   await page.click('#sendBtn');
+  await page.waitForSelector('#cfDlg[open]');   // 沒附圖、國際沒設定文字 UTM → 先提醒
+  await page.click('#cfYes');
   await page.waitForSelector('#doneDlg[open]');
   await page.waitForFunction(() => /RD 主粉/.test(document.getElementById('doneList').textContent));
   assert.equal(await page.isHidden('#doneRd'), true, 'RD 寫入成功不顯示提醒');

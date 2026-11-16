@@ -74,8 +74,18 @@ export async function fetchPages(env, ut) {
 
 export async function clearPageCache(env) { if (env.CACHE) { await env.CACHE.delete(CACHE_KEY); await env.CACHE.delete(NONE_KEY); } }
 
+// 舊資料表沒有 utm_text（純文字貼文用的 UTM）→ 補欄位；每個執行個體只檢查一次
+const colsOk = new WeakSet();   // 依 D1 綁定記錄
+async function ensureCols(env) {
+  if (colsOk.has(env.DB)) return;
+  try { await env.DB.prepare("ALTER TABLE fb_pages ADD COLUMN utm_text TEXT NOT NULL DEFAULT ''").run(); }
+  catch (e) { if (!/duplicate column/i.test(String(e && e.message))) throw e; }
+  colsOk.add(env.DB);
+}
+
 async function settings(env) {
-  const { results } = await env.DB.prepare('SELECT id, short, utm, rd, ord, show FROM fb_pages').all();
+  await ensureCols(env);
+  const { results } = await env.DB.prepare('SELECT id, short, utm, utm_text, rd, ord, show FROM fb_pages').all();
   return new Map((results || []).map((r) => [r.id, r]));
 }
 
@@ -85,7 +95,7 @@ export async function listPages(env, { all = false } = {}) {
   const out = [];
   for (const p of tokens.values()) {
     const c = conf.get(p.id);
-    const row = { id: p.id, name: p.name, short: c ? c.short : p.name, utm: c ? c.utm : '', rd: c ? c.rd : '', order: c ? c.ord : 999, show: c ? !!c.show : true };
+    const row = { id: p.id, name: p.name, short: c ? c.short : p.name, utm: c ? c.utm : '', utmText: c ? (c.utm_text || '') : '', rd: c ? c.rd : '', order: c ? c.ord : 999, show: c ? !!c.show : true };
     if (all || row.show) out.push(row);
   }
   out.sort((a, b) => a.order - b.order);   // 穩定排序：同順序（未設定）維持臉書回傳順序
@@ -93,10 +103,12 @@ export async function listPages(env, { all = false } = {}) {
 }
 
 export async function pageSetting(env, pageId) {
-  const r = await env.DB.prepare('SELECT utm, rd FROM fb_pages WHERE id = ?').bind(pageId).first();
-  return { utm: r ? r.utm : '', rd: r ? r.rd : '' };
+  await ensureCols(env);
+  const r = await env.DB.prepare('SELECT utm, utm_text, rd FROM fb_pages WHERE id = ?').bind(pageId).first();
+  return { utm: r ? r.utm : '', utmText: r ? (r.utm_text || '') : '', rd: r ? r.rd : '' };
 }
-export const pageUtm = async (env, pageId) => (await pageSetting(env, pageId)).utm;
+// text＝純文字貼文（沒附圖）用「文字」UTM，空白就不加；其他用「圖文」UTM
+export const pageUtm = async (env, pageId, text = false) => { const s = await pageSetting(env, pageId); return text ? s.utmText : s.utm; };
 export const pageRd = async (env, pageId) => (await pageSetting(env, pageId)).rd;
 
 const UTM_RE = /^[A-Za-z0-9?&=_.~%+\-]*$/;
@@ -109,22 +121,25 @@ export function validPages(body) {
     if (!p || typeof p.id !== 'string' || !/^\d{1,30}$/.test(p.id) || seen.has(p.id)) return null;
     const short = typeof p.short === 'string' ? p.short.trim() : '';
     const utm = typeof p.utm === 'string' ? p.utm.trim() : '';
+    const utmText = typeof p.utmText === 'string' ? p.utmText.trim() : '';
     const n = [...short].length;
     if (n < 1 || n > 20 || utm.length > 200 || !UTM_RE.test(utm)) return null;
+    if (utmText.length > 200 || !UTM_RE.test(utmText)) return null;
     if (!RD_CODES.includes(p.rd)) return null;
     if (!Number.isInteger(p.order) || p.order < 0 || p.order > 999) return null;
     seen.add(p.id);
-    out.push({ id: p.id, short, utm, rd: p.rd, order: p.order, show: p.show ? 1 : 0 });
+    out.push({ id: p.id, short, utm, utmText, rd: p.rd, order: p.order, show: p.show ? 1 : 0 });
   }
   return out;
 }
 
 export async function savePages(env, pages) {
+  await ensureCols(env);
   const now = Date.now();
   const stmts = pages.map((p) => env.DB.prepare(
-    'INSERT INTO fb_pages (id, short, utm, rd, ord, show, updated) VALUES (?, ?, ?, ?, ?, ?, ?) ' +
-    'ON CONFLICT(id) DO UPDATE SET short = excluded.short, utm = excluded.utm, rd = excluded.rd, ord = excluded.ord, show = excluded.show, updated = excluded.updated'
-  ).bind(p.id, p.short, p.utm, p.rd, p.order, p.show, now));
+    'INSERT INTO fb_pages (id, short, utm, utm_text, rd, ord, show, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
+    'ON CONFLICT(id) DO UPDATE SET short = excluded.short, utm = excluded.utm, utm_text = excluded.utm_text, rd = excluded.rd, ord = excluded.ord, show = excluded.show, updated = excluded.updated'
+  ).bind(p.id, p.short, p.utm, p.utmText || '', p.rd, p.order, p.show, now));
   if (stmts.length) await env.DB.batch(stmts);
 }
 

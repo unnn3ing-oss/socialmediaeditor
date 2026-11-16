@@ -74,6 +74,15 @@ if (window.top !== window.self) {
       .then(function () { $('loginBtn').disabled = false; });
   };
 
+  // 選檔案自動帶素材名稱：去副檔名、小寫、不合法的字元換成 -；只在名稱空白或上次是自動帶入時才覆蓋（「替換」或手打的不動）
+  var autoKey = '';
+  $('file').onchange = function () {
+    var f = $('file').files[0]; if (!f) return;
+    var cur = $('key').value.trim();
+    if (cur && cur !== autoKey) return;
+    var k = f.name.replace(/[.][^.]*$/, '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/-+$/, '').slice(0, 64);
+    $('key').value = k; autoKey = k;
+  };
   $('upForm').onsubmit = function (e) {
     e.preventDefault();
     var f = $('file').files[0], key = $('key').value.trim();
@@ -137,43 +146,77 @@ if (window.top !== window.self) {
     });
   }
 
+  // ---- 排程發布開放範圍（/admin/fb/access）----
+  var AC_TEXT = { admin: '只開放管理員', company: '開放給公司帳號' };
+  function acShow(mode) {
+    $('acState').textContent = '狀態：' + AC_TEXT[mode];
+    $('acState').className = 'fb-state' + (mode === 'company' ? ' on' : '');
+    $('acAdmin').setAttribute('aria-pressed', String(mode === 'admin'));
+    $('acCompany').setAttribute('aria-pressed', String(mode === 'company'));
+  }
+  function acLoad() {
+    say($('acMsg'), '');
+    return api('/admin/fb/access').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      acShow(res.data.mode);
+    }).catch(function (e) { say($('acMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function acSet(mode) {
+    $('acAdmin').disabled = $('acCompany').disabled = true; say($('acMsg'), '儲存中');
+    api('/admin/fb/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode }) }).then(function (res) {
+      if (res.ok) { acShow(res.data.mode); say($('acMsg'), '已切換為「' + AC_TEXT[res.data.mode] + '」', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('acMsg'), res.error || '切換失敗。', 'err');
+    }).catch(function () { say($('acMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('acAdmin').disabled = $('acCompany').disabled = false; });
+  }
+  $('acAdmin').onclick = function () { acSet('admin'); };
+  $('acCompany').onclick = function () { acSet('company'); };
+
   // ---- 粉專設定（/admin/fb/pages）----
   var pgItems = [];   // 目前表格順序；每列 { id, name, short, utm, rd, show }
   var RD_OPTS = [['', '不寫入'], ['news', '主粉'], ['ent', '娛樂粉'], ['shaokang', '少康粉'], ['intl', '國際＋粉']];
-  function pgMap(list) { return list.map(function (p) { return { id: p.id, name: p.name, short: p.short, utm: p.utm || '', rd: p.rd || '', show: !!p.show }; }); }
+  function pgMap(list) { return list.map(function (p) { return { id: p.id, name: p.name, short: p.short, utm: p.utm || '', utmText: p.utmText || '', rd: p.rd || '', show: !!p.show }; }); }
   function pgSync() {   // 把輸入框的值寫回 pgItems（換順序前先存）
     pgItems.forEach(function (it, i) {
       var r = $('pgRows').children[i]; if (!r) return;
-      it.short = r.querySelector('.pg-short').value; it.utm = r.querySelector('.pg-utm').value;
+      it.short = r.querySelector('.pg-short').value; it.utm = r.querySelector('.pg-utm').value; it.utmText = r.querySelector('.pg-utmtext').value;
       it.rd = r.querySelector('.pg-rd').value; it.show = r.querySelector('.pg-show').checked;
     });
   }
   function pgRender() {
-    var tb = $('pgRows'); tb.textContent = '';
+    var box = $('pgRows'); box.textContent = '';
     pgItems.forEach(function (it, i) {
-      var tr = document.createElement('tr');
-      function td(node) { var c = document.createElement('td'); c.appendChild(node); tr.appendChild(c); return c; }
+      var card = document.createElement('div'); card.className = 'pg-card';
+      function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+      function field(label, node, cls) { var l = el('label', cls); l.appendChild(document.createTextNode(label)); l.appendChild(node); return l; }
       function input(cls, val, ph, max, label) {
         var inp = document.createElement('input'); inp.type = 'text'; inp.className = cls; inp.value = val || ''; inp.maxLength = max;
         if (ph) inp.placeholder = ph; inp.setAttribute('aria-label', it.name + ' ' + label); return inp;
       }
-      td(document.createTextNode(String(i + 1))).className = 'num';
-      td(document.createTextNode(it.name));
-      td(input('pg-short', it.short, '', 20, '簡稱'));
-      td(input('pg-utm', it.utm, '?&utm_source=facebook&utm_medium=…', 200, 'UTM'));
-      var sel = document.createElement('select'); sel.className = 'pg-rd'; sel.setAttribute('aria-label', it.name + ' RD 區段');
-      RD_OPTS.forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
-      sel.value = it.rd || ''; td(sel);
-      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pg-show'; cb.checked = !!it.show; cb.setAttribute('aria-label', it.name + ' 顯示'); td(cb);
-      var mv = document.createElement('div'); mv.className = 'mv';
+      var head = el('div', 'pg-head');
+      head.appendChild(el('span', 'pg-no', String(i + 1)));
+      head.appendChild(el('span', 'pg-name', it.name));
+      var mv = el('div', 'mv');
       [['上移', -1], ['下移', 1]].forEach(function (m) {
         var b = document.createElement('button'); b.type = 'button'; b.className = 'pg-' + (m[1] < 0 ? 'up' : 'down'); b.textContent = m[0]; b.setAttribute('aria-label', it.name + m[0]);
         b.disabled = (i + m[1] < 0 || i + m[1] >= pgItems.length);
         b.onclick = function () { pgSync(); var x = pgItems.splice(i, 1)[0]; pgItems.splice(i + m[1], 0, x); pgRender(); };
         mv.appendChild(b);
       });
-      td(mv);
-      tb.appendChild(tr);
+      head.appendChild(mv);
+      card.appendChild(head);
+      var grid = el('div', 'pg-grid');
+      grid.appendChild(field('簡稱', input('pg-short', it.short, '', 20, '簡稱')));
+      var sel = document.createElement('select'); sel.className = 'pg-rd'; sel.setAttribute('aria-label', it.name + ' RD 區段');
+      RD_OPTS.forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
+      sel.value = it.rd || ''; grid.appendChild(field('RD 區段', sel));
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pg-show'; cb.checked = !!it.show; cb.setAttribute('aria-label', it.name + ' 顯示');
+      var sl = el('label', 'pg-showlbl'); sl.appendChild(cb); sl.appendChild(document.createTextNode('顯示')); grid.appendChild(sl);
+      grid.appendChild(field('UTM 圖文', input('pg-utm', it.utm, '?&utm_source=facebook&utm_medium=…', 200, 'UTM 圖文'), 'pg-wide'));
+      grid.appendChild(field('UTM 文字', input('pg-utmtext', it.utmText, '空白＝純文字貼文不加 UTM', 200, 'UTM 文字'), 'pg-wide'));
+      card.appendChild(grid);
+      box.appendChild(card);
     });
     $('pgWrap').hidden = !pgItems.length; $('pgSave').hidden = !pgItems.length;
   }
@@ -188,7 +231,7 @@ if (window.top !== window.self) {
   var fbLoaded = false;
   function fbLoad() {
     fbLoaded = true; say($('fbMsg'), '');
-    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad()]);
+    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad()]);
   }
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
@@ -279,10 +322,10 @@ if (window.top !== window.self) {
     pgSync();
     for (var i = 0; i < pgItems.length; i++) {
       var n = pgItems[i].short.trim().length;
-      if (n < 1 || n > 20) return say($('pgMsg'), '第 ' + (i + 1) + ' 列「' + pgItems[i].name + '」的簡稱要 1～20 字。', 'err');
-      if (pgItems[i].utm.length > 200) return say($('pgMsg'), '第 ' + (i + 1) + ' 列的 UTM 不能超過 200 字。', 'err');
+      if (n < 1 || n > 20) return say($('pgMsg'), '第 ' + (i + 1) + ' 個「' + pgItems[i].name + '」的簡稱要 1～20 字。', 'err');
+      if (pgItems[i].utm.length > 200 || pgItems[i].utmText.length > 200) return say($('pgMsg'), '第 ' + (i + 1) + ' 個「' + pgItems[i].name + '」的 UTM 不能超過 200 字。', 'err');
     }
-    var body = { pages: pgItems.map(function (it, k) { return { id: it.id, short: it.short.trim(), utm: it.utm.trim(), rd: it.rd, order: k, show: it.show ? 1 : 0 }; }) };
+    var body = { pages: pgItems.map(function (it, k) { return { id: it.id, short: it.short.trim(), utm: it.utm.trim(), utmText: it.utmText.trim(), rd: it.rd, order: k, show: it.show ? 1 : 0 }; }) };
     $('pgSave').disabled = true; say($('pgMsg'), '儲存中');
     api('/admin/fb/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
       if (res.ok) { pgItems = pgMap(res.data); pgRender(); say($('pgMsg'), '已儲存', 'good'); }

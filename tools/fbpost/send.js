@@ -43,6 +43,11 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
       const image = await composer.image();
       const msg = $('msg').value;
       if (!msg.trim() && !image) { err.textContent = '請輸入貼文內容，或貼上網址帶入照片。'; return; }
+      // 純文字（沒附圖）用各粉專的「文字」UTM；沒設定的提醒一下（留言連結不會加 UTM）
+      if (!image) {
+        const miss = c.targets.map((t) => targets.page(t.page)).filter((p) => p && p.noTextUtm).map((p) => p.short);
+        if (miss.length && !(await confirmBox('沒有設定文字 UTM', `${miss.join('、')} 沒有設定純文字貼文的 UTM，第 1 則留言的文章連結不會加 UTM。仍要送出嗎？（可到管理頁「粉專設定」填寫）`))) return;
+      }
       const fd = new FormData();
       fd.append('message', msg);
       const link = $('link').value.trim();

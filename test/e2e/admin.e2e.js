@@ -14,9 +14,10 @@ test.after(async () => { await browser.close(); await srv.close(); });
 let PG_SAVED = null;
 let PS_SAVED = null;
 let TOK_SAVED = null;
+let AC_MODE = 'admin';
 const PAGES = [
   { id: '1', name: 'TVBS 新聞', short: '新聞', utm: '', rd: 'news', order: 0, show: 1 },
-  { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', rd: 'ent', order: 1, show: 1 },
+  { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', utmText: '?&utm_medium=text', rd: 'ent', order: 1, show: 1 },
   { id: '3', name: 'TVBS 少康戰情室', short: '少康', utm: '', rd: '', order: 2, show: 0 }];
 const DATA = {
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
@@ -27,6 +28,8 @@ const DATA = {
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
   'POST /admin/fb/refresh': {},
+  'GET /admin/fb/access': () => ({ mode: AC_MODE }),
+  'POST /admin/fb/access': (b) => { AC_MODE = b.mode; return { mode: AC_MODE }; },
   'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP' }; },
   'DELETE /admin/fb/token': { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'secret', app: 'DEV-TOOL' },
   'GET /admin/rundown': { configured: true },
@@ -137,10 +140,18 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   assert.match(st, /到期日 2027-01-05/);
   assert.match(st, /粉專 3 個/);
   assert.match(await page.textContent('#fbMissing'), /缺少權限：pages_manage_posts/);
-  assert.equal(await page.locator('#pgRows tr').count(), 3);
-  assert.deepEqual(await page.$$eval('#pgRows tr', (rs) => rs.map((r) => r.children[0].textContent + r.children[1].textContent)), ['1TVBS 新聞', '2TVBS 娛樂', '3TVBS 少康戰情室']);
-  assert.equal(await page.inputValue('#pgRows tr:nth-child(2) .pg-utm'), '?&utm_source=facebook');
-  assert.equal(await page.isChecked('#pgRows tr:nth-child(3) .pg-show'), false);
+  assert.equal(await page.locator('#pgRows .pg-card').count(), 3);
+  assert.deepEqual(await page.$$eval('#pgRows .pg-card', (rs) => rs.map((r) => r.querySelector('.pg-no').textContent + r.querySelector('.pg-name').textContent)), ['1TVBS 新聞', '2TVBS 娛樂', '3TVBS 少康戰情室']);
+  assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(2) .pg-utm'), '?&utm_source=facebook');
+  assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(2) .pg-utmtext'), '?&utm_medium=text');
+  assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(1) .pg-utmtext'), '');
+  assert.equal(await page.isChecked('#pgRows .pg-card:nth-child(3) .pg-show'), false);
+  // 內容完整：名稱不折成直排、UTM 欄位夠寬、上下移按鈕在卡片內
+  const fit = await page.$$eval('#pgRows .pg-card', (cs) => cs.map((c) => {
+    const r = c.getBoundingClientRect(), dn = c.querySelector('.pg-down').getBoundingClientRect(), u = c.querySelector('.pg-utm').getBoundingClientRect();
+    return dn.right <= r.right + 0.5 && u.width >= 400 && c.querySelector('.pg-name').getBoundingClientRect().height < 40;
+  }));
+  assert.deepEqual(fit, [true, true, true]);
   assert.ok(calls.filter((c) => c.key === 'GET /admin/fb/status' || c.key === 'GET /admin/fb/pages').every((c) => c.auth === 'Bearer T'));
   // 重新讀取粉專：先清快取再重讀
   await page.click('#fbRefresh');
@@ -154,18 +165,20 @@ test('粉專設定：改簡稱、RD、上移後儲存，body 含新值與正確 
   const { page } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
   await page.waitForSelector('#pgWrap:not([hidden])');
-  await page.fill('#pgRows tr:nth-child(1) .pg-short', '主粉');
-  await page.selectOption('#pgRows tr:nth-child(3) .pg-rd', 'shaokang');
-  await page.check('#pgRows tr:nth-child(3) .pg-show');
-  await page.click('#pgRows tr:nth-child(3) .pg-up');   // 少康移到第 2 列
-  assert.equal(await page.inputValue('#pgRows tr:nth-child(2) .pg-short'), '少康');
-  assert.equal(await page.inputValue('#pgRows tr:nth-child(2) .pg-rd'), 'shaokang', '換順序後輸入值保留');
-  assert.equal(await page.inputValue('#pgRows tr:nth-child(1) .pg-short'), '主粉');
+  await page.fill('#pgRows .pg-card:nth-child(1) .pg-short', '主粉');
+  await page.selectOption('#pgRows .pg-card:nth-child(3) .pg-rd', 'shaokang');
+  await page.check('#pgRows .pg-card:nth-child(3) .pg-show');
+  await page.click('#pgRows .pg-card:nth-child(3) .pg-up');   // 少康移到第 2 列
+  assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(2) .pg-short'), '少康');
+  assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(2) .pg-rd'), 'shaokang', '換順序後輸入值保留');
+  assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(1) .pg-short'), '主粉');
   await page.click('#pgSave');
   await page.waitForFunction(() => document.getElementById('pgMsg').textContent === '已儲存');
   assert.deepEqual(PG_SAVED.pages.map((p) => [p.id, p.short, p.rd, p.order, p.show]),
     [['1', '主粉', 'news', 0, 1], ['3', '少康', 'shaokang', 1, 1], ['2', '娛樂', 'ent', 2, 1]]);
   assert.equal(PG_SAVED.pages[2].utm, '?&utm_source=facebook');
+  assert.equal(PG_SAVED.pages[2].utmText, '?&utm_medium=text', 'UTM 文字一起送');
+  assert.equal(PG_SAVED.pages[0].utmText, '');
 });
 
 test('粉專設定：簡稱空白不送出', async () => {
@@ -173,7 +186,7 @@ test('粉專設定：簡稱空白不送出', async () => {
   const { page } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
   await page.waitForSelector('#pgWrap:not([hidden])');
-  await page.fill('#pgRows tr:nth-child(1) .pg-short', '');
+  await page.fill('#pgRows .pg-card:nth-child(1) .pg-short', '');
   await page.click('#pgSave');
   assert.match(await page.textContent('#pgMsg'), /簡稱要 1～20 字/);
   assert.equal(PG_SAVED, null);
@@ -263,4 +276,43 @@ test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後
   await page.waitForFunction(() => /已改回 Secret/.test(document.getElementById('fbTokMsg').textContent));
   assert.ok(calls.some((c) => c.key === 'DELETE /admin/fb/token' && c.auth === 'Bearer T'));
   assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
+});
+
+test('排程發布開放範圍：讀取目前狀態、切換打 /admin/fb/access', async () => {
+  AC_MODE = 'admin';
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  await login(page);
+  await page.waitForFunction(() => document.getElementById('acState').textContent === '狀態：只開放管理員');
+  assert.equal(await page.getAttribute('#acAdmin', 'aria-pressed'), 'true');
+  const cards = await page.$$eval('#panel-fb section.card', (els) => els.map((e) => e.id));
+  assert.equal(cards[0], 'acCard', '放在臉書發文最上面');
+  await page.click('#acCompany');
+  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已切換為「開放給公司帳號」');
+  assert.equal(AC_MODE, 'company');
+  assert.equal(await page.getAttribute('#acCompany', 'aria-pressed'), 'true');
+  assert.match(await page.textContent('#acState'), /開放給公司帳號/);
+  assert.ok(calls.some((c) => c.key === 'POST /admin/fb/access' && c.auth === 'Bearer T'));
+  await page.click('#acAdmin');
+  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已切換為「只開放管理員」');
+  assert.equal(AC_MODE, 'admin');
+});
+
+test('素材上傳：順序是等級、素材名稱、檔案、上傳；選檔自動帶名稱，替換帶入的名稱不被覆蓋', async () => {
+  const { page } = await open({ width: 1280, height: 860 }, '#assets');
+  await login(page);
+  const order = await page.$$eval('#upForm label, #upForm button', (els) => els.map((e) => e.getAttribute('for') || e.id));
+  assert.deepEqual(order, ['tier', 'key', 'file', 'upBtn']);
+  const pick = (name) => page.setInputFiles('#file', { name, mimeType: 'image/png', buffer: Buffer.from([1, 2, 3]) });
+  await pick('Font Taipei Sans.Bold.woff2');
+  assert.equal(await page.inputValue('#key'), 'font-taipei-sans.bold');
+  await pick('logo_white.png');
+  assert.equal(await page.inputValue('#key'), 'logo_white', '上次自動帶的可以再換');
+  await page.fill('#key', 'my-name');
+  await pick('other.png');
+  assert.equal(await page.inputValue('#key'), 'my-name', '手打的不覆蓋');
+  await page.waitForSelector('#rows tr');
+  await page.click('#rows tr >> text=替換');
+  assert.equal(await page.inputValue('#key'), 'logo.png');
+  await pick('new-logo.png');
+  assert.equal(await page.inputValue('#key'), 'logo.png', '替換帶入的不覆蓋');
 });
