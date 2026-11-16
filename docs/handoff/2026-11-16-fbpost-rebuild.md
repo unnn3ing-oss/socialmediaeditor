@@ -1,5 +1,5 @@
 # 排程發布重寫（第一段：後端＋管理頁＋工具最小發文／管理）
-- 狀態：第一段追加進行中（共用畫圖核心＋帶入＋留言文字），計畫 `docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1b.md`　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
+- 狀態：第一段＋追加完成，等使用者部署實測　計畫：phase1、phase1b　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
 - 使用者原始需求：「重建新『排程發布』功能」；「全部都不可以參考過往任何紀錄來重寫」。
 - 設計（已確認）：`docs/superpowers/specs/2026-11-16-fbpost-rebuild-design.md`。實作計畫：`docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1.md`（寫好後）。
 
@@ -31,7 +31,7 @@
 - [x] 寫實作計畫（writing-plans）
 - [x] 使用者確認計畫與執行方式（A 混合）
 - [x] 第一段實作、測試（npm test 578、e2e 87、build --check）、獨立審查（3 Important＋1 升級已修）、截圖
-- [ ] 第一段追加（使用者 11/16 要求：測試期就能帶入＋套版、留言文字可改、全部模組化）：Task A～E 見 phase1b 計畫
+- [x] 第一段追加（測試期就能帶入＋套版、留言文字可改、全部模組化）：共用畫圖核心 `ui/compose/{render,fx,assets}.js`＋`fx.css`，圖片套版改接（改前後 7 情境＋貼圖畫布雜湊、桌機手機整頁截圖完全相同）；fbpost 前端拆 util／rules／targets／send／manage／compose／app；留言文字 `commentLead`；標題缺字型段先載入（`loadTitleGlyphs`）。npm test 580、e2e 92、獨立審查無 Critical／Important
 - [ ] 使用者部署並實測（清單見下）；結果回報後決定第二段或調整
 - [ ] 使用者說「推」才併入 main，同 commit 更新 CLAUDE.md「目前進度」
 
@@ -55,3 +55,8 @@
 
 ## 已知未處理（審查 Minor，使用者決定是否要修）
 token 無效時管理頁仍列五項缺權限；Safari 解析 `+0000` 時間；開啟連結未檢查 https；重查留言只看 50 則；逾時重按送出可能重複發文；「遲遲未發布」失敗後改時間不會復活。
+
+## 第一段追加的已知未處理（審查 Minor）
+- 純文字底圖模式一定附圖（標題空白也會送一張純色圖）。
+- 選取貼圖後切到別的模式／分頁，按 Delete 會刪掉看不到的貼圖（共用 fx.js，圖片套版原本也是這樣）。
+- 圖片套版自己的標題沒有先載入缺字型段（排程發布有）；要不要套用到圖片套版待使用者決定。

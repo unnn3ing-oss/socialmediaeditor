@@ -157,6 +157,7 @@ export function createComposer({ tb, assets }) {
         say('pullHint', '已取消帶入'); return;
       }
       const done = [];
+      if (st.mode === 'own') { st.mode = 'image'; setMode('image'); showMode(); }   // 帶入的是要套版的照片，切回作圖框
       if (assets.company) { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
       $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'color' ? '' : mainCaption(article), tags: article.tags });

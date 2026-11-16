@@ -136,3 +136,14 @@ test('貼圖與馬賽克：加到預覽，畫布跟著改變', async () => {
   assert.notEqual(await canvasHash(frame, '#cv'), before);
   await page.close();
 });
+
+test('在「自己的圖」模式按帶入：自動切回作圖框', async () => {
+  const { page, frame } = await openFb();
+  await frame.click('#modeSeg [data-mode=own]');
+  await frame.fill('#link', 'https://news.tvbs.com.tw/politics/1');
+  await frame.click('#pullBtn');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  assert.equal(await frame.getAttribute('#modeSeg [data-mode=image]', 'aria-pressed'), 'true');
+  assert.equal(await frame.isVisible('#cvWrap'), true);
+  await page.close();
+});
