@@ -13,7 +13,14 @@ export function commentLink(url, utm) {
   return base + (/[?&]$/.test(base) ? '' : '&') + u + hash;
 }
 
-export const commentText = (url, utm) => '看更多新聞內容\n' + commentLink(url, utm);
+export const DEFAULT_LEAD = '看更多新聞內容';
+export const MAX_LEAD = 200;
+// lead 沒給（undefined）用預設；給了空白就只放連結
+export function commentText(url, utm, lead = DEFAULT_LEAD) {
+  const head = String(lead == null ? DEFAULT_LEAD : lead).trim();
+  const link = commentLink(url, utm);
+  return head ? head + '\n' + link : link;
+}
 
 export async function postComment(env, token, postId, message) {
   const d = await graph(env, 'POST', '/' + postId + '/comments', { message }, token);

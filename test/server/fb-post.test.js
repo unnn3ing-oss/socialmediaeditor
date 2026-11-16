@@ -142,3 +142,22 @@ test('排程成功後真的計時器有紀錄（整合）', async (t) => {
   assert.equal((await state.storage.get('rec')).status, 'pending');
   assert.equal(await state.storage.getAlarm(), (at + 60) * 1000);
 });
+
+test('留言開頭文字：預設、自訂、空白只放連結、太長 400', async (t) => {
+  const { commentText } = await lp();
+  assert.equal(commentText(LINK, ''), '看更多新聞內容\n' + LINK);
+  assert.equal(commentText(LINK, '', '完整報導'), '完整報導\n' + LINK);
+  assert.equal(commentText(LINK, '', '  '), LINK);
+  assert.equal(commentText(LINK, '', ''), LINK);
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => ({ id: 'C1' })
+  });
+  await send(env, headers, { message: 'm', link: LINK, commentLead: '點我看', image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
+  assert.equal(f.calls.find((c) => /comments$/.test(c.path)).body.message, '點我看\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic');
+  const empty = await send(env, headers, { message: 'm', link: LINK, commentLead: '', image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
+  assert.equal(empty.status, 200);
+  assert.equal(f.calls.filter((c) => /comments$/.test(c.path)).pop().body.message, LINK + '?&utm_source=facebook&utm_medium=fbarticlepic');
+  const long = await send(env, headers, { message: 'm', link: LINK, commentLead: '字'.repeat(201), image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
+  assert.equal(long.status, 400);
+});

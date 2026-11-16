@@ -1,7 +1,7 @@
 // 發文：依序對每個粉專立即或排程；有圖排程照 Meta 官方範例（暫存照片 → /feed attached_media）
 import { graph, GraphError } from './graph.js';
 import { pageTokens, pageUtm } from './pages.js';
-import { commentText, postComment } from './comment.js';
+import { commentText, postComment, MAX_LEAD as MAX_COMMENT_LEAD } from './comment.js';
 import { armTimer } from './timer.js';
 
 export { commentLink, commentText } from './comment.js';
@@ -18,7 +18,9 @@ export function parsePostForm(fd) {
   const message = String(fd.get('message') || '');
   const link = String(fd.get('link') || '').trim();
   const image = fd.get('image');
+  const lead = fd.has('commentLead') ? String(fd.get('commentLead')) : undefined;   // 沒給＝預設「看更多新聞內容」
   if (message.length > MAX_MESSAGE) return null;
+  if (lead !== undefined && ([...lead.trim()].length > MAX_COMMENT_LEAD || /[\r\n]/.test(lead.trim()))) return null;
   if (link && !/^https?:\/\/[^\s]+$/i.test(link)) return null;
   let file = null;
   if (image && typeof image === 'object' && image.size > 0) {
@@ -35,7 +37,7 @@ export function parsePostForm(fd) {
     if (t.at !== null && !Number.isInteger(t.at)) return null;
     seen.add(t.page);
   }
-  return { message, link, file, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  return { message, link, lead, file, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
 async function publishOne(env, page, token, { message, file, at }) {
@@ -87,7 +89,7 @@ export async function createPosts(env, form) {
       continue;
     }
     if (!form.link) continue;
-    const text = commentText(form.link, await pageUtm(env, t.page));
+    const text = commentText(form.link, await pageUtm(env, t.page), form.lead);
     try {
       if (scheduled) { await armTimer(env, { pageId: t.page, postId: r.postId, message: text, at: t.at }); r.comment = 'armed'; }
       else { await postComment(env, p.token, r.postId, text); r.comment = 'done'; }
