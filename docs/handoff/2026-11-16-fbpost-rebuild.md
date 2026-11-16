@@ -19,7 +19,7 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| 實作計畫 | `docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1.md` | ⬜ |
+| 實作計畫 | `docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1.md`（Task 1～8） | ✅ 待使用者確認 |
 | 後端臉書模組 | 粉專清單、發文（立即／排程有圖）、列表、改時間、取消、刪除、留言 | ⬜ |
 | 後端留言 DO | 排程貼文發布後補第一則留言 | ⬜ |
 | 後端 RD 轉送 | `POST /rundown`、管理頁 ping | ⬜ |
@@ -28,7 +28,8 @@
 | 文件 | README、deploy.md（Secrets、DO migration v3）、規格、CLAUDE.md | ⬜ |
 
 ## 下一步
-- [ ] 寫實作計畫（writing-plans），使用者看過再動工
+- [x] 寫實作計畫（writing-plans）
+- [ ] 使用者確認計畫與執行方式
 - [ ] 依計畫實作、測試、獨立審查、截圖給使用者
 
 ## 測試
