@@ -12,49 +12,14 @@ import { autoLines, frameForUrl } from '../../sdk/news-rules.js';
 import { parseArticle } from '../../sdk/news-article.js';
 import * as compose from '../../ui/compose/render.js';
 import { createFxKit } from '../../ui/compose/fx.js';
+import { loadComposeAssets } from '../../ui/compose/assets.js';
 
 tb.init('pattern');
 
-const STICKER_IDS = ['smile', 'shock', 'cry', 'angry', 'kiss', 'laugh', 'meh'];
-
-async function urlOf(key) {
-  try { return (await tb.assets.get(key))?.url || null; } catch { return null; }
-}
-
-async function loadTitleFont(url) {
-  if (!url) return false;
-  try {
-    const face = new FontFace('WHZ-Heavy', `url(${url})`);
-    await face.load();
-    document.fonts.add(face);
-    return true;
-  } catch { return false; }
-}
-
-const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
-
-const [ribbonEnt, ribbonNews, logo, fontUrl, ...stickerUrls] = await Promise.all([
-  urlOf('frame.ent.ribbon'),
-  urlOf('frame.news.ribbon'),
-  urlOf('frame.logo'),
-  urlOf('font.title'),
-  ...STICKER_IDS.map((id) => urlOf('sticker.' + id)),
-]);
-
-const fontLoaded = await loadTitleFont(fontUrl);
-if (!fontLoaded) {
-  // Canvas 畫字不會等字型，先明確載入；離線時最多等 3 秒，之後退回系統字型
-  await withTimeout(Promise.all([
-    document.fonts.load('900 72px "Noto Sans TC"', '快訊標題'),
-    document.fonts.load('500 50px "Noto Sans TC"', '快訊標題'),
-  ]).catch(() => {}), 3000);
-}
-
-const stickers = {};
-STICKER_IDS.forEach((id, i) => { if (stickerUrls[i]) stickers[id] = stickerUrls[i]; });
+const { company, ribbonEnt, ribbonNews, logo, fontLoaded, stickers } = await loadComposeAssets(tb);
 
 window.PATTERN = {
-  company: Boolean(ribbonEnt || ribbonNews),
+  company,
   ribbonEnt, ribbonNews, logo, stickers, fontLoaded, tb,
   compose,                                                           // 共用畫圖核心（ui/compose/render.js）
   renderer: compose.createRenderer({ ribbonEnt, ribbonNews, logo, fontLoaded }),
