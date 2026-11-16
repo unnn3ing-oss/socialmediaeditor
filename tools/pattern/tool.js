@@ -6,9 +6,12 @@
 //   fontLoaded  公司標題字型（WHZ-Heavy）載入成功；否則畫布用 Noto Sans TC 粗體
 //   tb          SDK（下載、檔名）
 //   parseArticle／autoLines／frameForUrl   新聞規則（快速填入）
+//   compose／renderer   共用畫圖核心（ui/compose/render.js）與這次素材建好的畫圖器
 import { tb } from '../../sdk/toolbox.js';
 import { autoLines, frameForUrl } from '../../sdk/news-rules.js';
 import { parseArticle } from '../../sdk/news-article.js';
+import * as compose from '../../ui/compose/render.js';
+import { createFxKit } from '../../ui/compose/fx.js';
 
 tb.init('pattern');
 
@@ -53,6 +56,9 @@ STICKER_IDS.forEach((id, i) => { if (stickerUrls[i]) stickers[id] = stickerUrls[
 window.PATTERN = {
   company: Boolean(ribbonEnt || ribbonNews),
   ribbonEnt, ribbonNews, logo, stickers, fontLoaded, tb,
+  compose,                                                           // 共用畫圖核心（ui/compose/render.js）
+  renderer: compose.createRenderer({ ribbonEnt, ribbonNews, logo, fontLoaded }),
+  fxKit: createFxKit({ stickerUrls: stickers }),                      // 共用貼圖／馬賽克（ui/compose/fx.js）
   parseArticle, autoLines, frameForUrl,   // 快速填入（quickfill.js）用
 };
 

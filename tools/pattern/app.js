@@ -1,214 +1,19 @@
-const SIZE = 1080;
 const PA = window.PATTERN;
 const COMPANY = !!PA.company;
 
-// HSB/HSV breakdown of a #rrggbb color — used to sort the swatch list.
-function hexToHSB(hex) {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const delta = max - min;
-  let hue = 0;
-  if (delta !== 0) {
-    if (max === r) hue = ((g - b) / delta) % 6;
-    else if (max === g) hue = (b - r) / delta + 2;
-    else hue = (r - g) / delta + 4;
-    hue *= 60;
-    if (hue < 0) hue += 360;
-  }
-  return { hue, saturation: max === 0 ? 0 : delta / max, brightness: max };
-}
-
-// Near-neutrals (black / grays, including the warm #48413f) come first,
-// dark → light; then colors by hue: red → orange → yellow → green → blue →
-// indigo → purple. Pinks/magentas (hue ≥ PINK_HUE_START) count as reds, so
-// the wheel is rotated to start there instead of at 0°. New colors only
-// need to be added to the list — the sort places them.
-const NEUTRAL_SATURATION = 0.15;
-const PINK_HUE_START = 320;
-const redFamilyHue = hue => (hue >= PINK_HUE_START ? hue - 360 : hue);
-const PRESET_COLORS = [
-  '#c80000','#ff3916','#5fa646','#4c8b74','#ff9900','#1c6294','#cb6ce6','#d84040','#ff7ead','#004aad',
-  '#000000','#48413f','#a6a6a6','#5CAFCC','#FFDD30','#7261C9','#D13885','#3667A8','#3F8C59'
-].sort((a, b) => {
-  const ha = hexToHSB(a), hb = hexToHSB(b);
-  const aNeutral = ha.saturation < NEUTRAL_SATURATION, bNeutral = hb.saturation < NEUTRAL_SATURATION;
-  if (aNeutral !== bNeutral) return aNeutral ? -1 : 1;
-  if (aNeutral) return ha.brightness - hb.brightness;
-  return redFamilyHue(ha.hue) - redFamilyHue(hb.hue) || hb.saturation - ha.saturation;
-});
-
-// view: { zoom, x, y } — zoom 1 is a centered "cover" fit; x/y shift the
-// image (in canvas px) away from center. clampView keeps the canvas fully
-// covered so panning/zooming can never expose an empty edge.
-const MAX_ZOOM = 5;
-
-function newView() {
-  return { zoom: 1, x: 0, y: 0 };
-}
-
-function coverGeometry(image, view) {
-  const s = Math.max(SIZE / image.width, SIZE / image.height) * view.zoom;
-  const dw = image.width * s, dh = image.height * s;
-  return { s, dw, dh, dx: (SIZE - dw) / 2 + view.x, dy: (SIZE - dh) / 2 + view.y };
-}
-
-function clampView(image, view) {
-  view.zoom = Math.min(MAX_ZOOM, Math.max(1, view.zoom));
-  const { dw, dh } = coverGeometry(image, view);
-  const mx = (dw - SIZE) / 2, my = (dh - SIZE) / 2;
-  view.x = Math.min(mx, Math.max(-mx, view.x));
-  view.y = Math.min(my, Math.max(-my, view.y));
-}
-
-function drawImageCover(targetCtx, image, view = newView()) {
-  const g = coverGeometry(image, view);
-  targetCtx.drawImage(image, g.dx, g.dy, g.dw, g.dh);
-}
-
-const RIBBON_W = 230, RIBBON_H = 215; // 緞帶原始尺寸
-function loadImg(url) {
-  return new Promise(resolve => {
-    if (!url) return resolve(null);
-    const im = new Image();
-    im.onload = () => resolve(im);
-    im.onerror = () => resolve(null);
-    im.src = url;
-  });
-}
-let ribbonImg = null, ribbonNewsImg = null, logoImg = null;
-const ribbonReady = loadImg(PA.ribbonEnt).then(im => { ribbonImg = im; });
-const ribbonNewsReady = loadImg(PA.ribbonNews).then(im => { ribbonNewsImg = im; });
-
-function drawGradient(targetCtx) {
-  const grad = targetCtx.createLinearGradient(0, 0, 0, SIZE);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(0.45, 'rgba(0,0,0,0)');
-  grad.addColorStop(0.7, 'rgba(0,0,0,0.35)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.75)');
-  targetCtx.fillStyle = grad;
-  targetCtx.fillRect(0, 0, SIZE, SIZE);
-}
-
-function drawRibbon(targetCtx, frame) {
-  const im = frame === 'news' ? ribbonNewsImg : ribbonImg;
-  if (!im) return;
-  targetCtx.drawImage(im, SIZE - RIBBON_W, 0, RIBBON_W, RIBBON_H);
-}
-
-const LOGO_W = 170, LOGO_H = 100, LOGO_X = 455, LOGO_Y = 955;
-const logoReady = loadImg(PA.logo).then(im => { logoImg = im; });
-
-function drawLogoBottom(targetCtx) {
-  if (!logoImg) return;
-  targetCtx.drawImage(logoImg, LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
-}
-
-// ---- 通用框（框 C）：照片滿版＋底部黑色漸層＋左上角標籤＋左側主色直條的標題 ----
-const GEN_COLORS = [
-  { name: '墨黑', hex: '#202124' }, { name: '海軍藍', hex: '#1f3a5f' }, { name: '磚紅', hex: '#b03a2e' },
-  { name: '森綠', hex: '#2f6b4f' }, { name: '琥珀', hex: '#e0a100' }
-];
-const GEN_DEFAULT = () => ({ tag: '快訊', color: GEN_COLORS[0].hex });
-const GEN_TITLE_X = 108, GEN_TITLE_MAX_W = 900;
-const GEN_L1 = 72, GEN_L2 = 50, GEN_L1_BASE = 915, GEN_L2_BASE = 995;
-
-function drawGenericGradient(c) {
-  const grad = c.createLinearGradient(0, 560, 0, SIZE);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.78)');
-  c.fillStyle = grad;
-  c.fillRect(0, 560, SIZE, SIZE - 560);
-}
-
-// 角標留空就整個不畫；字太長時色塊變寬（左右各留 48px）
-function genTagWidth(c, tag) {
-  c.font = titleFont(50, 900);
-  return Math.max(290, Math.ceil(c.measureText(tag).width) + 96);
-}
-function drawGenericTag(c, gen) {
-  const tag = (gen.tag || '').trim();
-  if (!tag) return;
-  const w = genTagWidth(c, tag);
-  c.fillStyle = gen.color;
-  c.fillRect(0, 70, w, 96);
-  c.fillStyle = 'rgba(255,255,255,0.9)';
-  c.fillRect(w, 70, 14, 96);
-  c.fillStyle = '#fff';
-  c.font = titleFont(50, 900);
-  c.textAlign = 'center';
-  c.textBaseline = 'alphabetic';
-  c.fillText(tag, w / 2, 135);
-}
-
-// 第一行大標 72px、第二行副標 50px（可空）；只有一行時整組下移，標題底部對齊 y≈995
-function genTitleLines(titleText) {
-  const lines = parseLines(titleText).filter(l => l.trim());
-  return { l1: lines[0] || '', l2: lines.slice(1).join(' ') };
-}
-function genTitleLayout(c, titleText) {
-  const { l1, l2 } = genTitleLines(titleText);
-  if (!l1 && !l2) return null;
-  const main = l1 || l2;
-  const sub = l1 ? l2 : '';
-  const s1 = fitFontSize(c, [main], GEN_TITLE_MAX_W, GEN_L1, 900);
-  const s2 = sub ? fitFontSize(c, [sub], GEN_TITLE_MAX_W, GEN_L2, 500) : 0;
-  const base1 = sub ? GEN_L1_BASE : GEN_L2_BASE;
-  return { main, sub, s1, s2, base1, base2: GEN_L2_BASE };
-}
-function drawGenericTitle(c, titleText, gen) {
-  const L = genTitleLayout(c, titleText);
-  if (!L) return;
-  // 主色直條：從第一行字頂到最後一行基線下方 7px
-  const top = L.base1 - Math.round(L.s1 * 0.875);
-  const bottom = (L.sub ? L.base2 : L.base1) + 7;
-  c.fillStyle = gen.color;
-  c.fillRect(72, top, 10, bottom - top);
-  c.textAlign = 'left';
-  c.textBaseline = 'alphabetic';
-  c.fillStyle = '#fff';
-  c.font = titleFont(L.s1, 900);
-  c.fillText(L.main, GEN_TITLE_X, L.base1);
-  if (L.sub) {
-    c.globalAlpha = 0.9;
-    c.font = titleFont(L.s2, 500);
-    c.fillText(L.sub, GEN_TITLE_X, L.base2);
-    c.globalAlpha = 1;
-  }
-}
-
-const FONT_FALLBACK = `"Microsoft JhengHei", "PingFang TC", "PMingLiU", sans-serif`;
-// 標題字型：有公司字型（WHZ-Heavy）就用它；沒有就用 Noto Sans TC（粗細由 weight 指定）。字型在 tool.js 已先載入。
-function titleFont(size, weight = 900) {
-  return PA.fontLoaded
-    ? `${size}px "WHZ-Heavy", ${FONT_FALLBACK}`
-    : `${weight} ${size}px "Noto Sans TC", ${FONT_FALLBACK}`;
-}
+// 畫圖核心在 ui/compose/render.js（和「排程發布」共用），tool.js 載入後放在 PA.compose／PA.renderer。
+// 這裡把名稱接成全域，stickers.js、quickfill.js 與下面的批次介面照舊使用。
+const {
+  SIZE, PRESET_COLORS, MAX_ZOOM, newView, coverGeometry, clampView, loadImg, hasBackground,
+  GEN_COLORS, GEN_DEFAULT, GEN_TITLE_X, GEN_TITLE_MAX_W, GEN_L1, GEN_L1_BASE, GEN_L2_BASE,
+  BOX_CENTER, LINE_HEIGHT_RATIO, MAX_TITLE_LINES, anchorY, CANVA_TO_PX,
+  DEFAULT_CANVA_SIZE_IMAGE, DEFAULT_CANVA_SIZE_COLOR, FONT_SIZE_MIN, FONT_SIZE_MAX,
+  canvaToPx, defaultCanvaSizeFor, effectiveCanvaSize, titleRows, parseLines, usesDarkTitle
+} = PA.compose;
+const { titleFont, fitFontSize, drawImageCover, renderComposite } = PA.renderer;
+// 素材載好後要重畫的地方等這幾個（都是同一個 ready）
+const ribbonReady = PA.renderer.ready, ribbonNewsReady = PA.renderer.ready, logoReady = PA.renderer.ready;
 const whzFontReady = Promise.resolve();
-const BOX_CENTER = 880;      // fixed vertical center of the headline block (measured from real TVBS exports — 1/2/3-line titles all anchor here)
-const LINE_HEIGHT_RATIO = 93 / 67; // measured line-height : font-size ratio
-const MAX_TITLE_LINES = 4;     // 標題最多 4 行，第 5 行起不畫、輸入框旁標紅
-// 1～3 行以 BOX_CENTER 置中（實測 TVBS 版型）；4 行時最後一行對齊 3 行的底線、整塊往上長，才不會貼到圖片底邊
-const anchorY = (centerY, n, lineHeight) => (centerY === BOX_CENTER && n > 3 ? centerY - (n - 3) * lineHeight / 2 : centerY);
-
-// The font-size slider is labelled in Canva's own "字級" units (matching what
-// the user sees in Canva), not raw canvas px. Canva 字級 50 measured out to
-// 67px on our 1080 canvas, giving this conversion factor.
-const CANVA_TO_PX = 67 / 50;
-const DEFAULT_CANVA_SIZE_IMAGE = 50; // Canva 字級 50 — image/ribbon frame
-const DEFAULT_CANVA_SIZE_COLOR = 60; // Canva 字級 60 — solid-color frame
-
-function canvaToPx(canvaSize) {
-  return canvaSize * CANVA_TO_PX;
-}
-
-function defaultCanvaSizeFor(bgType) {
-  return bgType === 'color' ? DEFAULT_CANVA_SIZE_COLOR : DEFAULT_CANVA_SIZE_IMAGE;
-}
-
-const FONT_SIZE_MIN = 50;
-const FONT_SIZE_MAX = 70;
 
 // Stepper widget: [－] [number] [＋], number also responds to mouse-wheel
 // while hovered/focused. Used for both single mode and each batch item.
@@ -291,13 +96,6 @@ function createFontStepper({ initial, onChange }) {
   return { root, setValue: v => setValue(v, false), getValue: () => value, setLocked };
 }
 
-// Image backgrounds always use Canva 字級 50 — the only adjustable size is on
-// solid-color backgrounds. Every render/export path goes through this, so a
-// stale manual value can never leak onto an image.
-function effectiveCanvaSize(bg, chosen) {
-  return bg && bg.type === 'image' ? DEFAULT_CANVA_SIZE_IMAGE : chosen;
-}
-
 const FONT_HINT_IMAGE = '圖片背景固定使用字級 50，無法調整';
 const FONT_HINT_COLOR = '純色背景可調整字級，預設 60';
 
@@ -306,98 +104,6 @@ function syncFontStepperLock(stepper, hintEl, bg) {
   if (isImage) stepper.setValue(DEFAULT_CANVA_SIZE_IMAGE);
   stepper.setLocked(isImage);
   hintEl.textContent = isImage ? FONT_HINT_IMAGE : FONT_HINT_COLOR;
-}
-
-function fitFontSize(targetCtx, lines, maxWidth, baseSize, weight = 900) {
-  let size = baseSize;
-  targetCtx.font = titleFont(size, weight);
-  const widest = Math.max(...lines.map(l => targetCtx.measureText(l).width));
-  if (widest > maxWidth) {
-    size = Math.max(24, Math.floor(size * maxWidth / widest));
-  }
-  return size;
-}
-
-// 輸入框怎麼分行，畫面就怎麼分行（所見即所得）：頭尾的空行不畫，中間的空行會留成空隙。
-function titleRows(titleText) {
-  const rows = titleText.replace(/\r/g, '').split('\n').map(l => (l.trim() ? l : ''));
-  let first = 0, last = rows.length - 1;
-  while (first <= last && !rows[first]) first++;
-  while (last >= first && !rows[last]) last--;
-  return { lines: rows.slice(first, last + 1), lead: first, total: rows.length };
-}
-function parseLines(titleText) { return titleRows(titleText).lines; }
-
-// Light solid backgrounds get dark headline text. Threshold is WCAG relative
-// luminance: above it white text drops below ~2.5:1 contrast (yellow, orange,
-// light pink/gray/blue), while the saturated news colors (reds, greens,
-// blues, purples) stay white as in the house style.
-const DARK_TEXT_LUMINANCE = 0.35;
-const TITLE_LIGHT = '#ffffff';
-const TITLE_DARK = '#111111';
-
-function relativeLuminance(hex) {
-  const [r, g, b] = [1, 3, 5].map(i => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function usesDarkTitle(bg) {
-  return !!(bg && bg.type === 'color' && bg.color && relativeLuminance(bg.color) > DARK_TEXT_LUMINANCE);
-}
-
-function drawTitle(targetCtx, lines, baseSize, centerY, color = TITLE_LIGHT) {
-  lines = lines.slice(0, MAX_TITLE_LINES);
-  if (lines.length === 0) return;
-
-  const paddingX = 60;
-  const maxWidth = SIZE - paddingX * 2;
-  const fontSize = fitFontSize(targetCtx, lines, maxWidth, baseSize);
-  const lineHeight = fontSize * LINE_HEIGHT_RATIO;
-  const n = lines.length;
-  centerY = anchorY(centerY, n, lineHeight);
-
-  targetCtx.textAlign = 'center';
-  targetCtx.textBaseline = 'middle';
-  targetCtx.font = titleFont(fontSize);
-
-  lines.forEach((line, i) => {
-    const y = centerY - (n - 1) * lineHeight / 2 + i * lineHeight;
-    targetCtx.fillStyle = color;
-    targetCtx.fillText(line, SIZE / 2, y);
-  });
-}
-
-// source: { type: 'image', image } | { type: 'color', color }
-// frame: 'generic'（通用框 C，沒密碼只有這個）| 'entertainment'（粉）| 'news'（藍）；後兩個只在公司模式。gen = { tag, color }
-// fx（見 stickers.js）：{ photo(ctx) 照片畫完馬上叫（照片抽色）；mosaic(ctx) 在背景畫完、邊框與標題之前叫；stickers(ctx) 在最後叫 }
-function renderComposite(targetCtx, source, titleText, fontSize, frame, fx, gen) {
-  targetCtx.clearRect(0, 0, SIZE, SIZE);
-  targetCtx.canvas.classList.toggle('pannable', !!(source && source.type === 'image' && source.image));
-  if (source && source.type === 'color') {
-    targetCtx.fillStyle = source.color;
-    targetCtx.fillRect(0, 0, SIZE, SIZE);
-    if (fx && fx.mosaic) fx.mosaic(targetCtx);
-    drawLogoBottom(targetCtx);
-    drawTitle(targetCtx, parseLines(titleText), fontSize, SIZE / 2, usesDarkTitle(source) ? TITLE_DARK : TITLE_LIGHT);
-  } else {
-    drawImageCover(targetCtx, source.image, source.view);
-    if (fx && fx.photo) fx.photo(targetCtx);
-    if (fx && fx.mosaic) fx.mosaic(targetCtx);
-    if (frame === 'generic') {
-      const g = gen || GEN_DEFAULT();
-      drawGenericGradient(targetCtx);
-      drawGenericTag(targetCtx, g);
-      drawGenericTitle(targetCtx, titleText, g);
-    } else {
-      drawGradient(targetCtx);
-      drawRibbon(targetCtx, frame);
-      drawTitle(targetCtx, parseLines(titleText), fontSize, BOX_CENTER);
-    }
-  }
-  if (fx && fx.stickers) fx.stickers(targetCtx);
 }
 
 // Sizes and positions the on-image edit box with the same geometry drawTitle
@@ -461,10 +167,6 @@ function titlePlaceholder(frame) {
   return frame === 'generic'
     ? '大標題（第一行）\n副標題（第二行，可不填）'
     : '黑人心梗主因曝！\n醫示警「1行為」\n悄悄埋下未爆彈';
-}
-
-function hasBackground(source) {
-  return !!source && ((source.type === 'color' && source.color) || (source.type === 'image' && source.image));
 }
 
 let batchFx = null;    // 貼圖／馬賽克（stickers.js 設定）：{ forItem(item) -> 那一組的 fx, onView() -> 預覽的對象換了／畫面要更新 }
