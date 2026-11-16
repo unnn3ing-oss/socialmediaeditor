@@ -23,7 +23,7 @@ const PHOTO = fakeAsset([60, 170, 90]);
 // 公司模式（假外殼＋假憑證）開排程發布
 async function openFb() {
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
-  const posts = [], errors = [];
+  const posts = [], errors = [], articles = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(() => { try { localStorage.setItem('tbx.company', JSON.stringify({ token: 't', exp: Math.floor(Date.now() / 1000) + 3600, admin: true })); } catch {} });
   await page.route(API_BASE + '/**', async (r) => {
@@ -33,7 +33,11 @@ async function openFb() {
     if (p.startsWith('/assets/')) return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset() });
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
-    if (p === '/fetch/article') return json({ html: ARTICLE, url: u.searchParams.get('url') });
+    if (p === '/fetch/article') {
+      const url = u.searchParams.get('url'); articles.push(url);
+      if (/slow/.test(url)) await new Promise((res) => setTimeout(res, 1500));
+      return json({ html: ARTICLE, url });
+    }
     if (p === '/fetch/image') return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: PHOTO });
     if (p === '/fb/post') { posts.push(req.postDataBuffer()); return json({ results: [{ page: '111', ok: true, postId: '111_1', scheduled: false, comment: 'done' }] }); }
     return r.fulfill({ status: 404, headers: CORS, json: { ok: false, code: 'not_found' } });
@@ -43,7 +47,7 @@ async function openFb() {
   await frame.waitForSelector('#pages .chip', { state: 'attached' });
   await frame.click('#newBtn');
   await frame.waitForSelector('#postDlg:not([hidden])');
-  return { page, frame, posts, errors };
+  return { page, frame, posts, errors, articles };
 }
 const canvasHash = (frame, sel) => frame.evaluate(async (s) => {
   const d = document.querySelector(s).getContext('2d').getImageData(0, 0, 1080, 1080).data;
@@ -180,5 +184,62 @@ test('Ctrl+V 貼上照片（純文字圖時自動切回選套版）；預覽點�
   await frame.focus('#msg');
   await frame.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', 'abc'); document.getElementById('msg').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true })); });
   assert.match(await frame.textContent('#pullHint'), /已貼上照片/, '文字貼上不會被當成照片');
+  await page.close();
+});
+
+test('貼上網址只帶入一次；帶入中換網址，讀完會接著帶入新網址', async () => {
+  const { page, frame, articles } = await openFb();
+  await frame.evaluate(() => {
+    const el = document.getElementById('link');
+    el.value = 'https://news.tvbs.com.tw/sports/4051394';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true }));
+  });
+  await page.waitForTimeout(1500);
+  assert.deepEqual(articles, ['https://news.tvbs.com.tw/sports/4051394'], '只帶入一次');
+
+  await frame.fill('#link', 'https://news.tvbs.com.tw/slow/4000001');   // 讀很久
+  await page.waitForTimeout(900);
+  await frame.fill('#link', 'https://news.tvbs.com.tw/politics/4000002'); // 讀取中換網址
+  await frame.waitForSelector('#cfDlg[open]', { timeout: 6000 });         // 已有內容 → 問要不要覆蓋
+  await frame.click('#cfYes');
+  for (let i = 0; i < 40 && !articles.includes('https://news.tvbs.com.tw/politics/4000002'); i++) await page.waitForTimeout(100);
+  assert.ok(articles.includes('https://news.tvbs.com.tw/politics/4000002'), '新網址有帶入：' + articles.join(','));
+  await page.close();
+});
+
+test('從 Excel／Word 貼上（同時有文字和圖片）：文字照常貼，不換照片', async () => {
+  const { page, frame } = await openFb();
+  const prevented = await frame.evaluate((b64) => {
+    const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.setData('text/plain', '儲存格文字');
+    dt.items.add(new File([u8], 'cell.png', { type: 'image/png' }));
+    const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    document.getElementById('msg').dispatchEvent(ev);
+    return ev.defaultPrevented;
+  }, PHOTO.toString('base64'));
+  assert.equal(prevented, false);
+  await page.waitForTimeout(300);
+  assert.doesNotMatch(await frame.textContent('#pullHint'), /已貼上照片/);
+  await page.close();
+});
+
+test('預覽上編輯標題時帶入：編輯框收起，標題是文章標題', async () => {
+  const { page, frame } = await openFb();
+  await frame.evaluate((b64) => {
+    const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer(); dt.items.add(new File([u8], 'x.png', { type: 'image/png' }));
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+  }, PHOTO.toString('base64'));
+  await frame.waitForSelector('#cvEmpty', { state: 'hidden' });
+  await frame.dblclick('#cv');
+  await frame.waitForSelector('#cvWrap .cv-title:not([hidden])');
+  await frame.evaluate(() => { const el = document.getElementById('link'); el.value = 'https://news.tvbs.com.tw/life/4000003'; el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+  await frame.waitForSelector('#cfDlg[open]');
+  await frame.click('#cfYes');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  assert.equal(await frame.isHidden('#cvWrap .cv-title'), true);
+  assert.equal((await frame.inputValue('#title')).replace(/\n/g, ''), TITLE.replace(/\s/g, ''));
   await page.close();
 });

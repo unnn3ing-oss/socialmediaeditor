@@ -125,15 +125,20 @@ export function createComposer({ tb, assets }) {
   }
   document.addEventListener('paste', async (e) => {
     if ($('postDlg').hidden) return;
-    const file = [...((e.clipboardData && e.clipboardData.files) || [])].find((f) => /^image\//.test(f.type));
+    if ($('cfDlg').open) return;
+    const cd = e.clipboardData;
+    const file = [...((cd && cd.files) || [])].find((f) => /^image\//.test(f.type));
     if (!file) return;               // 不是圖片：照常貼文字
+    // 從 Excel／Word 複製會同時帶文字和圖片：貼在文字欄位時照常貼文字
+    const t = e.target;
+    if (cd.getData('text/plain') && t && /^(INPUT|TEXTAREA)$/.test(t.tagName) && !t.classList.contains('cv-title')) return;
     e.preventDefault();
     if (st.mode !== 'image') { st.mode = 'image'; setMode('image'); showMode(); }   // 貼照片就是要套版
     if (await loadPhoto(file)) say('pullHint', '已貼上照片'); else say('pullHint', '照片讀取失敗', true);
   });
 
   // ---- 帶入：貼上或打完新聞網址就自動帶入；Enter 也可以重新帶入 ----
-  let busy = false, lastPulled = '', typingTimer = 0;
+  let busy = false, pending = false, lastPulled = '', typingTimer = 0;
   async function firstImage(images) {
     for (const im of images.slice(0, MAX_IMAGES)) {
       if (!im || !im.url) continue;
@@ -146,9 +151,12 @@ export function createComposer({ tb, assets }) {
     return false;
   }
   async function pull() {
+    clearTimeout(typingTimer);
     const url = $('link').value.trim();
-    if (busy || !/^https?:\/\//i.test(url)) return;
+    if (!/^https?:\/\//i.test(url)) return;
+    if (busy) { pending = true; return; }          // 讀取中又換了網址：讀完再帶入一次
     busy = true; lastPulled = url;
+    if (titleEd) titleEd.end();                    // 預覽上編輯中：先收起，免得舊內容蓋掉帶入的標題
     say('pullHint', '讀取中…');
     try {
       let article;
@@ -172,6 +180,8 @@ export function createComposer({ tb, assets }) {
       say('pullHint', '已帶入：' + done.join('、') + (imgFail ? '（主圖讀取失敗，請在預覽按 Ctrl+V 貼上照片）' : ''));
     } finally {
       busy = false;
+      const now = $('link').value.trim();
+      if (pending && now !== lastPulled) { pending = false; pull(); } else pending = false;
     }
   }
   $('link').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pull(); } });
@@ -179,7 +189,7 @@ export function createComposer({ tb, assets }) {
   $('link').addEventListener('input', () => {
     clearTimeout(typingTimer);
     const url = $('link').value.trim();
-    if (ARTICLE_RE.test(url) && url !== lastPulled) typingTimer = setTimeout(pull, 700);
+    if (ARTICLE_RE.test(url) && url !== lastPulled) typingTimer = setTimeout(() => { if ($('link').value.trim() !== lastPulled) pull(); }, 700);
   });
 
   renderer.ready.then(draw);
