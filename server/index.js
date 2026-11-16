@@ -50,3 +50,4 @@ export default {
     ctx.waitUntil(cleanup(env, Date.now()));
   }
 };
+export { FbCommentTimer } from './fb/timer.js';

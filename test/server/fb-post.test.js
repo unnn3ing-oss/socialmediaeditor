@@ -127,3 +127,18 @@ test('請求驗證：粉專不在清單、targets 壞掉、圖檔型別', async 
   assert.equal(r.body.data.results[0].ok, false);
   assert.match(r.body.data.results[0].error, /粉專/);
 });
+
+test('排程成功後真的計時器有紀錄（整合）', async (t) => {
+  const { FbCommentTimer } = await import('../../server/fb/timer.js');
+  const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS, 'POST /111/feed': () => ({ id: '111_8' }) }); t.after(f.restore);
+  let env;
+  env = mkEnv({ FB_USER_TOKEN: 'U', FB_TIMER: fakeNamespace(FbCommentTimer, () => env) });
+  const { signToken } = await tok();
+  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true)) };
+  const at = nowSec() + 3600;
+  const r = await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]) });
+  assert.equal(r.body.data.results[0].comment, 'armed');
+  const { state } = env.FB_TIMER.instances.get('111_8');
+  assert.equal((await state.storage.get('rec')).status, 'pending');
+  assert.equal(await state.storage.getAlarm(), (at + 60) * 1000);
+});

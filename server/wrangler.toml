@@ -19,9 +19,19 @@ bucket_name = "toolbox-files"
 binding = "CACHE"
 id = "填入你的 ID"
 
+# 排程貼文發布後補第一則留言（每則貼文一個 Durable Object 實例）
+[[durable_objects.bindings]]
+name = "FB_TIMER"
+class_name = "FbCommentTimer"
+
+# 公司電腦的 wrangler.toml 已有 v1（new_sqlite_classes CommentHub）、v2（deleted_classes CommentHub）兩段：保留，v3 接在後面
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["FbCommentTimer"]
+
 # 每天台灣時間 03:17 清理日誌（UTC 19:17）
 [triggers]
 crons = ["17 19 * * *"]
 
 # Secrets 不寫在這裡，用 wrangler secret put 設定：
-#   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET
+#   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET、FB_USER_TOKEN、RUNDOWN_URL、RUNDOWN_TOKEN
