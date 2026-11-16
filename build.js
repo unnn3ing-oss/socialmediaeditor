@@ -52,13 +52,15 @@ const chromeVersion = (v) => String(v).split('.').map((n) => String(Number(n))).
 const sortedUnion = (...lists) => [...new Set(lists.flat())].sort();
 
 // 工具網址的版本號：工具資料夾＋共用的 sdk／ui 內容雜湊。內容一改網址就變，瀏覽器不會沿用舊的快取。
+// Python 執行時產生的快取（git 忽略）不算內容，否則跑過下載助手後網址版本號就變了
+const HASH_SKIP = /^__pycache__$|\.pyc$/;
 function contentHash(root, dirs) {
   const h = require('node:crypto').createHash('sha256');
   const walk = (rel) => {
     const abs = path.join(root, rel);
     if (!fs.existsSync(abs)) return;
     if (fs.statSync(abs).isDirectory()) {
-      for (const f of fs.readdirSync(abs).sort()) if (!f.startsWith('.')) walk(`${rel}/${f}`);
+      for (const f of fs.readdirSync(abs).sort()) if (!f.startsWith('.') && !HASH_SKIP.test(f)) walk(`${rel}/${f}`);
     } else { h.update(rel + '\0'); h.update(fs.readFileSync(abs)); h.update('\0'); }
   };
   dirs.forEach(walk);

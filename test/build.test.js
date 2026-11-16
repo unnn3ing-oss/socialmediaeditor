@@ -149,3 +149,14 @@ test('ext.dir：background 不在資料夾裡要報錯', async () => {
   const { errors } = await build(root);
   assert.ok(errors.some((e) => e.includes('ext.dir')), JSON.stringify(errors));
 });
+
+test('entry 版本號：Python 快取（__pycache__、.pyc）不影響', async () => {
+  const root = tmpRepo();
+  await build(root);
+  const before = readJson(root, 'shell/catalog.json').tools[0].entry;
+  fs.mkdirSync(path.join(root, 'tools/sample/__pycache__'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'tools/sample/__pycache__/x.cpython-313.pyc'), 'x');
+  fs.writeFileSync(path.join(root, 'tools/sample/y.pyc'), 'y');
+  await build(root);
+  assert.equal(readJson(root, 'shell/catalog.json').tools[0].entry, before);
+});
