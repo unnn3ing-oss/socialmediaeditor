@@ -41,6 +41,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }) {
     }
     if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: 'pending' }]);
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
+    if (p === '/fb/presets') return json([{ name: '雙11抽獎', body: '留言＋分享抽 AirPods！\nhttps://example.com/a' }, { name: '訂閱', body: '記得訂閱 YouTube' }]);
     if (p === '/rundown') {
       const b = JSON.parse(req.postData() || '{}');
       api.rundown.push(b);
@@ -342,5 +343,42 @@ test('已排程列表的留言狀態顯示中文', async () => {
   const txt = await page.locator('#fbpostApp').textContent();
   assert.match(txt, /留言：等待補留言/);
   assert.doesNotMatch(txt, /pending/);
+  await page.close();
+});
+
+test('第 2、3 則留言：新增、選活動留言帶入可改、距上一則、最多 3 則、刪除重新編號、送出', async () => {
+  const { page, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.fill('#msg', 'm');
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#addComment');
+  const b1 = '#extras .extra:nth-child(1)';
+  assert.match(await page.textContent(b1 + ' .extra-title'), /第 2 則留言/);
+  assert.equal(await page.inputValue(b1 + ' select.preset'), '', '預設自行輸入');
+  assert.equal(await page.inputValue(b1 + ' select.delay'), '5', '預設距上一則 5 分鐘');
+  await page.selectOption(b1 + ' select.preset', { label: '活動：雙11抽獎' });
+  assert.equal(await page.inputValue(b1 + ' textarea'), '留言＋分享抽 AirPods！\nhttps://example.com/a');
+  await page.fill(b1 + ' textarea', '留言＋分享抽 AirPods！（改過）');
+  await page.click('#addComment');
+  assert.equal(await page.isDisabled('#addComment'), true, '最多 3 則');
+  const b2 = '#extras .extra:nth-child(2)';
+  assert.match(await page.textContent(b2 + ' .extra-title'), /第 3 則留言/);
+  await page.selectOption(b2 + ' select.delay', '10');
+  // 空白不能送
+  await page.click('#sendBtn');
+  assert.match(await page.textContent('#sendErr'), /第 3 則留言沒有內容/);
+  assert.equal(api.posts.length, 0);
+  // 刪掉第 2 則 → 原本第 3 則變第 2 則
+  await page.fill(b2 + ' textarea', '第三則內容');
+  await page.click(b1 + ' .extra-del');
+  assert.equal(await page.locator('#extras .extra').count(), 1);
+  assert.match(await page.textContent(b1 + ' .extra-title'), /第 2 則留言/);
+  assert.equal(await page.isDisabled('#addComment'), false);
+  await page.click('#sendBtn');
+  await page.waitForSelector('#results li');
+  const body = api.posts[0];
+  assert.deepEqual(JSON.parse(/name="comments"\r\n\r\n([^\r]*)\r\n/.exec(body)[1]), [{ message: '第三則內容', delay: 10 }]);
   await page.close();
 });

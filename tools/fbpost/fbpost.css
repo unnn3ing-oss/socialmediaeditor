@@ -140,3 +140,14 @@ body.no-scroll { overflow: hidden; }
 .shelf .swatches .sw { flex: none; width: 52px; height: 52px; border-radius: 14px; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); scroll-snap-align: start; position: relative; }
 .shelf .swatches .sw.is-on { box-shadow: 0 0 0 3px var(--accent); }
 .shelf .swatches .sw.is-on::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 20px; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
+
+/* ---- 第 2、3 則留言 ---- */
+.extras { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.extra { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: #fafcff; }
+.extra-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 14px; }
+.extra-head select { font: inherit; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; max-width: 100%; }
+.extra-delay { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.extra-del { margin-left: auto; border: 0; background: none; color: var(--muted); font: 13px var(--font); cursor: pointer; padding: 4px; }
+.extra-del:hover { color: var(--bad-text); }
+.add-comment { margin-top: 10px; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px dashed var(--accent); color: var(--accent); background: #fff; font: 600 14px var(--font); cursor: pointer; }
+.add-comment:disabled { opacity: .45; cursor: not-allowed; }

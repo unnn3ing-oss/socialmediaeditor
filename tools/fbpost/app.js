@@ -12,6 +12,7 @@ import { createManage } from './manage.js';
 import { createTimePop } from './timepop.js';
 import { createDialog } from './dialog.js';
 import { createRd } from './rd.js';
+import { createComments } from './comments.js';
 
 tb.init('fbpost');
 
@@ -40,7 +41,7 @@ $('tabs').addEventListener('click', (e) => {
   const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
   let sender;
   const targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
-  sender = createSender({ tb, composer, targets, rd: createRd({ tb }) });
+  sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }) });
   const manage = createManage({ tb });
   targets.setPages(pages);
   manage.setPages(pages);
