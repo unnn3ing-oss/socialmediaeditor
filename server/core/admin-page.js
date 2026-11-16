@@ -38,9 +38,6 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 .msg{min-height:24px;margin:8px 0 0;font-weight:600}
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
-.pm-hint{font-size:13px;margin-top:4px}
-#pmRows select{min-width:160px}
-#pmRows td.err select{color:var(--ink);font-weight:400}
 .msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e6ecf6;vertical-align:middle}
@@ -105,59 +102,9 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <p class="msg" id="listMsg" role="status"></p>
     </section>
 
-    <section class="card" id="psCard">
-      <h2>暫停排程發布</h2>
-      <p>停用後，用公司密碼登入的人在排程發布工具只會看到停用公告（不能發文、排程、查詢、寫入 Rundown）；已排定的貼文照常由臉書發布。用管理密碼登入的人不受影響。只能在這裡手動恢復。</p>
-      <div class="row"><button id="psLoad" type="button">讀取目前狀態</button></div>
-      <p class="msg" id="psState" role="status"></p>
-      <div id="psForm" hidden>
-        <label for="psReason">停用原因（選填，最多 100 字，會顯示給同事）</label>
-        <input type="text" id="psReason" maxlength="100">
-        <div class="row">
-          <button id="psStop" class="danger" type="button">停用排程發布</button>
-          <button id="psSave" type="button" hidden>更新原因</button>
-          <button id="psResume" class="primary" type="button" hidden>恢復使用</button>
-        </div>
-        <div class="row" id="psConfirm" hidden role="alertdialog" aria-label="確認停用">
-          <span>確定要停用嗎？所有用公司密碼登入的同事會立刻無法使用排程發布。</span>
-          <button id="psYes" class="danger solid" type="button">確定停用</button>
-          <button id="psNo" type="button">先不要</button>
-        </div>
-      </div>
-      <p class="msg" id="psMsg" role="status"></p>
-    </section>
-
-    <section class="card">
-      <h2>臉書連線</h2>
-      <p>檢查後端 Secret <code>FB_TOKEN</code> 裡每組 token（用戶 token 或粉專 token）能管哪些粉專（不會顯示 token 本身）。用戶 token 請留意「資料存取到」的日期，過了要重新授權。</p>
-      <div class="row"><button id="fbBtn" type="button">檢查臉書連線</button></div>
-      <p class="msg" id="fbMsg" role="status"></p>
-      <div class="scroll" id="fbWrap" hidden>
-        <table><thead><tr><th>#</th><th>粉專</th><th>狀態</th><th>類型</th><th>到期</th><th>缺少的權限</th></tr></thead><tbody id="fbRows"></tbody></table>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>粉專對應</h2>
-      <p>排程發布工具用的粉專簡稱、排入 Rundown 的區段、文章連結的 utm 參數與排序（數字小的排前面）。RD 區段選「自動」時依粉專名稱判斷（名稱含「少康」就是少康，依此類推）；判斷錯了就直接選。沒有存過的粉專會依名稱套用預設值。</p>
-      <div class="row"><button id="pmLoad" type="button">讀取粉專對應</button><button id="pmSave" class="primary" type="button" hidden>儲存</button></div>
-      <p class="msg" id="pmMsg" role="status"></p>
-      <div class="scroll" id="pmWrap" hidden>
-        <table><thead><tr><th>粉專名稱</th><th>簡稱</th><th>RD 區段</th><th>utm</th><th>排序</th></tr></thead><tbody id="pmRows"></tbody></table>
-      </div>
-    </section>
-
-    <section class="card" id="rdCard">
-      <h2>Rundown 連線</h2>
-      <p>排程發布工具打開「排入 Rundown」後，送出成功會把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段。只寫 RD 區段是新聞、娛樂、少康、國際＋的粉專（區段在「粉專對應」設定）；擠看看、氣象沒有區段，略過。</p>
-      <p>純文字底圖選「無底色」或「臉書原生背景」時寫「/文字/」，其他都寫「/圖文/」。排程用排程時間，立即發布用送出當下的時間。格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格往下推（不覆蓋）。Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。</p>
-      <div class="row"><button id="rdPing" type="button">測試連線</button></div>
-      <p class="msg" id="rdMsg" role="status"></p>
-    </section>
-
     <section class="card">
       <h2>錯誤日誌</h2>
-      <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。臉書發文的成功／失敗也記在這裡（工具 <code>fb</code>）。</p>
+      <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。</p>
       <div class="row"><button id="logBtn" type="button">查看最近 7 天</button></div>
       <p class="msg" id="logMsg" role="status"></p>
       <div class="scroll" id="logWrap" hidden>
@@ -286,142 +233,6 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       say($('logMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '最近 7 天沒有任何錯誤。', 'good');
     }).catch(function () { say($('logMsg'), '讀取日誌失敗。', 'err'); })
       .then(function () { $('logBtn').disabled = false; });
-  };
-
-  // ---- 暫停排程發布（模組 server/core/pause.js）：先讀取目前狀態才能操作 ----
-  function psShow(d) {
-    $('psForm').hidden = false; $('psConfirm').hidden = true;
-    $('psStop').hidden = d.paused; $('psSave').hidden = !d.paused; $('psResume').hidden = !d.paused;
-    if (d.paused) $('psReason').value = d.reason || '';
-    say($('psState'), d.paused ? '目前：停用中' + (d.at ? '（' + fmtTime(d.at) + ' 起）' : '') + (d.reason ? '，原因：' + d.reason : '') : '目前：使用中', d.paused ? 'err' : 'good');
-  }
-  function psCall(opts, okText) {
-    ['psLoad', 'psStop', 'psSave', 'psResume', 'psYes'].forEach(function (id) { $(id).disabled = true; });
-    return api('/admin/fb/pause', opts).then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      psShow(res.data); say($('psMsg'), okText || '', 'good');
-    }).catch(function (e) { say($('psMsg'), '失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { ['psLoad', 'psStop', 'psSave', 'psResume', 'psYes'].forEach(function (id) { $(id).disabled = false; }); });
-  }
-  function psPost(paused, okText) {
-    return psCall({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: paused, reason: $('psReason').value }) }, okText);
-  }
-  $('psLoad').onclick = function () { say($('psMsg'), '讀取中'); psCall({}, ''); };
-  $('psStop').onclick = function () { $('psConfirm').hidden = false; $('psYes').focus(); };
-  $('psNo').onclick = function () { $('psConfirm').hidden = true; $('psStop').focus(); };
-  $('psYes').onclick = function () { psPost(true, '已停用排程發布。'); };
-  $('psSave').onclick = function () { psPost(true, '已更新停用原因。'); };
-  $('psResume').onclick = function () { psPost(false, '已恢復使用。'); };
-
-  $('fbBtn').onclick = function () {
-    $('fbBtn').disabled = true; say($('fbMsg'), '檢查中');
-    api('/admin/fb').then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      var d = res.data, tb = $('fbRows'); tb.textContent = '';
-      if (!d.configured) { $('fbWrap').hidden = true; return say($('fbMsg'), '還沒設定 FB_TOKEN，請照部署說明「連接臉書粉專」操作。', 'err'); }
-      var bad = 0;
-      d.tokens.forEach(function (t) {
-        var exp = t.expiresAt === 0 ? '不會過期' : t.expiresAt ? fmtTime(t.expiresAt * 1000) : '—';
-        if (t.dataAccessExpiresAt) exp += '；資料存取到 ' + fmtTime(t.dataAccessExpiresAt * 1000);
-        var warn = [];
-        var names = t.pages.map(function (p) {
-          var n = p.name;
-          if (p.usedBy) n += '（改用第 ' + p.usedBy + ' 組）';
-          if (!p.canPost) { n += '（無發文權限）'; warn.push(1); }
-          if (!p.canInsights) { n += '（無成效權限）'; warn.push(1); }
-          return n;
-        });
-        var pageText = names.length ? names.join('、')
-          : t.hint === 'debug_failed' ? (d.appSecret ? '讀不到授權範圍，請確認 FB_APP_ID／FB_APP_SECRET 是否正確' : '讀不到授權範圍，請設定 FB_APP_ID／FB_APP_SECRET 後再檢查')
-          : t.kind === 'user' ? '沒有授權任何粉專' : '（找不到粉專）';
-        if (t.skipped) { pageText += '；另有 ' + t.skipped + ' 個粉專換不到 token（可能沒有粉專角色）'; warn.push(1); }
-        var kindText = t.kind === 'user' ? '用戶 token' : t.kind === 'page' ? '粉專 token' : (t.type || '—');
-        var okRow = t.valid && t.pages.length && !t.missingScopes.length && !warn.length;
-        if (!okRow) bad++;
-        var tr = document.createElement('tr');
-        [t.index, pageText, t.valid ? '有效' : '無效' + (t.error ? '：' + t.error : ''), kindText, exp, t.missingScopes.join('、') || '—']
-          .forEach(function (v, i) {
-            var c = document.createElement('td'); c.textContent = v;
-            if ((i === 2 && !t.valid) || (i === 5 && t.missingScopes.length) || (i === 1 && (!t.pages.length || warn.length))) c.className = 'err';
-            tr.appendChild(c);
-          });
-        tb.appendChild(tr);
-      });
-      $('fbWrap').hidden = false;
-      var note = 'Graph ' + d.version + (d.appSecret ? '' : '；未設 FB_APP_SECRET（選填）');
-      say($('fbMsg'), bad ? bad + ' 組 token 有問題。' + note : '全部正常。' + note, bad ? 'err' : 'good');
-    }).catch(function (e) { say($('fbMsg'), '檢查失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('fbBtn').disabled = false; });
-  };
-
-  var pmItems = [];
-  var PM_CODES = [['', '自動'], ['news', '新聞'], ['ent', '娛樂'], ['shaokang', '少康'], ['intl', '國際＋'], ['jkk', '擠看看（無 RD 區）'], ['weather', '氣象（無 RD 區）']];
-  var PM_NAMES = { news: '新聞', ent: '娛樂', shaokang: '少康', intl: '國際＋', jkk: '擠看看', weather: '氣象' };
-  var RD_OK = ['news', 'ent', 'shaokang', 'intl'];
-  function pmLoad(doneMsg) {
-    $('pmLoad').disabled = true; say($('pmMsg'), '讀取中');
-    return api('/admin/fb/pagemap').then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      pmItems = res.data.items; var tb = $('pmRows'); tb.textContent = '';
-      pmItems.forEach(function (it, i) {
-        var tr = document.createElement('tr');
-        var n = document.createElement('td'); n.textContent = it.name + (it.saved ? '' : '（預設值）'); tr.appendChild(n);
-        function cell(type, val, label, id) {
-          var c = document.createElement('td'), inp = document.createElement('input');
-          inp.type = type; inp.value = val; inp.id = id; inp.setAttribute('aria-label', it.name + ' ' + label);
-          if (type === 'text') inp.maxLength = label === 'utm' ? 300 : 20;
-          if (type === 'number') { inp.min = 0; inp.max = 999; inp.step = 1; inp.style.width = '90px'; }
-          c.appendChild(inp); tr.appendChild(c);
-        }
-        cell('text', it.label, '簡稱', 'pmL' + i);
-        // RD 區段：決定排入 Rundown 寫到哪一區；空白＝自動（依粉專名稱猜）
-        var rc = document.createElement('td'), sel = document.createElement('select');
-        sel.id = 'pmC' + i; sel.setAttribute('aria-label', it.name + ' RD 區段');
-        PM_CODES.forEach(function (o) {
-          var op = document.createElement('option'); op.value = o[0];
-          op.textContent = o[0] ? o[1] : '自動（' + (PM_NAMES[it.auto] || '對不到') + '）';
-          sel.appendChild(op);
-        });
-        sel.value = PM_NAMES[it.codeSet] ? it.codeSet : '';
-        var hint = document.createElement('div'); hint.className = 'pm-hint';
-        function rcHint() {
-          var code = sel.value || it.auto || '';
-          var ok = RD_OK.indexOf(code) >= 0;
-          rc.className = ok ? '' : 'err'; hint.textContent = ok ? '' : '不會寫入 RD';
-        }
-        sel.onchange = rcHint; rcHint();
-        rc.appendChild(sel); rc.appendChild(hint); tr.appendChild(rc);
-        cell('text', it.utm, 'utm', 'pmU' + i); cell('number', it.sort, '排序', 'pmS' + i);
-        tb.appendChild(tr);
-      });
-      $('pmWrap').hidden = !pmItems.length; $('pmSave').hidden = !pmItems.length;
-      say($('pmMsg'), pmItems.length ? (doneMsg || '') : '還沒有任何粉專（請先設定 FB_TOKEN）。', pmItems.length ? (doneMsg ? 'good' : '') : 'err');
-    }).catch(function (e) { say($('pmMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('pmLoad').disabled = false; });
-  }
-  $('pmLoad').onclick = function () { pmLoad(); };
-  $('pmSave').onclick = function () {
-    var items = pmItems.map(function (it, i) {
-      return { id: it.id, label: $('pmL' + i).value, code: $('pmC' + i).value, utm: $('pmU' + i).value, sort: $('pmS' + i).value === '' ? NaN : Number($('pmS' + i).value) };
-    });
-    $('pmSave').disabled = true; say($('pmMsg'), '儲存中');
-    api('/admin/fb/pagemap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
-      if (res.ok) pmLoad('已儲存。');   // 重新讀取後再顯示，避免「已儲存」被讀取訊息蓋掉
-      else if (res.code === 'unauthorized') expired();
-      else say($('pmMsg'), res.error || '儲存失敗。', 'err');
-    }).catch(function () { say($('pmMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('pmSave').disabled = false; });
-  };
-
-  // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
-  $('rdPing').onclick = function () {
-    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
-    api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
-      if (res.ok) say($('rdMsg'), '連線正常：' + (res.data.title || '') + (res.data.sheets && res.data.sheets.length ? '（分頁：' + res.data.sheets.join('、') + '）' : ''), 'good');
-      else if (res.code === 'unauthorized') expired();
-      else say($('rdMsg'), res.error || '測試失敗。', 'err');
-    }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('rdPing').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };

@@ -6,14 +6,8 @@ import { handleAssets } from './core/assets.js';
 import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
-import { handleFb, adminFb, adminPageMap } from './core/fb.js';
-import { handleRundown, adminRundown } from './core/rundown.js';
-import { adminFbPause } from './core/pause.js';   // 模組：暫停排程發布
-import { syncScheduled, cleanupComments } from './core/fbqueue.js';
 
-export { CommentHub } from './core/fbqueue.js';
-
-adminExtras.push(adminLogs, adminFb, adminPageMap, adminFbPause, adminRundown);
+adminExtras.push(adminLogs);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -23,8 +17,6 @@ const modules = [
   (req, env, ctx, path) => handleAssets(req, env, path),
   (req, env, ctx, path) => handleLogs(req, env, path),
   (req, env, ctx, path) => handleFetch(req, env, path),
-  (req, env, ctx, path) => handleFb(req, env, path),
-  (req, env, ctx, path) => handleRundown(req, env, path),
   (req, env, ctx, path) => handleAdmin(req, env, path)
 ];
 
@@ -52,13 +44,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每天 03:17（UTC 19:17）清理；其他排程（每分鐘）做留言對時
-    if (event && event.cron === '17 19 * * *') {
-      ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupComments(env, Date.now()).catch(() => {})]));
-    } else if (event && event.cron) {
-      ctx.waitUntil(syncScheduled(env, Date.now()));
-    } else {
-      ctx.waitUntil(cleanup(env, Date.now()));
-    }
+    // 每天 03:17（UTC 19:17）清理日誌
+    ctx.waitUntil(cleanup(env, Date.now()));
   }
 };

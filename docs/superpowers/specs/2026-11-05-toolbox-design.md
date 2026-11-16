@@ -40,7 +40,7 @@ QuickPatterntool、LinePushPatternTool、-schedulenewnet、videodownload 的網�
 | 做圖 | 浮水印 | QuickPatterntool `watermark.*` | 通用（公司 Logo 另外解鎖） | — |
 | 做圖 | 尺寸 | QuickPatterntool `resize.*` | 通用 | — |
 | 做圖 | 設計 | QuickPatterntool `design-*` | 通用 | — |
-| 發文與素材 | 排程發布 | 新做（介面參照網新排程 `#modal`） | **公司專屬** | 後端 `/fb/*`（Graph API） |
+| 發文與素材 | 排程發布 | **2026-11-16 整套移除、待重寫**：只留卡片與「功能停用」頁（公開工具，不呼叫後端）；舊做法見 git `ebce125` | 公開（停用頁） | 無（`/fb/*`、`/rundown` 已移除） |
 | 發文與素材 | 網新排程 | -schedulenewnet `web/` | **公司專屬** | 外掛、網新登入 |
 | 發文與素材 | YT 批量下載 | videodownload `web/` | 通用 | 外掛、本機下載助手 |
 
@@ -285,16 +285,15 @@ socialmediaeditor/
 
 | 模組 | 路由 | 功能 | 資料 |
 |---|---|---|---|
-| auth | `POST /auth`、`GET /auth/status` | 公司密碼換憑證、狀態查詢；前端輸入管理密碼也可登入，拿到帶 `adm` 的公司憑證（12 小時、不續期、不能進 `/admin/*`），不受管理頁「暫停排程發布」限制 | 簽章金鑰放 Secrets |
+| auth | `POST /auth`、`GET /auth/status` | 公司密碼換憑證、狀態查詢；前端輸入管理密碼也可登入，拿到帶 `adm` 的公司憑證（12 小時、不續期、不能進 `/admin/*`）（原為繞過「暫停排程發布」而設，排程發布移除後保留） | 簽章金鑰放 Secrets |
 | assets | `GET /assets/manifest`、`GET /assets/<key>` | 依憑證回傳公司版或通用版清單與檔案 | R2＋D1 |
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
 | fetch | `GET /fetch?url=`、`GET /fetch/image?url=`、`GET /fetch/article?url=`（文章 HTML，≤2 MB） | 代抓公開網頁的標題與 OG 圖；圖片代理（只收 JPG／PNG／GIF／WebP、≤10 MB，讓網頁能把主圖畫進畫布）；只允許白名單網域、轉址逐跳檢查 | KV 快取（網頁資訊） |
-| fb | `GET /fb/pages`、`/fb/posts`、`/fb/scheduled`、`/fb/insights`、`POST /fb/post`、`POST /fb/cancel`、`POST /fb/reschedule`（改排程時間）、`GET /fb/comments`、`POST /fb/comment/retry`、`POST /fb/comment/dismiss`（發文時留言佇列）、`GET /admin/fb`、`GET`／`POST /admin/fb/pagemap`（粉專簡稱與 utm）；`GET /fb/comment-presets`、`GET`／`POST /admin/fb/comment-presets`（第 N 則留言預設文字，D1 `fb_comment_presets`）；`POST /fb/post` 可帶 `extraComments`（第 2、3 則延遲留言，`fb_comments.seq`／`delay`） | 臉書粉專：清單、貼文成效、發文／排程、取消排程（只刪未發布；需公司憑證）；管理頁檢查 token 狀態。只放行這些動作，不做萬用代理 | 粉專 token 放 Secrets（`FB_TOKEN`），KV 快取；D1 `fb_page_map`、`fb_comments`；每分鐘 cron 當留言時鐘（Durable Object `CommentHub` 為選用的準時鬧鐘，目前未綁定） |
+| fb | （2026-11-16 移除，待重寫；舊路由與 D1 `fb_*` 表見 git `ebce125`） | — | — |
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
-| rundown | `POST /rundown`（`{action:'ping'}`／`{action:'add', entries}`，需公司憑證）、`GET /admin/rundown`（設定檢查）、`POST /admin/rundown/ping`（管理頁測試連線） | 排程發布的「排入 Rundown」：檢查格式後補上金鑰轉給 Apps Script（從 -schedulenewnet 的 Worker `/rundown` 搬來，v8） | Secrets `RUNDOWN_URL`、`RUNDOWN_TOKEN` |
+| rundown | （2026-11-16 隨排程發布移除） | — | — |
 | cron | 每日 03:17（UTC 19:17） | 清理過期圖床檔案、日誌、30 天前已結束的留言 | — |
-| cron | 每分鐘 | 發文留言時鐘：只查 D1 找「貼文發布時間＋各自延遲」已到的留言；沒到期就完全不打臉書。到點嘗試次數可在管理頁「留言嘗試次數」設定（1～5，預設 2；D1 `fb_settings`，`GET`／`POST /admin/fb/settings`），每次失敗後間隔固定 30 秒（沒綁 Durable Object 時實際落在下一個每分鐘 cron，最多約 60 秒），試滿仍失敗標 `failed` 顯示、不再自動重試；限流碼（4／17／32／341／613／80001）不重試；貼文未發布但臉書時間變了就以新時間重設（單筆最多 5 次）；貼文已刪除就取消。後台提早發布時，留言仍在原預定時間才送出 | D1 |
 
 - 工具專屬路由放在 `tools/<id>/api.js`，`build.js` 自動掛到 `/t/<id>/`。
 - 必要 Secrets：`COMPANY_PASSWORD`、`ADMIN_PASSWORD`、`SESSION_SECRET`；Rundown 另需 `RUNDOWN_URL`、`RUNDOWN_TOKEN`；臉書另需 `FB_TOKEN`（選填 `FB_APP_ID`、`FB_APP_SECRET`）。
@@ -342,7 +341,7 @@ socialmediaeditor/
 - **YT 下載助手**（2026-11-15 定案）：videodownload 整套**複製**到 `tools/ytdl/`，不改 videodownload repo。新下載助手 `com.tbx.ytdl`（小編工具箱下載助手），`allowed_origins` 只允許本外掛；安裝資料夾 `TbxYtdl`，與舊工具並存。下載助手自動更新來源固定本 repo `main` 的 `tools/ytdl/host/`（git blob SHA 驗證）；外掛本身由核心 updater 更新。協定見 `tools/ytdl/PROTOCOL.md`。
 - **工具外掛模組**：`tool.json` 的 `ext.dir` 可帶整個資料夾（複製到 `extension/tools/<id>/`）；模組可匯出 `init(ctx)`，`ctx.push`／`ctx.onSubscribe` 推播給網頁，網頁用 `tb.ext.on(tool, cb)` 訂閱（訂閱後才開 port `tbx-push`）。
 - **固定外掛 ID**：`manifest.json` 加 `key`（比照 videodownload），每台電腦的外掛 ID 都相同，下載助手的 `allowed_origins` 才能寫死。
-- **側邊欄**（外掛 2.00 起，版面照網新快速排程）：頂列「網頁版」＋分頁「發文／狀態與更新」。發文分頁嵌入網站的 `panel.html?tool=fbpost`（單一工具外殼，提供 tbxShell、可在側邊欄輸入公司密碼，後端 `toolbox-api`）；狀態分頁有公司模式、一鍵檢測（後端／憑證／粉專／外掛橋接，嵌入頁以 postMessage 回報，只回覆固定外掛 ID）、版本更新。網新 cookie、網新後台、Rundown 都不帶過來。`host_permissions` 有網站網址，嵌入頁才能和網站共用公司憑證。
+- **側邊欄**（外掛 2.00 起，版面照網新快速排程）：頂列「網頁版」＋分頁「發文／狀態與更新」。發文分頁嵌入網站的 `panel.html?tool=fbpost`（2026-11-16 起只顯示「功能停用」；單一工具外殼，提供 tbxShell、可在側邊欄輸入公司密碼，後端 `toolbox-api`）；狀態分頁有公司模式、一鍵檢測（後端／憑證／外掛橋接，嵌入頁以 postMessage 回報，只回覆固定外掛 ID）、版本更新。網新 cookie、網新後台、Rundown 都不帶過來。`host_permissions` 有網站網址，嵌入頁才能和網站共用公司憑證。
 - **版本**：從 `1.00` 開始，規則比照 QuickPatterntool（`manifest.json`、`changelog.json`）。
 
 ### 8.1 安裝與更新（比照「網新快速排程」）

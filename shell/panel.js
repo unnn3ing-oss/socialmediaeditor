@@ -93,7 +93,6 @@ async function runChecks() {
   } catch { out.push(item('api', '後端連線', 'warn', '連不上伺服器')); }
 
   const cred = readCompany(window.localStorage);
-  let company = false;
   if (!cred) out.push(item('company', '公司憑證', 'warn', '尚未輸入公司密碼'));
   else {
     try {
@@ -101,16 +100,7 @@ async function runChecks() {
       const now = readCompany(window.localStorage) || cred;
       const days = Math.max(0, Math.ceil((now.exp * 1000 - Date.now()) / 86400000));
       out.push(item('company', '公司憑證', 'ok', `有效，剩 ${days} 天`));
-      company = true;
     } catch (e) { out.push(item('company', '公司憑證', 'warn', e && e.code === 'unauthorized' ? '已過期，請重新輸入' : '無法確認')); }
-  }
-
-  if (!company) out.push(item('fb', '臉書粉專', 'skip', '需要公司憑證'));
-  else {
-    try {
-      const pages = await api.call('/fb/pages');
-      out.push(pages.length ? item('fb', '臉書粉專', 'ok', `已連線 ${pages.length} 個粉專`) : item('fb', '臉書粉專', 'warn', '沒有可用的粉專'));
-    } catch (e) { out.push(item('fb', '臉書粉專', 'warn', e && e.code === 'fb_not_configured' ? '後端還沒設定臉書 token' : '讀取失敗')); }
   }
 
   try { const r = await ext.call('ping', {}); out.push(item('ext', '外掛橋接', 'ok', `正常（v${r.version}）`)); }

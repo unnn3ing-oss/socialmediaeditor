@@ -15,16 +15,20 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/` | 只留 tool.json／icon／thumb＋新 index.html 停用公告 | ⬜ |
-| `server/core/{fb,fbqueue,graph,pause,rundown}.js` | 刪除；`index.js`、`http.js` 拿掉相關路由／錯誤碼／cron | ⬜ |
-| `admin/`、`server/core/admin-page.js` | 刪臉書發文、Rundown 分類 | ⬜ |
-| `shell/panel.js` | 一鍵檢測刪臉書粉專項 | ⬜ |
-| 測試 | 刪 fbpost／fb／fbqueue／rundown 測試，新增停用頁 e2e，修 admin／sidepanel e2e | ⬜ |
-| 文件 | README、deploy.md、規格、CLAUDE.md | ⬜ |
+| `tools/fbpost/` | 只留 tool.json／icon／thumb＋新 index.html 停用公告 | ✅ |
+| `server/core/{fb,fbqueue,graph,pause,rundown}.js` | 刪除；`index.js`、`http.js` 拿掉相關路由／錯誤碼／cron | ✅ |
+| `admin/`、`server/core/admin-page.js` | 刪臉書發文、Rundown 分類 | ✅ |
+| `shell/panel.js` | 一鍵檢測刪臉書粉專項 | ✅ |
+| 測試 | 刪 fbpost／fb／fbqueue／rundown 測試，新增停用頁 e2e，修 admin／sidepanel e2e | ✅ |
+| 文件 | README、deploy.md、規格、CLAUDE.md | ✅ |
 
 ## 下一步
-- [ ] 依上表逐項做，`node build.js`，npm test、e2e、build --check
+- [x] 依上表逐項做，`node build.js`；npm test 540、e2e 76、build --check 通過
+- [x] sidepanel e2e：fbpost 改公開後側邊欄不再出現解鎖卡片，測試改為先寫入憑證再驗證狀態頁；一鍵檢測移除「臉書粉專」
 - [ ] 獨立審查 → 給使用者看截圖 → 等「推」
+
+## 部署後使用者要做
+- 後端重新部署；D1 DROP 三張表、`wrangler secret delete` 五個（指令見 docs/deploy.md 步驟 6-2）
 
 ## 注意事項
 - repo `wrangler.toml` 沒綁 Durable Object，移除 `CommentHub` 不需 migration（使用者本機若有綁需加 `deleted_classes`）。

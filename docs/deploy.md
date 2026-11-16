@@ -149,71 +149,29 @@ npx wrangler deploy
 
 ---
 
-## 步驟 6-2：連接臉書粉專（選做）
+## 步驟 6-2：排程發布已移除（2026-11-16，待重寫）
 
-讓工具箱可以讀粉專貼文成效、發文和排程。token **只存在 Cloudflare**，不要貼到 GitHub、聊天或任何文件裡。
+「排程發布」整套（臉書發文、留言佇列、暫停發布、Rundown）已從程式移除，工具卡片點進去只顯示「功能停用」。舊程式見 git 歷史 `ebce125`。後端更新部署後，照下面清掉舊資料與 Secrets（**刪了無法復原**，先確定不再需要）：
 
-1. 準備 token。**用戶 token 或粉專 token 都可以**，推薦用戶 token：
+1. 刪掉 D1 舊資料表（在 `server` 資料夾執行）：
 
-   | 放哪一種 | 後端會怎麼做 | 新增粉專時 |
-   |---|---|---|
-   | **用戶 token**（推薦） | 自動找出你授權的所有粉專，換成各粉專的 token | 不用動，最多 10 分鐘後自動出現 |
-   | 粉專 token | 直接用 | 要重設 `FB_TOKEN` |
-
-   在「存取權杖偵錯工具」（https://developers.facebook.com/tools/debug/accesstoken/ ）確認：到期是「永不」，權限包含：
-
-   | 權限 | 用途 |
-   |---|---|
-   | `pages_show_list` | 列出粉專 |
-   | `pages_read_engagement` | 讀貼文、留言數、心情數 |
-   | `read_insights` | 讀貼文成效 |
-   | `pages_manage_posts` | 發文、排程 |
-
-2. 在 `server` 資料夾執行，出現提示時貼上 token（**多組用逗號隔開，貼在同一行**，兩種可以混放）：
-
-   ```
-   npx wrangler secret put FB_TOKEN
+   ```bash
+   npx wrangler d1 execute toolbox --remote --command "DROP TABLE IF EXISTS fb_page_map; DROP TABLE IF EXISTS fb_comments; DROP TABLE IF EXISTS fb_settings;"
    ```
 
-   **成功的樣子：** 印出 `Success! Uploaded secret FB_TOKEN`。
+   **成功的樣子：** 顯示執行成功、沒有錯誤。
 
-3. （選填，建議）如果臉書 App 有開「要求 App 密鑰」，或想讓管理頁用 App 身分檢查 token，也設定這兩個（在 Meta 開發者後台 → 你的 App → 設定 → 基本資料）：
+2. 刪掉不再使用的 Secrets（沒設過的會顯示找不到，可略過）：
 
+   ```bash
+   npx wrangler secret delete FB_TOKEN
+   npx wrangler secret delete FB_APP_ID
+   npx wrangler secret delete FB_APP_SECRET
+   npx wrangler secret delete RUNDOWN_URL
+   npx wrangler secret delete RUNDOWN_TOKEN
    ```
-   npx wrangler secret put FB_APP_ID
-   npx wrangler secret put FB_APP_SECRET
-   ```
 
-4. 重新部署：`npx wrangler deploy`
-5. 打開管理後台登入，在「臉書發文」分類按「臉書連線」的「檢查臉書連線」。
-
-   **成功的樣子：** 每組 token 一列；用戶 token 那列的「粉專」會列出所有授權的粉專；狀態「有效」；「缺少的權限」是「—」；上方顯示「全部正常。」
-
-> **用戶 token 的「資料存取到期」**：到期日寫「永不」，但臉書另有「資料存取權」期限（通常約 90 天）。管理頁「到期」欄會寫「資料存取到 某日」，快到時用同一個臉書帳號回 Graph API 工具重新產生一次 token、重設 `FB_TOKEN` 即可。
->
-> **粉專屬於企業管理平台（Business Manager）時**：用戶 token 的「我的粉專清單」（`me/accounts`）可能是空的。後端會自動改從 token 的「授權範圍」讀出你授權的粉專，再一個個換成粉專 token，**不用另外設定**。管理頁若顯示「讀不到授權範圍」，照第 3 步設定 `FB_APP_ID`、`FB_APP_SECRET` 後重新部署、再檢查一次。
->
-> 粉專名稱後面出現「無發文權限」或「無成效權限」：代表你的臉書帳號在那個粉專的角色不夠，請粉專管理員調整你的權限。
-
----
-
-## 步驟 6-3：連接 Rundown（選做）
-
-「排程發布」的「排入 Rundown」會把 `文章ID/圖文/SLUG`（純文字底圖選「無底色」或「臉書原生背景」時寫 `/文字/`）寫進 FB RUNDOWN 試算表。寫入由網新快速排程那份 Apps Script（`-schedulenewnet` 的 `gas/rundown.gs`）處理，**沿用已部署的那一份，不用重新部署**。
-
-1. 在 `server/` 資料夾執行，填入跟舊圖床 Worker 一樣的值：
-   ```
-   npx wrangler secret put RUNDOWN_URL
-   ```
-   貼上 Apps Script 網頁應用程式的 `/exec` 網址（`https://script.google.com/macros/s/…/exec`）。
-   ```
-   npx wrangler secret put RUNDOWN_TOKEN
-   ```
-   貼上 Apps Script 指令碼屬性 `TOKEN` 的值（至少 12 字）。
-2. 重新部署：`npx wrangler deploy`
-3. 打開管理後台，登入後點左側「Rundown」，在「Rundown 連線」卡片按「檢查設定」，再按「測試連線」。
-
-   **成功的樣子：** 顯示「連線成功：FB RUNDOWN…（分頁 2026/11…）」。顯示「後端還沒設定 Rundown」＝第 1 步沒設好；顯示「沒有回 JSON」＝Apps Script 部署的「誰可以存取」要選「所有人」。
+3. 本機 `server/wrangler.toml` 的 `crons` 只留 `["17 19 * * *"]`；`[vars]` 的 `FB_GRAPH_VERSION` 可刪可留（程式不再讀）。若本機有綁 `CommentHub` Durable Object，要先拿掉綁定並加 `deleted_classes = ["CommentHub"]` 的 migration，否則部署會失敗。
 
 ---
 
@@ -235,8 +193,7 @@ npx wrangler deploy
 |---|---|
 | 換 Logo、版型 | 管理後台「素材」上傳同名檔案 |
 | 看有沒有人回報錯誤 | 登入管理後台，點「錯誤日誌」按「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
-| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy`。**確認 `server/wrangler.toml` 的 `crons` 有 `"* * * * *"`（留言時鐘）和 `"17 19 * * *"`（每日清理）兩個** |
-| 臉書 token 換了、新增粉專 | 用戶 token：新粉專會自動出現，不用動。粉專 token：照步驟 6-2 第 2 步重設 `FB_TOKEN`、再部署。都可以到管理頁按「檢查臉書連線」確認 |
+| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy`。`server/wrangler.toml` 的 `crons` 只要 `"17 19 * * *"`（每日清理） |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |
 
 每天台灣時間 03:17 後端會自動清掉 30 天前的日誌，不用管。
@@ -248,6 +205,4 @@ npx wrangler deploy
 | 工具箱顯示公司素材載不到、瀏覽器主控台有 CORS 錯誤 | 網站網址和 `ALLOWED_ORIGIN` 不一致 | 檢查 `wrangler.toml` 的 `ALLOWED_ORIGIN`（不要結尾斜線），重新部署 |
 | 輸入公司密碼一直失敗 | 密碼設錯，或 Secrets 沒設 | 重新執行步驟 3 對應的指令 |
 | `/assets/manifest` 出現 `misconfigured` | `SESSION_SECRET` 少於 32 字，或密碼沒設 | 重新產生金鑰並重設 |
-| 工具箱說「臉書 token 失效或過期」 | token 被撤銷，或擁有者改了密碼、拿掉權限 | 管理頁按「檢查臉書連線」看哪一組，重新產生 token 後照步驟 6-2 重設 |
-| 工具箱說「臉書 token 缺少需要的權限」 | 產生 token 時沒勾到權限 | 管理頁看「缺少的權限」，重新產生 token 時勾上 |
 | 步驟 2 說找不到資料庫 | `database_id` 填錯 | 回步驟 1 檢查 `wrangler.toml` |
