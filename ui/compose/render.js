@@ -288,3 +288,17 @@ export function createRenderer({ ribbonEnt = null, ribbonNews = null, logo = nul
 
   return { ready, fontLoaded, titleFont, fitFontSize, drawImageCover, renderComposite };
 }
+
+// Google 把 Noto Sans TC 切成很多段，canvas 畫字不會自動載入沒用過的那段，缺字會退回系統字型。
+// 畫標題前先用實際文字載入（粗體 900 與副標 500 兩種），最多等 5 秒就放行。公司字型缺字時也會退到 Noto。
+export function loadTitleGlyphs(text, timeoutMs = 5000) {
+  const t = String(text || '').replace(/\s+/g, '') || '標題';
+  if (typeof document === 'undefined' || !document.fonts) return Promise.resolve();
+  return Promise.race([
+    Promise.all([
+      document.fonts.load(`900 67px "Noto Sans TC"`, t),
+      document.fonts.load(`500 50px "Noto Sans TC"`, t),
+    ]).catch(() => {}),
+    new Promise((r) => setTimeout(r, timeoutMs)),
+  ]);
+}

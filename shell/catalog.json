@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=40cfbd72ea"
+      "entry": "tools/pattern/index.html?v=a97a1c7cea"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=105d0f34bf"
+      "entry": "tools/linepush/index.html?v=6f86682925"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=4cf4764aeb"
+      "entry": "tools/collage/index.html?v=d461345663"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=48b4dac9e4"
+      "entry": "tools/watermark/index.html?v=4b8c09de59"
     },
     {
       "id": "resize",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=3b07c0935c"
+      "entry": "tools/resize/index.html?v=a81777af9b"
     },
     {
       "id": "design",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=39806635b4"
+      "entry": "tools/design/index.html?v=8066e79fcb"
     },
     {
       "id": "fbpost",
@@ -75,7 +75,7 @@
       "requires": [],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=7b4f1b23d3"
+      "entry": "tools/fbpost/index.html?v=a9f7d039df"
     },
     {
       "id": "ytdl",
@@ -89,7 +89,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=0a3ea830a1"
+      "entry": "tools/ytdl/index.html?v=4dbe0d8482"
     }
   ]
 }

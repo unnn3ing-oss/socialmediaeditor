@@ -1,0 +1,138 @@
+// 排程發布：貼網址帶入＋套版（共用畫圖核心）。公司模式用測試外殼、公司素材一律假圖。
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { serve } = require('../helpers/serve.js');
+const { launch } = require('../helpers/browser.js');
+const { fakeAsset, API_BASE, openTool } = require('../helpers/tool-page.js');
+
+const ROOT = path.join(__dirname, '..', '..');
+let srv, browser;
+test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
+test.after(async () => { await browser.close(); await srv.close(); });
+
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+const PAGES = [{ id: '111', short: '新聞', order: 0 }, { id: '222', short: '娛樂', order: 1 }];
+const TITLE = 'Buffet離場「偷換人吃」會被抓？員工曝驚人內幕：恐背詐欺罪';
+const IMG_URL = 'https://cc.tvbs.com.tw/img/upload/2026/11/16/a.jpg';
+const ARTICLE = `<html><head><meta property="og:title" content="${TITLE}"><meta property="og:image" content="${IMG_URL}">
+<meta name="keywords" content="監視器,吃到飽,詐欺,很長很長的標籤"></head><body><article><h1>${TITLE}</h1>
+<figure><img src="${IMG_URL}"><figcaption>（圖／TVBS）</figcaption></figure><p>內文</p></article></body></html>`;
+const PHOTO = fakeAsset([60, 170, 90]);
+
+// 公司模式（假外殼＋假憑證）開排程發布
+async function openFb() {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+  const posts = [], errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.addInitScript(() => { try { localStorage.setItem('tbx.company', JSON.stringify({ token: 't', exp: Math.floor(Date.now() / 1000) + 3600, admin: true })); } catch {} });
+  await page.route(API_BASE + '/**', async (r) => {
+    const req = r.request(), u = new URL(req.url()), p = u.pathname;
+    if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
+    const json = (data) => r.fulfill({ headers: CORS, json: { ok: true, data } });
+    if (p.startsWith('/assets/')) return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset() });
+    if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
+    if (p === '/fb/pages') return json(PAGES);
+    if (p === '/fetch/article') return json({ html: ARTICLE, url: u.searchParams.get('url') });
+    if (p === '/fetch/image') return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: PHOTO });
+    if (p === '/fb/post') { posts.push(req.postDataBuffer()); return json({ results: [{ page: '111', ok: true, postId: '111_1', scheduled: false, comment: 'done' }] }); }
+    return r.fulfill({ status: 404, headers: CORS, json: { ok: false, code: 'not_found' } });
+  });
+  await page.goto(srv.url + 'test/fixtures/company-host.html?tool=fbpost');
+  const frame = await (await page.waitForSelector('iframe[name=tool]')).contentFrame();
+  await frame.waitForSelector('#pages li');
+  return { page, frame, posts, errors };
+}
+const canvasHash = (frame, sel) => frame.evaluate(async (s) => {
+  const d = document.querySelector(s).getContext('2d').getImageData(0, 0, 1080, 1080).data;
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', d))].map((b) => b.toString(16).padStart(2, '0')).join('');
+}, sel);
+
+test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼文內容與 hashtag', async () => {
+  const { page, frame, posts, errors } = await openFb();
+  assert.equal(await frame.isVisible('#frameSeg'), true, '公司模式有新聞／娛樂框');
+  await frame.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
+  await frame.click('#pullBtn');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  assert.match(await frame.textContent('#pullHint'), /娛樂粉框.*標題.*貼文內容.*主圖/);
+  assert.equal(await frame.getAttribute('#frameSeg [data-frame=entertainment]', 'aria-pressed'), 'true');
+  const title = await frame.inputValue('#title');
+  assert.ok(title.split('\n').length >= 2, '標題已自動換行：' + title);
+  assert.equal(title.replace(/\n/g, ''), TITLE.replace(/\s/g, ''));
+  const msg = await frame.inputValue('#msg');
+  assert.match(msg, new RegExp('^【' + TITLE.replace(/[?？()（）]/g, '.') + '】'));
+  assert.match(msg, /（圖／TVBS）/);
+  assert.match(msg, /#監視器 #吃到飽 #詐欺/);
+  assert.equal(await frame.isHidden('#cvEmpty'), true, '預覽已有圖');
+  assert.equal(await frame.inputValue('#lead'), '看更多新聞內容');
+
+  await frame.fill('#lead', '完整報導看這裡');
+  await frame.check('#pages li[data-page="111"] input[type=checkbox]');
+  await frame.click('#sendBtn');
+  await frame.waitForSelector('#results li');
+  const body = posts[0].toString('latin1');
+  assert.match(body, /name="image"; filename="fbpost\.png"\r\nContent-Type: image\/png/);
+  assert.match(Buffer.from(body, 'latin1').toString('utf8'), /name="commentLead"\r\n\r\n完整報導看這裡/);
+  assert.match(body, /name="link"\r\n\r\nhttps:\/\/news\.tvbs\.com\.tw\/sports\/4051394/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('已有內容時帶入先確認，按返回不覆蓋', async () => {
+  const { page, frame } = await openFb();
+  await frame.fill('#title', '我自己打的標題');
+  await frame.fill('#link', 'https://news.tvbs.com.tw/politics/1');
+  await frame.click('#pullBtn');
+  await frame.waitForSelector('#cfDlg[open]');
+  await frame.click('#cfNo');
+  await frame.waitForFunction(() => /已取消帶入/.test(document.getElementById('pullHint').textContent));
+  assert.equal(await frame.inputValue('#title'), '我自己打的標題');
+  await page.close();
+});
+
+test('同樣的輸入，排程發布與圖片套版畫出來的圖完全相同（作圖框、純文字底圖）', async () => {
+  const { page, frame } = await openFb();
+  // 作圖框：帶入（新聞框）
+  await frame.fill('#link', 'https://news.tvbs.com.tw/politics/4046330');
+  await frame.click('#pullBtn');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  await frame.fill('#title', '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割');
+  await frame.evaluate(async () => { await (await import('../../ui/compose/render.js')).loadTitleGlyphs(document.getElementById('title').value); await new Promise((r) => setTimeout(r, 100)); });
+  const fbImage = await canvasHash(frame, '#cv');
+  // 純文字底圖（預設紅）
+  await frame.click('#modeSeg [data-mode=color]');
+  await frame.fill('#title', '快訊／\n蔣萬安激戰沈伯洋\nTVBS封關民調出爐！');
+  await frame.evaluate(async () => { await (await import('../../ui/compose/render.js')).loadTitleGlyphs(document.getElementById('title').value); await new Promise((r) => setTimeout(r, 100)); });
+  const fbColor = await canvasHash(frame, '#cv');
+  await page.close();
+
+  const { page: pp, frame: pf } = await openTool(browser, srv.url, 'pattern', { company: true });
+  await pf.waitForSelector('.batch-item-block');
+  const [ptImage, ptColor] = await pf.evaluate(async (photoB64) => {
+    const im = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.src = 'data:image/png;base64,' + photoB64; });
+    const hash = async (ctx) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', ctx.getImageData(0, 0, 1080, 1080).data))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await PATTERN.renderer.ready;
+    await PATTERN.compose.loadTitleGlyphs('藍營大老拋兩岸統一「10年計畫」關中、丁守中急切割快訊／蔣萬安激戰沈伯洋TVBS封關民調出爐！');
+    const mk = () => { const c = document.createElement('canvas'); c.width = c.height = 1080; return c.getContext('2d'); };
+    const a = mk(); renderComposite(a, { type: 'image', image: im, view: newView() }, '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割', canvaToPx(50), 'news', null);
+    const b = mk(); renderComposite(b, { type: 'color', color: '#c80000' }, '快訊／\n蔣萬安激戰沈伯洋\nTVBS封關民調出爐！', canvaToPx(60), 'news', null);
+    return [await hash(a), await hash(b)];
+  }, PHOTO.toString('base64'));
+  assert.equal(fbImage, ptImage, '作圖框');
+  assert.equal(fbColor, ptColor, '純文字底圖');
+  await pp.close();
+});
+
+test('貼圖與馬賽克：加到預覽，畫布跟著改變', async () => {
+  const { page, frame } = await openFb();
+  await frame.click('#modeSeg [data-mode=color]');
+  await frame.fill('#title', '貼圖測試');
+  const before = await canvasHash(frame, '#cv');
+  // 純色底上的馬賽克平均後還是同色、標題又畫在上面，所以用貼圖（最後畫、蓋在最上面）驗證
+  await frame.click('#fxSlot .fx-mosaic-tile');
+  await frame.click('#fxSlot .fx-sticker-tile >> nth=0');
+  await frame.waitForFunction(() => /已加 2 個/.test(document.getElementById('fxCount').textContent));
+  assert.equal(await frame.locator('#cvWrap .fx-item').count(), 2, '預覽上有 2 個可拖曳方框');
+  assert.notEqual(await canvasHash(frame, '#cv'), before);
+  await page.close();
+});

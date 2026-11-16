@@ -1,0 +1,89 @@
+// 已排程／已發佈：選粉專＋刷新才查；改時間、取消、刪除
+import { $, fmt, errText, bounds, inRange, toLocalInput, commentState, say, confirmBox } from './util.js';
+
+function thumb(url) {
+  if (url) { const i = document.createElement('img'); i.className = 'thumb'; i.src = url; i.alt = ''; return i; }
+  const d = document.createElement('div'); d.className = 'noimg'; d.textContent = '無圖'; return d;
+}
+function rowBase(it, whenMs) {
+  const li = document.createElement('li'); li.dataset.id = it.id;
+  const body = document.createElement('div'); body.className = 'body';
+  const m = document.createElement('div'); m.textContent = (it.message || '').slice(0, 60);
+  const c = commentState(it.comment);
+  const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = fmt(whenMs) + (c ? '　' + c : '');
+  body.append(m, meta);
+  li.append(thumb(it.picture), body);
+  return li;
+}
+function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; b.onclick = fn; return b; }
+
+export function createManage({ tb }) {
+  async function loadSched() {
+    const page = $('schedPage').value; if (!page) return;
+    say('schedHint', '查詢中…');
+    try {
+      const items = await tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page));
+      const ul = $('schedList'); ul.textContent = '';
+      for (const it of items) {
+        const li = rowBase(it, it.at * 1000);
+        const acts = document.createElement('div'); acts.className = 'acts';
+        const edit = document.createElement('div'); edit.className = 'edit'; edit.hidden = true;
+        const dt = document.createElement('input'); dt.type = 'datetime-local';
+        const ok = btn('確認改時間', 'btn-primary', async () => {
+          const at = Math.floor(new Date(dt.value).getTime() / 1000);
+          if (!inRange(at)) { say('schedHint', '排程時間必須在 10 分鐘到 30 天之間。', true); return; }
+          try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/reschedule`, { method: 'POST', body: { page, at } }); await loadSched(); }
+          catch (e) { say('schedHint', errText(e), true); }
+        });
+        edit.append(dt, ok);
+        const bEdit = btn('改時間', 'btn-secondary', () => {
+          const { min, max } = bounds(); dt.min = min; dt.max = max; dt.value = toLocalInput(it.at * 1000); edit.hidden = !edit.hidden;
+        });
+        const bCancel = btn('取消', 'btn-secondary', async () => {
+          if (!await confirmBox('取消排程', '確定要取消這則排程貼文嗎？')) return;
+          try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/cancel`, { method: 'POST', body: { page } }); await loadSched(); }
+          catch (e) { say('schedHint', errText(e), true); }
+        });
+        acts.append(bEdit, bCancel);
+        li.append(acts, edit); ul.append(li);
+      }
+      say('schedHint', items.length ? `共 ${items.length} 則` : '沒有排程貼文');
+    } catch (e) { say('schedHint', errText(e), true); }
+  }
+
+  let pubNext = null;
+  async function loadPub(more) {
+    const page = $('pubPage').value; if (!page) return;
+    say('pubHint', '查詢中…');
+    try {
+      const d = await tb.api.call('/fb/published?page=' + encodeURIComponent(page) + (more && pubNext ? '&after=' + encodeURIComponent(pubNext) : ''));
+      const ul = $('pubList'); if (!more) ul.textContent = '';
+      for (const it of d.items || []) {
+        const li = rowBase(it, new Date(it.time).getTime());
+        const acts = document.createElement('div'); acts.className = 'acts';
+        if (it.url) { const a = document.createElement('a'); a.className = 'btn btn-sm btn-secondary'; a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '開啟'; acts.append(a); }
+        acts.append(btn('刪除', 'btn-secondary', async () => {
+          if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
+          try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/delete`, { method: 'POST', body: { page } }); li.remove(); }
+          catch (e) { say('pubHint', errText(e), true); }
+        }));
+        li.append(acts); ul.append(li);
+      }
+      pubNext = d.next || null; $('pubMore').hidden = !pubNext;
+      say('pubHint', ul.children.length ? `共 ${ul.children.length} 則` : '沒有已發佈貼文');
+    } catch (e) { say('pubHint', errText(e), true); }
+  }
+
+  $('schedReload').onclick = loadSched;
+  $('pubReload').onclick = () => loadPub(false);
+  $('pubMore').onclick = () => loadPub(true);
+
+  return {
+    setPages(pages) {
+      for (const id of ['schedPage', 'pubPage']) {
+        const el = $(id); el.textContent = '';
+        for (const p of pages) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.short; el.append(o); }
+      }
+    }
+  };
+}

@@ -10,9 +10,6 @@
 .card h2 { font-size: 1.05rem; margin: 18px 0 8px; }
 .lbl { display: block; font-weight: 500; margin: 12px 0 4px; }
 .card textarea, .card input[type=url], .card input[type=file], .card select, .card input[type=datetime-local] { width: 100%; max-width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; color: var(--text); }
-.imgrow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.imgrow input { width: auto !important; max-width: 100%; }
-#imgPrev { max-width: 120px; max-height: 120px; border-radius: 8px; border: 1px solid var(--line); }
 .hint { color: var(--muted); font-size: 13px; margin: 4px 0; overflow-wrap: anywhere; }
 .hint.bad, .bad { color: var(--bad-text); }
 .pages, .results, .list { list-style: none; margin: 0 0 12px; padding: 0; }
@@ -41,3 +38,23 @@
 .dlg { border: 1px solid var(--line); border-radius: 16px; padding: 20px; max-width: min(380px, calc(100vw - 32px)); }
 .dlg h2 { margin: 0 0 8px; font-size: 1.1rem; }
 .dlg .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+
+/* ---- 做圖 ---- */
+.pullrow { display: flex; gap: 8px; }
+.pullrow input { flex: 1 1 auto; min-width: 0; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 4px; }
+.seg button { height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font: 14px var(--font); cursor: pointer; color: var(--btn-text); }
+.seg button.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.compose { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 8px; }
+@media (max-width: 640px) { .compose { grid-template-columns: minmax(0, 1fr); } }
+.preview { min-width: 0; }
+.canvas-wrap { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--fill); }
+.canvas-wrap canvas { display: block; width: 100%; height: auto; touch-action: none; }
+.canvas-wrap canvas.pannable { cursor: grab; }
+.cv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; color: var(--muted); font-size: 14px; pointer-events: none; }
+#imgPrev { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+#imgPrev[hidden] { display: none; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches .sw { width: 30px; height: 30px; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); cursor: pointer; padding: 0; }
+.swatches .sw.is-on { box-shadow: 0 0 0 2px var(--accent); }
+.card input[type=text] { width: 100%; max-width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; color: var(--text); }
