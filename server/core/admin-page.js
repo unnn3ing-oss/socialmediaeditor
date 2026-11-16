@@ -38,6 +38,11 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 .msg{min-height:24px;margin:8px 0 0;font-weight:600}
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
+.fb-state{font-weight:600}.fb-state.on{color:#166534}.fb-state.off{color:var(--danger)}
+.fb-missing{margin:8px 0 0;padding-left:20px;color:var(--danger);font-weight:600}
+#pgRows select{min-width:120px}#pgRows .pg-short{min-width:110px}#pgRows .pg-utm{min-width:260px}
+#pgRows input[type=checkbox]{width:22px;height:22px;min-height:0}
+.mv{display:flex;gap:6px;white-space:nowrap}
 .msg.good{color:#166534}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e6ecf6;vertical-align:middle}
@@ -100,6 +105,33 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       </div>
       <p id="empty" hidden>還沒有任何素材。</p>
       <p class="msg" id="listMsg" role="status"></p>
+    </section>
+
+    <section class="card" id="fbCard">
+      <h2>臉書連線</h2>
+      <p>後端用 Secret <code>FB_USER_TOKEN</code>（用戶 token）取得各粉專的發文權限。這裡看連線狀態、到期日與缺少的權限（不會顯示 token 本身）。</p>
+      <p class="fb-state" id="fbState">狀態：尚未讀取</p>
+      <ul class="fb-missing" id="fbMissing" hidden></ul>
+      <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
+      <p class="msg" id="fbMsg" role="status"></p>
+    </section>
+
+    <section class="card" id="pgCard">
+      <h2>粉專設定</h2>
+      <p>簡稱只影響網頁上的顯示；UTM 只影響留言裡的文章連結；RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序依表格由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>
+      <p class="msg" id="pgMsg" role="status"></p>
+      <div class="scroll" id="pgWrap" hidden>
+        <table id="pgTable"><thead><tr><th>序號</th><th>臉書名稱</th><th>簡稱</th><th>UTM</th><th>RD 區段</th><th>顯示</th><th>順序</th></tr></thead><tbody id="pgRows"></tbody></table>
+      </div>
+      <div class="row"><button id="pgSave" class="primary" type="button" hidden>儲存</button></div>
+    </section>
+
+    <section class="card" id="rdCard">
+      <h2>Rundown 連線</h2>
+      <p>Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。這裡只檢查有沒有設定與連不連得上，不顯示網址與金鑰。</p>
+      <p class="fb-state" id="rdState">狀態：尚未讀取</p>
+      <div class="row"><button id="rdPing" type="button">測試連線</button></div>
+      <p class="msg" id="rdMsg" role="status"></p>
     </section>
 
     <section class="card">
@@ -185,7 +217,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       if (res.ok) {
         token = res.data.token; $('pw').value = '';
         $('login').hidden = true; $('app').hidden = false; say($('loginMsg'), '');
-        load();
+        load(); fbLoad(); rdLoad();
       } else say($('loginMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '登入失敗。'), 'err');
     }).catch(function () { say($('loginMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('loginBtn').disabled = false; });
@@ -233,6 +265,120 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       say($('logMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '最近 7 天沒有任何錯誤。', 'good');
     }).catch(function () { say($('logMsg'), '讀取日誌失敗。', 'err'); })
       .then(function () { $('logBtn').disabled = false; });
+  };
+
+  // ---- 臉書連線（/admin/fb/status）----
+  function fmtExp(sec) {
+    if (sec === null || sec === undefined) return '到期日不明';
+    if (!sec) return '永不過期';
+    return '到期日 ' + fmtTime(sec * 1000);
+  }
+  function fbStatus() {
+    return api('/admin/fb/status').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
+      if (!d.configured) { $('fbState').textContent = '狀態：後端尚未設定 FB_USER_TOKEN'; $('fbState').className = 'fb-state off'; return; }
+      $('fbState').textContent = '狀態：' + (d.valid ? '連線正常' : 'token 無效，請重新授權') + '；' + fmtExp(d.expires) + '；粉專 ' + (d.pages || 0) + ' 個';
+      $('fbState').className = 'fb-state ' + (d.valid ? 'on' : 'off');
+      (d.missing || []).forEach(function (m) { var li = document.createElement('li'); li.textContent = '缺少權限：' + m; ul.appendChild(li); });
+      ul.hidden = !(d.missing && d.missing.length);
+    });
+  }
+
+  // ---- 粉專設定（/admin/fb/pages）----
+  var pgItems = [];
+  var RD_OPTS = [['', '不寫入'], ['news', '主粉'], ['ent', '娛樂粉'], ['shaokang', '少康粉'], ['intl', '國際＋粉']];
+  function pgMap(list) { return list.map(function (p) { return { id: p.id, name: p.name, short: p.short, utm: p.utm || '', rd: p.rd || '', show: !!p.show }; }); }
+  function pgSync() {
+    pgItems.forEach(function (it, i) {
+      var r = $('pgRows').children[i]; if (!r) return;
+      it.short = r.querySelector('.pg-short').value; it.utm = r.querySelector('.pg-utm').value;
+      it.rd = r.querySelector('.pg-rd').value; it.show = r.querySelector('.pg-show').checked;
+    });
+  }
+  function pgRender() {
+    var tb = $('pgRows'); tb.textContent = '';
+    pgItems.forEach(function (it, i) {
+      var tr = document.createElement('tr');
+      function td(node) { var c = document.createElement('td'); c.appendChild(node); tr.appendChild(c); return c; }
+      function input(cls, val, ph, max, label) {
+        var inp = document.createElement('input'); inp.type = 'text'; inp.className = cls; inp.value = val || ''; inp.maxLength = max;
+        if (ph) inp.placeholder = ph; inp.setAttribute('aria-label', it.name + ' ' + label); return inp;
+      }
+      td(document.createTextNode(String(i + 1))).className = 'num';
+      td(document.createTextNode(it.name));
+      td(input('pg-short', it.short, '', 20, '簡稱'));
+      td(input('pg-utm', it.utm, '?&utm_source=facebook&utm_medium=…', 200, 'UTM'));
+      var sel = document.createElement('select'); sel.className = 'pg-rd'; sel.setAttribute('aria-label', it.name + ' RD 區段');
+      RD_OPTS.forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
+      sel.value = it.rd || ''; td(sel);
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pg-show'; cb.checked = !!it.show; cb.setAttribute('aria-label', it.name + ' 顯示'); td(cb);
+      var mv = document.createElement('div'); mv.className = 'mv';
+      [['上移', -1], ['下移', 1]].forEach(function (m) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'pg-' + (m[1] < 0 ? 'up' : 'down'); b.textContent = m[0]; b.setAttribute('aria-label', it.name + m[0]);
+        b.disabled = (i + m[1] < 0 || i + m[1] >= pgItems.length);
+        b.onclick = function () { pgSync(); var x = pgItems.splice(i, 1)[0]; pgItems.splice(i + m[1], 0, x); pgRender(); };
+        mv.appendChild(b);
+      });
+      td(mv);
+      tb.appendChild(tr);
+    });
+    $('pgWrap').hidden = !pgItems.length; $('pgSave').hidden = !pgItems.length;
+  }
+  function pgLoad() {
+    say($('pgMsg'), '讀取中');
+    return api('/admin/fb/pages').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      pgItems = pgMap(res.data); pgRender();
+      say($('pgMsg'), pgItems.length ? '' : '還沒有任何粉專（請先設定 FB_USER_TOKEN）。', pgItems.length ? '' : 'err');
+    }).catch(function (e) { say($('pgMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function fbLoad() {
+    say($('fbMsg'), '');
+    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad()]);
+  }
+  $('fbRefresh').onclick = function () {
+    $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
+    api('/admin/fb/refresh', { method: 'POST' }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      return fbLoad().then(function () { say($('fbMsg'), '已重新讀取。', 'good'); });
+    }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('fbRefresh').disabled = false; });
+  };
+  $('pgSave').onclick = function () {
+    pgSync();
+    for (var i = 0; i < pgItems.length; i++) {
+      var n = pgItems[i].short.trim().length;
+      if (n < 1 || n > 20) return say($('pgMsg'), '第 ' + (i + 1) + ' 列「' + pgItems[i].name + '」的簡稱要 1～20 字。', 'err');
+      if (pgItems[i].utm.length > 200) return say($('pgMsg'), '第 ' + (i + 1) + ' 列的 UTM 不能超過 200 字。', 'err');
+    }
+    var body = { pages: pgItems.map(function (it, k) { return { id: it.id, short: it.short.trim(), utm: it.utm.trim(), rd: it.rd, order: k, show: it.show ? 1 : 0 }; }) };
+    $('pgSave').disabled = true; say($('pgMsg'), '儲存中');
+    api('/admin/fb/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (res.ok) { pgItems = pgMap(res.data); pgRender(); say($('pgMsg'), '已儲存', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('pgMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('pgMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('pgSave').disabled = false; });
+  };
+
+  function rdLoad() {
+    api('/admin/rundown').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      $('rdState').textContent = res.data.configured ? '狀態：已設定' : '狀態：尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN';
+      $('rdState').className = 'fb-state ' + (res.data.configured ? 'on' : 'off');
+    }).catch(function () { say($('rdMsg'), '讀取設定狀態失敗。', 'err'); });
+  }
+
+  // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
+  $('rdPing').onclick = function () {
+    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
+    api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
+      if (res.ok) say($('rdMsg'), '連線正常：' + (res.data.title || '') + (res.data.sheets && res.data.sheets.length ? '（分頁：' + res.data.sheets.join('、') + '）' : ''), 'good');
+      else if (res.code === 'unauthorized') expired();
+      else say($('rdMsg'), res.error || '測試失敗。', 'err');
+    }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('rdPing').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };

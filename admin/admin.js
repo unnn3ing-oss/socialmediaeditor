@@ -118,15 +118,133 @@ if (window.top !== window.self) {
       .then(function () { $('logBtn').disabled = false; });
   };
 
+  // ---- 臉書連線（/admin/fb/status）----
+  function fmtExp(sec) {
+    if (sec === null || sec === undefined) return '到期日不明';
+    if (!sec) return '永不過期';
+    return '到期日 ' + fmtTime(sec * 1000);
+  }
+  function fbStatus() {
+    return api('/admin/fb/status').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
+      if (!d.configured) { $('fbState').textContent = '狀態：後端尚未設定 FB_USER_TOKEN'; $('fbState').className = 'fb-state off'; return; }
+      $('fbState').textContent = '狀態：' + (d.valid ? '連線正常' : 'token 無效，請重新授權') + '；' + fmtExp(d.expires) + '；粉專 ' + (d.pages || 0) + ' 個';
+      $('fbState').className = 'fb-state ' + (d.valid ? 'on' : 'off');
+      (d.missing || []).forEach(function (m) { var li = document.createElement('li'); li.textContent = '缺少權限：' + m; ul.appendChild(li); });
+      ul.hidden = !(d.missing && d.missing.length);
+    });
+  }
+
+  // ---- 粉專設定（/admin/fb/pages）----
+  var pgItems = [];   // 目前表格順序；每列 { id, name, short, utm, rd, show }
+  var RD_OPTS = [['', '不寫入'], ['news', '主粉'], ['ent', '娛樂粉'], ['shaokang', '少康粉'], ['intl', '國際＋粉']];
+  function pgMap(list) { return list.map(function (p) { return { id: p.id, name: p.name, short: p.short, utm: p.utm || '', rd: p.rd || '', show: !!p.show }; }); }
+  function pgSync() {   // 把輸入框的值寫回 pgItems（換順序前先存）
+    pgItems.forEach(function (it, i) {
+      var r = $('pgRows').children[i]; if (!r) return;
+      it.short = r.querySelector('.pg-short').value; it.utm = r.querySelector('.pg-utm').value;
+      it.rd = r.querySelector('.pg-rd').value; it.show = r.querySelector('.pg-show').checked;
+    });
+  }
+  function pgRender() {
+    var tb = $('pgRows'); tb.textContent = '';
+    pgItems.forEach(function (it, i) {
+      var tr = document.createElement('tr');
+      function td(node) { var c = document.createElement('td'); c.appendChild(node); tr.appendChild(c); return c; }
+      function input(cls, val, ph, max, label) {
+        var inp = document.createElement('input'); inp.type = 'text'; inp.className = cls; inp.value = val || ''; inp.maxLength = max;
+        if (ph) inp.placeholder = ph; inp.setAttribute('aria-label', it.name + ' ' + label); return inp;
+      }
+      td(document.createTextNode(String(i + 1))).className = 'num';
+      td(document.createTextNode(it.name));
+      td(input('pg-short', it.short, '', 20, '簡稱'));
+      td(input('pg-utm', it.utm, '?&utm_source=facebook&utm_medium=…', 200, 'UTM'));
+      var sel = document.createElement('select'); sel.className = 'pg-rd'; sel.setAttribute('aria-label', it.name + ' RD 區段');
+      RD_OPTS.forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
+      sel.value = it.rd || ''; td(sel);
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pg-show'; cb.checked = !!it.show; cb.setAttribute('aria-label', it.name + ' 顯示'); td(cb);
+      var mv = document.createElement('div'); mv.className = 'mv';
+      [['上移', -1], ['下移', 1]].forEach(function (m) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'pg-' + (m[1] < 0 ? 'up' : 'down'); b.textContent = m[0]; b.setAttribute('aria-label', it.name + m[0]);
+        b.disabled = (i + m[1] < 0 || i + m[1] >= pgItems.length);
+        b.onclick = function () { pgSync(); var x = pgItems.splice(i, 1)[0]; pgItems.splice(i + m[1], 0, x); pgRender(); };
+        mv.appendChild(b);
+      });
+      td(mv);
+      tb.appendChild(tr);
+    });
+    $('pgWrap').hidden = !pgItems.length; $('pgSave').hidden = !pgItems.length;
+  }
+  function pgLoad() {
+    say($('pgMsg'), '讀取中');
+    return api('/admin/fb/pages').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      pgItems = pgMap(res.data); pgRender();
+      say($('pgMsg'), pgItems.length ? '' : '還沒有任何粉專（請先設定 FB_USER_TOKEN）。', pgItems.length ? '' : 'err');
+    }).catch(function (e) { say($('pgMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  var fbLoaded = false;
+  function fbLoad() {
+    fbLoaded = true; say($('fbMsg'), '');
+    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad()]);
+  }
+  $('fbRefresh').onclick = function () {
+    $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
+    api('/admin/fb/refresh', { method: 'POST' }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      return fbLoad().then(function () { say($('fbMsg'), '已重新讀取。', 'good'); });
+    }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('fbRefresh').disabled = false; });
+  };
+  $('pgSave').onclick = function () {
+    pgSync();
+    for (var i = 0; i < pgItems.length; i++) {
+      var n = pgItems[i].short.trim().length;
+      if (n < 1 || n > 20) return say($('pgMsg'), '第 ' + (i + 1) + ' 列「' + pgItems[i].name + '」的簡稱要 1～20 字。', 'err');
+      if (pgItems[i].utm.length > 200) return say($('pgMsg'), '第 ' + (i + 1) + ' 列的 UTM 不能超過 200 字。', 'err');
+    }
+    var body = { pages: pgItems.map(function (it, k) { return { id: it.id, short: it.short.trim(), utm: it.utm.trim(), rd: it.rd, order: k, show: it.show ? 1 : 0 }; }) };
+    $('pgSave').disabled = true; say($('pgMsg'), '儲存中');
+    api('/admin/fb/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (res.ok) { pgItems = pgMap(res.data); pgRender(); say($('pgMsg'), '已儲存', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('pgMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('pgMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('pgSave').disabled = false; });
+  };
+
   function signOut() {
     token = ''; pending = '';
     $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('login').hidden = false;
+    fbLoaded = false; rdLoaded = false; pgItems = [];
   }
   $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
 
-  // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #assets 等記住目前分類
+  // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #fb 等記住目前分類
 
-  var TABS = ['assets', 'logs'];
+  // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
+  $('rdPing').onclick = function () {
+    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
+    api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
+      if (res.ok) say($('rdMsg'), '連線正常：' + (res.data.title || '') + (res.data.sheets && res.data.sheets.length ? '（分頁：' + res.data.sheets.join('、') + '）' : ''), 'good');
+      else if (res.code === 'unauthorized') expired();
+      else say($('rdMsg'), res.error || '測試失敗。', 'err');
+    }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('rdPing').disabled = false; });
+  };
+
+  var rdLoaded = false;
+  function rdLoad() {
+    rdLoaded = true;
+    api('/admin/rundown').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      $('rdState').textContent = res.data.configured ? '狀態：已設定' : '狀態：尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN';
+      $('rdState').className = 'fb-state ' + (res.data.configured ? 'on' : 'off');
+    }).catch(function () { say($('rdMsg'), '讀取設定狀態失敗。', 'err'); });
+  }
+
+  var TABS = ['fb', 'rd', 'assets', 'logs'];
   var assetsLoaded = false;
   function tabFromHash() { var t = location.hash.slice(1); return TABS.indexOf(t) >= 0 ? t : TABS[0]; }
   function showTab(id, focus) {
@@ -137,6 +255,8 @@ if (window.top !== window.self) {
     });
     if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
     if (focus) $('tab-' + id).focus();
+    if (id === 'fb' && !fbLoaded && token) fbLoad();
+    if (id === 'rd' && !rdLoaded && token) rdLoad();
     if (id === 'assets' && !assetsLoaded && token) { assetsLoaded = true; load(); }
   }
   TABS.forEach(function (t, i) {

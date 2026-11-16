@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>排程發布</title>
 <link rel="stylesheet" href="../../ui/tokens.css">
+<link rel="stylesheet" href="fbpost.css">
 <style>
   .off { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box; }
   .off-box { max-width: 420px; width: 100%; text-align: center; padding: 32px 24px; border: 1px solid var(--line, #e3e7ee); border-radius: 16px; background: var(--surface, #fff); }
@@ -20,5 +21,64 @@
     <p>臉書上已經排好的貼文不受影響。</p>
   </section>
 </main>
+
+<main class="fp" id="fbpostApp" hidden>
+  <header class="fp-head">
+    <h1>排程發布</h1>
+    <span class="pill warn">測試模式（僅管理員）</span>
+  </header>
+  <div class="tabs" role="tablist" aria-label="分頁" id="tabs">
+    <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="new">新增發文</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="sched">已排程</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
+  </div>
+
+  <section id="tab-new" class="card">
+    <label class="lbl" for="img">圖片（選填，jpeg／png）</label>
+    <div class="imgrow">
+      <input type="file" id="img" accept="image/jpeg,image/png">
+      <img id="imgPrev" alt="圖片預覽" hidden>
+    </div>
+    <label class="lbl" for="msg">貼文內容</label>
+    <textarea id="msg" rows="5" placeholder="貼文內容"></textarea>
+    <label class="lbl" for="link">文章網址（選填）</label>
+    <input id="link" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/...">
+    <p class="hint">發布後第一則留言會放這個連結＋該粉專的 UTM。</p>
+    <h2>粉專</h2>
+    <ul class="pages" id="pages"></ul>
+    <button type="button" class="btn btn-primary" id="sendBtn" disabled>全部送出（0 個粉專）</button>
+    <p class="hint bad" id="sendErr" role="alert"></p>
+    <ul class="results" id="results" aria-live="polite"></ul>
+  </section>
+
+  <section id="tab-sched" class="card" hidden>
+    <div class="bar">
+      <label class="inline">粉專 <select id="schedPage"></select></label>
+      <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
+    </div>
+    <p class="hint" id="schedHint" role="status"></p>
+    <ul class="list" id="schedList"></ul>
+  </section>
+
+  <section id="tab-pub" class="card" hidden>
+    <div class="bar">
+      <label class="inline">粉專 <select id="pubPage"></select></label>
+      <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
+    </div>
+    <p class="hint" id="pubHint" role="status"></p>
+    <ul class="list" id="pubList"></ul>
+    <button type="button" class="btn btn-secondary btn-sm" id="pubMore" hidden>載入更多</button>
+  </section>
+</main>
+
+<dialog class="dlg" id="cfDlg" aria-labelledby="cfTitle">
+  <h2 id="cfTitle"></h2>
+  <p id="cfBody"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="cfNo">返回</button>
+    <button type="button" class="btn btn-primary" id="cfYes">確定</button>
+  </div>
+</dialog>
+<script type="module" src="app.js"></script>
 </body>
 </html>

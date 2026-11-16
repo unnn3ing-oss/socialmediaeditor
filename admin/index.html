@@ -20,7 +20,7 @@
 
 <section id="login" class="card login">
   <h1>管理登入</h1>
-  <p>公開與公司素材、錯誤日誌都在這裡，不用改程式也不用重新部署。</p>
+  <p>公開與公司素材、臉書發文的設定都在這裡，不用改程式也不用重新部署。</p>
   <form id="loginForm">
     <label for="pw">管理密碼</label>
     <input id="pw" type="password" autocomplete="current-password" required>
@@ -31,12 +31,52 @@
 
 <div id="app" class="layout" hidden>
   <nav class="side" role="tablist" aria-label="後台分類">
+    <button type="button" role="tab" id="tab-fb" data-tab="fb" aria-controls="panel-fb">臉書發文</button>
+    <button type="button" role="tab" id="tab-rd" data-tab="rd" aria-controls="panel-rd">Rundown</button>
     <button type="button" role="tab" id="tab-assets" data-tab="assets" aria-controls="panel-assets">素材</button>
     <span class="sep" aria-hidden="true"></span>
     <button type="button" role="tab" id="tab-logs" data-tab="logs" aria-controls="panel-logs">錯誤日誌</button>
   </nav>
 
   <main>
+    <!-- 臉書發文 -->
+    <div class="panel" id="panel-fb" role="tabpanel" aria-labelledby="tab-fb" hidden>
+      <h1>臉書發文</h1>
+      <p>排程發布工具的臉書連線與粉專設定。</p>
+
+      <section class="card" id="fbCard">
+        <h2>臉書連線</h2>
+        <p>後端用 Secret <code>FB_USER_TOKEN</code>（用戶 token）取得各粉專的發文權限。這裡看連線狀態、到期日與缺少的權限（不會顯示 token 本身）。</p>
+        <p class="fb-state" id="fbState">狀態：尚未讀取</p>
+        <ul class="fb-missing" id="fbMissing" hidden></ul>
+        <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
+        <p class="msg" id="fbMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="pgCard">
+        <h2>粉專設定</h2>
+        <p>簡稱只影響網頁上的顯示；UTM 只影響留言裡的文章連結；RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序依表格由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>
+        <p class="msg" id="pgMsg" role="status"></p>
+        <div class="scroll" id="pgWrap" hidden>
+          <table id="pgTable"><thead><tr><th>序號</th><th>臉書名稱</th><th>簡稱</th><th>UTM</th><th>RD 區段</th><th>顯示</th><th>順序</th></tr></thead><tbody id="pgRows"></tbody></table>
+        </div>
+        <div class="row"><button id="pgSave" class="primary" type="button" hidden>儲存</button></div>
+      </section>
+    </div>
+
+    <!-- Rundown -->
+    <div class="panel" id="panel-rd" role="tabpanel" aria-labelledby="tab-rd" hidden>
+      <h1>Rundown</h1>
+      <p>排程發布工具「排入 Rundown」的連線檢查。</p>
+      <section class="card" id="rdCard">
+        <h2>Rundown 連線</h2>
+        <p>Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。這裡只檢查有沒有設定與連不連得上，不顯示網址與金鑰。</p>
+        <p class="fb-state" id="rdState">狀態：尚未讀取</p>
+        <div class="row"><button id="rdPing" type="button">測試連線</button></div>
+        <p class="msg" id="rdMsg" role="status"></p>
+      </section>
+    </div>
+
     <!-- 素材 -->
     <div class="panel" id="panel-assets" role="tabpanel" aria-labelledby="tab-assets" hidden>
       <h1>素材</h1>
