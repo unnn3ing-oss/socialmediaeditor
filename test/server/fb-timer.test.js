@@ -62,8 +62,8 @@ test('臉書時間是 ISO 字串也能比對', async (t) => {
   assert.equal((await post('status')).at, newAt);
 });
 
-test('貼文不存在 → canceled', async (t) => {
-  const { f, obj, post } = await mk(t, { 'GET /111_5': () => gErr(100, 400, 'does not exist') });
+test('貼文不存在（HTTP 404）→ canceled', async (t) => {
+  const { f, obj, post } = await mk(t, { 'GET /111_5': () => gErr(100, 404, 'does not exist') });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   assert.equal((await post('status')).status, 'canceled');
@@ -157,4 +157,20 @@ test('留言送出後回應遺失：重試前先查，臉書上已有就不再�
   const s = await post('status');
   assert.equal(s.status, 'done'); assert.equal(s.commentId, 'C7');
   assert.equal(n, 1);
+});
+
+test('code 100 但不是「物件不存在」→ 不當成取消，走重試', async (t) => {
+  const { obj, post } = await mk(t, { 'GET /111_5': () => Response.json({ error: { code: 100, message: 'Tried accessing nonexisting field' } }, { status: 400 }) });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  const s = await post('status');
+  assert.notEqual(s.status, 'canceled');
+  assert.equal(s.attempts, 1);
+});
+
+test('code 100 subcode 33（物件不存在）→ canceled', async (t) => {
+  const { obj, post } = await mk(t, { 'GET /111_5': () => Response.json({ error: { code: 100, error_subcode: 33, message: 'does not exist' } }, { status: 400 }) });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal((await post('status')).status, 'canceled');
 });

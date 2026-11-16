@@ -5,7 +5,7 @@ tb.init('fbpost');
 
 const $ = (id) => document.getElementById(id);
 const MIN_S = 10 * 60, MAX_S = 30 * 24 * 3600;
-const COMMENT = { done: '已留言', armed: '排程後補留言', none: '不留言', failed: '留言失敗' };
+const COMMENT = { done: '已留言', armed: '排程後補留言', pending: '等待補留言', posting: '等待補留言', none: '不留言', failed: '留言失敗', canceled: '已取消' };
 const pad = (n) => String(n).padStart(2, '0');
 const toLocalInput = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const fmt = (ms) => { if (!Number.isFinite(ms)) return '時間不明'; const d = new Date(ms); return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -217,7 +217,11 @@ $('pubMore').onclick = () => loadPub(true);
   let st;
   try { st = await tb.api.call('/auth/status'); } catch { return; }
   if (!st || st.admin !== true) return;
-  try { pages = await tb.api.call('/fb/pages'); } catch (e) { return; }
+  try { pages = await tb.api.call('/fb/pages'); } catch (e) {
+    // 權限不足維持單純停用；其他（token 過期、沒設定、沒有粉專）把原因顯示出來
+    if (e && e.code !== 'fb_forbidden') { $('offReason').textContent = '原因：' + errText(e); $('offReason').hidden = false; }
+    return;
+  }
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;
   fillSelect($('schedPage')); fillSelect($('pubPage'));

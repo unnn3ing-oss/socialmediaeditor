@@ -101,3 +101,16 @@ test('GET /admin/fb/status：缺權限、到期日不明', async (t) => {
   const d2 = (await (await call(env2, '/admin/fb/status', { headers: await auth(env2, 'admin') })).json()).data;
   assert.equal(d2.configured, false);
 });
+
+test('/me/accounts 回空：不快取，回 fb_no_pages', async (t) => {
+  let n = 0;
+  const f = installFetch({ 'GET /me/accounts': () => (++n === 1 ? { data: [] } : ACCOUNTS) }); t.after(f.restore);
+  const env = fbEnv();
+  const h = await auth(env, 'company', true);
+  const r1 = await call(env, '/fb/pages', { headers: h });
+  assert.equal(r1.status, 503);
+  const b = await r1.json();
+  assert.equal(b.code, 'fb_no_pages'); assert.match(b.error, /權限/);
+  const r2 = await call(env, '/fb/pages', { headers: h });
+  assert.equal(r2.status, 200, '空結果沒被快取，第二次重抓');
+});

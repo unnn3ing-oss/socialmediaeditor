@@ -72,7 +72,8 @@ export class FbCommentTimer {
       try {
         post = await graph(this.env, 'GET', '/' + rec.postId, { fields: 'is_published,scheduled_publish_time' }, page.token);
       } catch (e) {
-        if (e instanceof GraphError && (e.code === 100 || e.status === 404) && !isRateLimit(e)) return this.finish(rec, 'canceled');
+        // 只有「貼文確實不存在」才當成已取消；其他 code 100（欄位、權限）走重試
+        if (e instanceof GraphError && (e.status === 404 || (e.code === 100 && e.subcode === 33))) return this.finish(rec, 'canceled');
         throw e;
       }
       if (!post.is_published) {

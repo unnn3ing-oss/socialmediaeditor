@@ -15,7 +15,7 @@ const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers
 const PAGES = [{ id: '111', short: '新聞', order: 1 }, { id: '222', short: '娛樂', order: 2 }, { id: '333', short: '國際', order: 3 }];
 const SHOT = process.env.SHOT_DIR;
 
-// mode: 'admin' | 'company'（無 admin）| 'denied'（401）
+// mode: 'admin' | 'company'（無 admin）| 'denied'（401）| 'tokenbad'（管理員，但 /fb/pages 回 fb_token）
 async function newPage(mode, viewport = { width: 1280, height: 900 }) {
   const page = await browser.newPage({ viewport });
   const errors = [], fbCalls = [], api = { posts: [], reschedules: [], cancels: [], deletes: [] };
@@ -28,9 +28,9 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }) {
     if (p.startsWith('/fb/')) fbCalls.push(p);
     if (p === '/auth/status') {
       if (mode === 'denied') return json({ ok: false, code: 'unauthorized', error: '請先登入' }, 401);
-      return json(mode === 'admin' ? { company: true, exp: soon, admin: true } : { company: true, exp: soon });
+      return json(mode === 'admin' || mode === 'tokenbad' ? { company: true, exp: soon, admin: true } : { company: true, exp: soon });
     }
-    if (p === '/fb/pages') return json(PAGES);
+    if (p === '/fb/pages') return mode === 'tokenbad' ? json({ ok: false, code: 'fb_token', error: '臉書 token 無效或過期。' }, 502) : json(PAGES);
     if (p === '/fb/post') {
       const body = req.postData() || '';
       api.posts.push(body);
@@ -39,7 +39,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }) {
         ? { page: t.page, ok: false, scheduled: false, comment: 'none', error: '臉書拒絕' }
         : { page: t.page, ok: true, postId: t.page + '_9', scheduled: t.at != null, at: t.at ?? undefined, comment: t.at != null ? 'armed' : 'done' })) });
     }
-    if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: { status: 'pending' } }]);
+    if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: 'pending' }]);
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
     let m = /^\/fb\/posts\/([^/]+)\/(reschedule|cancel|delete)$/.exec(p);
     if (m) {
@@ -200,5 +200,27 @@ test('管理員手機 390px 無橫向捲動', async () => {
   await page.waitForSelector('#pubList li');
   assert.ok((await overflow(page)) <= 0, '已發佈：' + (await overflow(page)));
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('管理員但臉書 token 有問題：停用頁顯示原因', async () => {
+  const { page, errors } = await newPage('tokenbad', { width: 390, height: 700 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.locator('#offReason').waitFor({ state: 'visible' });
+  assert.match(await page.textContent('#offReason'), /token 無效或過期/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('已排程列表的留言狀態顯示中文', async () => {
+  const { page } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.locator('#fbpostApp').waitFor({ state: 'visible' });
+  await page.click('text=已排程');
+  await page.locator('button:has-text("刷新"):visible').click();
+  await page.waitForSelector('img[src^="data:"]');
+  const txt = await page.locator('#fbpostApp').textContent();
+  assert.match(txt, /留言：等待補留言/);
+  assert.doesNotMatch(txt, /pending/);
   await page.close();
 });

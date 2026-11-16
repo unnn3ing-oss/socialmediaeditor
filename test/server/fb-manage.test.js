@@ -84,3 +84,11 @@ test('粉專不在清單 400；貼文 ID 格式不對 404', async (t) => {
   assert.equal((await call('/fb/posts/abc/cancel', { method: 'POST', body: JSON.stringify({ page: '111' }) })).status, 404);
   assert.equal((await call('/fb/posts/111_1%2Fx/cancel', { method: 'POST', body: JSON.stringify({ page: '111' }) })).status, 404);
 });
+
+test('臉書改時間成功但計時器出錯 → 仍回成功', async (t) => {
+  const { env, call } = await setup(t, { 'POST /111_1': () => ({ success: true }), 'DELETE /111_1': () => ({ success: true }) });
+  env.FB_TIMER = { idFromName: (n) => ({ name: n }), get: () => ({ fetch: async () => { throw new Error('DO down'); } }) };
+  const r = await call('/fb/posts/111_1/reschedule', { method: 'POST', body: JSON.stringify({ page: '111', at: nowSec() + 7200 }) });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal((await call('/fb/posts/111_1/cancel', { method: 'POST', body: JSON.stringify({ page: '111' }) })).status, 200);
+});

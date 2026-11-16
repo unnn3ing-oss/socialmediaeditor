@@ -39,12 +39,13 @@ export async function listPublished(env, page, token, after) {
 
 export async function reschedule(env, id, token, at) {
   await graph(env, 'POST', '/' + id, { scheduled_publish_time: at }, token);
-  if (env.FB_TIMER) await retimeTimer(env, id, at);   // 沒有等待中的留言時計時器回 ok:false，忽略
+  // 臉書已改成功；計時器出錯不影響結果（到點時會依臉書上的時間自行校正）
+  if (env.FB_TIMER) { try { await retimeTimer(env, id, at); } catch { /* 忽略 */ } }
 }
 
 export async function removePost(env, id, token) {
   await graph(env, 'DELETE', '/' + id, {}, token);
-  if (env.FB_TIMER) await cancelTimer(env, id);
+  if (env.FB_TIMER) { try { await cancelTimer(env, id); } catch { /* 到點時查不到貼文會自行取消 */ } }
 }
 
 export { timeOk };

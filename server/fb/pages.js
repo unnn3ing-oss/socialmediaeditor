@@ -29,6 +29,7 @@ export async function pageTokens(env) {
       if (isTokenError(e)) throw new FbSetupError('fb_token', e.message);
       throw e;
     }
+    if (!list.length) throw new FbSetupError('fb_no_pages');   // 空的不快取，補權限後馬上生效
     if (env.CACHE) await env.CACHE.put(CACHE_KEY, JSON.stringify(list), { expirationTtl: CACHE_TTL });
   }
   return new Map(list.map((p) => [p.id, p]));
@@ -105,7 +106,7 @@ export async function tokenStatus(env) {
       const exp = d && d.data && Number(d.data.expires_at);
       expires = exp > 0 ? exp : null;
     } catch { expires = null; }
-    try { pages = (await pageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; }
+    try { pages = (await pageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; else if (e.code !== 'fb_no_pages') throw e; }
   }
   return { configured: true, valid, expires, missing, pages };
 }
