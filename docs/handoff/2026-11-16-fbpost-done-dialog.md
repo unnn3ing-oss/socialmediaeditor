@@ -23,8 +23,21 @@
 
 ## 下一步
 - [x] 依上表實作（另加 `util.js` copyText、`dialog.js` Esc 跳過 doneDlg；替身後端改成固定娛樂 222 失敗）；fbpost e2e 31、npm test 609、build --check 通過
-- [ ] 獨立審查 → 截圖給使用者確認
-- [ ] 使用者後來追加（尚未確認做法）：管理頁 UTM 分「圖文」「文字」兩欄；管理頁粉專設定版面顯示完整；素材上傳順序改等級→名稱→檔案→上傳，名稱自動取檔名去副檔名
+- [x] 獨立審查通過、截圖已給使用者（`02bf456`）
+
+## 追加（使用者已說「開始」）
+| 項目 | 決定 |
+|---|---|
+| UTM 兩欄 | D1 `fb_pages.utm_text`（自動 ALTER 補欄位）；沒附圖（純文字）用「文字」UTM，其他用「圖文」（原 `utm`）。**文字空白＝不加 UTM**，前端送出前若勾選的粉專文字 UTM 空白要跳確認提醒（`/fb/pages` 多回 `noTextUtm`） |
+| 粉專設定版面 | 表格改每粉專一張小卡（名稱＋上下移／簡稱 RD 顯示／UTM 圖文整行／UTM 文字整行），兩個管理頁都改 |
+| 素材上傳 | 順序 等級→名稱→檔案→上傳；選檔自動填名稱（去副檔名、小寫、非法字元→-），只在名稱空白或上次自動填時覆蓋 |
+| 開放切換 | 兩段：只開放管理員（預設）／開放給公司帳號；存 `fb_settings` k=`access`；`/admin/fb/access` GET/POST；`GET /fb/access` 回 mode；開放時隱藏「測試模式」標籤；前端不再只看 admin，改看 `/fb/pages` 是否 403 |
+| 部署 | **後端需重新部署** |
+
+- [ ] 後端：pages.js／post.js／access.js／index.js／schema.sql＋單元測試
+- [ ] 管理頁：`admin/`、`server/core/admin-page.js`
+- [ ] fbpost 前端：app.js 閘門、送出前文字 UTM 提醒
+- [ ] 測試、審查、截圖
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`
