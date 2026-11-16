@@ -247,7 +247,10 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await openPost(page);
   assert.equal(await page.isChecked('#rdOn'), false);
   assert.equal(await page.isDisabled('#rdSlug'), true);
-  await page.click('.switch');
+  const lbl = await page.locator('.rd-lbl').boundingBox(), slugBox = await page.locator('#rdSlug').boundingBox();
+  assert.ok(lbl.x + lbl.width <= slugBox.x, `「排入 RD」與 SLUG 框不能重疊：${lbl.x + lbl.width} > ${slugBox.x}`);
+  assert.ok(slugBox.height >= 36, 'SLUG 框有輸入框樣式（高度）');
+  await page.click('.rd-switch');
   assert.equal(await page.isChecked('#rdOn'), true);
   await page.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
   await page.fill('#title', '快訊／蔣萬安激戰沈伯洋\nTVBS封關民調出爐！');
