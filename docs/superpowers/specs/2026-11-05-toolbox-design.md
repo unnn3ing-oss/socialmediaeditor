@@ -40,7 +40,7 @@ QuickPatterntool、LinePushPatternTool、-schedulenewnet、videodownload 的網�
 | 做圖 | 浮水印 | QuickPatterntool `watermark.*` | 通用（公司 Logo 另外解鎖） | — |
 | 做圖 | 尺寸 | QuickPatterntool `resize.*` | 通用 | — |
 | 做圖 | 設計 | QuickPatterntool `design-*` | 通用 | — |
-| 發文與素材 | 排程發布 | **2026-11-16 整套移除、待重寫**：只留卡片與「功能停用」頁（公開工具，不呼叫後端）；舊做法見 git `ebce125` | 公開（停用頁） | 無（`/fb/*`、`/rundown` 已移除） |
+| 發文與素材 | 排程發布 | **2026-11-16 重寫中**（設計 `2026-11-16-fbpost-rebuild-design.md`）：第一段＝管理員測試畫面（發文、已排程／已發佈管理）；其他人看到「功能停用」 | 公開卡片，內容僅管理員（`adm`） | `/fb/*`、`/rundown` |
 | 發文與素材 | 網新排程 | -schedulenewnet `web/` | **公司專屬** | 外掛、網新登入 |
 | 發文與素材 | YT 批量下載 | videodownload `web/` | 通用 | 外掛、本機下載助手 |
 
@@ -290,9 +290,9 @@ socialmediaeditor/
 | admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
 | fetch | `GET /fetch?url=`、`GET /fetch/image?url=`、`GET /fetch/article?url=`（文章 HTML，≤2 MB） | 代抓公開網頁的標題與 OG 圖；圖片代理（只收 JPG／PNG／GIF／WebP、≤10 MB，讓網頁能把主圖畫進畫布）；只允許白名單網域、轉址逐跳檢查 | KV 快取（網頁資訊） |
-| fb | （2026-11-16 移除，待重寫；舊路由與 D1 `fb_*` 表見 git `ebce125`） | — | — |
+| fb | `GET /fb/pages`、`POST /fb/post`、`GET /fb/scheduled`、`GET /fb/published`、`POST /fb/posts/:id/{reschedule,cancel,delete}`；管理 `GET /admin/fb/status`、`GET/POST /admin/fb/pages`、`POST /admin/fb/refresh` | 臉書發文（`server/fb/`）；測試期間只給 `adm` 憑證（`access.js` 的 `FB_ACCESS`）；排程留言用 Durable Object `FbCommentTimer` | Secret `FB_USER_TOKEN`；D1 `fb_pages` |
 | imghost | `/t/sched/upload`、`/i/<key>` | 圖床（從 `snn-images` 複製），3 天自動刪除 | R2 |
-| rundown | （2026-11-16 隨排程發布移除） | — | — |
+| rundown | `POST /rundown`；管理 `GET /admin/rundown`、`POST /admin/rundown/ping` | 補金鑰轉送 FB RUNDOWN Apps Script（不改 Apps Script） | Secrets `RUNDOWN_URL`、`RUNDOWN_TOKEN` |
 | cron | 每日 03:17（UTC 19:17） | 清理過期圖床檔案、日誌、30 天前已結束的留言 | — |
 
 - 工具專屬路由放在 `tools/<id>/api.js`，`build.js` 自動掛到 `/t/<id>/`。

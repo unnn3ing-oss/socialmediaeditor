@@ -149,29 +149,42 @@ npx wrangler deploy
 
 ---
 
-## 步驟 6-2：排程發布已移除（2026-11-16，待重寫）
+## 步驟 6-2：排程發布（2026-11-16 重寫版）
 
-「排程發布」整套（臉書發文、留言佇列、暫停發布、Rundown）已從程式移除，工具卡片點進去只顯示「功能停用」。舊程式見 git 歷史 `ebce125`。後端更新部署後，照下面清掉舊資料與 Secrets（**刪了無法復原**，先確定不再需要）：
+測試期間只有在網站用**管理密碼**登入的人能用（其他人看到「功能停用」）。
 
-1. 刪掉 D1 舊資料表（在 `server` 資料夾執行）：
-
-   ```bash
-   npx wrangler d1 execute toolbox --remote --command "DROP TABLE IF EXISTS fb_page_map; DROP TABLE IF EXISTS fb_comments; DROP TABLE IF EXISTS fb_settings;"
-   ```
-
-   **成功的樣子：** 顯示執行成功、沒有錯誤。
-
-2. 刪掉不再使用的 Secrets（沒設過的會顯示找不到，可略過）：
+1. **D1 建新表 `fb_pages`**（粉專簡稱／UTM／RD 區段／順序／顯示；在 `server` 資料夾執行，重跑不會動到舊資料）：
 
    ```bash
-   npx wrangler secret delete FB_TOKEN
-   npx wrangler secret delete FB_APP_ID
-   npx wrangler secret delete FB_APP_SECRET
-   npx wrangler secret delete RUNDOWN_URL
-   npx wrangler secret delete RUNDOWN_TOKEN
+   npx wrangler d1 execute toolbox --remote --file=./schema.sql
    ```
 
-3. 本機 `server/wrangler.toml` 的 `crons` 只留 `["17 19 * * *"]`；`[vars]` 的 `FB_GRAPH_VERSION` 可刪可留（程式不再讀）。若本機有綁 `CommentHub` Durable Object，要先拿掉綁定並加 `deleted_classes = ["CommentHub"]` 的 migration，否則部署會失敗。
+2. **Secrets**（`FB_USER_TOKEN` 要用**長效** user token，約 60 天到期；到期後再執行一次同一行換新）：
+
+   ```bash
+   npx wrangler secret put FB_USER_TOKEN
+   npx wrangler secret put RUNDOWN_URL
+   npx wrangler secret put RUNDOWN_TOKEN
+   ```
+
+   - token 需要的權限：`pages_show_list`、`pages_manage_posts`、`pages_read_engagement`、`pages_manage_engagement`、`pages_read_user_content`（管理頁「臉書連線」會列出缺少的）。
+   - `RUNDOWN_URL`＝FB RUNDOWN 試算表 Apps Script 的 `/exec` 網址；`RUNDOWN_TOKEN`＝同一支 Apps Script 指令碼屬性 `TOKEN`（至少 12 字）。
+
+3. **本機 `server/wrangler.toml` 加留言計時器**（repo 版已有，照抄到本機那份）。公司電腦已有的 `v1`、`v2` 兩段 `[[migrations]]` **保留**，`v3` 接在後面：
+
+   ```toml
+   [[durable_objects.bindings]]
+   name = "FB_TIMER"
+   class_name = "FbCommentTimer"
+
+   [[migrations]]
+   tag = "v3"
+   new_sqlite_classes = ["FbCommentTimer"]
+   ```
+
+   `crons` 維持 `["17 19 * * *"]`（留言靠計時器，不需要每分鐘的 cron）。
+
+4. `npx wrangler deploy`，到管理頁「臉書發文」：看 token 狀態 → 粉專設定填簡稱、UTM、RD 區段、順序、顯示 → 儲存；「Rundown」按「測試連線」。
 
 ---
 
@@ -193,7 +206,7 @@ npx wrangler deploy
 |---|---|
 | 換 Logo、版型 | 管理後台「素材」上傳同名檔案 |
 | 看有沒有人回報錯誤 | 登入管理後台，點「錯誤日誌」按「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
-| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy`。`server/wrangler.toml` 的 `crons` 只要 `"17 19 * * *"`（每日清理） |
+| 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy`。`server/wrangler.toml` 的 `crons` 只要 `"17 19 * * *"`（每日清理）；要有 `FB_TIMER` 綁定與 migration `v3`（步驟 6-2） |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |
 
 每天台灣時間 03:17 後端會自動清掉 30 天前的日誌，不用管。
