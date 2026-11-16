@@ -1,5 +1,5 @@
 # 排程發布重寫（第一段：後端＋管理頁＋工具最小發文／管理）
-- 狀態：第一段＋追加完成，等使用者部署實測　計畫：phase1、phase1b　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
+- 狀態：第一段已併入 main（2026-11-16），等使用者部署實測　計畫：phase1、phase1b　- 分支：claude/rebuild-scheduled-publish-3sd0gr　- 最後更新：2026-11-16
 - 使用者原始需求：「重建新『排程發布』功能」；「全部都不可以參考過往任何紀錄來重寫」。
 - 設計（已確認）：`docs/superpowers/specs/2026-11-16-fbpost-rebuild-design.md`。實作計畫：`docs/superpowers/plans/2026-11-16-fbpost-rebuild-phase1.md`（寫好後）。
 
