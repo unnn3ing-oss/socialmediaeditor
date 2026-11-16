@@ -103,8 +103,8 @@
           <p class="noimg" id="noImg" hidden>純文字：這則貼文不附圖，只發貼文內容。</p>
         </div>
         <div class="right">
-          <label class="lbl" for="link">文章網址 <small>貼上就自動帶入</small></label>
-          <input id="link" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/...">
+          <label class="lbl" for="link">文章網址 <small class="req">必填</small><small>貼上就自動帶入</small></label>
+          <input id="link" type="url" inputmode="url" required aria-required="true" placeholder="https://news.tvbs.com.tw/...">
           <p class="hint" id="pullHint" role="status"></p>
           <label class="lbl" for="title">標題 <small id="titleCount"></small></label>
           <textarea id="title" rows="4" placeholder="帶入時自動換行"></textarea>

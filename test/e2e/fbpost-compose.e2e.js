@@ -152,13 +152,14 @@ test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍�
   assert.equal(await frame.isHidden('#imgArea'), true);
   assert.equal(await frame.isVisible('#noImg'), true);
   await frame.fill('#msg', '只有文字');
+  await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });   // 網址必填（不觸發帶入）
   await frame.click('#pages .chip[data-page="111"] .chip-l');
   await frame.click('#sendBtn');
   await frame.waitForSelector('#results li');
   const body = posts[0].toString('utf8');
   assert.doesNotMatch(body, /name="image"/, '純文字不附圖');
   assert.match(body, /name="message"\r\n\r\n只有文字/);
-  assert.doesNotMatch(body, /name="commentLead"/, '沒網址就沒有留言欄位');
+  assert.doesNotMatch(body, /name="commentLead"/, '留言內容沒輸入就不送，後端用預設文字');
   await page.close();
 });
 

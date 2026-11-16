@@ -41,7 +41,7 @@ export function parsePostForm(fd) {
   const lead = fd.has('commentLead') ? String(fd.get('commentLead')) : undefined;   // 沒給＝預設「看更多新聞內容」
   if (message.length > MAX_MESSAGE) return null;
   if (lead !== undefined && ([...lead.trim()].length > MAX_COMMENT_LEAD || /[\r\n]/.test(lead.trim()))) return null;
-  if (link && !/^https?:\/\/[^\s]+$/i.test(link)) return null;
+  if (!link || !/^https?:\/\/[^\s]+$/i.test(link)) return null;   // 文章網址必填（第 1 則留言、RD 都要用）
   let file = null;
   if (image && typeof image === 'object' && image.size > 0) {
     if (!['image/jpeg', 'image/png'].includes(image.type) || image.size > MAX_IMAGE) return null;
@@ -127,14 +127,21 @@ export async function createPosts(env, form) {
       }
       continue;
     }
-    // 立即：第 1 則馬上留；第 2、3 則交給計時器（從現在算）
+    // 立即：第 1 則最重要，先馬上留；失敗就連同第 2、3 則交給計時器，由計時器先重試第 1 則，成功後才留後面的
+    let firstOk = false;
     if (first) {
-      try { await postComment(env, p.token, r.postId, first); r.comment = 'done'; }
+      try { await postComment(env, p.token, r.postId, first); r.comment = 'done'; firstOk = true; }
       catch (e) { r.comment = 'failed'; r.commentError = errText(e); }
     }
-    if (extras.length) {
-      try { await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items: extras }); r.extra = extras.length; }
-      catch (e) { r.extraError = errText(e); }
+    const items = [...(first && !firstOk ? [{ message: first, offset: 0, recheck: true }] : []), ...extras];
+    if (items.length) {
+      try {
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items });
+        if (first && !firstOk) r.comment = 'retry';
+        if (extras.length) r.extra = extras.length;
+      } catch (e) {
+        if (extras.length) r.extraError = errText(e);
+      }
     }
   }
   return results;

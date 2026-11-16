@@ -6,7 +6,9 @@ async function callTimer(env, postId, action, body) {
   if (!env.FB_TIMER) throw new Error('FB_TIMER 未綁定');
   const stub = env.FB_TIMER.get(env.FB_TIMER.idFromName(String(postId)));
   const r = await stub.fetch('https://timer/' + action, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
-  return r.json();
+  const d = await r.json();
+  if (action === 'arm' && (!d || !d.ok)) throw new Error((d && d.error) || '計時器沒有接受');   // 沒排上就不能當成排好了
+  return d;
 }
 export const armTimer = (env, rec) => callTimer(env, rec.postId, 'arm', rec);
 export const retimeTimer = (env, postId, at) => callTimer(env, postId, 'retime', { at });
@@ -47,7 +49,8 @@ function normItems(body) {
     const off = Number(x && x.offset);
     if (!x || typeof x.message !== 'string' || !x.message || !Number.isInteger(off) || off < 0 || off < prev) return null;
     prev = off;
-    out.push({ message: x.message, offset: off, status: 'pending', attempts: 0 });
+    // recheck：這則可能其實已經留成功（立即發布時回應錯誤），當成「留言途中」，到點先查再留，避免重複
+    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0 });
   }
   return out;
 }

@@ -151,3 +151,4 @@ body.no-scroll { overflow: hidden; }
 .extra-del:hover { color: var(--bad-text); }
 .add-comment { margin-top: 10px; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px dashed var(--accent); color: var(--accent); background: #fff; font: 600 14px var(--font); cursor: pointer; }
 .add-comment:disabled { opacity: .45; cursor: not-allowed; }
+.lbl small.req { color: var(--bad-text); font-weight: 600; }

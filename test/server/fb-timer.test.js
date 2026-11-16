@@ -277,3 +277,22 @@ test('前一則失敗（例如限流）：後面的也標失敗，不跳著留',
   assert.match(s.items[2].error, /前一則/);
   assert.ok(!comments(f).some((c) => c.body.message === '第三則'), '第三則沒有留');
 });
+
+test('arm 帶 recheck：第 1 則可能已留過（回應錯誤但其實成功）→ 先查，有就不再留', async (t) => {
+  const { f, obj, post } = await mk(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'GET /111_5/comments': () => ({ data: [{ id: 'C9', from: { id: '111' }, message: '看更多\nhttps://x' }] })
+  });
+  await post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: [{ message: '看更多\nhttps://x', offset: 0, recheck: true }] });
+  assert.equal((await post('status')).items[0].status, 'posting');
+  await obj.alarm();
+  const s = await post('status');
+  assert.equal(s.items[0].status, 'done'); assert.equal(s.items[0].commentId, 'C9');
+  assert.equal(comments(f).length, 0);
+});
+
+test('armTimer：計時器拒收（資料不完整）會丟錯，不能當成排好了', async () => {
+  const { armTimer } = await lm();
+  const env = { FB_TIMER: { idFromName: (n) => ({ name: n }), get: () => ({ fetch: async () => Response.json({ ok: false, error: '資料不完整' }) }) } };
+  await assert.rejects(() => armTimer(env, { postId: '1_2', items: [] }), /資料不完整/);
+});

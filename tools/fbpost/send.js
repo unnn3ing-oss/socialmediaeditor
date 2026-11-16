@@ -16,7 +16,7 @@ export function createSender({ tb, composer, targets, rd, comments }) {
       if (r.ok) {
         t += r.scheduled ? '排程成功' : '發布成功';
         if (r.scheduled && r.at) t += '（' + fmt(r.at * 1000) + '）';
-        t += '；' + (COMMENT[r.comment] || '') + (r.comment === 'failed' && r.commentError ? '（' + r.commentError + '）' : '');
+        t += '；' + (COMMENT[r.comment] || '') + ((r.comment === 'failed' || r.comment === 'retry') && r.commentError ? '（' + r.commentError + '）' : '');
         if (r.extra) t += `；另排 ${r.extra} 則留言`;
         if (r.extraError) t += `；第 2、3 則留言排定失敗（${r.extraError}）`;
       } else t += '失敗（' + (r.error === 'fb_bad_time' ? '排程時間必須在 10 分鐘到 30 天之間' : (r.error || '未知原因')) + '）';
@@ -34,6 +34,7 @@ export function createSender({ tb, composer, targets, rd, comments }) {
     if (c.error) { err.textContent = c.error; return; }
     const extra = comments.collect();
     if (extra.error) { err.textContent = extra.error; return; }
+    if (!/^https?:\/\/\S+$/i.test($('link').value.trim())) { err.textContent = '請貼上文章網址（第 1 則留言和排入 RD 都要用到）。'; return; }
     if (!c.targets.length) return;
     const btn = $('sendBtn'); btn.disabled = true; btn.textContent = '送出中…';
     try {

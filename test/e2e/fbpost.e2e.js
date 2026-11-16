@@ -382,3 +382,16 @@ test('第 2、3 則留言：新增、選活動留言帶入可改、距上一則�
   assert.deepEqual(JSON.parse(/name="comments"\r\n\r\n([^\r]*)\r\n/.exec(body)[1]), [{ message: '第三則內容', delay: 10 }]);
   await page.close();
 });
+
+test('文章網址必填：沒填按送出會提示、不送出', async () => {
+  const { page, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  assert.match(await page.textContent('label[for=link]'), /必填/);
+  await page.fill('#msg', 'm');
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#sendBtn');
+  assert.match(await page.textContent('#sendErr'), /請貼上文章網址/);
+  assert.equal(api.posts.length, 0);
+  await page.close();
+});
