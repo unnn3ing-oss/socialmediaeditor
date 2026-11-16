@@ -30,3 +30,16 @@ export function articleId(url) {
 }
 
 export const rdText = (id, slug) => `${id}/圖文/${slug}`;
+
+// 送給後端的 RD 筆數：同一筆（區段＋日期＋時間＋文字都一樣）只寫一次；後端一次最多 10 筆，超過就分批
+export function rdBatches(entries, size = 10) {
+  const seen = new Set(), out = [];
+  for (const e of entries) {
+    const k = [e.page, e.date, e.time, e.text].join('|');
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(e);
+  }
+  const batches = [];
+  for (let i = 0; i < out.length; i += size) batches.push(out.slice(i, i + size));
+  return batches;
+}

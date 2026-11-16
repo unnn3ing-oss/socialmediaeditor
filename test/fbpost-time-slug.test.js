@@ -75,3 +75,14 @@ test('slug：文章 ID 與 RD 文字', async () => {
   assert.equal(articleId('https://example.com/a'), '');
   assert.equal(rdText('4046330', '秋冬衣櫃'), '4046330/圖文/秋冬衣櫃');
 });
+
+test('RD：相同的筆去重，超過 10 筆分批', async () => {
+  const { rdBatches } = await S();
+  const e = (i, page = 'news') => ({ page, date: '2026-11-16', time: '19:20', text: `40513${String(i).padStart(2, '0')}/圖文/測試` });
+  assert.deepEqual(rdBatches([e(1), e(1), e(1, 'ent')]), [[e(1), e(1, 'ent')]]);
+  const many = Array.from({ length: 23 }, (_, i) => e(i));
+  const b = rdBatches(many);
+  assert.deepEqual(b.map((x) => x.length), [10, 10, 3]);
+  assert.deepEqual(b.flat(), many);
+  assert.deepEqual(rdBatches([]), []);
+});
