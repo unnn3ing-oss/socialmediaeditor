@@ -37,6 +37,14 @@
 .list .edit input { width: auto !important; max-width: 100%; }
 .dlg { border: 1px solid var(--line); border-radius: 16px; padding: 20px; max-width: min(380px, calc(100vw - 32px)); }
 .dlg h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.done-dlg { max-width: min(480px, calc(100vw - 32px)); width: 100%; }
+.done-dlg .results { margin: 10px 0 0; }
+.rd-warn { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text); }
+.rd-warn p { margin: 0; }
+.rd-copy { margin: 8px 0 6px; max-width: 100%; height: auto; min-height: 40px; padding: 8px 16px; line-height: 1.4; gap: 8px; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; text-align: left; }
+.rd-copy .copy-ic { flex: none; opacity: .6; }
+.rd-copy.copied { border-color: var(--ok-line); background: var(--ok-bg); color: var(--ok-text); }
+.rd-where { font-size: 13px; }
 .dlg .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
 /* ---- 做圖 ---- */

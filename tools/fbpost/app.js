@@ -16,12 +16,14 @@ import { createComments } from './comments.js';
 
 tb.init('fbpost');
 
-$('tabs').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-tab]'); if (!b) return;
+function showTab(name) {
   for (const t of $('tabs').querySelectorAll('[data-tab]')) {
-    const on = t === b; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on));
+    const on = t.dataset.tab === name; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on));
     $('tab-' + t.dataset.tab).hidden = !on;
   }
+}
+$('tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab);
 });
 
 // 啟動：只有管理員才顯示、才呼叫 /fb/*
@@ -37,11 +39,12 @@ $('tabs').addEventListener('click', (e) => {
   }
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;
-  createDialog();   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
+  const dialog = createDialog();   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
   const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
   let sender;
   const targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
-  sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }) });
+  sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }),
+    onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
   const manage = createManage({ tb });
   const showPages = (list) => { $('pagesState').textContent = `已連線 ${list.length} 個粉專`; targets.setPages(list); manage.setPages(list); };
   showPages(pages);

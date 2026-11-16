@@ -44,3 +44,16 @@ export function segmented(root, key, onPick) {
   });
   return set;
 }
+
+// 複製文字：先用 clipboard API，不行（iframe、權限）退回舊方式；回傳是否成功
+export async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* 退回舊方式 */ }
+  const t = document.createElement('textarea');
+  t.value = text; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;opacity:0;left:-9999px';
+  (document.querySelector('dialog[open]') || document.body).append(t);
+  t.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  t.remove();
+  return ok;
+}

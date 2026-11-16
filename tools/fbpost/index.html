@@ -157,6 +157,21 @@
 </div>
 
 
+<!-- 送出完成：全部粉專成功才跳 -->
+<dialog class="dlg done-dlg" id="doneDlg" aria-labelledby="doneTitle">
+  <h2 id="doneTitle">送出完成</h2>
+  <ul class="results" id="doneList"></ul>
+  <div class="rd-warn" id="doneRd" hidden>
+    <p id="doneRdMsg"></p>
+    <button type="button" class="btn btn-secondary rd-copy" id="doneRdCopy" title="點一下複製"><span id="doneRdText"></span><span class="copy-ic" aria-hidden="true">⧉</span></button>
+    <p class="rd-where" id="doneRdWhere"></p>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="doneBack">返回列表</button>
+    <button type="button" class="btn btn-primary" id="doneAgain">再發一則</button>
+  </div>
+</dialog>
+
 <dialog class="dlg" id="cfDlg" aria-labelledby="cfTitle">
   <h2 id="cfTitle"></h2>
   <p id="cfBody"></p>

@@ -15,14 +15,16 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/rd.js` | `write()` 回 `{ lines, failed:[{text,label,time}] }` 或改為另附 failed，寫入邏輯不變 | ⬜ |
-| `tools/fbpost/send.js` | 全部成功開 `doneDlg`；共用 `clearAll()`；按鈕事件 | ⬜ |
-| `tools/fbpost/index.html`、`fbpost.css` | `<dialog id="doneDlg">`、複製按鈕樣式 | ⬜ |
-| `tools/fbpost/app.js` | 傳 `dialog.close`、切分頁給 send.js | ⬜ |
-| `tests/e2e/fbpost.e2e.js` | 再發一則、返回列表、部分失敗不跳、RD 失敗複製按鈕 | ⬜ |
+| `tools/fbpost/rd.js` | `write()` 回 `{ lines, failed:[{text,label,time}] }` 或改為另附 failed，寫入邏輯不變 | ✅ |
+| `tools/fbpost/send.js` | 全部成功開 `doneDlg`；共用 `clearAll()`；按鈕事件 | ✅ |
+| `tools/fbpost/index.html`、`fbpost.css` | `<dialog id="doneDlg">`、複製按鈕樣式 | ✅ |
+| `tools/fbpost/app.js` | 傳 `dialog.close`、切分頁給 send.js | ✅ |
+| `tests/e2e/fbpost.e2e.js` | 再發一則、返回列表、部分失敗不跳、RD 失敗複製按鈕 | ✅ |
 
 ## 下一步
-- [ ] 依上表實作 → fbpost e2e、npm test、build --check → 截圖給使用者 → 獨立審查
+- [x] 依上表實作（另加 `util.js` copyText、`dialog.js` Esc 跳過 doneDlg；替身後端改成固定娛樂 222 失敗）；fbpost e2e 31、npm test 609、build --check 通過
+- [ ] 獨立審查 → 截圖給使用者確認
+- [ ] 使用者後來追加（尚未確認做法）：管理頁 UTM 分「圖文」「文字」兩欄；管理頁粉專設定版面顯示完整；素材上傳順序改等級→名稱→檔案→上傳，名稱自動取檔名去副檔名
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`

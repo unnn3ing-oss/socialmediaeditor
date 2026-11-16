@@ -13,13 +13,15 @@ export function createRd({ tb }) {
   sw.addEventListener('change', () => { try { localStorage.setItem(KEY, sw.checked ? '1' : '0'); } catch { /* 無痕視窗等，忽略 */ } sync(); });
   sync();
 
-  // results：/fb/post 的結果；pageOf(id) -> { rd, short }；回傳要顯示的文字陣列（空＝沒開或沒有要寫的）
+  // results：/fb/post 的結果；pageOf(id) -> { rd, short }
+  // 回傳 { lines：要顯示的文字（空＝沒開或沒有要寫的）, missing：組不出 RD 格式的原因, failed：{ text, where[] } 寫入失敗要手動貼的 }
   async function write({ results, pageOf, link, title, sentAt }) {
-    if (!sw.checked) return [];
+    const out = (lines, extra) => ({ lines, missing: null, failed: null, ...extra });
+    if (!sw.checked) return out([]);
     const id = articleId(link);
-    if (!id) return ['RD：沒有文章 ID（網址最後要是新聞編號），未寫入'];
+    if (!id) { const m = 'RD：沒有文章 ID（網址最後要是新聞編號），未寫入'; return out([m], { missing: m }); }
     const slug = slugOf($('rdSlug').value, title);
-    if (!slug) return ['RD：沒有 SLUG（請填 SLUG 或標題），未寫入'];
+    if (!slug) { const m = 'RD：沒有 SLUG（請填 SLUG 或標題），未寫入'; return out([m], { missing: m }); }
     const entries = [];
     for (const r of results) {
       const p = pageOf(r.page);
@@ -27,17 +29,22 @@ export function createRd({ tb }) {
       const ms = r.scheduled && r.at ? r.at * 1000 : sentAt;
       entries.push({ page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(id, slug) });
     }
-    if (!entries.length) return ['RD：成功的粉專都沒有設定 RD 區段，未寫入'];
-    const lines = [];
+    if (!entries.length) return out(['RD：成功的粉專都沒有設定 RD 區段，未寫入']);
+    const lines = [], where = [];
+    const at = (e) => `${LABEL[e.page] || e.page} ${e.time || ''}`.trim();
     for (const batch of rdBatches(entries)) {   // 去重；一次最多 10 筆，超過分批
       try {
         const d = await tb.api.call('/rundown', { method: 'POST', body: { entries: batch } });
-        lines.push(...(d.results || []).map(line));
+        const rs = d.results || [];
+        lines.push(...rs.map(line));
+        rs.forEach((x, i) => { if (!x.ok) where.push(at({ page: x.page || (batch[i] || {}).page, time: x.time || (batch[i] || {}).time })); });
+        if (rs.length < batch.length) for (const e of batch.slice(rs.length)) where.push(at(e));   // 沒回結果的當失敗
       } catch (e) {
         lines.push('RD：寫入失敗（' + ((e && e.message) || '失敗') + '）');
+        for (const x of batch) where.push(at(x));
       }
     }
-    return lines;
+    return out(lines, where.length ? { failed: { text: rdText(id, slug), where } } : {});
   }
   // Apps Script 回傳的一筆 → 顯示文字，例：RD 主粉 15:13 → AE255（插入）
   function line(x) {

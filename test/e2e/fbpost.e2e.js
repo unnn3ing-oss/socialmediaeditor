@@ -16,7 +16,7 @@ const PAGES = [{ id: '111', short: '新聞', order: 1, rd: 'news' }, { id: '222'
 const SHOT = process.env.SHOT_DIR;
 
 // mode: 'admin' | 'company'（無 admin）| 'denied'（401）| 'tokenbad'（管理員，但 /fb/pages 回 fb_token）
-async function newPage(mode, viewport = { width: 1280, height: 900 }) {
+async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [], fbCalls = [], api = { posts: [], reschedules: [], cancels: [], deletes: [], rundown: [] };
   const soon = Math.floor(Date.now() / 1000) + 7200;
@@ -35,7 +35,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }) {
       const body = req.postData() || '';
       api.posts.push(body);
       const targets = JSON.parse(/name="targets"\r\n\r\n([^\r]*)\r\n/.exec(body)[1]);
-      return json({ results: targets.map((t, i) => (i === 1
+      return json({ results: targets.map((t) => (t.page === '222'   // 替身後端：娛樂一定失敗
         ? { page: t.page, ok: false, scheduled: false, comment: 'none', error: '臉書拒絕' }
         : { page: t.page, ok: true, postId: t.page + '_9', scheduled: t.at != null, at: t.at ?? undefined, comment: t.at != null ? 'armed' : 'done' })) });
     }
@@ -45,6 +45,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }) {
     if (p === '/rundown') {
       const b = JSON.parse(req.postData() || '{}');
       api.rundown.push(b);
+      if (opts.rdFail) return json({ results: b.entries.map((e) => ({ ok: false, page: e.page, time: e.time, error: '找不到時段' })) });
       return json({ results: b.entries.map((e) => ({ ok: true, page: e.page, status: 'insert', cell: '2026/11!AE255', time: e.time })) });
     }
     let m = /^\/fb\/posts\/([^/]+)\/(reschedule|cancel|delete)$/.exec(p);
@@ -164,6 +165,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   const rows = await page.locator('#results li').allTextContents();
   assert.match(rows[0], /新聞：發布成功；已留言/);
   assert.match(rows[1], /娛樂：失敗（臉書拒絕）/);
+  assert.equal(await page.locator('#doneDlg').evaluate((d) => d.open), false, '有粉專失敗：不跳完成視窗、不清空');
   assert.equal(api.rundown.length, 0, 'RD 預設關');
 
   // 關閉後內容保留
@@ -267,7 +269,9 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.click(chip(333) + ' .chip-l');
   const before = Date.now();
   await page.click('#sendBtn');
-  await page.waitForFunction(() => /RD 主粉/.test(document.getElementById('results').textContent));
+  await page.waitForSelector('#doneDlg[open]');
+  await page.waitForFunction(() => /RD 主粉/.test(document.getElementById('doneList').textContent));
+  assert.equal(await page.isHidden('#doneRd'), true, 'RD 寫入成功不顯示提醒');
   assert.equal(api.rundown.length, 1);
   const [e] = api.rundown[0].entries;
   assert.equal(api.rundown[0].entries.length, 1, '國際沒有 RD 區段、娛樂沒勾，只寫新聞');
@@ -275,8 +279,12 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   assert.equal(e.text, '4051394/圖文/蔣萬安激');
   const d = new Date(before);
   assert.equal(e.date, `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`);
-  assert.match(await page.textContent('#results'), /RD 主粉 \d\d:\d\d → AE255（插入）/);
-  // 手填 SLUG 只留文字數字
+  assert.match(await page.textContent('#doneList'), /RD 主粉 \d\d:\d\d → AE255（插入）/);
+  // 再發一則：手填 SLUG 只留文字數字
+  await page.click('#doneAgain');
+  await page.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
+  await page.fill('#msg', 'm');
+  await page.click(chip(111) + ' .chip-l');
   await page.fill('#rdSlug', '秋冬 衣櫃！');
   await page.click('#sendBtn');
   for (let i = 0; i < 50 && api.rundown.length < 2; i++) await page.waitForTimeout(100);
@@ -377,9 +385,97 @@ test('第 2、3 則留言：新增、選活動留言帶入可改、距上一則�
   assert.match(await page.textContent(b1 + ' .extra-title'), /第 2 則留言/);
   assert.equal(await page.isDisabled('#addComment'), false);
   await page.click('#sendBtn');
-  await page.waitForSelector('#results li');
+  await page.waitForSelector('#doneList li');
   const body = api.posts[0];
   assert.deepEqual(JSON.parse(/name="comments"\r\n\r\n([^\r]*)\r\n/.exec(body)[1]), [{ message: '第三則內容', delay: 10 }]);
+  await page.close();
+});
+
+test('全部成功：跳送出完成，再發一則清空並留在視窗；返回列表關視窗回已排程、不自動查詢', async () => {
+  const { page, api, fbCalls, errors } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.click('#tabs [data-tab=pub]');
+  await openPost(page);
+  const fill = async (msg) => {
+    await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+    await page.fill('#msg', msg);
+    await page.click(chip(111) + ' .chip-l');
+  };
+  await fill('第一則');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.match(await page.textContent('#doneList'), /新聞：發布成功；已留言/);
+  assert.equal(await page.isHidden('#doneRd'), true, '沒開 RD 不顯示提醒');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-done.png') });
+  // Esc 不關（一定要選），底下新增發文視窗也不關
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#doneDlg').evaluate((d) => d.open), true);
+  assert.equal(await page.isVisible('#postDlg'), true);
+  // 頁面已清空
+  assert.equal(await page.inputValue('#msg'), '');
+  assert.equal(await page.inputValue('#link'), '');
+  assert.equal(await page.textContent('#results'), '');
+  assert.doesNotMatch(await page.getAttribute(chip(111), 'class'), /\bon\b/);
+  await page.click('#doneAgain');
+  assert.equal(await page.locator('#doneDlg').evaluate((d) => d.open), false);
+  assert.equal(await page.isVisible('#postDlg'), true, '再發一則：留在新增發文');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'link');
+  await fill('第二則');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 2);
+  const before = fbCalls.filter((p) => p === '/fb/scheduled').length;
+  await page.click('#doneBack');
+  await page.waitForSelector('#postDlg', { state: 'hidden' });
+  assert.equal(await page.isVisible('#tab-sched'), true, '回到已排程');
+  assert.equal(await page.getAttribute('#tabs [data-tab=sched]', 'aria-selected'), 'true');
+  await page.waitForTimeout(200);
+  assert.equal(fbCalls.filter((p) => p === '/fb/scheduled').length, before, '不自動查詢');
+  // 再打開新增發文是空的
+  await page.click('#newBtn');
+  assert.equal(await page.inputValue('#msg'), '');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('RD 寫入失敗：仍跳完成視窗，提醒並可一鍵複製 RD 格式', async () => {
+  const { page, errors } = await newPage('admin', undefined, { rdFail: true });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: srv.url });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('.rd-switch');
+  await page.fill('#rdSlug', '我是測試');
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/4320000');
+  await page.fill('#msg', 'm');
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(await page.isVisible('#doneRd'), true);
+  assert.match(await page.textContent('#doneRdMsg'), /RD 沒寫進去/);
+  assert.equal((await page.textContent('#doneRdText')).trim(), '4320000/圖文/我是測試');
+  assert.match(await page.textContent('#doneRdWhere'), /^主粉 \d\d:\d\d$/);
+  assert.match(await page.textContent('#doneList'), /RD 主粉：失敗（找不到時段）/);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-done-rdfail.png') });
+  await page.click('#doneRdCopy');
+  await page.waitForFunction(() => document.getElementById('doneRdText').textContent === '已複製');
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '4320000/圖文/我是測試');
+  await page.waitForFunction(() => document.getElementById('doneRdText').textContent === '4320000/圖文/我是測試', null, { timeout: 3000 });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('RD 沒有文章 ID：完成視窗只顯示原因、沒有複製按鈕', async () => {
+  const { page } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('.rd-switch');
+  await page.fill('#link', 'https://example.com/abc');
+  await page.fill('#msg', 'm');
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.match(await page.textContent('#doneRdMsg'), /沒有文章 ID/);
+  assert.equal(await page.isHidden('#doneRdCopy'), true);
   await page.close();
 });
 

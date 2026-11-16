@@ -1,7 +1,8 @@
 // 送出：組 FormData（圖、內文、文章網址、留言文字、各粉專目標）→ /fb/post → 排入 RD → 顯示每個粉專的結果
-import { $, fmt, errText, COMMENT, confirmBox } from './util.js';
+// 全部粉專成功＝清空頁面、跳「送出完成」（再發一則／返回列表）；有任一失敗＝結果留在頁面、不清空
+import { $, fmt, errText, COMMENT, confirmBox, copyText } from './util.js';
 
-export function createSender({ tb, composer, targets, rd, comments }) {
+export function createSender({ tb, composer, targets, rd, comments, onBack }) {
   function updateButton() {
     const n = targets.count();
     $('sendBtn').textContent = `全部送出（${n} 個粉專）`;
@@ -9,8 +10,8 @@ export function createSender({ tb, composer, targets, rd, comments }) {
     if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = n ? '' : '請先勾選要發的粉專'; $('sendErr').dataset.auto = n ? '' : '1'; }
   }
 
-  function renderResults(rs, rdLines) {
-    const ul = $('results'); ul.textContent = '';
+  function renderResults(ul, rs, rdLines) {
+    ul.textContent = '';
     for (const r of rs) {
       const li = document.createElement('li'); li.className = r.ok ? 'ok' : 'err';
       let t = targets.shortOf(r.page) + '：';
@@ -56,8 +57,9 @@ export function createSender({ tb, composer, targets, rd, comments }) {
       const sentAt = Date.now();
       const data = await tb.api.call('/fb/post', { method: 'POST', body: fd });
       const results = data.results || [];
-      const rdLines = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
-      renderResults(results, rdLines);
+      const rdOut = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
+      if (results.length && results.every((r) => r.ok)) { clearAll(); showDone(results, rdOut); return; }
+      renderResults($('results'), results, rdOut.lines);
       $('results').scrollIntoView({ block: 'nearest' });
     } catch (e) {
       err.textContent = errText(e);
@@ -66,10 +68,39 @@ export function createSender({ tb, composer, targets, rd, comments }) {
     }
   });
 
-  $('clearBtn').addEventListener('click', async () => {
-    if (!(await confirmBox('清空這則發文', '網址、圖片、標題、貼文內容、粉專勾選和結果都會清掉。'))) return;
+  function clearAll() {
     composer.reset(); targets.reset(); rd.reset(); comments.reset();
     $('results').textContent = ''; $('sendErr').textContent = '';
+  }
+  $('clearBtn').addEventListener('click', async () => {
+    if (!(await confirmBox('清空這則發文', '網址、圖片、標題、貼文內容、粉專勾選和結果都會清掉。'))) return;
+    clearAll();
+  });
+
+  // 送出完成視窗：RD 沒寫進去時顯示提醒＋可複製的 RD 格式
+  const done = $('doneDlg');
+  function showDone(results, rdOut) {
+    renderResults($('doneList'), results, rdOut.lines);
+    const f = rdOut.failed, miss = rdOut.missing;
+    $('doneRd').hidden = !f && !miss;
+    $('doneRdMsg').textContent = f ? 'RD 沒寫進去，請手動貼上：' : (miss || '');
+    $('doneRdCopy').hidden = !f;
+    $('doneRdWhere').hidden = !f;
+    if (f) { $('doneRdText').textContent = f.text; $('doneRdCopy').dataset.text = f.text; $('doneRdWhere').textContent = f.where.join('、'); }
+    $('doneRdCopy').classList.remove('copied');
+    done.showModal();
+    $('doneAgain').focus();
+  }
+  done.addEventListener('cancel', (e) => e.preventDefault());   // 一定要選一個
+  $('doneAgain').addEventListener('click', () => { done.close(); $('link').focus(); });
+  $('doneBack').addEventListener('click', () => { done.close(); if (onBack) onBack(); });
+  let copyTimer;
+  $('doneRdCopy').addEventListener('click', async () => {
+    const b = $('doneRdCopy');
+    if (!(await copyText(b.dataset.text || ''))) { $('doneRdMsg').textContent = '複製失敗，請手動選取文字。'; return; }
+    b.classList.add('copied'); $('doneRdText').textContent = '已複製';
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => { b.classList.remove('copied'); $('doneRdText').textContent = b.dataset.text; }, 1500);
   });
 
   return { updateButton };

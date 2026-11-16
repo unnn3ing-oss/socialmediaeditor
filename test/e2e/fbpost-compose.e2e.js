@@ -76,7 +76,7 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   await frame.fill('#lead', '完整報導看這裡');
   await frame.click('#pages .chip[data-page="111"] .chip-l');
   await frame.click('#sendBtn');
-  await frame.waitForSelector('#results li');
+  await frame.waitForSelector('#doneList li');
   const body = posts[0].toString('latin1');
   assert.match(body, /name="image"; filename="fbpost\.png"\r\nContent-Type: image\/png/);
   assert.match(Buffer.from(body, 'latin1').toString('utf8'), /name="commentLead"\r\n\r\n完整報導看這裡/);
@@ -157,7 +157,7 @@ test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍�
   await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });   // 網址必填（不觸發帶入）
   await frame.click('#pages .chip[data-page="111"] .chip-l');
   await frame.click('#sendBtn');
-  await frame.waitForSelector('#results li');
+  await frame.waitForSelector('#doneList li');
   const body = posts[0].toString('utf8');
   assert.doesNotMatch(body, /name="image"/, '純文字不附圖');
   assert.match(body, /name="message"\r\n\r\n只有文字/);
