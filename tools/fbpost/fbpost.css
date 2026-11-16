@@ -227,3 +227,5 @@ body.no-scroll { overflow: hidden; }
 .seg.tabs { display: inline-flex; align-self: flex-start; }
 .post-head .pill, .fp-head .pill { line-height: 1.5; }
 @media (max-width: 820px) { .post-head .pill.warn { display: none; } .post-head { flex-wrap: nowrap; } .post-head h2 { font-size: 1rem; white-space: nowrap; } .post-head .seg button { padding: 0 10px; } }
+.fp .card:hover { transform: none; }
+@media (max-width: 480px) { .post-head { flex-wrap: wrap; row-gap: 8px; } .post-head #modeSeg { order: 3; width: 100%; } .post-head #modeSeg button { flex: 1; } }

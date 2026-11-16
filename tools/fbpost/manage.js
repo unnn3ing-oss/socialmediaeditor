@@ -15,6 +15,12 @@ function rowBase(it, whenMs) {
   li.append(thumb(it.picture), body);
   return li;
 }
+// 排序：near＝時間由近到遠、far＝由遠到近；缺時間一律放最後
+function byAt(x, y, order) {
+  const a = Number(x) || 0, b = Number(y) || 0;
+  if (!a || !b) return (a ? 0 : 1) - (b ? 0 : 1);
+  return order === 'far' ? b - a : a - b;
+}
 function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; b.onclick = fn; return b; }
 
 export function createManage({ tb }) {
@@ -23,8 +29,7 @@ export function createManage({ tb }) {
     say('schedHint', '查詢中…');
     try {
       const items = (await tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page))).slice();
-      const dir = $('schedSort').value === 'far' ? -1 : 1;
-      items.sort((a, b) => dir * ((Number(a.at) || Infinity) - (Number(b.at) || Infinity)));
+      items.sort((a, b) => byAt(a.at, b.at, $('schedSort').value));
       const ul = $('schedList'); ul.textContent = '';
       for (const it of items) {
         const li = rowBase(it, it.at * 1000); li.dataset.at = String(it.at || '');
@@ -79,8 +84,8 @@ export function createManage({ tb }) {
   $('schedReload').onclick = loadSched;
   // 排序只重排畫面上的列，不重查臉書
   $('schedSort').onchange = () => {
-    const dir = $('schedSort').value === 'far' ? -1 : 1, ul = $('schedList');
-    [...ul.children].sort((a, b) => dir * ((Number(a.dataset.at) || Infinity) - (Number(b.dataset.at) || Infinity))).forEach((li) => ul.append(li));
+    const ul = $('schedList');
+    [...ul.children].sort((a, b) => byAt(a.dataset.at, b.dataset.at, $('schedSort').value)).forEach((li) => ul.append(li));
   };
   $('pubReload').onclick = () => loadPub(false);
   $('pubMore').onclick = () => loadPub(true);
