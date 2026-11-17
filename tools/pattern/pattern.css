@@ -95,8 +95,9 @@ textarea { min-height: 88px; resize: vertical; }
   grid-template-columns: 340px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   column-gap: 16px;
-  height: calc(100vh - 2 * var(--pad));
-  height: calc(100dvh - 2 * var(--pad));
+  /* 扣掉標題（22px×1.35＋下距 12px）才不會整頁多出捲軸 */
+  height: calc(100vh - 2 * var(--pad) - 42px);
+  height: calc(100dvh - 2 * var(--pad) - 42px);
   min-height: 560px;
 }
 .settings {
@@ -133,6 +134,7 @@ textarea { min-height: 88px; resize: vertical; }
   .layout { grid-template-columns: 320px minmax(0, 1fr); }
 }
 .m-tabs { display: none; }
+.tool-h1 { margin: 0 0 12px; font-size: 22px; font-weight: 700; line-height: 1.35; }
 
 /* ---- 設定欄內容 ---- */
 .quickfill { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
@@ -356,6 +358,7 @@ canvas.pannable.panning { cursor: grabbing; }
   .wrap { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
 
   /* 工具名稱下方的局部切換（不是第二層全域工具列） */
+  .tool-h1 { margin: 0; padding: 12px var(--pad) 0; background: var(--stage); }
   .m-tabs {
     display: flex; gap: 8px;
     padding: 12px var(--pad);

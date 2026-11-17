@@ -495,7 +495,8 @@ function expandBatchItem(item) {
   lastActiveItemId = item.id;
   renderBatchItemsList();
   renderBatchThumbs();
-  scrollToBatchItem(item.id);
+  // 剛開啟只有第 1 組時不捲，讓最上面的文章網址留在畫面上
+  if (batchItems.length > 1) scrollToBatchItem(item.id);
   setBatchPreviewTitle(item);
   const index = batchItems.indexOf(item);
   if (isItemDone(item)) {

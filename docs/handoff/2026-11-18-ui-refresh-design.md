@@ -1,5 +1,5 @@
 # 小編工具箱 UI 更新：設計交接
-- 狀態：實作中（使用者 2026-11-18 回「開始」，依序做第 1～3 輪）
+- 狀態：三輪實作完成，待使用者看截圖與實機確認（未併入 main）
 - 文件分支：`codex/ui-design-handoff-20261118`
 - PR 目標開發分支：`dev/ui-refresh`（由 main `137f961f31c50579ef6f05bf91d045618be4dbd2` 建立）
 - 最後更新：2026-11-18（Asia/Taipei）
@@ -13,8 +13,8 @@
 | 輪 | 內容 | 狀態 |
 |---|---|---|
 | 1 | tokens＋單列導覽（桌面 disclosure 下拉／≤820px 或觸控「工具」面板）＋首頁 3／2／1 欄 | ✅ `4669287`（shell e2e 22、company／status／tokens e2e、npm test 618、build --check 通過） |
-| 2 | （子代理進行中）圖片套版桌面＋手機（編輯／預覽切換、底部操作列），只改排版、輸出逐像素比對 | ⬜ |
-| 3 | （3 個子代理進行中：linepush／collage／watermark／resize、design／livereq、fbpost／ytdl）其他 8 工具依 mobile spec §6（含 YT 下載、尺寸按鈕對齊） | ⬜ |
+| 2 | ✅ 圖片套版桌面＋手機（編輯／預覽切換、底部操作列），只改排版、輸出逐像素比對 | ✅ `38a97a7`，輸出 PNG 改版前後 SHA1 相同 |
+| 3 | ✅ 其他 8 工具依 mobile spec §6（含 YT 下載、尺寸按鈕對齊） | ✅ `38a97a7`＋審查修正 |
 
 ### 第 1 輪實作重點
 - 導覽同一份 DOM：`#toolbar` 內 `#tools-btn`（≤820px 才顯示）＋`#tools-panel`（工具首頁、各分類 `.nav-group`＞`.nav-trigger`＋`.nav-menu`、手機狀態槽）。工具按鈕 `#toolbar button[data-tool]`，目前工具用 `aria-current="page"`（取代 aria-pressed）。
@@ -22,6 +22,14 @@
 - ≤820px 把 `#status` 搬進面板（`.nav-status`），公司狀態 warn 時「工具」鈕加提示點。
 - 首頁卡片標籤：`tool.json` 新增選填 `badges`（build.js 傳進 catalog），`requires` 自動加「需要外掛」「需要下載助手」。
 - 安裝教學 CSS、`ui/compose/fx.css` 換新色與圓角；`shell/installer.js`（Windows 安裝程式畫面）不動。
+
+### 第 2、3 輪與審查
+- 圖片套版：`tools/pattern/layout.js`（新）管手機 tabs／更多選單；底部 `#actionBar`（`#genBtn`、`#dlBtn`、更多）作用於目前展開那組；22px H1；手機狀態鏡像 `#mStatus`。
+- 設計手機：屬性／圖層底部抽屜（`position:fixed`，只在直接開工具頁驗證）。直播需求單：≥1000px 兩欄、缺漏提示可點跳欄位、複製失敗自動選取。YT：`#work` 間距、新增列 44px 對齊、≤820px 無外掛顯示「需在電腦使用」。
+- 獨立審查：通過；補圖片套版 H1、設計控制項 40→44、拼圖／浮水印／尺寸手機縮圖刪除鈕 44。主對話再修：H1 造成桌面整頁多 42px 捲軸、開頁左欄被捲走網址欄、pattern e2e 斷點等待。
+- 測試：npm test 618、e2e 156、build --check 通過。
+- **未驗證**：iOS Safari／Android Chrome／LINE 實機、鍵盤彈出時底部操作列、safe-area、螢幕閱讀器。
+- **待使用者決定**：其他工具內 H1 統一 22px（目前只有圖片套版）；排程發布次要操作目前換行不收合（審查認為符合「允許兩列」）。
 
 ## 已定案的決定
 

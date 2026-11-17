@@ -8,13 +8,13 @@
 body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(--text); font-family: var(--font, system-ui, sans-serif); }
 .dz button, .dz-modal button {
   font: inherit; cursor: pointer; color: var(--text); background: var(--field-bg);
-  border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: 7px 14px; font-weight: 500; min-height: 40px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: 7px 14px; font-weight: 500; min-height: 44px;
 }
 .dz button:disabled, .dz-modal button:disabled { opacity: .45; cursor: not-allowed; }
 .dz button.primary, .dz-modal button.primary { background: var(--accent); color: #fff; border-color: var(--accent);  }
 .dz button.primary:hover:not(:disabled), .dz-modal button.primary:hover:not(:disabled) { background: var(--accent-dark); }
 .dz input, .dz select, .dz textarea, .dz-modal input, .dz-modal select {
-  font: inherit; color: var(--text); background: var(--field-bg); border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: 6px 10px; box-sizing: border-box; min-height: 40px;
+  font: inherit; color: var(--text); background: var(--field-bg); border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: 6px 10px; box-sizing: border-box; min-height: 44px;
 }
 .dz input[type="checkbox"], .dz input[type="radio"], .dz input[type="range"], .dz input[type="color"] { padding: 0; }
 .bg-toggle { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-control); background: var(--accent-tint); }

@@ -378,8 +378,8 @@ test('手機：編輯／預覽切換保留內容，canvas 與表單是同一個�
   assert.equal((await st()).editSel, 'true');
   // 回到桌面寬度：兩區都顯示、並列；再縮回手機仍是原本分頁
   await page.setViewportSize({ width: 1280, height: 800 });
-  s = await st();
-  assert.deepEqual([s.editHidden, s.prevHidden], [false, false]);
+  // 斷點 change 事件是非同步的，等它套用
+  await frame.waitForFunction(() => !document.getElementById('panelEdit').hidden && !document.getElementById('panelPreview').hidden);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await frame.inputValue('.batch-item-block textarea'), '切換保留測試');
   await page.close();
