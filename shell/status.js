@@ -7,11 +7,15 @@ export const CHECKS = [
   {
     id: 'extension',
     label: '正在檢查外掛',
-    async run() {
+    // 外掛通常幾十毫秒就回；超過 400ms 還沒回，先顯示「未安裝外掛」，之後有回再改成已連線（不用空等 3 秒）。
+    async run(update) {
+      const early = setTimeout(() => update && update({ state: 'warn', text: '未安裝外掛' }), 400);
       try {
         await ext.call('ping', {});
+        clearTimeout(early);
         return { state: 'ok', text: '外掛已連線' };
       } catch (e) {
+        clearTimeout(early);
         if (e && e.code === 'no_extension') return { state: 'warn', text: '未安裝外掛' };
         return { state: 'warn', text: '外掛連線異常' };
       }
@@ -65,7 +69,7 @@ export function initStatus({ root, shell, openInstall, checks = CHECKS }) {
 
   return {
     async runAll() {
-      await Promise.all(checks.filter((c) => !c.passive).map(async (c) => shell.setStatus(c.id, await c.run())));
+      await Promise.all(checks.filter((c) => !c.passive).map(async (c) => shell.setStatus(c.id, await c.run((v) => shell.setStatus(c.id, v)))));
     },
     byId,
   };

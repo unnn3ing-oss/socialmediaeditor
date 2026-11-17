@@ -5,7 +5,6 @@ import { createToolbar } from './toolbar.js';
 import { createPanes } from './panes.js';
 import { initDrag } from './drag.js';
 import { initStatus } from './status.js';
-import { openInstall } from './install.js';
 import { initCompany } from './company.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,6 +22,22 @@ const statusSubs = new Set();
 let companyState = { unlocked: false, exp: null };
 const companySubs = new Set();
 
+// 安裝教學（程式與樣式約 74KB）按了才載入，首頁不先下載。
+let installMod = null;
+let installCss = null;
+function openInstall() {
+  // 樣式先到位再開，避免閃一下沒樣式的畫面；樣式載入失敗也照開。
+  installCss ||= new Promise((resolve) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'shell/install.css';
+    link.onload = link.onerror = resolve;
+    document.head.appendChild(link);
+  });
+  installMod ||= import('./install.js');
+  return Promise.all([installMod, installCss]).then(([m]) => m.openInstall());
+}
+
 const byId = (id) => catalog.find((t) => t.id === id) || null;
 const shownTools = () => catalog.filter((t) => t.tier === 'public' || companyState.unlocked);
 
@@ -32,7 +47,29 @@ const panes = createPanes(workEl, {
   onClose: (side) => set(L.closePane(state, side)),
 });
 
-function set(next) { state = next; render(); }
+function set(next) { state = next; render(); syncHash(); }
+
+// ---- 網址記住目前開著的工具（#pattern、並排 #pattern+linepush）：重新整理留在原工具，上一頁／下一頁可用 ----
+const hashOf = (s) => { const ids = L.visible(s); return ids.length ? `#${ids.join('+')}` : ''; };
+function syncHash() {
+  const want = hashOf(state);
+  if (want === location.hash) return;
+  try { history.pushState(null, '', want || location.pathname + location.search); } catch { /* 不支援就不記 */ }
+}
+function stateFromHash() {
+  let raw = '';
+  try { raw = decodeURIComponent(location.hash.slice(1)); } catch { raw = ''; }
+  const ids = [...new Set(raw.split('+'))].filter((id) => byId(id)).slice(0, 2);
+  if (!ids.length) return L.home(state);
+  const one = L.openSingle(L.initial(), ids[0]);
+  return ids[1] ? L.dropOnSide(one, ids[1], 'right') : one;
+}
+function applyHash() {
+  if (hashOf(state) === location.hash) return;
+  state = stateFromHash();
+  render();
+}
+window.addEventListener('popstate', applyHash);
 
 function render() {
   const showing = state.view === 'work';
@@ -97,6 +134,7 @@ async function start() {
   }
   loaded = true;
   renderCatalog();
+  applyHash();
   render();
 }
 

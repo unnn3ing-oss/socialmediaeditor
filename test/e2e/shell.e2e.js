@@ -180,3 +180,70 @@ test('brand returns to showcase', async () => {
   assert.equal(await page.isVisible('#showcase'), true);
   assert.equal(await page.isVisible('#work'), false);
 });
+
+test('網址記住工具：重新整理留在原工具，上一頁回櫥窗，並排也記得', async () => {
+  const page = await open();
+  await page.click('#showcase .card[data-tool=beta]');
+  assert.equal(await page.evaluate(() => location.hash), '#beta');
+  await page.reload();
+  await page.waitForSelector('#work .pane[data-side]');
+  assert.deepEqual(await ids(page), ['beta']);
+  await page.goBack();
+  await page.waitForSelector('#showcase:not([hidden])');
+  assert.equal(await page.isVisible('#work'), false);
+  await page.goForward();
+  await page.waitForSelector('#work:not([hidden])');
+  assert.deepEqual(await ids(page), ['beta']);
+  await drag(page, 'alpha', 'right');
+  assert.equal(await page.evaluate(() => location.hash), '#beta+alpha');
+  await page.reload();
+  await page.waitForSelector('#work.split');
+  assert.deepEqual(await ids(page), ['beta', 'alpha']);
+  // 不存在的工具代號：留在櫥窗
+  await page.goto(srv.url + 'index.html#nope');
+  await page.reload();
+  await page.waitForSelector('#showcase .card');
+  assert.equal(await page.isVisible('#work'), false);
+});
+
+test('首頁不先載安裝教學；按了才載', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
+  const page = await ctx.newPage();
+  const urls = [];
+  page.on('request', (r) => urls.push(r.url()));
+  await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
+  await page.goto(srv.url + 'index.html');
+  await page.waitForSelector('#status .pill-warn');
+  assert.equal(urls.some((u) => /shell\/install/.test(u)), false);
+  await page.click('#status .pill-warn');
+  await page.waitForSelector('.ds:not([hidden])');
+  assert.equal(urls.some((u) => /shell\/install\.js/.test(u)), true);
+  assert.equal(urls.some((u) => /shell\/install\.css/.test(u)), true);
+});
+
+test('沒裝外掛：1 秒內就顯示「未安裝外掛」', async () => {
+  const page = await open();
+  const t0 = Date.now();
+  await page.waitForSelector('#status .pill-warn', { timeout: 1500 });
+  assert.ok(Date.now() - t0 < 1500);
+  assert.equal(await page.textContent('#status .pill-warn'), '未安裝外掛');
+});
+
+test('頂列放不下時只留圖示，目前工具保留文字，頂列維持一行', async () => {
+  const many = { tools: Array.from({ length: 9 }, (_, i) => tool(['alpha', 'beta', 'gamma'][i] || `x${i}`, `第${i + 1}個工具名稱`)) };
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const page = await ctx.newPage();
+  await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: many }));
+  await page.goto(srv.url + 'index.html');
+  await page.waitForSelector('#showcase .card');
+  await page.waitForSelector('#toolbar.compact');
+  await page.click('#toolbar button[data-tool=beta]');
+  assert.equal(await page.isVisible('#toolbar button[data-tool=beta] .lbl'), true);
+  assert.equal(await page.isVisible('#toolbar button[data-tool=alpha] .lbl'), false);
+  assert.equal(await page.getAttribute('#toolbar button[data-tool=alpha]', 'title'), '第1個工具名稱');
+  const h = await page.evaluate(() => document.getElementById('top').offsetHeight);
+  assert.ok(h < 80, `頂列高度 ${h}`);
+  // 夠寬就恢復文字
+  await page.setViewportSize({ width: 1900, height: 720 });
+  await page.waitForSelector('#toolbar:not(.compact)');
+});

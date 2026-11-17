@@ -2,7 +2,7 @@ html, body { height: 100%; }
 body { display: flex; flex-direction: column; overflow: hidden; }
 
 #top {
-  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  flex: none; display: flex; flex-wrap: nowrap; align-items: center; gap: 8px 20px;
   background: var(--surface); border-bottom: 1px solid var(--line); padding: 12px 28px;
 }
 #brand {
@@ -12,7 +12,13 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 #brand .logo { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #2f7bff, #004aad); color: #fff; font-weight: 800; font-size: 16px; line-height: 1; }
 #brand .word b { color: var(--accent); font-weight: 700; }
-#toolbar { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; }
+#toolbar { display: flex; flex-wrap: nowrap; gap: 8px; flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+#toolbar::-webkit-scrollbar { display: none; }
+/* 放不下時（toolbar.js 量測後加 .compact）：只留圖示，目前開著的工具保留文字 */
+#toolbar.compact button:not([aria-pressed='true']) { padding: 0 14px; }
+#toolbar.compact button:not([aria-pressed='true']) .lbl { display: none; }
+#toolbar.compact .ico { width: 18px; height: 18px; }
+#status, #company-btn { flex: none; white-space: nowrap; }
 #toolbar button {
   display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px;
   background: var(--accent-tint); color: var(--muted); border: 0; border-radius: 999px;
@@ -22,7 +28,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #toolbar button[aria-pressed='true'] { background: var(--accent); color: #fff; font-weight: 500; }
 #toolbar button:active { transform: scale(.97); }
 .ico { width: 16px; height: 16px; flex: none; background: currentColor; -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
-#status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#status { display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; }
 #status .pill { background: transparent; border-color: transparent; color: var(--muted); font-weight: 500; padding: 0 6px; }
 #status .pill-ok::before { background: #22a559; }
 #status .pill-warn::before { background: #e08a00; }
@@ -65,7 +71,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .dz span { pointer-events: none; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 16px; }
 
 @media (max-width: 820px) {
-  #top { padding: 8px 16px; }
+  #top { padding: 8px 16px; flex-wrap: wrap; gap: 8px; }
+  #company-btn { margin-left: auto; }
   #showcase { padding: 12px 12px 28px; }
   .showcase-inner { padding: 20px 16px; }
   #toolbar { flex-wrap: nowrap; overflow-x: auto; flex-basis: 100%; order: 3; }
