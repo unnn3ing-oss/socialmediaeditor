@@ -122,5 +122,6 @@ button.pill::after { content: ''; position: absolute; inset: -8px 0; }
 .field input, .field textarea, .field select {
   font: 400 15px/1.5 var(--font); color: var(--text); background: var(--surface);
   border: 1px solid var(--line-strong); border-radius: 12px; padding: 10px 12px; min-height: 44px;
+  min-width: 0; max-width: 100%; /* iPhone 輸入框預設較寬，放在窄欄裡要能縮 */
 }
 .field input::placeholder, .field textarea::placeholder { color: #6b7280; }

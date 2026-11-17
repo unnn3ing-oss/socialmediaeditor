@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="shell/shell.css">
 </head>
 <body>
+<a class="skip" href="#stage">跳至主要內容</a>
 <header id="top">
   <button type="button" id="brand" aria-label="回到工具櫥窗">
     <span class="logo" aria-hidden="true">編</span>
@@ -21,13 +22,9 @@
   <div id="status" role="status"></div>
   <button type="button" class="btn btn-secondary btn-sm" id="company-btn">登入</button>
 </header>
-<main id="stage">
+<main id="stage" tabindex="-1">
   <section id="showcase" aria-busy="true"></section>
   <section id="work" hidden></section>
-  <div id="dropzones" hidden aria-hidden="true">
-    <div class="dz" data-side="left"><span>放到左邊</span></div>
-    <div class="dz" data-side="right"><span>放到右邊</span></div>
-  </div>
 </main>
 <script type="module" src="shell/main.js"></script>
 </body>

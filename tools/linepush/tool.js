@@ -1151,6 +1151,7 @@ function buildCardUI(i) {
   dz.className = 'dropzone';
   const dzThumb = document.createElement('img');
   dzThumb.className = 'dz-thumb';
+  dzThumb.alt = '';
   const dzText = document.createElement('div');
   dzText.className = 'dz-text';
   dzText.textContent = '點擊、拖曳圖片，或先點此格再貼上（Ctrl+V）';

@@ -3,7 +3,6 @@ import * as L from './layout.js';
 import { renderSkeleton, renderShowcase } from './showcase.js';
 import { createToolbar } from './toolbar.js';
 import { createPanes } from './panes.js';
-import { initDrag } from './drag.js';
 import { initStatus } from './status.js';
 import { initCompany } from './company.js';
 
@@ -41,15 +40,12 @@ function openInstall() {
 const byId = (id) => catalog.find((t) => t.id === id) || null;
 const shownTools = () => catalog.filter((t) => t.tier === 'public' || companyState.unlocked);
 
-const toolbar = createToolbar($('toolbar'), { onOpen: (id) => set(L.openSingle(state, id)) });
-const panes = createPanes(workEl, {
-  onFocus: (side) => set(L.focus(state, side)),
-  onClose: (side) => set(L.closePane(state, side)),
-});
+const toolbar = createToolbar($('toolbar'), { onOpen: (id) => set(L.open(state, id)) });
+const panes = createPanes(workEl);
 
 function set(next) { state = next; render(); syncHash(); }
 
-// ---- 網址記住目前開著的工具（#pattern、並排 #pattern+linepush）：重新整理留在原工具，上一頁／下一頁可用 ----
+// ---- 網址記住目前開著的工具（#pattern）：重新整理留在原工具，上一頁／下一頁可用。舊的並排網址 #甲+乙 只開甲 ----
 const hashOf = (s) => { const ids = L.visible(s); return ids.length ? `#${ids.join('+')}` : ''; };
 function syncHash() {
   const want = hashOf(state);
@@ -59,15 +55,15 @@ function syncHash() {
 function stateFromHash() {
   let raw = '';
   try { raw = decodeURIComponent(location.hash.slice(1)); } catch { raw = ''; }
-  const ids = [...new Set(raw.split('+'))].filter((id) => byId(id)).slice(0, 2);
-  if (!ids.length) return L.home(state);
-  const one = L.openSingle(L.initial(), ids[0]);
-  return ids[1] ? L.dropOnSide(one, ids[1], 'right') : one;
+  const id = raw.split('+').find((x) => byId(x));
+  return id ? L.open(state, id) : L.home(state);
 }
 function applyHash() {
   if (hashOf(state) === location.hash) return;
   state = stateFromHash();
   render();
+  const want = hashOf(state);
+  if (want && want !== location.hash) { try { history.replaceState(null, '', want); } catch { /* 不支援就不改 */ } }
 }
 window.addEventListener('popstate', applyHash);
 
@@ -75,28 +71,24 @@ function render() {
   const showing = state.view === 'work';
   showcaseEl.hidden = showing;
   workEl.hidden = !showing;
-  panes.sync({
-    split: state.mode === 'split',
-    left: showing ? byId(state.left) : null,
-    right: showing && state.mode === 'split' ? byId(state.right) : null,
-    last: state.last,
-  });
+  panes.sync(showing ? byId(state.tool) : null);
   toolbar.setPressed(L.visible(state));
 }
 
 function renderCatalog() {
   const tools = shownTools();
-  renderShowcase(showcaseEl, tools, { onOpen: (id) => set(L.openSingle(state, id)) });
+  renderShowcase(showcaseEl, tools, { onOpen: (id) => set(L.open(state, id)) });
   toolbar.render(tools);
   toolbar.setPressed(L.visible(state));
 }
 
 $('brand').addEventListener('click', () => set(L.home(state)));
 
-initDrag({
-  toolbar: $('toolbar'),
-  zones: $('dropzones'),
-  onDrop: (id, side) => set(L.dropOnSide(state, id, side)),
+// 跳至主要內容：不改網址（網址記的是工具），直接把焦點移到目前的工具或櫥窗
+document.querySelector('.skip').addEventListener('click', (e) => {
+  e.preventDefault();
+  const frame = state.view === 'work' && panes.get(state.tool)?.frame;
+  if (frame) frame.focus(); else $('stage').focus();
 });
 
 window.tbxShell = {
@@ -108,7 +100,7 @@ window.tbxShell = {
   onStatus(fn) { statusSubs.add(fn); return () => statusSubs.delete(fn); },
   company: () => ({ ...companyState }),
   onCompany(fn) { companySubs.add(fn); return () => companySubs.delete(fn); },
-  focusTool: (id) => { if (byId(id)) set(L.openSingle(state, id)); },
+  focusTool: (id) => { if (byId(id)) set(L.open(state, id)); },
   openInstall: () => openInstall(),
   // 內部掛點：給 company.js 等外殼模組使用，不屬於 SDK。
   _internal: {

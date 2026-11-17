@@ -1,4 +1,4 @@
-// 上方工具列：圖示＋文字，可點擊也可拖曳。放不下時自動改成只顯示圖示（目前開著的工具保留文字）。
+// 上方工具列：圖示＋文字，點擊開啟工具。放不下時自動改成只顯示圖示（目前開著的工具保留文字）。
 
 export function createToolbar(root, { onOpen }) {
   const narrow = window.matchMedia ? window.matchMedia('(max-width: 820px)') : { matches: false };
@@ -16,7 +16,6 @@ export function createToolbar(root, { onOpen }) {
         const b = document.createElement('button');
         b.type = 'button';
         b.dataset.tool = t.id;
-        b.draggable = true;
         b.setAttribute('aria-pressed', 'false');
         b.title = t.name;
         b.setAttribute('aria-label', t.name);

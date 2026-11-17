@@ -1,5 +1,6 @@
 const PA = window.PATTERN;
 const COMPANY = !!PA.company;
+let fieldUid = 0; // 動態欄位的 id（label 對應用）
 
 // 畫圖核心在 ui/compose/render.js（和「排程發布」共用），tool.js 載入後放在 PA.compose／PA.renderer。
 // 這裡把名稱接成全域，stickers.js、quickfill.js 與下面的批次介面照舊使用。
@@ -210,6 +211,7 @@ function createBackgroundPicker(opts) {
   dz.tabIndex = 0;
   const thumb = document.createElement('img');
   thumb.className = 'batch-item-thumb';
+  thumb.alt = '';
   thumb.style.display = 'none';
   const dzText = document.createElement('div');
   dzText.innerHTML = '點擊選擇圖片<br>或拖曳／貼上（Ctrl+V）圖片到此處';
@@ -577,6 +579,7 @@ function renderBatchThumbs() {
     let el;
     if (isDone) {
       el = document.createElement('img');
+      el.alt = '';
       el.src = item.resultUrl;
     } else {
       el = document.createElement('div');
@@ -715,10 +718,12 @@ function buildBatchItemRow(item, index) {
   thumb.className = 'row-thumb';
   if (isDone) {
     const img = document.createElement('img');
+    img.alt = '';
     img.src = item.resultUrl;
     thumb.appendChild(img);
   } else if (item.bg.type === 'image' && item.bg.image) {
     const img = document.createElement('img');
+    img.alt = '';
     img.src = item.bg.image.src;
     thumb.appendChild(img);
   } else if (item.bg.type === 'color' && item.bg.color) {
@@ -841,6 +846,8 @@ function buildBatchItemBlock(item, index) {
   const tagInput = document.createElement('input');
   tagInput.type = 'text';
   tagInput.className = 'gen-tag';
+  tagInput.id = `genTag${++fieldUid}`;
+  tagLabel.htmlFor = tagInput.id;
   tagInput.maxLength = 12;
   tagInput.placeholder = '快訊';
   tagInput.value = item.gen.tag;
@@ -899,6 +906,8 @@ function buildBatchItemBlock(item, index) {
   const textareaLabel = document.createElement('label');
   textareaLabel.textContent = '標題（Enter 換行，最多 4 行）';
   const textarea = document.createElement('textarea');
+  textarea.id = `titleText${++fieldUid}`;
+  textareaLabel.htmlFor = textarea.id;
   textarea.placeholder = titlePlaceholder(item.frame);
   textarea.value = item.title;
   const linesWarn = document.createElement('p');

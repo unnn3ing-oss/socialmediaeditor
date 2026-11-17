@@ -1,7 +1,7 @@
 body { margin: 0; background: var(--stage); color: var(--text); font-family: var(--font); }
 .lr { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
 .lr-top, .lr-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-.lr-duty { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lr-duty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .lr-duty .lr-hint { grid-column: 1 / -1; margin: 0; }
 .lr-hint { font-size: 13px; color: var(--muted); margin: 0; }
 .field textarea { resize: vertical; }
@@ -33,7 +33,7 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 .lr-event input.is-bad { border-color: var(--bad-text); }
 .lr-weather { border-top: 1px dashed var(--line-strong); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .lr-pre { margin: 0; padding: 12px; background: var(--fill); border-radius: 12px; white-space: pre-wrap; font: 400 14px/1.6 var(--font); }
-@media (max-width: 560px) { .lr-duty { grid-template-columns: 1fr; } .lr-top, .lr-card { padding: 16px; } }
+@media (max-width: 560px) { .lr-duty { grid-template-columns: minmax(0, 1fr); } .lr-top, .lr-card { padding: 16px; } }
 .lr-pagesbar { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 12px 20px; }
 .lr-nav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .lr-pos { font-weight: 700; font-variant-numeric: tabular-nums; }

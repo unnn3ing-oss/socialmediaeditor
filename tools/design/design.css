@@ -163,7 +163,8 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .dz-lbl { flex: 0 0 64px; font-size: 13px; color: var(--text); }
 .dz-ctl { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
-.dz-ctl > input[type="number"] { width: 100%; min-width: 0; }
+.dz-ctl > input[type="number"] { width: 100%; min-width: 56px; }
+.dz-ctl:has(> input[type="number"] + .dz-unit + input[type="number"]) { flex-wrap: wrap; }
 .dz-ctl > input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
 .dz-ctl > select, .dz-ctl > textarea { width: 100%; min-width: 0; }
 .dz-panel input[type="number"], .dz-panel select {

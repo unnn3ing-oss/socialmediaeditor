@@ -1194,8 +1194,11 @@
     }
     return input.value;
   }
+  // 第一個欄位有 id 時，標題用 <label for> 對應（輔助科技讀得到欄位名稱）
   function row(label, ...controls) {
-    return el('div', { class: 'dz-row' }, el('span', { class: 'dz-lbl', text: label }), el('div', { class: 'dz-ctl' }, ...controls));
+    const first = controls.find(c => c && /^(INPUT|SELECT|TEXTAREA)$/.test(c.tagName));
+    const lbl = first && first.id ? el('label', { class: 'dz-lbl', for: first.id, text: label }) : el('span', { class: 'dz-lbl', text: label });
+    return el('div', { class: 'dz-row' }, lbl, el('div', { class: 'dz-ctl' }, ...controls));
   }
   // 數字欄位：get() 讀值、apply(v) 套用（在 live 交易裡）
   function numField(id, label, get, apply, { min, max, step = 1, unit = '' } = {}) {
@@ -1375,8 +1378,8 @@
     const preset = el('select', { id: 'dzSizePreset' },
       Object.keys(C.SIZES).map(k => el('option', { value: k, text: `${SIZE_NAMES[k] || k}（${C.SIZES[k][0]}×${C.SIZES[k][1]}）` })),
       el('option', { value: 'custom', text: '自訂尺寸' }));
-    const wIn = el('input', { type: 'number', id: 'dzPageW', min: C.SIDE_MIN, max: C.SIDE_MAX, step: 1, value: p.w, inputmode: 'numeric' });
-    const hIn = el('input', { type: 'number', id: 'dzPageH', min: C.SIDE_MIN, max: C.SIDE_MAX, step: 1, value: p.h, inputmode: 'numeric' });
+    const wIn = el('input', { type: 'number', id: 'dzPageW', 'aria-label': '寬', min: C.SIDE_MIN, max: C.SIDE_MAX, step: 1, value: p.w, inputmode: 'numeric' });
+    const hIn = el('input', { type: 'number', id: 'dzPageH', 'aria-label': '高', min: C.SIDE_MIN, max: C.SIDE_MAX, step: 1, value: p.h, inputmode: 'numeric' });
     const setSize = (w, h) => {
       const r = act('頁面尺寸', d => C.setPageProps(d, page().id, { w, h }));
       if (r.ok) { fitView(); say(`頁面尺寸改成 ${w}×${h}`); }

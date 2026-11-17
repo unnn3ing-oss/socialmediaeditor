@@ -91,7 +91,7 @@ test('expiry pops login and keeps pane', async () => {
   await page.waitForSelector('#company-dialog[open]');
   assert.equal(await page.textContent('#company-dialog h2'), '公司密碼已過期');
   assert.equal(await page.locator('#toolbar button[data-tool=secret]').count(), 0);
-  assert.equal(await page.locator('.pane[data-tool=secret][data-side]').count(), 1);
+  assert.equal(await page.locator('.pane[data-tool=secret]:not([hidden])').count(), 1);
   assert.equal(await page.locator('.pane[data-tool=secret] .pane-lock').count(), 1);
 
   api.statusCode = 200;

@@ -1,6 +1,6 @@
-// 窗格：每個開過的工具只建立一次 iframe，不可見時隱藏，永不移除。
+// 窗格：每個開過的工具只建立一次 iframe，不可見時隱藏，永不移除。一次只顯示一個（沒有關閉鈕，回櫥窗點品牌）。
 
-export function createPanes(root, { onFocus, onClose }) {
+export function createPanes(root) {
   const panes = new Map(); // id -> { pane, frame }
 
   function ensure(tool) {
@@ -10,32 +10,16 @@ export function createPanes(root, { onFocus, onClose }) {
     pane.className = 'pane';
     pane.dataset.tool = tool.id;
     pane.hidden = true;
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'pane-close';
-    close.setAttribute('aria-label', `關閉${tool.name}`);
-    close.textContent = '×';
     const frame = document.createElement('iframe');
     frame.title = tool.name;
     frame.dataset.created = String(performance.now());
     frame.src = tool.entry;
-    pane.append(close, frame);
+    pane.append(frame);
     root.appendChild(pane);
-    pane.addEventListener('pointerdown', () => { const s = pane.dataset.side; if (s) onFocus(s); });
-    close.addEventListener('click', () => { const s = pane.dataset.side; if (s) onClose(s); });
     p = { pane, frame };
     panes.set(tool.id, p);
     return p;
   }
-
-  // 點進 iframe 時，父視窗會失焦；用 activeElement 判斷是哪一格。
-  window.addEventListener('blur', () => {
-    setTimeout(() => {
-      for (const { pane, frame } of panes.values()) {
-        if (document.activeElement === frame && pane.dataset.side) onFocus(pane.dataset.side);
-      }
-    }, 0);
-  });
 
   // 公司憑證過期時蓋一層鎖定提示；iframe 本身不動，內容原封不動。
   function setLocked(id, locked) {
@@ -63,19 +47,10 @@ export function createPanes(root, { onFocus, onClose }) {
     ensure,
     setLocked,
     get: (id) => panes.get(id),
-    // sides: { left: toolOrNull, right: toolOrNull }
-    sync({ split, left, right, last }) {
-      const want = new Map();
-      if (left) want.set(left.id, 'left');
-      if (right) want.set(right.id, 'right');
-      root.classList.toggle('split', split);
-      for (const t of [left, right]) if (t) ensure(t);
-      for (const [id, { pane }] of panes) {
-        const side = want.get(id);
-        pane.hidden = !side;
-        if (side) pane.dataset.side = side; else delete pane.dataset.side;
-        pane.classList.toggle('is-last', Boolean(side) && split && side === last);
-      }
+    // 顯示 tool（null＝全部隱藏）
+    sync(tool) {
+      if (tool) ensure(tool);
+      for (const [id, { pane }] of panes) pane.hidden = !tool || id !== tool.id;
     },
   };
 }

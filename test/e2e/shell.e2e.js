@@ -25,13 +25,7 @@ async function open() {
   return page;
 }
 
-async function drag(page, id, side) {
-  const dt = await page.evaluateHandle((i) => { const d = new DataTransfer(); d.setData('text/plain', i); return d; }, id);
-  await page.dispatchEvent(`#toolbar button[data-tool=${id}]`, 'dragstart', { dataTransfer: dt });
-  await page.dispatchEvent(`.dz[data-side=${side}]`, 'dragover', { dataTransfer: dt });
-  await page.dispatchEvent(`.dz[data-side=${side}]`, 'drop', { dataTransfer: dt });
-}
-const ids = (page) => page.$$eval('#work .pane[data-side]', (els) => els.sort((a, b) => a.dataset.side.localeCompare(b.dataset.side)).map((e) => e.dataset.tool));
+const ids = (page) => page.$$eval('#work .pane:not([hidden])', (els) => els.map((e) => e.dataset.tool));
 
 test('opens on showcase', async () => {
   const page = await open();
@@ -45,80 +39,51 @@ test('card opens single full page', async () => {
   await page.click('#showcase .card[data-tool=alpha]');
   assert.equal(await page.isVisible('#showcase'), false);
   assert.deepEqual(await ids(page), ['alpha']);
-  assert.equal(await page.locator('#work .pane[data-side=left]').count(), 1);
+  assert.equal(await page.locator('#work .pane:not([hidden])').count(), 1);
   assert.equal(await page.getAttribute('#toolbar button[data-tool=alpha]', 'aria-pressed'), 'true');
 });
 
-test('drag to right splits', async () => {
+test('並排已停用：工具列不能拖、沒有放置區，拖曳事件不改版面', async () => {
   const page = await open();
   await page.click('#showcase .card[data-tool=alpha]');
-  await drag(page, 'beta', 'right');
-  assert.equal(await page.locator('#work .pane[data-side]').count(), 2);
-  assert.equal(await page.getAttribute('#work .pane[data-side=left]', 'data-tool'), 'alpha');
-  assert.equal(await page.getAttribute('#work .pane[data-side=right]', 'data-tool'), 'beta');
-  assert.equal(await page.isVisible('#dropzones'), false);
-});
-
-async function assertCloseLayout(page) {
-  const layouts = await page.$$eval('#work .pane[data-side]', (panes) => panes.map((pane) => {
-    const frame = pane.querySelector('iframe'), close = pane.querySelector('.pane-close');
-    const p = pane.getBoundingClientRect(), f = frame.getBoundingClientRect(), c = close.getBoundingClientRect();
-    return { titleBars: pane.querySelectorAll('.pane-bar').length, topGap: f.top - p.top,
-      gap: c.left - f.right, closeWidth: c.width, closeHeight: c.height,
-      radius: getComputedStyle(close).borderRadius, label: close.getAttribute('aria-label'), frameTitle: frame.title };
-  }));
-  for (const layout of layouts) {
-    assert.equal(layout.titleBars, 0, '不留下標題框或空白標題列');
-    assert.ok(Math.abs(layout.topGap) < 1, '工具內容從窗格頂端開始');
-    assert.ok(layout.gap >= 0, '關閉鈕不可遮住 iframe 內的工具控制');
-    assert.equal(layout.closeWidth, layout.closeHeight);
-    assert.equal(layout.radius, '50%');
-    assert.ok(layout.closeWidth >= 44, '保持觸控可點範圍');
-    assert.ok(layout.label.startsWith('關閉'));
-    assert.ok(layout.frameTitle);
-  }
-}
-
-test('窗格不顯示標題列，單工具與左右並排保留不遮內容的圓形關閉鈕', async () => {
-  const page = await open();
-  await page.click('#showcase .card[data-tool=alpha]');
-  await assertCloseLayout(page);
-  await drag(page, 'beta', 'right');
-  await assertCloseLayout(page);
-  await page.setViewportSize({ width: 390, height: 820 });
-  await assertCloseLayout(page);
-  await page.click('.pane[data-tool=beta] .pane-close');
+  assert.equal(await page.getAttribute('#toolbar button[data-tool=beta]', 'draggable'), null);
+  assert.equal(await page.locator('#dropzones, .dz').count(), 0);
+  const dt = await page.evaluateHandle(() => { const d = new DataTransfer(); d.setData('text/plain', 'beta'); return d; });
+  await page.dispatchEvent('#toolbar button[data-tool=beta]', 'dragstart', { dataTransfer: dt });
+  await page.dispatchEvent('#work', 'drop', { dataTransfer: dt });
   assert.deepEqual(await ids(page), ['alpha']);
-  await assertCloseLayout(page);
+  assert.equal(await page.evaluate(() => document.getElementById('work').className), '');
 });
 
-test('移除標題列後鎖定層覆蓋工具內容，圓形關閉鈕仍可操作', async () => {
+test('沒有關閉鈕直條：工具內容滿版到右邊；回櫥窗用品牌', async () => {
+  const page = await open();
+  await page.click('#showcase .card[data-tool=alpha]');
+  for (const w of [1280, 390]) {
+    await page.setViewportSize({ width: w, height: 820 });
+    const r = await page.$eval('.pane[data-tool=alpha]', (pane) => {
+      const p = pane.getBoundingClientRect(), f = pane.querySelector('iframe').getBoundingClientRect();
+      return { close: pane.querySelectorAll('.pane-close, button').length, right: p.right - f.right, left: f.left - p.left, top: f.top - p.top, vw: document.documentElement.clientWidth, pr: p.right, title: pane.querySelector('iframe').title };
+    });
+    assert.equal(r.close, 0, '窗格裡沒有按鈕');
+    assert.ok(Math.abs(r.right) < 1 && Math.abs(r.left) < 1 && Math.abs(r.top) < 1, `iframe 滿版 ${JSON.stringify(r)}`);
+    assert.ok(Math.abs(r.pr - r.vw) < 1, '窗格到視窗右緣');
+    assert.ok(r.title);
+  }
+  await page.click('#brand');
+  assert.equal(await page.isVisible('#showcase'), true);
+});
+
+test('鎖定層覆蓋工具內容', async () => {
   const page = await open();
   await page.click('#showcase .card[data-tool=alpha]');
   await page.evaluate(() => window.tbxShell._internal.panes.setLocked('alpha', true));
   const state = await page.$eval('.pane[data-tool=alpha]', (pane) => {
     const p = pane.getBoundingClientRect(), lock = pane.querySelector('.pane-lock').getBoundingClientRect();
-    const close = pane.querySelector('.pane-close'), c = close.getBoundingClientRect();
-    return { top: lock.top - p.top, height: lock.height - p.height,
-      closeAvailable: document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2) === close };
+    return { top: lock.top - p.top, height: lock.height - p.height, width: lock.width - p.width };
   });
   assert.ok(Math.abs(state.top) < 1);
   assert.ok(Math.abs(state.height) < 1);
-  assert.equal(state.closeAvailable, true);
-  await page.click('.pane[data-tool=alpha] .pane-close');
-  assert.equal(await page.isVisible('#showcase'), true);
-  assert.equal(await page.locator('.pane[data-tool=alpha] iframe').count(), 1);
-});
-
-test('third tool replaces last-operated', async () => {
-  const page = await open();
-  await page.click('#showcase .card[data-tool=alpha]');
-  await drag(page, 'beta', 'right');
-  await page.frameLocator('.pane[data-tool=alpha] iframe').locator('#t').click();
-  await page.waitForSelector('.pane[data-side=left].is-last');
-  await page.click('#toolbar button[data-tool=gamma]');
-  assert.equal(await page.getAttribute('#work .pane[data-side=left]', 'data-tool'), 'gamma');
-  assert.equal(await page.getAttribute('#work .pane[data-side=right]', 'data-tool'), 'beta');
+  assert.ok(Math.abs(state.width) < 1);
 });
 
 test('iframe kept alive', async () => {
@@ -136,41 +101,13 @@ test('iframe kept alive', async () => {
   assert.equal(await page.locator('iframe').count(), 2);
 });
 
-test('closed pane keeps content', async () => {
+test('回櫥窗再開同一工具，內容還在', async () => {
   const page = await open();
-  await page.click('#showcase .card[data-tool=alpha]');
-  await drag(page, 'beta', 'right');
+  await page.click('#showcase .card[data-tool=beta]');
   await page.frameLocator('.pane[data-tool=beta] iframe').locator('#t').fill('還在嗎');
-  await page.click('#work .pane[data-tool=beta] .pane-close');
-  assert.deepEqual(await ids(page), ['alpha']);
-  await page.click('#toolbar button[data-tool=beta]');
-  assert.deepEqual(await ids(page), ['beta']);
+  await page.click('#brand');
+  await page.click('#showcase .card[data-tool=beta]');
   assert.equal(await page.frameLocator('.pane[data-tool=beta] iframe').locator('#t').inputValue(), '還在嗎');
-});
-
-test('drop outside keeps layout', async () => {
-  const page = await open();
-  await page.click('#showcase .card[data-tool=alpha]');
-  await drag(page, 'beta', 'right');
-  const before = await ids(page);
-  const dt = await page.evaluateHandle(() => { const d = new DataTransfer(); d.setData('text/plain', 'gamma'); return d; });
-  // 放在工具列上
-  await page.dispatchEvent('#toolbar button[data-tool=gamma]', 'dragstart', { dataTransfer: dt });
-  assert.equal(await page.isVisible('#dropzones'), true);
-  await page.dispatchEvent('#toolbar', 'drop', { dataTransfer: dt });
-  assert.deepEqual(await ids(page), before);
-  assert.equal(await page.isVisible('#dropzones'), false);
-  // 拖曳中按 Esc
-  await page.dispatchEvent('#toolbar button[data-tool=gamma]', 'dragstart', { dataTransfer: dt });
-  assert.equal(await page.isVisible('#dropzones'), true);
-  await page.keyboard.press('Escape');
-  assert.deepEqual(await ids(page), before);
-  assert.equal(await page.isVisible('#dropzones'), false);
-  // dragend
-  await page.dispatchEvent('#toolbar button[data-tool=gamma]', 'dragstart', { dataTransfer: dt });
-  await page.dispatchEvent('#toolbar button[data-tool=gamma]', 'dragend', { dataTransfer: dt });
-  assert.equal(await page.isVisible('#dropzones'), false);
-  assert.deepEqual(await ids(page), before);
 });
 
 test('brand returns to showcase', async () => {
@@ -181,12 +118,12 @@ test('brand returns to showcase', async () => {
   assert.equal(await page.isVisible('#work'), false);
 });
 
-test('網址記住工具：重新整理留在原工具，上一頁回櫥窗，並排也記得', async () => {
+test('網址記住工具：重新整理留在原工具，上一頁回櫥窗；舊並排網址只開第一個', async () => {
   const page = await open();
   await page.click('#showcase .card[data-tool=beta]');
   assert.equal(await page.evaluate(() => location.hash), '#beta');
   await page.reload();
-  await page.waitForSelector('#work .pane[data-side]');
+  await page.waitForSelector('#work .pane:not([hidden])');
   assert.deepEqual(await ids(page), ['beta']);
   await page.goBack();
   await page.waitForSelector('#showcase:not([hidden])');
@@ -194,11 +131,10 @@ test('網址記住工具：重新整理留在原工具，上一頁回櫥窗，�
   await page.goForward();
   await page.waitForSelector('#work:not([hidden])');
   assert.deepEqual(await ids(page), ['beta']);
-  await drag(page, 'alpha', 'right');
-  assert.equal(await page.evaluate(() => location.hash), '#beta+alpha');
-  await page.reload();
-  await page.waitForSelector('#work.split');
-  assert.deepEqual(await ids(page), ['beta', 'alpha']);
+  await page.goto(srv.url + 'index.html#beta+alpha');
+  await page.waitForSelector('#work:not([hidden])');
+  assert.deepEqual(await ids(page), ['beta']);
+  assert.equal(await page.evaluate(() => location.hash), '#beta');
   // 不存在的工具代號：留在櫥窗
   await page.goto(srv.url + 'index.html#nope');
   await page.reload();
@@ -246,4 +182,36 @@ test('頂列放不下時只留圖示，目前工具保留文字，頂列維持�
   // 夠寬就恢復文字
   await page.setViewportSize({ width: 1900, height: 720 });
   await page.waitForSelector('#toolbar:not(.compact)');
+});
+
+test('手機寬度：頁面不被撐寬、頂列不超過 2 列、按鈕縮小但 ≥ 24px', async () => {
+  for (const w of [320, 390]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 640 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
+    await page.goto(srv.url + 'index.html#alpha');
+    await page.waitForSelector('#work .pane:not([hidden]) iframe');
+    const m = await page.evaluate(() => {
+      const b = document.querySelector('#toolbar button').getBoundingClientRect();
+      return { sw: document.documentElement.scrollWidth, top: document.getElementById('top').offsetHeight, bh: b.height,
+        frameW: document.querySelector('.pane:not([hidden]) iframe').getBoundingClientRect().width };
+    });
+    assert.equal(m.sw, w, '頁面沒有水平溢位');
+    assert.ok(m.top <= 96, `頂列高 ${m.top}`);
+    assert.ok(m.bh >= 24 && m.bh <= 36, `工具按鈕高 ${m.bh}`);
+    assert.ok(Math.abs(m.frameW - w) < 1, '工具框等於螢幕寬');
+    await ctx.close();
+  }
+});
+
+test('跳至主要內容：Tab 第一個出現，按下把焦點移到工具且不改網址', async () => {
+  const page = await open();
+  await page.goto(srv.url + 'index.html#alpha');
+  await page.waitForSelector('#work .pane:not([hidden]) iframe');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement.className), 'skip');
+  assert.equal(await page.isVisible('.skip'), true);
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement.tagName), 'IFRAME');
+  assert.equal(await page.evaluate(() => location.hash), '#alpha');
 });
