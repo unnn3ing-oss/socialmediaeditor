@@ -1,5 +1,5 @@
 # 排程發布：送出成功後跳「再發一則／返回列表」
-- 狀態：進行中　- 分支：claude/dreamy-gauss-mzxyof　- 最後更新：2026-11-16
+- 狀態：已併入 main　- 分支：claude/dreamy-gauss-mzxyof　- 最後更新：2026-11-16
 - 使用者原始需求：「把目前的新增發文，改為按送出後，如果成功則彈出『再發一則』並清除頁面、『返回列表』則跳出新增發文彈窗回到『已排程』列表」
 
 ## 已定案的決定
@@ -47,7 +47,7 @@
 - [x] 後端 access.js（`accessState`／`setAccessState`）／index.js（POST 沒帶 reason＝保留）＋測試；`fb_forbidden` 文字改「排程發布目前關閉。」
 - [x] 兩個管理頁（`#acOpen`／`#acClose`／`#acReason`／`#acReasonSave`）
 - [x] fbpost app.js 顯示 `detail.reason`＋e2e；npm test 613、e2e 117、build --check 通過
-- [x] 獨立審查通過（未改檔）；等使用者說「推」
+- [x] 獨立審查通過（未改檔）；已併入 main
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`
