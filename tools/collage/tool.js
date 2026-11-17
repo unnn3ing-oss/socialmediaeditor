@@ -492,7 +492,7 @@ tb.init('collage');
     const c = offscreen();
     const blob = await new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('產生圖片失敗'))), 'image/png'));
     try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); say('已複製拼圖，可以直接貼到別的地方'); }
-    catch (e) { say('複製失敗：瀏覽器不允許寫入剪貼簿，請改用「下載圖片」'); }
+    catch (e) { say('複製失敗：瀏覽器不允許寫入剪貼簿，請改用「下載這張」'); }
   }));
 
   $('cgResetBtn').addEventListener('click', async () => {

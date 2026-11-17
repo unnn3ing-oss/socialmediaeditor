@@ -347,6 +347,7 @@ if (window.top !== window.self) {
     token = ''; pending = '';
     $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('login').hidden = false;
     fbLoaded = false; rdLoaded = false; pgItems = []; psItems = [];
+    try { $('pw').focus(); } catch (e) {}
   }
   $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
 
@@ -401,4 +402,6 @@ if (window.top !== window.self) {
     };
   });
   window.addEventListener('hashchange', function () { if (token) showTab(tabFromHash()); });
+  // 進頁面顯示登入區時，直接把游標放在密碼框
+  if (!$('login').hidden) { try { $('pw').focus(); } catch (e) {} }
 })();

@@ -225,7 +225,9 @@ tb.init('watermark');
     emptyEl.hidden = !!p;
     const ready = !!p && !!logo;
     downloadBtn.disabled = busy || !ready;
-    downloadBtn.textContent = n > 1 ? '下載本張' : '下載圖片';
+    downloadBtn.textContent = '下載這張';
+    const why = busy ? '' : !p ? '先加入照片' : !logo ? '先上傳浮水印圖' : '';
+    downloadBtn.title = why; downloadAllBtn.title = busy ? '' : !logo ? '先上傳浮水印圖' : '';
     downloadAllBtn.hidden = n < 2;
     downloadAllBtn.disabled = busy || !logo;
     downloadAllBtn.textContent = `全部下載（${n} 張）`;
@@ -537,7 +539,7 @@ tb.init('watermark');
       if (note) notes.push(note);
       items.push({ blob, name: `${tb.stampName(now, i + 1)}.${extFor(list[i])}` });
     }
-    await tb.download.batch(items);
+    await tb.download.batch(items, { onProgress: (i, total) => { statusEl.textContent = `儲存第 ${i}／${total} 張`; } });
     statusEl.textContent = `已下載 ${list.length} 張（${items[0].name} ～ ${items[items.length - 1].name}）${notes.join('')}`;
   }));
 

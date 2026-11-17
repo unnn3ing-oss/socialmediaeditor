@@ -84,6 +84,9 @@
 .yt-card .qlist { padding: 6px 8px 8px; }
 .yt-card .qrow { padding: 10px; gap: 14px; }
 .yt-card > .clear-ask { margin: 8px 12px 4px; }
+.no-ext { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.no-ext[hidden] { display: none; }
+.no-ext button { margin-left: auto; }
 .is-locked .addc, .is-locked #queue-card { opacity: .55; } /* 兩張卡也設了 inert：不能點、不能用鍵盤 */
 
 /* 設定與檢查 */

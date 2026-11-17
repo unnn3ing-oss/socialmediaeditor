@@ -89,9 +89,9 @@
   <div id="downloadRow">
     <button type="button" id="backStepBtn" hidden>← 返回編輯</button>
     <span class="dock-chip" id="dockChip" hidden></span>
-    <button type="button" class="ghost" id="resetAllBtn">清除本頁</button>
+    <button type="button" class="ghost" id="resetAllBtn">清除這張</button>
     <button type="button" class="primary" id="nextStepBtn">下一步：畫面檢查 →</button>
-    <button type="button" class="light" id="downloadJpgBtn" hidden>下載本頁</button>
+    <button type="button" class="light" id="downloadJpgBtn" hidden>下載這張</button>
     <button type="button" class="primary" id="downloadAllBtn" hidden>全部下載</button>
     <div class="dl-confirm" id="dlConfirm" role="dialog" aria-label="下載前確認" hidden>
       <div class="dl-confirm-text">已確認無錯字、圖片無露白？</div>
@@ -140,13 +140,13 @@
 <div class="modal-overlay" id="confirmOverlay">
   <div class="modal" style="max-width:360px">
     <div class="modal-head">
-      <h2 id="confirmTitle">確定要清除本頁？</h2>
+      <h2 id="confirmTitle">確定要清除這張？</h2>
     </div>
     <div class="modal-body">
       <p style="margin:0" id="confirmBody">這會清空「本頁」所有格子目前的文字、標籤與圖片設定，且無法復原（不會影響另一頁）。</p>
       <div class="btn-row" style="justify-content:flex-end; margin-top:16px">
         <button type="button" id="confirmCancelBtn">取消</button>
-        <button type="button" id="confirmOkBtn" class="primary">清除本頁</button>
+        <button type="button" id="confirmOkBtn" class="primary">清除這張</button>
       </div>
     </div>
   </div>

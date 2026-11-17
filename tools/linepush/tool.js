@@ -1077,7 +1077,13 @@ function renderTo(ctx, renderMode, pageState, opts = {}) {
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
+let renderRaf = 0;
+function scheduleRender() {
+  if (renderRaf) return;
+  renderRaf = requestAnimationFrame(() => { renderRaf = 0; render(); });
+}
 function render() {
+  if (renderRaf) { cancelAnimationFrame(renderRaf); renderRaf = 0; }
   renderTo(ctx, 'final', activePage(), { showActiveBorder: true, showHeaderBorder: true, interactive: true });
   syncDockContext();
   updateDownloadState();
@@ -1095,15 +1101,11 @@ function isImageFile(file) {
 
 function loadImageFile(file, onLoaded, onError) {
   if (!isImageFile(file)) { if (onError) onError(`無法辨識「${file ? file.name : ''}」為圖片檔`); return; }
-  const reader = new FileReader();
-  reader.onerror = () => onError && onError(`讀取「${file.name}」失敗，請換一張圖片`);
-  reader.onload = e => {
-    const image = new Image();
-    image.onerror = () => onError && onError(`「${file.name}」無法開啟，可能是不支援的圖片格式`);
-    image.onload = () => onLoaded(image, file.name);
-    image.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.onerror = () => { URL.revokeObjectURL(url); onError && onError(`「${file.name}」無法開啟，可能是不支援的圖片格式`); };
+  image.onload = () => onLoaded(image, file.name);
+  image.src = url;
 }
 
 // Puts a photo into cell i of any page (not only the visible one). Photos the
@@ -1112,7 +1114,10 @@ function loadImageFile(file, onLoaded, onError) {
 function setCardImageAt(pageIdx, i, image, fileName, source = 'manual') {
   const pg = pages[pageIdx];
   const state = pg.cards[i];
+  const prevImg = state.img;
   state.img = image;
+  if (prevImg && prevImg !== image && prevImg.src && prevImg.src.startsWith('blob:') &&
+      ![pages, ...Object.values(pagesByMode).filter(Boolean)].some(list => list.some(p => p.cards.some(c => c.img === prevImg)))) URL.revokeObjectURL(prevImg.src);
   state.imgSource = source;
   state.fileName = fileName;
   state.scale = 1;
@@ -1550,7 +1555,7 @@ function pointerMove(evt) {
     const cell = cellRect(tagDrag.idx, activePage().showHeader);
     const off = newsTagDragTo(ctx, cell, state, tagDrag.n, tagDrag.startPos, pos.x - tagDrag.startX, pos.y - tagDrag.startY);
     if (tagDrag.n === 1) state.tagPos = off; else state.tag2Pos = off;
-    render();
+    scheduleRender();
     return;
   }
   if (stickerDrag) {
@@ -1561,7 +1566,7 @@ function pointerMove(evt) {
       st.x = stickerDrag.startStX + (pos.x - stickerDrag.startX);
       st.y = stickerDrag.startStY + (pos.y - stickerDrag.startY);
       clampStickerPos(cellRect(stickerDrag.idx, activePage().showHeader), st);
-      render();
+      scheduleRender();
     }
     return;
   }
@@ -1586,7 +1591,7 @@ function pointerMove(evt) {
   state.offsetX = drag.startOffsetX + (pos.x - drag.startX);
   state.offsetY = drag.startOffsetY + (pos.y - drag.startY);
   clampCardOffset(drag.idx);
-  render();
+  scheduleRender();
 }
 
 function pointerUp() {
@@ -1633,7 +1638,7 @@ canvas.addEventListener('wheel', evt => {
     const factor = 1 - evt.deltaY * 0.0015;
     st.scale = clamp(st.scale * factor, STICKER_MIN_SCALE, STICKER_MAX_SCALE);
     clampStickerPos(cellRect(idx, activePage().showHeader), st);
-    render();
+    scheduleRender();
     return;
   }
 
@@ -1643,7 +1648,7 @@ canvas.addEventListener('wheel', evt => {
   const factor = 1 - evt.deltaY * 0.0015;
   applyScale(idx, state.scale * factor);
   refreshCardThumb(idx);
-  render();
+  scheduleRender();
 }, { passive: false });
 
 canvas.addEventListener('dragover', evt => evt.preventDefault());
@@ -1941,7 +1946,7 @@ function exportFileName(pageIndex) {
 
 // 新聞／娛樂 completeness: every cell needs both headline lines and a photo.
 // (拼圖 has no such rule.) 「全部下載」 stays locked until every cell on every
-// page is complete; 「下載本頁」 asks first when the current page isn't.
+// page is complete; 「下載這張」 asks first when the current page isn't.
 function cardMissing(st) {
   const miss = [];
   // 四格 A 的說明可以留空；其他版面兩行標題都要有
@@ -2475,9 +2480,9 @@ document.getElementById('quickfillReopen').addEventListener('click', () => {
 
 
 const CONFIRM_DEFAULTS = {
-  title: '確定要清除本頁？',
+  title: '確定要清除這張？',
   body: '這會清空「本頁」所有格子目前的文字、標籤與圖片設定，且無法復原（不會影響另一頁）。',
-  okText: '清除本頁',
+  okText: '清除這張',
 };
 function askConfirm(opts = {}) {
   const o = { ...CONFIRM_DEFAULTS, ...opts };
@@ -2504,6 +2509,7 @@ function askConfirm(opts = {}) {
 
 document.getElementById('resetAllBtn').addEventListener('click', async () => {
   if (!(await askConfirm())) return;
+  const oldImgs = pages[activePageIndex].cards.map(c => c.img).filter(Boolean);
   pages[activePageIndex] = makePageState(activePageIndex);
   cellSelected = false;
   headerSelected = false;
@@ -2511,6 +2517,11 @@ document.getElementById('resetAllBtn').addEventListener('click', async () => {
   syncTopUIFromState();
   syncAllCellUI();
   render();
+  // 清掉的圖若已沒有任何格子在用，釋放 object URL
+  const lists = [pages, ...Object.values(pagesByMode).filter(Boolean)];
+  new Set(oldImgs).forEach(im => {
+    if (im.src && im.src.startsWith('blob:') && !lists.some(l => l.some(p => p.cards.some(c => c.img === im)))) URL.revokeObjectURL(im.src);
+  });
 });
 
 const helpOverlay = document.getElementById('helpOverlay');
@@ -2906,7 +2917,7 @@ canvas.addEventListener('mouseleave', () => { if (gapTipCell >= 0) hideGapTip(fa
 
 // One place that decides what is visible for the current mode / step / selection.
 // Dock items that depend on what is on the pages: 「下一步」 stays greyed out until either page has
-// something on it, 貼圖 are dimmed until a cell is picked, 下載本頁 needs this page to have content.
+// something on it, 貼圖 are dimmed until a cell is picked, 下載這張 needs this page to have content.
 function pageIsEdited(pg) {
   return pg.cards.some(c => c.img || (c.line1 || '').trim() || (c.line2 || '').trim() || (c.tag || '').trim() || (c.tag2 || '').trim() || c.stickers.length);
 }
@@ -2968,7 +2979,7 @@ function syncChrome() {
   $('dock').classList.toggle('checking', checking);
   $('nextStepBtn').hidden = !editing;
   $('backStepBtn').hidden = !checking;
-  $('downloadJpgBtn').textContent = '下載本頁';
+  $('downloadJpgBtn').textContent = '下載這張';
   $('downloadAllBtn').hidden = !checking;
   $('downloadAllBtn').textContent = '全部下載';
   syncDockContext();

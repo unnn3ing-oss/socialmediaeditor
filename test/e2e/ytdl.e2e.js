@@ -139,3 +139,28 @@ test('安裝教學：「也要 YT 下載」預設不勾，外殼 tbxShell.openIn
   assert.equal(await page.isChecked('#deployYtCheck'), false);
   await page.close();
 });
+
+test('YT 下載（沒裝外掛）：只有一個提示區塊＋安裝外掛按鈕，佇列與設定收起', async () => {
+  const { serve } = require('../helpers/serve.js');
+  const { launch } = require('../helpers/browser.js');
+  const srv = await serve(ROOT);
+  const browser = await launch();
+  try {
+    const page = await (await browser.newContext()).newPage();
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(srv.url + 'tools/ytdl/index.html');
+    await page.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
+    await page.waitForTimeout(2000); // 過了舊版 1.5 秒才展開步驟的時間
+    assert.equal(await page.isVisible('#conn-pill'), false);
+    assert.equal(await page.isVisible('#setup-card'), false);
+    assert.equal(await page.isVisible('#connect-status'), false);
+    assert.equal(await page.isVisible('#work'), false);
+    assert.match(await page.textContent('#no-ext-text'), /安裝小編工具箱外掛/);
+    // 不在外殼裡：沒有「安裝外掛」按鈕，改用文字指路
+    assert.equal(await page.isVisible('#no-ext-install'), false);
+    assert.match(await page.textContent('#no-ext-text'), /頂列的「安裝外掛」/);
+    // 已輸入的內容在收起期間不會消失
+    await page.evaluate(() => { document.getElementById('add-url').value = 'https://youtu.be/x'; });
+    assert.equal(await page.inputValue('#add-url'), 'https://youtu.be/x');
+  } finally { await browser.close(); await srv.close(); }
+});

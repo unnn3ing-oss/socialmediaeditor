@@ -54,18 +54,28 @@ function zhError(err, lead) {
       .map(t => ({ path: t.path.slice(PREFIX.length), repoPath: t.path, sha: t.sha }));
     if (!list.some(f => f.path === 'manifest.json')) throw new Error('GitHub 上找不到 manifest.json');
     if (list.some(f => !isSafePath(f.path))) throw new Error('GitHub 上的檔案清單含有不安全的路徑，已停止');
-    const files = [];
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
-      onProgress(`下載 ${i + 1}/${list.length}：${f.path}`);
-      let res;
-      try { res = await fetch(`${RAW}/${commit.sha}/${f.repoPath.split('/').map(encodeURIComponent).join('/')}`, { cache: 'no-store' }); }
-      catch (e) { throw new Error('下載檔案失敗，請確認網路連線'); }
-      if (!res.ok) throw new Error(`下載 ${f.path} 失敗（HTTP ${res.status}）`);
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if ((await gitBlobSha(bytes)) !== f.sha) throw new Error(`${f.path} 下載內容和 GitHub 上的不一致，已取消`);
-      files.push({ path: f.path, bytes });
-    }
+    // 最多 5 個並發；結果依清單順序放回，進度數字照完成數遞增，任一檔失敗就整批失敗（其餘請求不再開始）
+    const files = new Array(list.length);
+    let next = 0, done = 0, failure = null;
+    const worker = async () => {
+      while (!failure && next < list.length) {
+        const i = next++;
+        const f = list[i];
+        onProgress(`下載 ${done + 1}/${list.length}：${f.path}`);
+        try {
+          let res;
+          try { res = await fetch(`${RAW}/${commit.sha}/${f.repoPath.split('/').map(encodeURIComponent).join('/')}`, { cache: 'no-store' }); }
+          catch (e) { throw new Error('下載檔案失敗，請確認網路連線'); }
+          if (!res.ok) throw new Error(`下載 ${f.path} 失敗（HTTP ${res.status}）`);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          if ((await gitBlobSha(bytes)) !== f.sha) throw new Error(`${f.path} 下載內容和 GitHub 上的不一致，已取消`);
+          files[i] = { path: f.path, bytes };
+          done++;
+        } catch (e) { failure = failure || e; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(5, list.length) }, worker));
+    if (failure) throw failure;
     return files;
   }
 
@@ -241,6 +251,7 @@ function wireUp() {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let step = 1;
   let busy = false;
+  let downloaded = false;
   let opener = null;
   let replayTimer = null;
 
@@ -267,6 +278,8 @@ function wireUp() {
     prevBtn.disabled = busy || step === 1;
     nextBtn.disabled = busy;
     nextBtn.textContent = step === TOTAL ? '完成' : '下一步';
+    // 第 1 步下載完成前，主按鈕是「下載安裝檔」；「下一步」降為次要（仍可按，有人已下載過）
+    nextBtn.classList.toggle('primary', step !== 1 || downloaded);
     countEl.textContent = `${step} / ${TOTAL}`;
   };
   const setBusy = b => { busy = b; installBtn.disabled = pickBtn.disabled = zipBtn.disabled = b; refreshNav(); };
@@ -380,6 +393,8 @@ function wireUp() {
           ytNote = '另外請複製下方的 YT 一行指令，貼到終端機執行。';
         }
       }
+      downloaded = true;
+      refreshNav();
       setStatus(`已下載安裝檔「${name}」。${ytNote}請按「下一步」執行它。`, 'ok');
     } catch (err) {
       setStatus(zhError(err, '發生錯誤'), 'err');

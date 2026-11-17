@@ -92,6 +92,7 @@ tb.init('resize');
     downloadBtn.disabled = true;
     downloadAllBtn.hidden = n < 2;
     downloadAllBtn.disabled = true;
+    downloadBtn.title = downloadAllBtn.title = n ? '輸入的尺寸不能下載，請先修正' : '先加入照片';
     if (!p) { statusEl.textContent = '請先上傳照片'; sizeHint.textContent = ''; previewHint.textContent = ''; return; }
     const pl = plan(p);
     if (pl.error || tooBig(pl)) {
@@ -116,6 +117,8 @@ tb.init('resize');
     previewHint.textContent = movable ? '在預覽上拖曳可以調整保留的範圍；每張照片各自記住。' : '';
     emptyEl.textContent = '上傳或貼上照片，輸入寬高就會顯示轉換後的樣子';
     downloadBtn.disabled = busy;
+    downloadBtn.title = '';
+    downloadAllBtn.title = '';
     downloadAllBtn.disabled = busy || !st.photos.every(q => { const x = plan(q); return !x.error && !tooBig(x); });
   }
 
@@ -358,7 +361,7 @@ tb.init('resize');
       const { blob, ext } = await exportPhoto(list[i]);
       items.push({ blob, name: `${tb.stampName(now, i + 1)}.${ext}` });
     }
-    await tb.download.batch(items);          // 每張間隔 0.5～1 秒，瀏覽器比較不會擋掉連續下載
+    await tb.download.batch(items, { onProgress: (i, total) => { statusEl.textContent = `儲存第 ${i}／${total} 張`; } });   // 每張間隔 0.5～1 秒，瀏覽器比較不會擋掉連續下載
     statusEl.textContent = `已下載 ${list.length} 張（${items[0].name} ～ ${items[items.length - 1].name}）`;
   }));
 

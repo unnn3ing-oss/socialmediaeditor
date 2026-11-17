@@ -25,10 +25,11 @@ export function download(blob, name) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// items: [{ blob, name }]；rng、wait、save 可注入，方便測試。
-download.batch = async function batch(items, { rng = Math.random, wait = sleep, save = saveBlob } = {}) {
+// items: [{ blob, name }]；rng、wait、save 可注入，方便測試；onProgress(i, total) 選填，每張儲存前呼叫（i 從 1 起）。
+download.batch = async function batch(items, { rng = Math.random, wait = sleep, save = saveBlob, onProgress } = {}) {
   for (let i = 0; i < items.length; i++) {
     if (i > 0) await wait(500 + rng() * 500);
+    if (onProgress) onProgress(i + 1, items.length);
     save(items[i].blob, items[i].name);
   }
 };

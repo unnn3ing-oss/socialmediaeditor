@@ -48,7 +48,7 @@ test("reset (the start button, the host running, the extension coming back) give
 
 test("extensionNotice tells apart 'not found yet' from 'connection lost'", () => {
   assert.equal(extensionNotice({ detected: true, everDetected: true }), null);
-  assert.match(extensionNotice({ detected: false, everDetected: false }), /還沒偵測到小編工具箱外掛/);
+  assert.match(extensionNotice({ detected: false, everDetected: false }), /要先安裝小編工具箱外掛/);
   const lost = extensionNotice({ detected: false, everDetected: true });
   assert.match(lost, /連線中斷/);
   assert.match(lost, /重新整理/);

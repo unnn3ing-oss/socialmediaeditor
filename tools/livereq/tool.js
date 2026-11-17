@@ -208,6 +208,12 @@ src.addEventListener('paste', (e) => {
   src.value = text;
   run();
 });
+// 進入工具就聚焦貼上框；外殼切回這個工具時（iframe 重新取得焦點）若游標不在輸入欄，也回到貼上框
+src.focus({ preventScroll: true });
+window.addEventListener('focus', () => {
+  const a = document.activeElement;
+  if (!a || a === document.body) src.focus({ preventScroll: true });
+});
 $('clear').addEventListener('click', () => {
   src.value = ''; cards.length = 0; list.replaceChildren(); pagesBar.replaceChildren(); dots.replaceChildren();
   pagesBar.hidden = nav.hidden = true; empty.hidden = true; count.textContent = '';

@@ -20,7 +20,9 @@ async function loadTitleFont(url) {
 }
 
 // 回傳 { company, ribbonEnt, ribbonNews, logo, fontLoaded, fontError, stickers: { id: url } }
-export async function loadComposeAssets(tb) {
+// 選填 { waitFont: false }：素材網址拿到就回傳，字型改在背景載入；
+//   多回 fontReady（promise，resolve 成 { fontLoaded, fontError }），此時 fontLoaded 為 false 僅表示「還沒載好」。
+export async function loadComposeAssets(tb, { waitFont = true } = {}) {
   const [ribbonEnt, ribbonNews, logo, fontUrl, ...stickerUrls] = await Promise.all([
     urlOf(tb, 'frame.ent.ribbon'),
     urlOf(tb, 'frame.news.ribbon'),
@@ -28,16 +30,21 @@ export async function loadComposeAssets(tb) {
     urlOf(tb, 'font.title'),
     ...STICKER_IDS.map((id) => urlOf(tb, 'sticker.' + id)),
   ]);
-  const font = await loadTitleFont(fontUrl);
-  const fontLoaded = font.ok;
-  if (!fontLoaded) {
-    // Canvas 畫字不會等字型，先明確載入；離線時最多等 3 秒，之後退回系統字型
-    await withTimeout(Promise.all([
-      document.fonts.load('900 72px "Noto Sans TC"', '快訊標題'),
-      document.fonts.load('500 50px "Noto Sans TC"', '快訊標題'),
-    ]).catch(() => {}), 3000);
-  }
+  const loadFonts = async () => {
+    const font = await loadTitleFont(fontUrl);
+    if (!font.ok) {
+      // Canvas 畫字不會等字型，先明確載入；離線時最多等 3 秒，之後退回系統字型
+      await withTimeout(Promise.all([
+        document.fonts.load('900 72px "Noto Sans TC"', '快訊標題'),
+        document.fonts.load('500 50px "Noto Sans TC"', '快訊標題'),
+      ]).catch(() => {}), 3000);
+    }
+    return { fontLoaded: font.ok, fontError: font.error };
+  };
   const stickers = {};
   STICKER_IDS.forEach((id, i) => { if (stickerUrls[i]) stickers[id] = stickerUrls[i]; });
-  return { company: Boolean(ribbonEnt || ribbonNews), ribbonEnt, ribbonNews, logo, fontLoaded, fontError: font.error, stickers };
+  const base = { company: Boolean(ribbonEnt || ribbonNews), ribbonEnt, ribbonNews, logo, stickers };
+  if (!waitFont) return { ...base, fontLoaded: false, fontError: '', fontReady: loadFonts() };
+  const f = await loadFonts();
+  return { ...base, ...f };
 }

@@ -187,3 +187,13 @@ test('導覽列在粉專列上面；畫面來源在檢查列，待補只標黃�
   assert.equal(await frame.locator('.lr-card:not([hidden]) [data-copy]').isDisabled(), false);
   await page.close();
 });
+
+test('進入工具：貼上框自動聚焦（值班小編欄位仍在上方）；解析是次要按鈕、複製是主按鈕', async () => {
+  const { frame, page } = await open();
+  assert.equal(await frame.evaluate(() => document.activeElement && document.activeElement.id), 'src');
+  const y = async (id) => (await frame.locator(id).boundingBox()).y;
+  assert.ok((await y('#dutyName')) < (await y('#src')));
+  assert.match(await frame.getAttribute('#run', 'class'), /btn-secondary/);
+  assert.doesNotMatch(await frame.getAttribute('#run', 'class'), /btn-primary/);
+  await page.close();
+});

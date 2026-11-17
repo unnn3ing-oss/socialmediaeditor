@@ -617,7 +617,7 @@
   /* 右下角「其他工具」縮小一點、貼角落，少蓋到內容 */
   .tools-fab { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   .tools-btn { width: 40px; height: 40px; font-size: 17px; }
-  /* 圖片套版：「全部完成／全部下載」固定在畫面底部。手機上預覽在最上面，這兩顆要往下捲一個半螢幕才看得到；
+  /* 圖片套版：「全部下載」固定在畫面底部。手機上預覽在最上面，這兩顆要往下捲一個半螢幕才看得到；
      固定在底部後不管捲到哪都按得到。只在圖片套版顯示時出現（切到其他功能時 #layoutApp 是 hidden，整列跟著消失）。 */
   #batchActions {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;

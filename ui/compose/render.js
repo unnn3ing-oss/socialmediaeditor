@@ -304,7 +304,10 @@ export function createRenderer({ ribbonEnt = null, ribbonNews = null, logo = nul
     if (fx && fx.stickers) fx.stickers(targetCtx);
   }
 
-  return { ready, fontLoaded, titleFont, fitFontSize, drawImageCover, renderComposite };
+  // 字型晚一步載好時（loadComposeAssets 的 waitFont:false）用它切換成公司字型
+  function setFontLoaded(v) { fontLoaded = Boolean(v); }
+
+  return { ready, fontLoaded, setFontLoaded, titleFont, fitFontSize, drawImageCover, renderComposite };
 }
 
 // Google 把 Noto Sans TC 切成很多段，canvas 畫字不會自動載入沒用過的那段，缺字會退回系統字型。

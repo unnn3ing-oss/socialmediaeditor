@@ -1,6 +1,6 @@
 // 貼圖與馬賽克（需在 app.js 之後載入）：「圖片套版」批次模式，**每一組各自有一份**貼圖／馬賽克（預覽的是哪一組就編輯哪一組），一排貼圖固定在預覽畫布下方。
 // 貼圖、馬賽克、抽色的畫法與編輯器在 ui/compose/fx.js（和「排程發布」共用），tool.js 建好放在 window.PATTERN.fxKit。
-// 因為是畫進同一張畫布，下載、複製圖片、批次「完成」存下來的圖都會自動包含它們。
+// 因為是畫進同一張畫布，下載、複製圖片、批次「產生此張」存下來的圖都會自動包含它們。
 (function () {
   if (typeof SIZE === 'undefined') return;
   const batchSlot = document.getElementById('batchFxSlot');
@@ -28,7 +28,7 @@
       changed: () => {
         const it = current();
         if (!it) return;
-        if (it.invalidateDone) it.invalidateDone();   // 改了貼圖，這一組要重新按「完成」
+        if (it.invalidateDone) it.invalidateDone();   // 改了貼圖，這一組要重新按「產生此張」
         previewBatchItem(it);
       },
       redraw: () => { const it = current(); if (it && !it.done && listOf(it).length) previewBatchItem(it); },

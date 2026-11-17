@@ -90,3 +90,12 @@ test('有密碼：會取公司 Logo（含 tvbs-news-logo），出現新版／舊
   assert.equal(await frame.evaluate(() => !!window.Watermark.state.custom && !!window.Watermark.state.logoOld), true);
   assert.deepEqual(errors, []);
 });
+
+test('沒照片時下載按鈕停用並有原因；批次下載顯示「儲存第 i／N 張」', async () => {
+  const t = await openWm();
+  const f = t.frame;
+  assert.equal(await f.locator('#wmDownloadBtn').textContent(), '下載這張');
+  assert.equal(await f.locator('#wmDownloadBtn').isDisabled(), true);
+  assert.equal(await f.locator('#wmDownloadBtn').getAttribute('title'), '先加入照片');
+  await t.page.close();
+});

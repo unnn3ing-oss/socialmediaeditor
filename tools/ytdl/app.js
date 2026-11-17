@@ -51,7 +51,7 @@ function renderSetup() {
   const now = Date.now();
   if (ok && !wasDeployed) { wasDeployed = true; setupOverride = null; } // 連好了：自動收起
   else if (!ok && wasDeployed) { wasDeployed = false; unhealthySince = now; setupOverride = null; }
-  const show = setupOverride ?? (!ok && now - unhealthySince >= 1500);
+  const show = setupOverride ?? (detected && !ok && now - unhealthySince >= 1500);
   setHidden($("setup-card"), !show);
   $("open-setup").setAttribute("aria-expanded", String(show));
 
@@ -61,6 +61,7 @@ function renderSetup() {
   setText($("ext-version"), detected && client.version() ? `（v${client.version()}）` : "");
   const summary = connectSummary({ detected, deployed: ok, status });
   setText($("connect-status"), summary.text);
+  setHidden($("connect-status"), !detected);
   $("connect-status").dataset.ok = String(summary.ok);
   const advice = detected ? installerAdvice(status) : null;
   setText($("installer-advice"), advice ?? "");
@@ -70,18 +71,28 @@ function renderSetup() {
 
   const pill = $("conn-pill");
   pill.className = `pill ${ok ? "pill-ok" : "pill-warn"}`;
-  setText(pill, ok ? "已連線" : !detected ? "未偵測到外掛" : status.state === "running" ? "需要處理" : "尚未連上下載助手");
+  setText(pill, ok ? "已連線" : status.state === "running" ? "需要處理" : "尚未連上下載助手");
+  setHidden(pill, !detected); // 沒外掛時只留頂部那一個提示區塊，不重複講
+  syncSetupTimer();
 }
 
 $("open-setup").addEventListener("click", () => { setupOverride = $("setup-card").hidden; renderSetup(); });
-$("open-install").addEventListener("click", () => {
-  // 工具在外殼的 iframe 裡：請外殼開安裝教學；單獨開這個頁面時就只能指路
+function installOpener() {
+  // 工具在外殼的 iframe 裡：請外殼開安裝教學；單獨開這個頁面時拿不到
   try {
     const shell = window.parent !== window ? window.parent.tbxShell : null;
-    if (shell && typeof shell.openInstall === "function") { shell.openInstall(); return; }
+    if (shell && typeof shell.openInstall === "function") return () => shell.openInstall();
   } catch { /* 跨來源：外殼拿不到 */ }
+  return null;
+}
+const canOpenInstall = () => installOpener() !== null;
+function openInstall() {
+  const open = installOpener();
+  if (open) { try { open(); return; } catch { /* 退回文字說明 */ } }
   setHidden($("install-hint"), false);
-});
+}
+$("open-install").addEventListener("click", openInstall);
+$("no-ext-install").addEventListener("click", openInstall);
 $("installer-ran").addEventListener("click", () => { passedInstaller = true; writeSeen(); renderSetup(); });
 $("start").addEventListener("click", () => {
   autoConnect.reset();
@@ -115,8 +126,10 @@ function renderQueueArea() {
   $("queue-card").inert = !detected;
   const updating = reloading();
   const missing = extensionNotice({ detected, everDetected, updating });
-  setText($("no-extension"), missing ?? "");
+  setText($("no-ext-text"), missing ? missing + (canOpenInstall() ? "" : "請到小編工具箱首頁，按頂列的「安裝外掛」。") : "");
   setHidden($("no-extension"), !missing);
+  setHidden($("no-ext-install"), !canOpenInstall());
+  setHidden($("work"), !detected); // 沒外掛時整個收起（只隱藏，輸入的內容還在），連上自動恢復
   const hostText = hostNotice({ detected, status, wasRunning: hostWasRunning, gaveUp, updating });
   setText($("conn-note"), hostText?.text ?? "");
   $("conn-note").dataset.kind = hostText?.kind ?? "info";
@@ -174,7 +187,14 @@ function render() {
   renderQueueArea();
 }
 
-setInterval(renderSetup, 500); // 只是時間過去，也可能該把設定步驟展開
+// 只是時間過去，也可能該把設定步驟展開：只在「尚未連好」時才跑；連好就停，斷線（render）再啟動
+let setupTimer = null;
+function syncSetupTimer() {
+  const need = !deployed();
+  if (need && !setupTimer) setupTimer = setInterval(renderSetup, 500);
+  else if (!need && setupTimer) { clearInterval(setupTimer); setupTimer = null; }
+}
+syncSetupTimer();
 
 // ---------- 連線 ----------
 let notRunningAt = 0; // 最後一次看到下載助手沒在跑（更新後重新啟動會留下這個時間）
@@ -217,6 +237,7 @@ function connectHost() {
   }
   if (next.send) send({ type: "start" }).catch(() => {});
 }
+// 這個 3 秒計時保留：連上時 autoConnect 回傳 send:false（不送訊息，幾乎無成本），斷線後靠它自動重連
 setInterval(connectHost, 3000);
 
 // ---------- 加入與執行 ----------

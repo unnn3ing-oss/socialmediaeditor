@@ -153,3 +153,19 @@ test('有密碼：要求公司貼圖與字型、WHZ-Heavy 出現在選單並成�
   // 假字型檔不是真的字型，載入失敗只會退回備用字型，不應丟錯
   assert.deepEqual(errors.filter((e) => !/font|Failed to load/i.test(e)), []);
 });
+
+test('快捷鍵提示預設收起，按「？快捷鍵」顯示，Esc 關閉；「套用」不斷行', async () => {
+  const t = await open();
+  const f = t.frame;
+  assert.equal(await f.locator('#dzKeys').isHidden(), true);
+  await f.click('#dzKeysBtn');
+  assert.equal(await f.locator('#dzKeys').isVisible(), true);
+  await t.page.keyboard.press('Escape');
+  assert.equal(await f.locator('#dzKeys').isHidden(), true);
+  await f.click('#dzKeysBtn'); await f.click('#dzKeysBtn');
+  assert.equal(await f.locator('#dzKeys').isHidden(), true);
+  const h = await f.evaluate(() => { const b = document.getElementById('dzPageApply'); return [b.getBoundingClientRect().height, parseFloat(getComputedStyle(b).lineHeight) || 0, getComputedStyle(b).whiteSpace]; });
+  assert.equal(h[2], 'nowrap');
+  assert.ok(h[0] < 48, `套用按鈕高度 ${h[0]}`);
+  await t.page.close();
+});

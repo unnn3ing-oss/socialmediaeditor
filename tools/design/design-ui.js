@@ -285,7 +285,7 @@
               <button type="button" id="dzSaveBtn" title="存成 .json，之後可以再開啟繼續編輯">存專案</button>
               <input type="file" id="dzOpenFile" accept=".json,application/json" hidden>
             </div>
-            <button type="button" class="primary dz-export-btn" id="dzExportBtn" aria-haspopup="dialog" title="設定格式、範圍、尺寸後下載或複製">${icon('download')}<span>匯出</span></button>
+            <button type="button" class="primary dz-export-btn" id="dzExportBtn" aria-haspopup="dialog" title="下載這張：設定格式、範圍、尺寸後下載或複製">${icon('download')}<span>下載這張</span></button>
           </div>
         </div>
         <div class="dz-stage" id="dzStage" tabindex="-1" aria-label="設計畫布">
@@ -301,7 +301,10 @@
           </div>
         </div>
         <div class="dz-status" id="dzStatus" role="status" aria-live="polite"></div>
-        <div class="dz-hint"><span class="dz-desk">雙擊文字可以直接編輯、雙擊群組可以選取裡面的單一物件；Ctrl＋G 群組、Ctrl＋7 剪裁遮色片；Ctrl＋滾輪縮放、按住空白鍵拖曳平移；Delete 刪除、Ctrl＋Z 復原、Ctrl＋C／V／D 複製貼上與重複、方向鍵微調（Shift 一次 10px）、] [ 調圖層。</span><span class="dz-touch">雙指縮放畫布、在空白處拖曳平移；文字內容在下方面板修改。</span></div>
+        <div class="dz-hint">
+          <button type="button" class="dz-keys-btn" id="dzKeysBtn" aria-expanded="false" aria-controls="dzKeys">？快捷鍵</button>
+          <div class="dz-keys" id="dzKeys" role="region" aria-label="快捷鍵說明" hidden><span class="dz-desk">雙擊文字可以直接編輯、雙擊群組可以選取裡面的單一物件；Ctrl＋G 群組、Ctrl＋7 剪裁遮色片；Ctrl＋滾輪縮放、按住空白鍵拖曳平移；Delete 刪除、Ctrl＋Z 復原、Ctrl＋C／V／D 複製貼上與重複、方向鍵微調（Shift 一次 10px）、] [ 調圖層。</span><span class="dz-touch">雙指縮放畫布、在空白處拖曳平移；文字內容在下方面板修改。</span></div>
+        </div>
       </div>
       <aside class="dz-panel" id="dzPanel" aria-label="屬性與圖層">
         <div class="bg-toggle dz-toggle dz-tabs" role="tablist" aria-label="面板">
@@ -963,9 +966,14 @@
   // =====================================================================================
   // 快捷鍵與剪貼簿
   // =====================================================================================
+  function setKeys(open) {
+    $('dzKeys').hidden = !open;
+    $('dzKeysBtn').setAttribute('aria-expanded', String(open));
+  }
   function onKeyDown(e) {
     if (app.hidden) return;
     if (e.key === 'Escape' && drag) { e.preventDefault(); cancelDrag(); return; }
+    if (e.key === 'Escape' && !$('dzKeys').hidden && !typing() && $('dzExportDlg').hidden) { e.preventDefault(); setKeys(false); return; }
     if (typing()) return;
     if (document.querySelector('.modal-overlay.open, #confirmOverlay.open') || !$('dzExportDlg').hidden) return;
     const mod = e.ctrlKey || e.metaKey, k = (e.key || '').toLowerCase();
@@ -1991,7 +1999,7 @@
       : `將下載第 ${r.pages[0] + 1} 頁（${FMT}）`;
     $('dzExpErr').textContent = err;
     $('dzExpGo').disabled = !!err || exporting;
-    $('dzExpGo').textContent = each ? `下載 ${r.pages.length} 張` : many ? '下載 ZIP' : '下載';
+    $('dzExpGo').textContent = each ? `全部下載（${r.pages.length} 張）` : many ? '下載 ZIP' : '下載';
     // 剪貼簿只能放一張 PNG：範圍只有一頁時才能複製
     $('dzExpCopy').disabled = !!err || many || exporting;
   }
@@ -2162,6 +2170,7 @@
     $('dzPageDup').addEventListener('click', dupPage);
     $('dzPageDel').addEventListener('click', delPage);
     $('dzExportBtn').addEventListener('click', openExportDlg);
+    $('dzKeysBtn').addEventListener('click', () => setKeys($('dzKeys').hidden));
     wireExportDlg();
     $('dzSaveBtn').addEventListener('click', saveProject);
     $('dzOpenBtn').addEventListener('click', () => $('dzOpenFile').click());

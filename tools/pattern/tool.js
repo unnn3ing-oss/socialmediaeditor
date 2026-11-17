@@ -16,7 +16,8 @@ import { loadComposeAssets } from '../../ui/compose/assets.js';
 
 tb.init('pattern');
 
-const { company, ribbonEnt, ribbonNews, logo, fontLoaded, stickers } = await loadComposeAssets(tb);
+// 先拿素材網址就顯示介面；字型在背景載，載好後切換並重畫（輸出前 app.js 會等 PATTERN.fontReady）
+const { company, ribbonEnt, ribbonNews, logo, fontLoaded, stickers, fontReady } = await loadComposeAssets(tb, { waitFont: false });
 
 window.PATTERN = {
   company,
@@ -25,6 +26,12 @@ window.PATTERN = {
   renderer: compose.createRenderer({ ribbonEnt, ribbonNews, logo, fontLoaded }),
   fxKit: createFxKit({ stickerUrls: stickers }),                      // 共用貼圖／馬賽克（ui/compose/fx.js）
   parseArticle, autoLines, frameForUrl,   // 快速填入（quickfill.js）用
+  fontReady: fontReady.then((f) => {
+    window.PATTERN.fontLoaded = f.fontLoaded;
+    window.PATTERN.fontError = f.fontError;
+    window.PATTERN.renderer.setFontLoaded(f.fontLoaded);
+    return f;
+  }),
 };
 
 function loadScript(src) {

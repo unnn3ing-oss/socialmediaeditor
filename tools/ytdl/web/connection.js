@@ -1,7 +1,7 @@
 // 網頁對「小編工具箱外掛」與「下載助手」連線狀態要說什麼，以及何時該一直請外掛去啟動下載助手。
 // 都是純函式：畫面只畫它們回傳的東西。
 
-export const EXTENSION_MISSING_TEXT = "還沒偵測到小編工具箱外掛。請先照設定步驟 1 安裝；完成後這裡會自動解鎖，不用重新整理。這個工具需要電腦版 Chrome。";
+export const EXTENSION_MISSING_TEXT = "這個工具要先安裝小編工具箱外掛（電腦版 Chrome）才能使用。裝好後這裡會自動解鎖，不用重新整理。";
 export const EXTENSION_LOST_TEXT = "與小編工具箱外掛的連線中斷（它可能被停用、重新載入或移除）。請到 chrome://extensions 確認它已啟用；恢復後這裡會自動解鎖，也可以重新整理本頁。";
 
 // 永遠做得到的一件事：安裝檔會把下載助手更新到最新版。
@@ -22,6 +22,9 @@ export function hostNotice({ detected, status, wasRunning, gaveUp, updating = fa
   if (status.state === "forbidden") return { kind: "error", text: FORBIDDEN_TEXT };
   if (gaveUp) {
     return { kind: "error", text: `下載助手啟動後馬上又關閉了，自動重試幾次都失敗。請${REINSTALL_ACTION}（它會自動檢查並修復），再按設定步驟 3 的「啟動」重試。` };
+  }
+  if (status.state === "not_installed" && !wasRunning) {
+    return { kind: "info", text: "外掛已經裝好了，缺的是「下載助手」（跑在你電腦上的小程式）：請在下面的設定步驟 2 下載並執行 YT 下載助手安裝檔，裝完按「啟動」。" };
   }
   if (wasRunning) return { kind: "info", text: "與下載助手的連線中斷，下載已暫停。正在嘗試重新連線…" };
   return null;

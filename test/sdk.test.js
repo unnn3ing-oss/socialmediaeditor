@@ -22,6 +22,16 @@ test('batch waits 500..1000ms between items', async () => {
   }
 });
 
+test('batch onProgress(i, total) 每張儲存前呼叫（選填，不給也能跑）', async () => {
+  const { download } = await import('../sdk/download.js');
+  const log = [];
+  await download.batch(
+    [{ blob: 'a', name: '1' }, { blob: 'b', name: '2' }],
+    { wait: async () => {}, save: (b, n) => log.push('save' + n), onProgress: (i, t) => log.push(`p${i}/${t}`) },
+  );
+  assert.deepEqual(log, ['p1/2', 'save1', 'p2/2', 'save2']);
+});
+
 test('buildLogPayload sanitizes code and keeps only four keys', async () => {
   const { buildLogPayload } = await import('../sdk/log.js');
   const p = buildLogPayload('sample', 'Save Failed!', '1.0', 'UA');
