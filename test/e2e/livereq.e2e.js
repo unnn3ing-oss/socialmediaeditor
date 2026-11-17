@@ -167,3 +167,23 @@ test('一次一張：複製後跳下一張、已複製打勾、可回上一張�
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('導覽列在粉專列上面；畫面來源在檢查列，待補只標黃不擋', async () => {
+  const { frame, page } = await open();
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  const order = await frame.evaluate(() => {
+    const n = document.getElementById('nav'), p = document.getElementById('pagesBar');
+    return !!(n.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  assert.equal(order, true);
+  await frame.fill('#dutyName', '王小明');
+  await frame.fill('#dutyContact', '#85001');
+  const checks = () => frame.locator('.lr-card:not([hidden]) [data-checks]').innerText();
+  assert.match(await checks(), /✓ 畫面來源/);
+  await frame.click('.lr-dot >> nth=3'); // 桃園政見：畫面來源待補
+  assert.doesNotMatch(await checks(), /✓ 畫面來源/);
+  assert.equal(await frame.locator('.lr-card:not([hidden]) [data-checks] li.warn', { hasText: '畫面來源：待補' }).count(), 1);
+  await frame.locator('#pagesBar .lr-pages:not([hidden]) label.lr-box', { hasText: '新聞' }).click();
+  assert.equal(await frame.locator('.lr-card:not([hidden]) [data-copy]').isDisabled(), false);
+  await page.close();
+});

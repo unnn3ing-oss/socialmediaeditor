@@ -117,19 +117,18 @@ function makeCard(a, idx) {
     tmIn.classList.toggle('is-bad', !tmIn.value.trim());
     q('.lr-time').textContent = fmtTime(a.time || tmIn.value.trim());
     const items = [
-      ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
+      ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['畫面來源', '畫面來源'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
     ];
     const ul = q('[data-checks]');
-    const timeWarn = warnings.some((w) => w.startsWith('直播時間'));
-    const okItems = items.filter(([k]) => !(k === '直播時間' && timeWarn)).map(([k, label]) => {
+    // 依順序排；直播時間、畫面來源有提醒時，就在原位置顯示黃色
+    const warnOf = (k) => warnings.find((w) => w.startsWith(k));
+    ul.replaceChildren(...items.map(([k, label]) => {
       const li = document.createElement('li');
-      const bad = missing.includes(k);
-      li.className = bad ? 'bad' : 'ok';
-      li.textContent = (bad ? '缺 ' : '✓ ') + (bad ? k : label);
+      const bad = missing.includes(k), warn = !bad && warnOf(k);
+      li.className = bad ? 'bad' : warn ? 'warn' : 'ok';
+      li.textContent = bad ? '缺 ' + k : warn || '✓ ' + label;
       return li;
-    });
-    const warnItems = warnings.map((t) => { const li = document.createElement('li'); li.className = 'warn'; li.textContent = t; return li; });
-    ul.replaceChildren(...okItems, ...warnItems);
+    }));
     if (!dirty) { out.value = build(a, opt); out.rows = Math.min(Math.max(out.value.split('\n').length + 1, 6), 40); }
     copyBtn.disabled = missing.length > 0;
     msg.className = 'lr-msg' + (missing.length ? ' is-bad' : '');
