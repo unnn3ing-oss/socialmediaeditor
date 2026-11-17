@@ -109,3 +109,20 @@ test('值班小編到期：早班 16:30、16:00 後晚班到 00:00、凌晨到 0
   assert.equal(P.dutyExpiry(at(16, 0)), new Date(2026, 10, 18, 0, 0).getTime());
   assert.equal(P.dutyExpiry(at(2, 0)), at(8, 0).getTime());
 });
+
+test('氣象單後面緊接下一場（沒空行）：封面段留在氣象單', async () => {
+  const P = await load();
+  const l = P.parse(read('weather.txt').trimEnd() + '\n●新聞事件：下一場\n●YT標：X');
+  assert.equal(l.length, 2);
+  assert.equal(P.weatherNote(l[0]).ok, true);
+  assert.equal(l[1].lines[0], '●新聞事件：下一場');
+});
+
+test('直播平台值寫在同一行：拆成欄位名／YT:／值，不把 YT: 插到欄位行前', async () => {
+  const P = await load();
+  const out = P.build(P.parse('●新聞事件：A\n●直播平台：TVBS NEWS\n●畫面來源：X\n●YT標：B｜LIVE\n●內文：C')[0], OPT).split('\n');
+  assert.deepEqual(out.slice(0, 7), ['●新聞事件：A', '●直播平台：', 'YT:', 'TVBS NEWS', 'FB:', '新聞', '國際']);
+  const fb = P.parse('●新聞事件：A\n●直播平台：FB 新聞\n●畫面來源：X\n●YT標：B｜LIVE\n●內文：C')[0];
+  assert.deepEqual(fb.fbExisting, ['新聞']);
+  assert.ok(!P.build(fb, OPT).includes('YT:'));
+});

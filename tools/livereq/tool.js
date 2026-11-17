@@ -130,6 +130,7 @@ function makeCard(a, idx) {
   evIn.addEventListener('input', refresh);
 
   copyBtn.addEventListener('click', async () => {
+    expireDuty(); // 值班到期後馬上失效，不等 30 秒的計時
     if (lastMissing.length) return;
     const ok = await copyText(out.value);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');

@@ -37,6 +37,21 @@ export function fieldOf(line) {
 
 const blank = (s) => !String(s).trim();
 
+// 氣象單（事件或開場行含「氣象」）最後一個欄位是內文，且內文只有「正文＋封面」兩段 → 最後一段是封面
+function isWeatherCover(cur) {
+  const fs = fieldsOf(cur);
+  const last = fs[fs.length - 1];
+  if (!last || last.kind !== 'body') return false;
+  const head = cur.slice(0, fs[0].line).join('\n') + '\n' + fs.filter((f) => f.kind === 'event').map((f) => f.text).join('\n');
+  if (!/氣象/.test(head)) return false;
+  let groups = 0, inGroup = false;
+  for (const v of last.values) {
+    if (blank(v)) inGroup = false;
+    else if (!inGroup) { inGroup = true; groups++; }
+  }
+  return groups === 2;
+}
+
 // 整份文字 → 每場的行陣列
 export function splitBlocks(text) {
   const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
@@ -47,6 +62,7 @@ export function splitBlocks(text) {
     // 把緊貼在新開頭前面（中間沒有空行）的非欄位行一起帶到新的一場
     let k = cur.length;
     while (k > 0 && !blank(cur[k - 1]) && !fieldOf(cur[k - 1])) k--;
+    if (k < cur.length && isWeatherCover(cur)) k = cur.length; // 氣象單最後的封面段不帶去下一場
     const carry = cur.slice(k);
     blocks.push(cur.slice(0, k));
     cur = carry;
@@ -124,7 +140,7 @@ function platformInfo(lines, f) {
     const t = text.trim();
     if (!t) continue;
     const h = /^(FB|臉書|YT)\s*[：:]?\s*(.*)$/i.exec(t);
-    if (h && (/[：:]/.test(t) || !h[2])) {
+    if (h && (/[：:]/.test(t) || !h[2] || /^(FB|臉書|YT)\s/i.test(t))) {
       mode = /^YT$/i.test(h[1]) ? 'yt' : 'fb';
       if (mode === 'fb') {
         info.fbHead = i; info.fbLast = i;
@@ -228,7 +244,11 @@ export function build(a, { checked = [], duty = {}, eventOverride = '' } = {}) {
         replace.set(at, base.replace(/\s+$/, '') + '、' + extra.join('、'));
       } else add(plat.fbLast, extra);
     } else {
-      if (plat.ytHead < 0 && plat.plainFirst >= 0) add(plat.plainFirst - 1, ['YT:']);
+      if (plat.ytHead < 0 && plat.plainFirst === platF.line) {
+        // 值寫在欄位行同一行：拆成 欄位名：／YT:／值
+        replace.set(platF.line, L[platF.line].replace(/^(\s*[●◎]?[^：:]*[：:]).*$/, '$1'));
+        add(platF.line, ['YT:', platF.inline.trim()]);
+      } else if (plat.ytHead < 0 && plat.plainFirst >= 0) add(plat.plainFirst - 1, ['YT:']);
       add(platF.last, ['FB:', ...extra]);
     }
   }
