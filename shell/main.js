@@ -40,7 +40,12 @@ function openInstall() {
 const byId = (id) => catalog.find((t) => t.id === id) || null;
 const shownTools = () => catalog.filter((t) => t.tier === 'public' || companyState.unlocked);
 
-const toolbar = createToolbar($('toolbar'), { onOpen: (id) => set(L.open(state, id)) });
+const toolbar = createToolbar($('toolbar'), {
+  // 從選單選工具：開工具後把焦點移到工具內容（不留在已收起的選單）
+  onOpen: (id) => { set(L.open(state, id)); focusTool(); },
+  onHome: () => { set(L.home(state)); $('stage').focus(); },
+  statusEl: $('status'),
+});
 const panes = createPanes(workEl);
 
 function set(next) { state = next; render(); syncHash(); }
@@ -84,11 +89,15 @@ function renderCatalog() {
 
 $('brand').addEventListener('click', () => set(L.home(state)));
 
+function focusTool() {
+  const frame = state.view === 'work' && panes.get(state.tool)?.frame;
+  if (frame) frame.focus(); else $('stage').focus();
+}
+
 // 跳至主要內容：不改網址（網址記的是工具），直接把焦點移到目前的工具或櫥窗
 document.querySelector('.skip').addEventListener('click', (e) => {
   e.preventDefault();
-  const frame = state.view === 'work' && panes.get(state.tool)?.frame;
-  if (frame) frame.focus(); else $('stage').focus();
+  focusTool();
 });
 
 window.tbxShell = {
@@ -132,6 +141,8 @@ async function start() {
 
 // ---- 狀態列與安裝教學 ----
 const status = initStatus({ root: $('status'), shell: window.tbxShell, openInstall });
+// 手機狀態收在「工具」面板裡：有需要注意的狀態時在「工具」鈕上加提示點
+window.tbxShell.onStatus(() => toolbar.setAlert(statuses.get('company')?.state === 'warn'));
 initCompany({ shell: window.tbxShell, button: $('company-btn') });
 // 偵測不到外掛時不自動跳出教學；使用者按頂列膠囊／「安裝外掛」才開。
 status.runAll();

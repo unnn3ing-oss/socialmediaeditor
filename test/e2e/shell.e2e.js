@@ -25,6 +25,13 @@ async function open() {
   return page;
 }
 
+// 從頂列下拉選工具：先點分類再點工具
+async function pick(page, id) {
+  const trigger = page.locator(`.nav-group:has(button[data-tool=${id}]) .nav-trigger`);
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+  await page.click(`#toolbar button[data-tool=${id}]`);
+}
+
 const ids = (page) => page.$$eval('#work .pane:not([hidden])', (els) => els.map((e) => e.dataset.tool));
 
 test('opens on showcase', async () => {
@@ -40,7 +47,7 @@ test('card opens single full page', async () => {
   assert.equal(await page.isVisible('#showcase'), false);
   assert.deepEqual(await ids(page), ['alpha']);
   assert.equal(await page.locator('#work .pane:not([hidden])').count(), 1);
-  assert.equal(await page.getAttribute('#toolbar button[data-tool=alpha]', 'aria-pressed'), 'true');
+  assert.equal(await page.getAttribute('#toolbar button[data-tool=alpha]', 'aria-current'), 'page');
 });
 
 test('並排已停用：工具列不能拖、沒有放置區，拖曳事件不改版面', async () => {
@@ -93,9 +100,9 @@ test('iframe kept alive', async () => {
   await input.fill('測試');
   const created = await page.getAttribute('.pane[data-tool=alpha] iframe', 'data-created');
   assert.ok(created);
-  await page.click('#toolbar button[data-tool=beta]');
+  await pick(page, 'beta');
   assert.deepEqual(await ids(page), ['beta']);
-  await page.click('#toolbar button[data-tool=alpha]');
+  await pick(page, 'alpha');
   assert.equal(await page.frameLocator('.pane[data-tool=alpha] iframe').locator('#t').inputValue(), '測試');
   assert.equal(await page.getAttribute('.pane[data-tool=alpha] iframe', 'data-created'), created);
   assert.equal(await page.locator('iframe').count(), 2);
@@ -165,41 +172,139 @@ test('沒裝外掛：1 秒內就顯示「未安裝外掛」', async () => {
   assert.equal(await page.textContent('#status .pill-warn'), '未安裝外掛');
 });
 
-test('頂列放不下時只留圖示，目前工具保留文字，頂列維持一行', async () => {
-  const many = { tools: Array.from({ length: 9 }, (_, i) => tool(['alpha', 'beta', 'gamma'][i] || `x${i}`, `第${i + 1}個工具名稱`)) };
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
-  const page = await ctx.newPage();
-  await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: many }));
-  await page.goto(srv.url + 'index.html');
-  await page.waitForSelector('#showcase .card');
-  await page.waitForSelector('#toolbar.compact');
-  await page.click('#toolbar button[data-tool=beta]');
-  assert.equal(await page.isVisible('#toolbar button[data-tool=beta] .lbl'), true);
-  assert.equal(await page.isVisible('#toolbar button[data-tool=alpha] .lbl'), false);
-  assert.equal(await page.getAttribute('#toolbar button[data-tool=alpha]', 'title'), '第1個工具名稱');
-  const h = await page.evaluate(() => document.getElementById('top').offsetHeight);
-  assert.ok(h < 80, `頂列高度 ${h}`);
-  // 夠寬就恢復文字
-  await page.setViewportSize({ width: 1900, height: 720 });
-  await page.waitForSelector('#toolbar:not(.compact)');
+test('桌面下拉：hover 150ms 才開、快速路過不開、離開 200ms 關、跨間隙不關', async () => {
+  const page = await open();
+  const trig = page.locator('.nav-trigger').first();
+  const box = await trig.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(60);
+  await page.mouse.move(600, 500); // 快速路過
+  await page.waitForTimeout(250);
+  assert.equal(await trig.getAttribute('aria-expanded'), 'false');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(80);
+  assert.equal(await trig.getAttribute('aria-expanded'), 'false', '150ms 內不開');
+  await page.waitForTimeout(150);
+  assert.equal(await trig.getAttribute('aria-expanded'), 'true');
+  // 往下跨過 8px 間隙到第一項，不會關
+  const item = await page.locator('#toolbar button[data-tool=alpha]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height + 4, { steps: 3 });
+  await page.mouse.move(item.x + 20, item.y + item.height / 2, { steps: 3 });
+  await page.waitForTimeout(300);
+  assert.equal(await trig.getAttribute('aria-expanded'), 'true');
+  await page.mouse.move(900, 600);
+  await page.waitForTimeout(100);
+  assert.equal(await trig.getAttribute('aria-expanded'), 'true', '200ms 內不關');
+  await page.waitForTimeout(200);
+  assert.equal(await trig.getAttribute('aria-expanded'), 'false');
 });
 
-test('手機寬度：頁面不被撐寬、頂列不超過 2 列、按鈕縮小但 ≥ 24px', async () => {
+test('桌面下拉：點擊開關、同時只開一個、Esc 還焦點、ArrowDown 進第一項、點外面與 iframe 關閉', async () => {
+  const page = await open();
+  const [a, b] = [page.locator('.nav-trigger').nth(0), page.locator('.nav-trigger').nth(1)];
+  await a.click();
+  assert.equal(await a.getAttribute('aria-expanded'), 'true');
+  assert.ok(await a.getAttribute('aria-controls'));
+  await b.click();
+  assert.equal(await a.getAttribute('aria-expanded'), 'false');
+  assert.equal(await b.getAttribute('aria-expanded'), 'true');
+  await page.keyboard.press('Escape');
+  assert.equal(await b.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.evaluate(() => document.activeElement.classList.contains('nav-trigger')), true);
+  await a.focus();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.tool), 'alpha');
+  await page.keyboard.press('Enter');
+  assert.deepEqual(await ids(page), ['alpha']);
+  assert.equal(await a.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.evaluate(() => document.activeElement.tagName), 'IFRAME', '選完焦點進工具');
+  await a.click();
+  await page.mouse.click(700, 500); // 點進 iframe
+  await page.waitForFunction(() => document.querySelector('.nav-trigger').getAttribute('aria-expanded') === 'false');
+  await a.click();
+  await page.click('#brand');
+  assert.equal(await a.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.getAttribute('.nav-home', 'aria-current'), 'page');
+});
+
+test('觸控裝置（寬度 >820）：點擊開分類，不靠 hover', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
+  await page.goto(srv.url + 'index.html');
+  await page.waitForSelector('#showcase .card');
+  await page.tap('.nav-trigger >> nth=0');
+  assert.equal(await page.getAttribute('.nav-trigger >> nth=0', 'aria-expanded'), 'true');
+  await page.tap('#toolbar button[data-tool=beta]');
+  assert.deepEqual(await ids(page), ['beta']);
+  await ctx.close();
+});
+
+test('手機「工具」面板：開、選工具、Esc、點外面關；狀態在面板裡；內容保留', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
+  await page.goto(srv.url + 'index.html');
+  await page.waitForSelector('#showcase .card');
+  assert.equal(await page.isVisible('.nav-trigger'), false);
+  await page.tap('#tools-btn');
+  assert.equal(await page.getAttribute('#tools-btn', 'aria-expanded'), 'true');
+  assert.equal(await page.locator('#tools-panel #status').count(), 1);
+  assert.equal(await page.isVisible('#toolbar button[data-tool=gamma]'), true);
+  await page.tap('#toolbar button[data-tool=alpha]');
+  assert.equal(await page.getAttribute('#tools-btn', 'aria-expanded'), 'false');
+  await page.frameLocator('.pane[data-tool=alpha] iframe').locator('#t').fill('手機');
+  await page.tap('#tools-btn');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getAttribute('#tools-btn', 'aria-expanded'), 'false');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'tools-btn');
+  await page.tap('#tools-btn');
+  await page.tap('#tools-panel .nav-home');
+  assert.equal(await page.isVisible('#showcase'), true);
+  await page.tap('#showcase .card[data-tool=alpha]');
+  assert.equal(await page.frameLocator('.pane[data-tool=alpha] iframe').locator('#t').inputValue(), '手機');
+  // 轉成桌面寬度：狀態回頁首
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForFunction(() => document.getElementById('status').parentNode.id === 'top');
+  await ctx.close();
+});
+
+test('首頁欄數：桌面 3、平板 2、手機 1（手機不放縮圖）；使用條件標籤', async () => {
+  const cat = { tools: [...CATALOG.tools, tool('ytx', '下載', { group: '發文與素材', requires: ['extension', 'helper'], badges: ['管理員測試'] })] };
+  for (const [w, cols, thumb] of [[1280, 3, true], [1024, 2, true], [390, 1, false]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: 800 } });
+    const page = await ctx.newPage();
+    await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: cat }));
+    await page.goto(srv.url + 'index.html');
+    await page.waitForSelector('#showcase .card');
+    const n = await page.$eval('#showcase .grid', (g) => getComputedStyle(g).gridTemplateColumns.split(' ').length);
+    assert.equal(n, cols, `${w}px 欄數`);
+    assert.equal(await page.isVisible('#showcase .card[data-tool=alpha] .thumb'), thumb);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), w);
+    assert.deepEqual(await page.$$eval('#showcase .card[data-tool=ytx] .badge', (e) => e.map((x) => x.textContent)), ['管理員測試', '需要外掛', '需要下載助手']);
+    await ctx.close();
+  }
+});
+
+test('手機寬度：頁面不被撐寬、56px 單列頁首、觸控目標 ≥ 44px', async () => {
   for (const w of [320, 390]) {
     const ctx = await browser.newContext({ viewport: { width: w, height: 640 }, isMobile: true, hasTouch: true });
     const page = await ctx.newPage();
     await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
     await page.goto(srv.url + 'index.html#alpha');
     await page.waitForSelector('#work .pane:not([hidden]) iframe');
-    const m = await page.evaluate(() => {
-      const b = document.querySelector('#toolbar button').getBoundingClientRect();
-      return { sw: document.documentElement.scrollWidth, top: document.getElementById('top').offsetHeight, bh: b.height,
-        frameW: document.querySelector('.pane:not([hidden]) iframe').getBoundingClientRect().width };
-    });
+    const m = await page.evaluate(() => ({
+      sw: document.documentElement.scrollWidth, top: document.getElementById('top').offsetHeight,
+      bh: document.getElementById('tools-btn').getBoundingClientRect().height,
+      lh: document.getElementById('company-btn').getBoundingClientRect().height,
+      frameW: document.querySelector('.pane:not([hidden]) iframe').getBoundingClientRect().width,
+    }));
     assert.equal(m.sw, w, '頁面沒有水平溢位');
-    assert.ok(m.top <= 96, `頂列高 ${m.top}`);
-    assert.ok(m.bh >= 24 && m.bh <= 36, `工具按鈕高 ${m.bh}`);
+    assert.equal(m.top, 56, `頂列高 ${m.top}`);
+    assert.ok(m.bh >= 44 && m.lh >= 44, `按鈕高 ${m.bh}/${m.lh}`);
     assert.ok(Math.abs(m.frameW - w) < 1, '工具框等於螢幕寬');
+    await page.tap('#tools-btn');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), w, '面板不撐寬');
     await ctx.close();
   }
 });

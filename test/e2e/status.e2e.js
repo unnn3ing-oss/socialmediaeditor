@@ -41,7 +41,7 @@ test('install does not auto-open on desktop', async () => {
 
 test('no auto-open on phone', async () => {
   const page = await open({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
-  await page.waitForSelector('#status .pill-warn', { timeout: 5000 });
+  await page.waitForSelector('#status .pill-warn', { timeout: 5000, state: 'attached' });
   await page.waitForTimeout(500);
   assert.equal(await page.locator('#deployOverlay').count(), 0);
 });
