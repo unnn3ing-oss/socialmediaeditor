@@ -303,10 +303,11 @@
         <div class="dz-status" id="dzStatus" role="status" aria-live="polite"></div>
         <div class="dz-hint">
           <button type="button" class="dz-keys-btn" id="dzKeysBtn" aria-expanded="false" aria-controls="dzKeys">？快捷鍵</button>
-          <div class="dz-keys" id="dzKeys" role="region" aria-label="快捷鍵說明" hidden><span class="dz-desk">雙擊文字可以直接編輯、雙擊群組可以選取裡面的單一物件；Ctrl＋G 群組、Ctrl＋7 剪裁遮色片；Ctrl＋滾輪縮放、按住空白鍵拖曳平移；Delete 刪除、Ctrl＋Z 復原、Ctrl＋C／V／D 複製貼上與重複、方向鍵微調（Shift 一次 10px）、] [ 調圖層。</span><span class="dz-touch">雙指縮放畫布、在空白處拖曳平移；文字內容在下方面板修改。</span></div>
+          <div class="dz-keys" id="dzKeys" role="region" aria-label="快捷鍵說明" hidden><span class="dz-desk">雙擊文字可以直接編輯、雙擊群組可以選取裡面的單一物件；Ctrl＋G 群組、Ctrl＋7 剪裁遮色片；Ctrl＋滾輪縮放、按住空白鍵拖曳平移；Delete 刪除、Ctrl＋Z 復原、Ctrl＋C／V／D 複製貼上與重複、方向鍵微調（Shift 一次 10px）、] [ 調圖層。</span><span class="dz-touch">雙指縮放畫布、在空白處拖曳平移；文字內容請點下方「屬性」修改。</span></div>
         </div>
       </div>
       <aside class="dz-panel" id="dzPanel" aria-label="屬性與圖層">
+        <div class="dz-sheet-head"><strong id="dzSheetTitle">屬性</strong><button type="button" id="dzSheetClose">收合</button></div>
         <div class="bg-toggle dz-toggle dz-tabs" role="tablist" aria-label="面板">
           <button type="button" role="tab" id="dzTabProps" data-tab="props" aria-controls="dzPanelBody">屬性</button>
           <button type="button" role="tab" id="dzTabLayers" data-tab="layers" aria-controls="dzLayers">圖層</button>
@@ -314,6 +315,10 @@
         <div id="dzPanelBody" role="tabpanel" aria-labelledby="dzTabProps"></div>
         <div id="dzLayers" class="dz-layers" role="tabpanel" aria-labelledby="dzTabLayers" hidden></div>
       </aside>
+      <div class="dz-sheetbar" id="dzSheetBar" role="group" aria-label="屬性與圖層">
+        <button type="button" id="dzSheetProps" data-sheet="props" aria-expanded="false" aria-controls="dzPanel">屬性</button>
+        <button type="button" id="dzSheetLayers" data-sheet="layers" aria-expanded="false" aria-controls="dzPanel">圖層</button>
+      </div>
       <div class="dz-modal" id="dzExportDlg" hidden>
         <div class="dz-modal-card" role="dialog" aria-modal="true" aria-labelledby="dzExpTitle">
           <div class="dz-modal-head">
@@ -1855,6 +1860,22 @@
       const b = document.querySelector('#dzPanel [role="tab"].active');
       if (b) b.focus();
     });
+    // 手機：底部列開關抽屜（只切換 class，內容不重建）
+    const panel = $('dzPanel');
+    const syncSheet = () => {
+      const open = panel.classList.contains('is-open');
+      for (const b of document.querySelectorAll('#dzSheetBar [data-sheet]')) b.setAttribute('aria-expanded', String(open && b.dataset.sheet === panelTab));
+      $('dzSheetTitle').textContent = panelTab === 'layers' ? '圖層' : '屬性';
+    };
+    const openSheet = (t, on) => { if (t) setTab(t); panel.classList.toggle('is-open', on); syncSheet(); };
+    for (const b of document.querySelectorAll('#dzSheetBar [data-sheet]')) {
+      b.addEventListener('click', () => {
+        const same = panel.classList.contains('is-open') && panelTab === b.dataset.sheet;
+        openSheet(b.dataset.sheet, !same);
+      });
+    }
+    $('dzSheetClose').addEventListener('click', () => { openSheet(null, false); const b = $('dzSheet' + (panelTab === 'layers' ? 'Layers' : 'Props')); if (b) b.focus(); });
+    panel.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.classList.contains('is-open') && matchMedia('(max-width: 820px)').matches) { e.stopPropagation(); $('dzSheetClose').click(); } });
     const box = $('dzLayers');
     box.addEventListener('click', onLayerClick);
     box.addEventListener('dblclick', e => {

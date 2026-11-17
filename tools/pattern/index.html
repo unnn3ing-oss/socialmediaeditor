@@ -13,8 +13,13 @@
 </head>
 <body>
 <div class="wrap">
+  <!-- 手機（≤820px）才出現：只切本工具的「編輯／預覽」，兩區共用同一份畫面（hidden 切換，不重建） -->
+  <div class="m-tabs" id="mTabs" role="tablist" aria-label="圖片套版檢視" hidden>
+    <button type="button" role="tab" id="tabEdit" aria-selected="true" aria-controls="panelEdit">編輯</button>
+    <button type="button" role="tab" id="tabPreview" aria-selected="false" aria-controls="panelPreview" tabindex="-1">預覽</button>
+  </div>
   <div class="layout" id="layoutApp">
-    <div class="card">
+    <section class="settings" id="panelEdit" aria-label="設定">
       <div class="quickfill" id="quickfill">
         <label for="qfUrl">文章網址（貼上自動帶入標題與主圖）</label>
         <div class="qf-row">
@@ -24,21 +29,17 @@
         <div class="hint" id="qfHint">帶入到目前展開的那一組；已有內容會先問你要不要覆蓋。</div>
       </div>
       <div id="batchFields">
-        <div class="btn-row batch-actions" id="batchActions" style="margin-top:0; margin-bottom:20px">
-          <button id="batchDownloadAllBtn" style="flex:1">全部下載</button>
-          <button id="helpBtn" type="button">使用說明</button>
-        </div>
-
         <div id="batchItemsList"></div>
 
-        <div class="btn-row">
-          <button id="batchResetBtn" style="flex:1">全部清除</button>
-          <button id="addBatchItemBtn" style="flex:1">＋ 再做一張</button>
+        <div class="btn-row list-actions">
+          <button id="batchResetBtn" type="button">全部清除</button>
+          <button id="addBatchItemBtn" type="button">＋ 再做一張</button>
+          <button id="helpBtn" type="button" class="quiet">使用說明</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="preview-col">
+    <section class="preview-col" id="panelPreview" aria-label="預覽">
       <div id="batchPreview">
         <div class="canvas-wrap">
           <canvas id="batchCanvas" width="1080" height="1080"></canvas>
@@ -50,10 +51,25 @@
           <button type="button" class="shelf-nav" id="batchThumbsPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
           <div class="batch-thumbs" id="batchThumbs"></div>
           <button type="button" class="shelf-nav" id="batchThumbsNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
+          <!-- 桌面：全部下載在縮圖列右側；手機：layout.js 把它移進「更多」 -->
+          <div class="shelf-act" id="dlAllSlot"><button id="batchDownloadAllBtn" type="button">全部下載</button></div>
         </div>
         <div class="preview-title" id="batchPreviewTitle"></div>
-        <div class="status" id="batchStatus">按某一組的「產生此張」後，預覽會顯示在這裡</div>
+        <div class="status" id="batchStatus" role="status" aria-live="polite">按某一組的「產生此張」後，預覽會顯示在這裡</div>
         <div class="hint preview-hint">點兩下預覽圖輸入標題；<span class="hint-desk">點一下即可 Ctrl+V 貼上圖片；滾輪縮放、</span><span class="hint-touch">雙指縮放、</span>拖曳調整位置。</div>
+      </div>
+    </section>
+
+    <!-- 桌面：左設定欄尾端；手機：sticky 在工具內容底部（safe-area 只在這一層處理） -->
+    <div class="actions" id="actionBar">
+      <div class="m-status" id="mStatus" aria-hidden="true"></div>
+      <div class="act-row">
+        <button type="button" id="genBtn" class="primary" disabled>產生此張</button>
+        <button type="button" id="dlBtn" disabled>下載這張</button>
+        <div class="more-wrap" id="moreWrap" hidden>
+          <button type="button" id="moreBtn" aria-haspopup="true" aria-expanded="false" aria-controls="moreMenu">更多</button>
+          <div class="more-menu" id="moreMenu" role="group" aria-label="更多動作" hidden></div>
+        </div>
       </div>
     </div>
   </div>

@@ -86,6 +86,9 @@ function installOpener() {
   return null;
 }
 const canOpenInstall = () => installOpener() !== null;
+const PHONE_UNSUPPORTED_TEXT = "此功能需在已安裝外掛與下載助手的電腦使用。手機無法安裝下載助手，請改用電腦開啟本頁。";
+const smallScreen = () => { try { return window.matchMedia("(max-width: 820px)").matches; } catch { return false; } };
+try { window.matchMedia("(max-width: 820px)").addEventListener("change", () => render()); } catch { /* 舊瀏覽器沒有 change 事件 */ }
 function openInstall() {
   const open = installOpener();
   if (open) { try { open(); return; } catch { /* 退回文字說明 */ } }
@@ -126,9 +129,12 @@ function renderQueueArea() {
   $("queue-card").inert = !detected;
   const updating = reloading();
   const missing = extensionNotice({ detected, everDetected, updating });
-  setText($("no-ext-text"), missing ? missing + (canOpenInstall() ? "" : "請到小編工具箱首頁，按頂列的「安裝外掛」。") : "");
-  setHidden($("no-extension"), !missing);
-  setHidden($("no-ext-install"), !canOpenInstall());
+  // 手機／小螢幕且沒有外掛：這個功能要在裝了外掛與下載助手的電腦使用，不引導在手機安裝
+  const phoneOnly = !detected && smallScreen();
+  document.body.classList.toggle("no-desktop", phoneOnly);
+  setText($("no-ext-text"), phoneOnly ? PHONE_UNSUPPORTED_TEXT : missing ? missing + (canOpenInstall() ? "" : "請到小編工具箱首頁，按頂列的「安裝外掛」。") : "");
+  setHidden($("no-extension"), !missing && !phoneOnly);
+  setHidden($("no-ext-install"), phoneOnly || !canOpenInstall());
   setHidden($("work"), !detected); // 沒外掛時整個收起（只隱藏，輸入的內容還在），連上自動恢復
   const hostText = hostNotice({ detected, status, wasRunning: hostWasRunning, gaveUp, updating });
   setText($("conn-note"), hostText?.text ?? "");

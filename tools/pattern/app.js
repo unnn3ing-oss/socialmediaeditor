@@ -435,6 +435,8 @@ function setItemResultUrl(item, url) {
 const batchItemsList = document.getElementById('batchItemsList');
 const addBatchItemBtn = document.getElementById('addBatchItemBtn');
 const batchDownloadAllBtn = document.getElementById('batchDownloadAllBtn');
+const genBtn = document.getElementById('genBtn');
+const dlBtn = document.getElementById('dlBtn');
 const batchResetBtn = document.getElementById('batchResetBtn');
 const batchCanvas = document.getElementById('batchCanvas');
 const batchCtx = batchCanvas.getContext('2d');
@@ -465,6 +467,8 @@ function isItemDone(item) {
 // Only one item's full edit block is shown at a time (accordion); every
 // other item collapses into a summary row, whether it's done or not.
 let expandedBatchItemId = null;
+// 底部「產生此張／下載這張」的對象：目前展開的那一組；產生後會收合，就沿用最後一次展開的
+let lastActiveItemId = null;
 
 function scrollToBatchItem(id) {
   const node = batchItemsList.querySelector(`[data-item-id="${id}"]`);
@@ -488,6 +492,7 @@ function setBatchPreviewTitle(item) {
 // thumbnail click in the preview strip below the canvas.
 function expandBatchItem(item) {
   expandedBatchItemId = item.id;
+  lastActiveItemId = item.id;
   renderBatchItemsList();
   renderBatchThumbs();
   scrollToBatchItem(item.id);
@@ -571,19 +576,22 @@ function syncBatchActions() {
 
 function renderBatchThumbs() {
   batchDownloadAllBtn.disabled = batchItems.length === 0;
+  genBtn.disabled = dlBtn.disabled = batchItems.length === 0;
   syncBatchActions();
   batchThumbs.innerHTML = '';
   batchItems.forEach((item, index) => {
     const isDone = isItemDone(item);
     const firstLine = item.title.split('\n').find(l => l.trim()) || '';
-    let el;
+    const el = document.createElement('div');
+    el.className = 'thumb-item' + (isDone ? '' : ' thumb-placeholder');
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
     if (isDone) {
-      el = document.createElement('img');
-      el.alt = '';
-      el.src = item.resultUrl;
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = item.resultUrl;
+      el.appendChild(img);
     } else {
-      el = document.createElement('div');
-      el.className = 'thumb-placeholder';
       const titleSpan = document.createElement('span');
       titleSpan.className = 'thumb-title';
       titleSpan.textContent = firstLine || '（尚未輸入標題）';
@@ -593,11 +601,20 @@ function renderBatchThumbs() {
       el.appendChild(titleSpan);
       el.appendChild(tagSpan);
     }
+    const numEl = document.createElement('span');
+    numEl.className = 'thumb-n';
+    numEl.textContent = `#${index + 1}`;
+    el.appendChild(numEl);
     el.dataset.thumbId = item.id;
     el.dataset.thumbDone = isDone ? '1' : '';
     el.classList.toggle('active-thumb', item.id === expandedBatchItemId);
     el.title = `#${index + 1} ${firstLine}`;
+    el.setAttribute('aria-label', `圖片 #${index + 1}${isDone ? '，已完成' : '，未完成'}`);
+    if (item.id === expandedBatchItemId) el.setAttribute('aria-current', 'true');
     el.addEventListener('click', () => expandBatchItem(item));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); expandBatchItem(item); }
+    });
     batchThumbs.appendChild(el);
   });
   batchThumbsShelf.hidden = batchItems.length === 0;
@@ -781,24 +798,8 @@ function buildBatchItemBlock(item, index) {
     renderBatchThumbs();
   }
   const headBtns = document.createElement('div');
-  headBtns.style.display = 'flex';
-  headBtns.style.gap = '6px';
-  const completeBtn = document.createElement('button');
-  completeBtn.type = 'button';
-  completeBtn.className = 'primary';
-  completeBtn.textContent = '產生此張';
-  completeBtn.addEventListener('click', async () => {
-    if (await completeBatchItem(item)) collapseBatchItems();
-  });
-  const downloadBtn = document.createElement('button');
-  downloadBtn.type = 'button';
-  downloadBtn.textContent = '下載這張';
-  downloadBtn.addEventListener('click', async () => {
-    if (isItemDone(item) || await completeBatchItem(item)) downloadItem(item);
-  });
+  headBtns.className = 'head-btns';
   const removeBtn = createRemoveButton(() => removeBatchItem(item.id));
-  headBtns.appendChild(downloadBtn);
-  headBtns.appendChild(completeBtn);
   headBtns.appendChild(removeBtn);
   head.appendChild(label);
   head.appendChild(headBtns);
@@ -851,7 +852,7 @@ function buildBatchItemBlock(item, index) {
   tagInput.maxLength = 12;
   tagInput.placeholder = '快訊';
   tagInput.value = item.gen.tag;
-  tagInput.style.cssText = 'width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--border); font:inherit; margin-bottom:12px';
+  tagInput.style.cssText = 'width:100%; margin-bottom:12px';
   const colorLabel = document.createElement('label');
   colorLabel.textContent = '主色';
   const colorRow = document.createElement('div');
@@ -875,7 +876,7 @@ function buildBatchItemBlock(item, index) {
   customColor.title = '自訂顏色';
   customColor.setAttribute('aria-label', '自訂顏色');
   customColor.value = item.gen.color;
-  customColor.style.cssText = 'width:34px; height:34px; padding:0; border:1px solid var(--border); border-radius:7px; background:none; cursor:pointer';
+  customColor.style.cssText = 'cursor:pointer';
   colorRow.appendChild(customColor);
   genBox.appendChild(tagLabel);
   genBox.appendChild(tagInput);
@@ -1002,10 +1003,12 @@ function buildBatchItemBlock(item, index) {
   }
 
   const errorEl = document.createElement('div');
-  errorEl.className = 'hint';
+  errorEl.className = 'hint item-error';
+  errorEl.tabIndex = -1;
   if (item.errorMsg) {
+    errorEl.setAttribute('role', 'alert');
     errorEl.textContent = item.errorMsg;
-    errorEl.style.color = '#dc2626';
+    errorEl.style.color = 'var(--bad-text)';
   }
 
   applyFrameVisual();
@@ -1195,6 +1198,37 @@ wirePreviewPanZoom(
 );
 
 addBatchItemBtn.addEventListener('click', addBatchItem);
+
+// ---- 底部操作列：產生此張／下載這張 ----
+// 對象＝目前展開的那一組；產生後會收合，就沿用最後一次展開的（沒有就最後一組）。
+function actionTarget() {
+  return batchItems.find(it => it.id === expandedBatchItemId)
+    || batchItems.find(it => it.id === lastActiveItemId)
+    || batchItems[batchItems.length - 1] || null;
+}
+// 通知外殼排版（手機切到預覽／留在編輯），不碰畫圖邏輯
+function announceGenerated(ok) {
+  document.dispatchEvent(new CustomEvent('pattern:generated', { detail: { ok } }));
+}
+// 失敗：留在編輯，把錯誤訊息捲到可見並聚焦
+function focusItemError(item) {
+  if (expandedBatchItemId !== item.id) expandBatchItem(item);
+  const err = batchItemsList.querySelector(`.batch-item-block[data-item-id="${item.id}"] .item-error`);
+  if (err) { err.scrollIntoView({ block: 'center' }); err.focus({ preventScroll: true }); }
+}
+genBtn.addEventListener('click', async () => {
+  const item = actionTarget();
+  if (!item) return;
+  const ok = await completeBatchItem(item);
+  if (ok) collapseBatchItems(); else focusItemError(item);
+  announceGenerated(ok);
+});
+dlBtn.addEventListener('click', async () => {
+  const item = actionTarget();
+  if (!item) return;
+  if (isItemDone(item) || await completeBatchItem(item)) { downloadItem(item); }
+  else { focusItemError(item); announceGenerated(false); }
+});
 
 // 全部下載 finishes whatever is finishable first: if every item has a title
 // and a background, all of them get completed and downloaded; otherwise it

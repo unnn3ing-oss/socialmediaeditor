@@ -28,7 +28,7 @@
 .qbar { height: 6px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
 .qbar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .2s linear; }
 .qline { display: flex; align-items: baseline; gap: 6px 8px; flex-wrap: wrap; min-width: 0; }
-.qpill { flex: none; font: 700 11px var(--mono); padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.qpill { flex: none; font: 700 11px var(--mono); padding: 1px 8px; border-radius: var(--radius-control); background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .qsub { font: 11.5px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
 .qsub:empty { display: none; }
 /* the question that 從清單移除 opens inside the row: it takes the place of the text and the buttons */

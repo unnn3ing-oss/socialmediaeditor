@@ -66,6 +66,16 @@ async function copyText(text) {
   return ok;
 }
 
+// 複製失敗：選取文字讓使用者手動複製（textarea 用 select、一般文字用 Range）
+function selectManual(node) {
+  try {
+    if (node.select) { node.focus({ preventScroll: true }); node.select(); return; }
+    node.classList.add('lr-sel');
+    const r = document.createRange(); r.selectNodeContents(node);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  } catch { /* 忽略 */ }
+}
+
 // ---- 卡片 ----
 function makeCard(a, idx) {
   const el = tpl.content.firstElementChild.cloneNode(true);
@@ -100,6 +110,15 @@ function makeCard(a, idx) {
     q('[data-wtext]').textContent = w.text;
   }
 
+  // 缺漏提示 → 對應欄位（只指到畫面上看得到的欄位；其餘落在完整需求單）
+  const focusField = (t) => { if (!t) return; t.scrollIntoView({ block: 'center' }); t.focus({ preventScroll: true }); };
+  function jumpTarget(k) {
+    if (k === '新聞事件') return !evWrap.hidden ? () => evIn : () => out;
+    if (k === '直播時間') return !q('[data-timewrap]').hidden ? () => tmIn : () => out;
+    if (k === 'FB 粉專') return () => boxes.find((b) => !b.disabled) || out;
+    if (k === '值班小編') return () => (dutyName.value.trim() ? dutyContact : dutyName);
+    return () => out;
+  }
   let dirty = false;
   let lastMissing = [];
   out.addEventListener('input', () => { dirty = true; regen.hidden = false; });
@@ -115,6 +134,8 @@ function makeCard(a, idx) {
     title.classList.toggle('is-bad', !a.event && !evIn.value.trim());
     evIn.classList.toggle('is-bad', !evIn.value.trim());
     tmIn.classList.toggle('is-bad', !tmIn.value.trim());
+    evIn.setAttribute('aria-invalid', String(!evIn.value.trim()));
+    tmIn.setAttribute('aria-invalid', String(!tmIn.value.trim()));
     q('.lr-time').textContent = fmtTime(a.time || tmIn.value.trim());
     const items = [
       ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['畫面來源', '畫面來源'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
@@ -126,7 +147,15 @@ function makeCard(a, idx) {
       const li = document.createElement('li');
       const bad = missing.includes(k), warn = !bad && warnOf(k);
       li.className = bad ? 'bad' : warn ? 'warn' : 'ok';
-      li.textContent = bad ? '缺 ' + k : warn || '✓ ' + label;
+      const text = bad ? '缺 ' + k : warn || '✓ ' + label;
+      const target = (bad || warn) ? jumpTarget(k) : null;
+      if (target) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'lr-jump'; b.textContent = text;
+        b.setAttribute('aria-label', text + '，前往填寫');
+        b.addEventListener('click', () => focusField(target()));
+        li.append(b);
+      } else li.textContent = text;
       return li;
     }));
     if (!dirty) { out.value = build(a, opt); out.rows = Math.min(Math.max(out.value.split('\n').length + 1, 6), 40); }
@@ -143,13 +172,14 @@ function makeCard(a, idx) {
     if (lastMissing.length) return;
     const ok = await copyText(out.value);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
-    msg.textContent = ok ? '已複製完整需求單' : '複製失敗，請手動選取';
-    if (ok) afterCopy(idx);
+    msg.textContent = ok ? '已複製完整需求單' : '複製失敗，已選取全文，請長按或按 Ctrl+C 手動複製';
+    if (ok) afterCopy(idx); else selectManual(out);
   });
   q('[data-weather]').addEventListener('click', async () => {
     const ok = await copyText(w.text);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
-    msg.textContent = ok ? (w.ok ? '已複製封面提醒' : '已複製封面提醒（主播或標題沒抓到，請檢查）') : '複製失敗，請手動選取';
+    msg.textContent = ok ? (w.ok ? '已複製封面提醒' : '已複製封面提醒（主播或標題沒抓到，請檢查）') : '複製失敗，已選取封面提醒文字，請手動複製';
+    if (!ok) selectManual(q('[data-wtext]'));
   });
 
   refresh();

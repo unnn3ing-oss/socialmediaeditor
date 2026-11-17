@@ -164,3 +164,59 @@ test('YT 下載（沒裝外掛）：只有一個提示區塊＋安裝外掛按�
     assert.equal(await page.inputValue('#add-url'), 'https://youtu.be/x');
   } finally { await browser.close(); await srv.close(); }
 });
+
+test('YT 下載（沒裝外掛）：手機顯示「需在電腦使用」、不引導安裝；320／390 無水平溢位', async () => {
+  const { serve } = require('../helpers/serve.js');
+  const { launch } = require('../helpers/browser.js');
+  const srv = await serve(ROOT);
+  const browser = await launch();
+  try {
+    for (const width of [320, 390]) {
+      const page = await (await browser.newContext({ viewport: { width, height: 800 }, deviceScaleFactor: 1 })).newPage();
+      await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+      await page.goto(srv.url + 'tools/ytdl/index.html');
+      await page.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
+      assert.match(await page.textContent('#no-ext-text'), /此功能需在已安裝外掛與下載助手的電腦使用/);
+      assert.equal(await page.isVisible('#no-ext-install'), false);
+      assert.equal(await page.isVisible('#setup-card'), false);
+      assert.equal(await page.isVisible('#open-setup'), false);
+      assert.equal(await page.isVisible('#conn-pill'), false);
+      assert.equal(await page.isVisible('#download-win'), false);
+      assert.equal(await page.isVisible('#work'), false);
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(over <= 0, `${width}px 水平溢位 ${over}`);
+      // 強制展開工作區（模擬已連線）：版面也不能溢位
+      await page.evaluate(() => { document.getElementById('work').hidden = false; });
+      const over2 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(over2 <= 0, `${width}px 工作區水平溢位 ${over2}`);
+      await page.close();
+    }
+  } finally { await browser.close(); await srv.close(); }
+});
+
+test('YT 下載：工作區卡片有間距，新增列各元件同高 44px、更新列橫排', async () => {
+  const { serve } = require('../helpers/serve.js');
+  const { launch } = require('../helpers/browser.js');
+  const srv = await serve(ROOT);
+  const browser = await launch();
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 })).newPage();
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(srv.url + 'tools/ytdl/index.html');
+    await page.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
+    await page.evaluate(() => { document.getElementById('work').hidden = false; });
+    const gap = await page.$eval('#work', (el) => getComputedStyle(el).rowGap);
+    assert.equal(gap, '14px');
+    const hs = await page.evaluate(() => ['#add-card .in', '#mode', '#quality', '#add-btn'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().height)));
+    assert.deepEqual(hs, [44, 44, 44, 44]);
+    const ys = await page.evaluate(() => ['#add-card .in', '#mode', '#quality', '#add-btn'].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return Math.round(r.top + r.height / 2); }));
+    assert.equal(new Set(ys).size, 1, '垂直置中對齊 ' + ys);
+    const o = await page.evaluate(() => ['#outdir', '#save-outdir'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().height)));
+    assert.equal(o[0], o[1]);
+    const dir = await page.$eval('#up-check', (el) => getComputedStyle(el.parentElement).flexDirection);
+    assert.equal(dir, 'row');
+    const w = await page.$eval('#doctor-check', (el) => el.getBoundingClientRect().width);
+    assert.ok(w < 300, '檢查環境不全寬 ' + w);
+    await page.close();
+  } finally { await browser.close(); await srv.close(); }
+});

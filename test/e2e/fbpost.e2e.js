@@ -405,6 +405,25 @@ test('管理員手機 390px 無橫向捲動', async () => {
   await page.close();
 });
 
+test('管理員手機 320px 無橫向捲動，粉專膠囊與送出鈕可按（≥44px）', async () => {
+  const { page, errors } = await newPage('admin', { width: 320, height: 700 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.click('#schedReload');
+  await page.waitForSelector('#schedList li');
+  assert.ok((await overflow(page)) <= 0, '已排程：' + (await overflow(page)));
+  await openPost(page);
+  await page.click(chip(111) + ' .chip-l');
+  await page.click(chip(111) + ' .chip-r');
+  await page.fill('#msg', '手機'.repeat(40));
+  assert.ok((await overflow(page)) <= 0, '新增發文：' + (await overflow(page)));
+  const send = await page.locator('#sendBtn').boundingBox();
+  assert.ok(send.height >= 44, '送出鈕高度 ' + send.height);
+  const chipBox = await page.locator(chip(111)).boundingBox();
+  assert.ok(chipBox.height >= 44, '粉專膠囊高度 ' + chipBox.height);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('管理員但臉書 token 有問題：停用頁顯示原因', async () => {
   const { page, errors } = await newPage('tokenbad', { width: 390, height: 700 });
   await page.goto(srv.url + 'tools/fbpost/index.html');
