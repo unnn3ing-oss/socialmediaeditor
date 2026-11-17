@@ -1,15 +1,17 @@
 // 直播需求單：畫面。規則都在 parse.js。
 import { tb } from '../../sdk/toolbox.js';
-import { PAGES, parse, check, build, weatherNote, dutyExpiry } from './parse.js';
+import { PAGES, parse, check, build, weatherNote, dutyExpiry, fmtTime } from './parse.js';
 
 tb.init('livereq');
 
 const $ = (id) => document.getElementById(id);
 const src = $('src'), list = $('list'), empty = $('empty'), count = $('count');
 const dutyName = $('dutyName'), dutyContact = $('dutyContact'), dutyHint = $('dutyHint');
-const tpl = $('cardTpl');
+const tpl = $('cardTpl'), pagesTpl = $('pagesTpl');
+const pagesBar = $('pagesBar'), nav = $('nav'), pos = $('pos'), dots = $('dots');
 const KEY = 'tbx.livereq.duty';
-const cards = []; // { a, el, refresh }
+const cards = []; // { a, el, pagesEl, refresh, copied }
+let cur = 0;
 
 // ---- 值班小編（依班別到期） ----
 let dutyExp = 0;
@@ -72,11 +74,12 @@ function makeCard(a, idx) {
   const out = q('[data-out]'), msg = q('[data-msg]'), copyBtn = q('[data-copy]'), regen = q('[data-regen]');
   el.dataset.idx = String(idx);
   q('[data-repeat]').hidden = !a.repeat;
-  q('.lr-time').textContent = a.time;
   evWrap.hidden = !!a.event;
   q('[data-timewrap]').hidden = !!a.time;
 
-  // 粉專：需求單已經有的打勾並鎖住
+  // 粉專：放在輸入區與卡片之間（每張一排，只顯示目前這張）；需求單已經有的打勾並鎖住
+  const pagesEl = pagesTpl.content.firstElementChild.cloneNode(true);
+  const pq = (s) => pagesEl.querySelector(s);
   const have = new Set(a.fbExisting.map((s) => s.replace(/\s+/g, '').replace(/(粉專|粉)$/, '')));
   const boxes = PAGES.map((p) => {
     const lab = document.createElement('label');
@@ -85,10 +88,10 @@ function makeCard(a, idx) {
     cb.type = 'checkbox'; cb.value = p;
     if (have.has(p)) { cb.checked = true; cb.disabled = true; lab.title = '需求單已經有'; }
     lab.append(cb, document.createTextNode(p));
-    q('[data-boxes]').append(lab);
+    pq('[data-boxes]').append(lab);
     return cb;
   });
-  q('[data-have]').textContent = a.fbExisting.length ? `需求單已有：${a.fbExisting.join('、')}` : '';
+  pq('[data-have]').textContent = a.fbExisting.length ? `需求單已有：${a.fbExisting.join('、')}` : '';
 
   const w = weatherNote(a);
   if (w) {
@@ -112,7 +115,7 @@ function makeCard(a, idx) {
     title.classList.toggle('is-bad', !a.event && !evIn.value.trim());
     evIn.classList.toggle('is-bad', !evIn.value.trim());
     tmIn.classList.toggle('is-bad', !tmIn.value.trim());
-    q('.lr-time').textContent = a.time || tmIn.value.trim();
+    q('.lr-time').textContent = fmtTime(a.time || tmIn.value.trim());
     const items = [
       ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
     ];
@@ -142,6 +145,7 @@ function makeCard(a, idx) {
     const ok = await copyText(out.value);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
     msg.textContent = ok ? '已複製完整需求單' : '複製失敗，請手動選取';
+    if (ok) afterCopy(idx);
   });
   q('[data-weather]').addEventListener('click', async () => {
     const ok = await copyText(w.text);
@@ -150,13 +154,48 @@ function makeCard(a, idx) {
   });
 
   refresh();
-  return { a, el, refresh };
+  return { a, el, pagesEl, refresh, copied: false };
 }
+
+// ---- 一次一張 ----
+function show(i) {
+  if (!cards.length) return;
+  cur = Math.max(0, Math.min(cards.length - 1, i));
+  cards.forEach((c, k) => { c.el.hidden = k !== cur; c.pagesEl.hidden = k !== cur; });
+  pos.textContent = `第 ${cur + 1}／${cards.length} 場`;
+  [...dots.children].forEach((d, k) => {
+    d.classList.toggle('is-cur', k === cur);
+    d.classList.toggle('is-done', cards[k].copied);
+    d.textContent = cards[k].copied ? '✓' : String(k + 1);
+    d.setAttribute('aria-current', k === cur ? 'true' : 'false');
+  });
+  $('prev').disabled = cur === 0;
+  $('next').disabled = cur === cards.length - 1;
+}
+function afterCopy(i) {
+  cards[i].copied = true;
+  if (i < cards.length - 1) { show(i + 1); return; }
+  show(i);
+  const left = cards.filter((c) => !c.copied).length;
+  const msg = cards[i].el.querySelector('[data-msg]');
+  msg.textContent = left ? `已複製；還有 ${left} 張沒複製` : '已複製，全部完成';
+}
+$('prev').addEventListener('click', () => show(cur - 1));
+$('next').addEventListener('click', () => show(cur + 1));
 
 function run() {
   cards.length = 0;
   const all = parse(src.value);
   list.replaceChildren(...all.map((a, i) => { const c = makeCard(a, i); cards.push(c); return c.el; }));
+  pagesBar.replaceChildren(...cards.map((c) => c.pagesEl));
+  dots.replaceChildren(...cards.map((c, k) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lr-dot'; b.setAttribute('aria-label', `第 ${k + 1} 場`);
+    b.addEventListener('click', () => show(k));
+    return b;
+  }));
+  pagesBar.hidden = nav.hidden = !all.length;
+  show(0);
   empty.hidden = !!all.length || !src.value.trim();
   count.textContent = all.length ? `共 ${all.length} 場` : '';
 }
@@ -171,6 +210,7 @@ src.addEventListener('paste', (e) => {
   run();
 });
 $('clear').addEventListener('click', () => {
-  src.value = ''; cards.length = 0; list.replaceChildren(); empty.hidden = true; count.textContent = '';
+  src.value = ''; cards.length = 0; list.replaceChildren(); pagesBar.replaceChildren(); dots.replaceChildren();
+  pagesBar.hidden = nav.hidden = true; empty.hidden = true; count.textContent = '';
   src.focus();
 });

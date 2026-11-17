@@ -20,7 +20,7 @@
       <p class="lr-hint" id="dutyHint"></p>
     </div>
     <label class="field">貼上直播需求單（可一次貼多場；再貼會取代上一份）
-      <textarea id="src" rows="8" spellcheck="false"></textarea>
+      <textarea id="src" rows="3" spellcheck="false"></textarea>
     </label>
     <div class="lr-actions">
       <span class="lr-count" id="count"></span>
@@ -29,14 +29,22 @@
     </div>
   </section>
   <p class="lr-empty" id="empty" hidden>找不到需求單欄位（●／◎ 開頭的「新聞事件」「直播平台」「YT標」等），請確認貼上的內容。</p>
+  <section class="lr-pagesbar" id="pagesBar" hidden></section>
+  <nav class="lr-nav" id="nav" hidden aria-label="場次">
+    <button type="button" class="btn btn-secondary btn-sm" id="prev">‹ 上一張</button>
+    <span class="lr-pos" id="pos"></span>
+    <span class="lr-dots" id="dots"></span>
+    <button type="button" class="btn btn-secondary btn-sm" id="next">下一張 ›</button>
+  </nav>
   <section class="lr-list" id="list" aria-live="polite"></section>
 </main>
 <template id="cardTpl">
   <article class="lr-card">
     <header class="lr-head">
       <h2 class="lr-title"></h2>
-      <span class="lr-tag" data-repeat hidden>更正版</span>
       <span class="lr-time"></span>
+      <span class="lr-tag" data-repeat hidden>更正版</span>
+      <button type="button" class="btn btn-primary lr-copy" data-copy>複製</button>
     </header>
     <label class="field lr-event" hidden>新聞事件（需求單沒寫，請補上）
       <input type="text" data-event autocomplete="off">
@@ -44,11 +52,6 @@
     <label class="field lr-event" data-timewrap hidden>直播時間（需求單沒寫，請補上）
       <input type="text" data-time autocomplete="off" placeholder="例如 1430">
     </label>
-    <div class="lr-pages">
-      <span class="lr-label">FB 粉專</span>
-      <span class="lr-boxes" data-boxes></span>
-      <span class="lr-have" data-have></span>
-    </div>
     <ul class="lr-checks" data-checks></ul>
     <label class="field">完整需求單（可直接改，複製以這裡為準）
       <textarea data-out rows="10" spellcheck="false"></textarea>
@@ -57,13 +60,19 @@
       <span class="lr-msg" data-msg></span>
       <button type="button" class="btn btn-secondary btn-sm" data-regen hidden>重新產生</button>
       <button type="button" class="btn btn-secondary btn-sm" data-weather hidden>複製封面提醒</button>
-      <button type="button" class="btn btn-primary btn-sm" data-copy>複製</button>
     </div>
     <div class="lr-weather" data-wbox hidden>
       <p class="lr-hint">提醒影音小幫手製作封面（他們輪流剪 SOT 與做封面，需要等一下）。早班約 15:30 還沒收到氣象需求單，可以到群組詢問。</p>
       <pre class="lr-pre" data-wtext></pre>
     </div>
   </article>
+</template>
+<template id="pagesTpl">
+  <div class="lr-pages">
+    <span class="lr-label">FB 粉專</span>
+    <span class="lr-boxes" data-boxes></span>
+    <span class="lr-have" data-have></span>
+  </div>
 </template>
 <script type="module" src="tool.js"></script>
 </body>

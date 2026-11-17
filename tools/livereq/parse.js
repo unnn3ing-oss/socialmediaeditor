@@ -348,3 +348,15 @@ export function dutyExpiry(now = new Date()) {
 export function parse(text) {
   return splitBlocks(text).map(analyze);
 }
+
+// 時間統一寫成 HH:MM：0925→09:25、21:00開始→21:00、1430→14:30；認不出就原樣
+export function fmtTime(s) {
+  const t = String(s || '');
+  const ok = (h, m) => +h < 24 && +m < 60;
+  const pad = (h, m) => String(+h).padStart(2, '0') + ':' + m;
+  let m = /(\d{1,2})\s*[:：]\s*(\d{2})/.exec(t);
+  if (m && ok(m[1], m[2])) return pad(m[1], m[2]);
+  m = /(?<!\d)(\d{1,2})(\d{2})(?!\d)/.exec(t);
+  if (m && ok(m[1], m[2])) return pad(m[1], m[2]);
+  return t.trim();
+}

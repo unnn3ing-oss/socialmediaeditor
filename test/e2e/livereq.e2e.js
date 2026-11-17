@@ -36,12 +36,14 @@ test('貼上 6 場：拆卡片、缺值班小編與粉專時不能複製', async
   assert.match(await first.locator('[data-msg]').textContent(), /FB 粉專、值班小編/);
   // 2100看世界：需求單已有新聞粉、國際粉 → 打勾鎖住，不算缺粉專
   const c5 = frame.locator('.lr-card').nth(4);
-  assert.equal(await c5.locator('input[value=新聞]').isChecked(), true);
-  assert.equal(await c5.locator('input[value=新聞]').isDisabled(), true);
+  const p5 = frame.locator('#pagesBar .lr-pages').nth(4);
+  assert.equal(await p5.locator('input[value=新聞]').isChecked(), true);
+  assert.equal(await p5.locator('input[value=新聞]').isDisabled(), true);
   assert.doesNotMatch(await c5.locator('[data-msg]').textContent(), /FB 粉專/);
   // 九點熱話題：更正版
   const c6 = frame.locator('.lr-card').nth(5);
   assert.equal(await c6.locator('.lr-title').textContent(), '九點熱話題 重1');
+  await frame.click('.lr-dot >> nth=5');
   assert.equal(await c6.locator('[data-repeat]').isVisible(), true);
   assert.deepEqual(errors, []);
   await page.close();
@@ -53,7 +55,7 @@ test('填值班小編＋勾粉專 → 輸出更新、複製到剪貼簿；值班
   await frame.fill('#dutyName', '王小明');
   await frame.fill('#dutyContact', '#85001');
   const first = frame.locator('.lr-card').first();
-  await first.locator('label.lr-box', { hasText: '國際' }).click();
+  await frame.locator('#pagesBar .lr-pages').first().locator('label.lr-box', { hasText: '國際' }).click();
   assert.equal(await first.locator('[data-copy]').isDisabled(), false);
   const out = await first.locator('[data-out]').inputValue();
   assert.match(out, /大白話\nFB:\n國際\n●畫面來源：玉娜4G\n●值班小編：\n王小明 #85001\n/);
@@ -115,7 +117,7 @@ test('沒寫新聞事件：卡片要求補上，補了才算', async () => {
   assert.equal(await card.locator('[data-copy]').isDisabled(), true);
   await card.locator('[data-time]').fill('1430');
   assert.match(await card.locator('[data-out]').inputValue(), /^●新聞事件：記者會\n●直播時間：1430\n/);
-  assert.equal(await card.locator('.lr-time').textContent(), '1430');
+  assert.equal(await card.locator('.lr-time').textContent(), '14:30');
   await page.close();
 });
 
@@ -131,5 +133,37 @@ test('再貼一份：取代上一份，只留新的卡片', async () => {
   assert.equal(await frame.locator('.lr-card').count(), 1);
   assert.match(await frame.inputValue('#src'), /^11月16日《18氣象站》/);
   assert.equal(await frame.textContent('#count'), '共 1 場');
+  await page.close();
+});
+
+test('一次一張：複製後跳下一張、已複製打勾、可回上一張、粉專勾選各張分開；時間寫成 00:00', async () => {
+  const { frame, page, errors } = await open();
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  await frame.fill('#dutyName', '王小明');
+  await frame.fill('#dutyContact', '#85001');
+  const visibleCards = () => frame.locator('.lr-card:not([hidden])').count();
+  assert.equal(await visibleCards(), 1);
+  assert.equal(await frame.textContent('#pos'), '第 1／6 場');
+  assert.equal(await frame.locator('.lr-card').first().locator('.lr-time').textContent(), '09:25');
+  assert.equal(await frame.locator('#prev').isDisabled(), true);
+  await frame.locator('#pagesBar .lr-pages:not([hidden]) label.lr-box', { hasText: '少康' }).click();
+  await frame.locator('.lr-card:not([hidden]) [data-copy]').click();
+  await frame.waitForFunction(() => document.getElementById('pos').textContent === '第 2／6 場');
+  assert.equal(await frame.textContent('.lr-dot >> nth=0'), '✓');
+  // 第 2 張的粉專沒被第 1 張影響
+  assert.equal(await frame.locator('#pagesBar .lr-pages:not([hidden]) input[value=少康]').isChecked(), false);
+  await frame.click('#prev');
+  assert.equal(await frame.textContent('#pos'), '第 1／6 場');
+  assert.equal(await frame.locator('#pagesBar .lr-pages:not([hidden]) input[value=少康]').isChecked(), true);
+  // 最後一張：複製後停在原地並提示
+  await frame.click('.lr-dot >> nth=4');
+  assert.equal(await frame.locator('.lr-card:not([hidden]) .lr-time').textContent(), '21:00');
+  await frame.click('#next');
+  assert.equal(await frame.locator('#next').isDisabled(), true);
+  await frame.locator('#pagesBar .lr-pages:not([hidden]) label.lr-box', { hasText: '新聞' }).click();
+  await frame.locator('.lr-card:not([hidden]) [data-copy]').click();
+  await frame.waitForFunction(() => /還有 4 張沒複製/.test(document.querySelector('.lr-card:not([hidden]) [data-msg]').textContent));
+  assert.equal(await frame.textContent('#pos'), '第 6／6 場');
+  assert.deepEqual(errors, []);
   await page.close();
 });

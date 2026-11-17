@@ -158,3 +158,13 @@ test('固定時段節目沒寫直播時間：只提醒、不擋；一般活動�
   assert.equal(ev.program, false);
   assert.ok(P.check(ev, OPT).missing.includes('直播時間'));
 });
+
+test('時間格式 00:00', async () => {
+  const P = await load();
+  assert.equal(P.fmtTime('0925'), '09:25');
+  assert.equal(P.fmtTime('1430'), '14:30');
+  assert.equal(P.fmtTime('21:00開始'), '21:00');
+  assert.equal(P.fmtTime('21:00~21:XX:XX(第一段廣告前)'), '21:00');
+  assert.equal(P.fmtTime('9:05'), '09:05');
+  assert.equal(P.fmtTime('晚間'), '晚間');
+});
