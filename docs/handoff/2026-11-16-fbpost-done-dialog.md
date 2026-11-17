@@ -47,7 +47,7 @@
 - [x] 後端 access.js（`accessState`／`setAccessState`）／index.js（POST 沒帶 reason＝保留）＋測試；`fb_forbidden` 文字改「排程發布目前關閉。」
 - [x] 兩個管理頁（`#acOpen`／`#acClose`／`#acReason`／`#acReasonSave`）
 - [x] fbpost app.js 顯示 `detail.reason`＋e2e；npm test 613、e2e 117、build --check 通過
-- [ ] 審查，等使用者說「推」
+- [x] 獨立審查通過（未改檔）；等使用者說「推」
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`
