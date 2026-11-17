@@ -72,7 +72,7 @@ test('沒有內文：標題去掉 LIVE 加上固定句，插在標題後', async
   const P = await load();
   assert.equal(P.titleToBody('賴清德陪同蘇巧慧  板橋慈惠宮參香祈福｜LIVE'), '賴清德陪同蘇巧慧  板橋慈惠宮參香祈福，讓TVBS新聞帶您一起來了解。');
   assert.equal(P.titleToBody('【LIVE】 川普訪台'), '川普訪台，讓TVBS新聞帶您一起來了解。');
-  const a = P.parse('●新聞事件：A\n●直播平台：\nTVBS NEWS\n●畫面來源：X\n●YT標：B｜LIVE')[0];
+  const a = P.parse('●新聞事件：A\n●直播時間：1000\n●直播平台：\nTVBS NEWS\n●畫面來源：X\n●YT標：B｜LIVE')[0];
   assert.match(P.build(a, OPT), /●YT標：B｜LIVE\n●內文：B，讓TVBS新聞帶您一起來了解。$/);
   assert.deepEqual(P.check(a, OPT).missing, []);
 });
@@ -88,8 +88,8 @@ test('「標」算標題、「文」算內文，內容裡的字不影響', async
 test('缺漏：新聞事件、FB 粉專、值班小編、標題都擋；手動補新聞事件插在最上面', async () => {
   const P = await load();
   const a = P.parse('●直播平台：\nTVBS NEWS\n●畫面來源：X')[0];
-  assert.deepEqual(P.check(a, { checked: [], duty: { name: '', contact: '' } }).missing, ['新聞事件', 'FB 粉專', '值班小編', '標題', '內文']);
-  assert.deepEqual(P.check(a, { ...OPT, eventOverride: '活動' }).missing, ['標題', '內文']);
+  assert.deepEqual(P.check(a, { checked: [], duty: { name: '', contact: '' } }).missing, ['新聞事件', '直播時間', 'FB 粉專', '值班小編', '標題', '內文']);
+  assert.deepEqual(P.check(a, { ...OPT, eventOverride: '活動' }).missing, ['直播時間', '標題', '內文']);
   assert.ok(P.build(a, { ...OPT, eventOverride: '活動' }).startsWith('●新聞事件：活動\n'));
   assert.ok(P.check(a, { ...OPT, duty: { name: '王', contact: '' } }).missing.includes('值班小編'));
 });
@@ -125,4 +125,22 @@ test('直播平台值寫在同一行：拆成欄位名／YT:／值，不把 YT: 
   const fb = P.parse('●新聞事件：A\n●直播平台：FB 新聞\n●畫面來源：X\n●YT標：B｜LIVE\n●內文：C')[0];
   assert.deepEqual(fb.fbExisting, ['新聞']);
   assert.ok(!P.build(fb, OPT).includes('YT:'));
+});
+
+test('直播時間：必填；九點熱話題開頭時間算有；18氣象站自動 18:00 不插行；手補放新聞事件下一行', async () => {
+  const P = await load();
+  const list = P.parse(read('batch.txt'));
+  assert.equal(list[5].time, '21:00~21:XX:XX(第一段廣告前)');
+  const w = P.parse(read('weather.txt'))[0];
+  assert.equal(w.time, '18:00');
+  assert.ok(!P.check(w, OPT).missing.includes('直播時間'));
+  assert.doesNotMatch(P.build(w, OPT), /直播時間/);
+  const a = P.parse('●新聞事件：記者會\n●直播平台：\nTVBS NEWS\n●畫面來源：X\n●YT標：B｜LIVE')[0];
+  assert.deepEqual(P.check(a, OPT).missing, ['直播時間']);
+  assert.deepEqual(P.check(a, { ...OPT, timeOverride: '1430' }).missing, []);
+  assert.match(P.build(a, { ...OPT, timeOverride: '1430' }), /^●新聞事件：記者會\n●直播時間：1430\n●直播平台：/);
+  const b = P.parse('●直播平台：\nTVBS NEWS\n●畫面來源：X\n●YT標：B')[0];
+  assert.match(P.build(b, { ...OPT, eventOverride: '活動', timeOverride: '1430' }), /^●新聞事件：活動\n●直播時間：1430\n●直播平台：/);
+  const c = P.parse('●新聞事件：A\n●直播時間：\n●直播平台：\nTVBS NEWS\n●YT標：B')[0];
+  assert.match(P.build(c, { ...OPT, timeOverride: '0900' }), /●直播時間：0900\n/);
 });

@@ -68,12 +68,13 @@ async function copyText(text) {
 function makeCard(a, idx) {
   const el = tpl.content.firstElementChild.cloneNode(true);
   const q = (s) => el.querySelector(s);
-  const title = q('.lr-title'), evWrap = q('.lr-event'), evIn = q('[data-event]');
+  const title = q('.lr-title'), evWrap = q('.lr-event'), evIn = q('[data-event]'), tmIn = q('[data-time]');
   const out = q('[data-out]'), msg = q('[data-msg]'), copyBtn = q('[data-copy]'), regen = q('[data-regen]');
   el.dataset.idx = String(idx);
   q('[data-repeat]').hidden = !a.repeat;
   q('.lr-time').textContent = a.time;
   evWrap.hidden = !!a.event;
+  q('[data-timewrap]').hidden = !!a.time;
 
   // 粉專：需求單已經有的打勾並鎖住
   const have = new Set(a.fbExisting.map((s) => s.replace(/\s+/g, '').replace(/(粉專|粉)$/, '')));
@@ -103,15 +104,17 @@ function makeCard(a, idx) {
 
   function refresh() {
     const checked = boxes.filter((b) => b.checked && !b.disabled).map((b) => b.value);
-    const opt = { checked, duty: duty(), eventOverride: evIn.value };
+    const opt = { checked, duty: duty(), eventOverride: evIn.value, timeOverride: tmIn.value };
     const { missing, warnings } = check(a, opt);
     lastMissing = missing;
     const name = (a.event || evIn.value.trim() || '（未填新聞事件）') + (a.repeat && !(a.event || '').includes(a.repeat) ? ' ' + a.repeat : '');
     title.textContent = name;
     title.classList.toggle('is-bad', !a.event && !evIn.value.trim());
     evIn.classList.toggle('is-bad', !evIn.value.trim());
+    tmIn.classList.toggle('is-bad', !tmIn.value.trim());
+    q('.lr-time').textContent = a.time || tmIn.value.trim();
     const items = [
-      ['新聞事件', '新聞事件'], ['FB 粉專', 'FB 粉專'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
+      ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
     ];
     const ul = q('[data-checks]');
     ul.replaceChildren(...items.map(([k, label]) => {
@@ -128,6 +131,7 @@ function makeCard(a, idx) {
   }
   boxes.forEach((b) => b.addEventListener('change', refresh));
   evIn.addEventListener('input', refresh);
+  tmIn.addEventListener('input', refresh);
 
   copyBtn.addEventListener('click', async () => {
     expireDuty(); // 值班到期後馬上失效，不等 30 秒的計時

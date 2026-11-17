@@ -184,6 +184,8 @@ export function analyze(lines) {
     const m = /(\d{1,2}[:：]\d{2})/.exec(lines.slice(0, stop).join('\n'));
     if (m) time = m[1];
   }
+  // 18氣象站沒寫時間：固定 18:00，只算有，不插行
+  if (!time && /18\s*氣象/.test(event)) time = '18:00';
   const title = titleF ? firstLine(titleF.text) : '';
   const titles = fields.filter((f) => f.kind === 'title').flatMap((f) => f.text.split('\n')).filter(Boolean);
   const source = srcF ? srcF.text.trim() : '';
@@ -205,9 +207,10 @@ export function pagesToAdd(fbExisting, checked) {
 }
 
 // 缺漏（擋複製）與提醒
-export function check(a, { checked = [], duty = {}, eventOverride = '' } = {}) {
+export function check(a, { checked = [], duty = {}, eventOverride = '', timeOverride = '' } = {}) {
   const missing = [];
   if (!(a.event || eventOverride.trim())) missing.push('新聞事件');
+  if (!(a.time || timeOverride.trim())) missing.push('直播時間');
   if (!a.fbExisting.length && !checked.length) missing.push('FB 粉專');
   if (!String(duty.name || '').trim() || !String(duty.contact || '').trim()) missing.push('值班小編');
   if (!a.title) missing.push('標題');
@@ -218,7 +221,7 @@ export function check(a, { checked = [], duty = {}, eventOverride = '' } = {}) {
 }
 
 // 組出完整需求單
-export function build(a, { checked = [], duty = {}, eventOverride = '' } = {}) {
+export function build(a, { checked = [], duty = {}, eventOverride = '', timeOverride = '' } = {}) {
   const { lines, fields, sym } = a;
   const L = lines.slice();
   const ins = new Map(); // 行號（插在這行之後；-1＝最前面）→ 要插的行
@@ -230,6 +233,17 @@ export function build(a, { checked = [], duty = {}, eventOverride = '' } = {}) {
     const ev = first(fields, 'event');
     if (ev) replace.set(ev.line, L[ev.line].replace(/[：:]\s*.*$/, '：' + eventOverride.trim()));
     else add(-1, [sym + '新聞事件：' + eventOverride.trim()]);
+  }
+
+  // 直播時間（沒有才補）：有空的時間欄就填它，否則放在新聞事件下一行
+  if (!a.time && timeOverride.trim()) {
+    const t = timeOverride.trim();
+    const tf = first(fields, 'time');
+    const ev = first(fields, 'event');
+    if (tf) replace.set(tf.line, L[tf.line].replace(/\s*$/, '') + t);
+    else if (ev) add(ev.last, [sym + '直播時間：' + t]);
+    else if (!a.event && eventOverride.trim()) add(-1, [sym + '直播時間：' + t]);
+    else add(fields.length ? fields[0].line - 1 : -1, [sym + '直播時間：' + t]);
   }
 
   // 直播平台

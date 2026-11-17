@@ -104,12 +104,18 @@ test('沒寫新聞事件：卡片要求補上，補了才算', async () => {
   const { frame, page } = await open();
   await paste(frame, '●直播平台：\nTVBS NEWS\n●畫面來源：X\n●YT標：測試｜LIVE');
   const card = frame.locator('.lr-card');
-  assert.equal(await card.locator('.lr-event').isVisible(), true);
+  assert.equal(await card.locator('.lr-event:not([data-timewrap])').isVisible(), true);
   assert.match(await card.locator('[data-msg]').textContent(), /新聞事件/);
   await card.locator('[data-event]').fill('記者會');
   assert.doesNotMatch(await card.locator('[data-msg]').textContent(), /新聞事件/);
   assert.match(await card.locator('[data-out]').inputValue(), /^●新聞事件：記者會\n/);
   assert.match(await card.locator('[data-out]').inputValue(), /●內文：測試，讓TVBS新聞帶您一起來了解。/);
+  // 沒寫直播時間：要補，補了插在新聞事件下一行才能複製
+  assert.match(await card.locator('[data-msg]').textContent(), /直播時間/);
+  assert.equal(await card.locator('[data-copy]').isDisabled(), true);
+  await card.locator('[data-time]').fill('1430');
+  assert.match(await card.locator('[data-out]').inputValue(), /^●新聞事件：記者會\n●直播時間：1430\n/);
+  assert.equal(await card.locator('.lr-time').textContent(), '1430');
   await page.close();
 });
 
