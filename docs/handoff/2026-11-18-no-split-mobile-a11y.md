@@ -31,7 +31,7 @@
 - [x] 外殼改動＋layout 單元測試（`layout.js` 只剩 initial／open／home／visible；`panes.sync(tool)`；跳至主要內容＝`.skip`，JS 攔截不改網址）
 - [x] 各工具 CSS／標籤（livereq minmax、linepush 頂列換行＋貼圖列可捲＋× 32px＋標籤／alt、pattern 標籤／alt、design `row()` 用 label for＋寬高可換行、collage／watermark 滑桿 24px、collage 按鈕不斷字）
 - [x] 手機 e2e、npm test 618、e2e 136、build --check 通過；量測腳本 7 寬度 × 11 頁 0 項問題
-- [ ] 獨立審查
+- [x] 獨立審查：通過，無修改（小遺憾：設計「弧度」列第二個數字框沒名稱，原本就有）
 - [ ] 截圖給使用者，等「推」
 
 ## 測試
