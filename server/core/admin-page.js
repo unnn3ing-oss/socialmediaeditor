@@ -112,10 +112,13 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
 
     <section class="card" id="acCard">
-        <h2>排程發布開放範圍</h2>
-        <p>「只開放管理員」：只有在網站用管理密碼登入的人能用排程發布（測試期間）。「開放給公司帳號」：用公司密碼登入的人也能用。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <h2>排程發布</h2>
+        <p>關閉時只有用管理員密碼登入的人能用；公司帳號會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
         <p class="fb-state" id="acState">狀態：尚未讀取</p>
-        <div class="row ac-row"><button id="acAdmin" type="button" aria-pressed="false">只開放管理員</button><button id="acCompany" type="button" aria-pressed="false">開放給公司帳號</button></div>
+        <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
+        <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>
+        <input id="acReason" type="text" maxlength="100" placeholder="例如：臉書權杖更換中">
+        <div class="row" id="acReasonRow" hidden><button id="acReasonSave" type="button">儲存原因</button></div>
         <p class="msg" id="acMsg" role="status"></p>
       </section>
 
@@ -321,32 +324,40 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     });
   }
 
-  // ---- 排程發布開放範圍（/admin/fb/access）----
-  var AC_TEXT = { admin: '只開放管理員', company: '開放給公司帳號' };
-  function acShow(mode) {
-    $('acState').textContent = '狀態：' + AC_TEXT[mode];
-    $('acState').className = 'fb-state' + (mode === 'company' ? ' on' : '');
-    $('acAdmin').setAttribute('aria-pressed', String(mode === 'admin'));
-    $('acCompany').setAttribute('aria-pressed', String(mode === 'company'));
+  // ---- 排程發布開放／關閉（/admin/fb/access）----
+  // mode：company＝開放、admin＝關閉（只有管理員密碼能用）；reason＝關閉原因
+  var acMode = '';
+  function acShow(d) {
+    acMode = d.mode;
+    var open = d.mode === 'company';
+    $('acState').textContent = '狀態：' + (open ? '開放' : '關閉' + (d.reason ? '（原因：' + d.reason + '）' : ''));
+    $('acState').className = 'fb-state ' + (open ? 'on' : 'off');
+    $('acOpen').setAttribute('aria-pressed', String(open));
+    $('acClose').setAttribute('aria-pressed', String(!open));
+    $('acReason').value = d.reason || '';
+    $('acReasonRow').hidden = open;
   }
   function acLoad() {
     say($('acMsg'), '');
     return api('/admin/fb/access').then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      acShow(res.data.mode);
+      acShow(res.data);
     }).catch(function (e) { say($('acMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
   }
-  function acSet(mode) {
-    $('acAdmin').disabled = $('acCompany').disabled = true; say($('acMsg'), '儲存中');
-    api('/admin/fb/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode }) }).then(function (res) {
-      if (res.ok) { acShow(res.data.mode); say($('acMsg'), '已切換為「' + AC_TEXT[res.data.mode] + '」', 'good'); }
+  function acSet(mode, done) {
+    var reason = $('acReason').value.trim();
+    if (Array.from(reason).length > 100) return say($('acMsg'), '關閉原因最多 100 字。', 'err');
+    $('acOpen').disabled = $('acClose').disabled = $('acReasonSave').disabled = true; say($('acMsg'), '儲存中');
+    api('/admin/fb/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode, reason: reason }) }).then(function (res) {
+      if (res.ok) { acShow(res.data); say($('acMsg'), done, 'good'); }
       else if (res.code === 'unauthorized') expired();
-      else say($('acMsg'), res.error || '切換失敗。', 'err');
+      else say($('acMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('acMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('acAdmin').disabled = $('acCompany').disabled = false; });
+      .then(function () { $('acOpen').disabled = $('acClose').disabled = $('acReasonSave').disabled = false; });
   }
-  $('acAdmin').onclick = function () { acSet('admin'); };
-  $('acCompany').onclick = function () { acSet('company'); };
+  $('acOpen').onclick = function () { acSet('company', '已開放'); };
+  $('acClose').onclick = function () { acSet('admin', '已關閉'); };
+  $('acReasonSave').onclick = function () { acSet(acMode || 'admin', '已儲存原因'); };
 
   // ---- 粉專設定（/admin/fb/pages）----
   var pgItems = [];

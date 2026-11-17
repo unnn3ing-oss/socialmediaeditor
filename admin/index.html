@@ -45,10 +45,13 @@
       <p>排程發布工具的臉書連線與粉專設定。</p>
 
       <section class="card" id="acCard">
-        <h2>排程發布開放範圍</h2>
-        <p>「只開放管理員」：只有在網站用管理密碼登入的人能用排程發布（測試期間）。「開放給公司帳號」：用公司密碼登入的人也能用。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <h2>排程發布</h2>
+        <p>關閉時只有用管理員密碼登入的人能用；公司帳號會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
         <p class="fb-state" id="acState">狀態：尚未讀取</p>
-        <div class="row ac-row"><button id="acAdmin" type="button" aria-pressed="false">只開放管理員</button><button id="acCompany" type="button" aria-pressed="false">開放給公司帳號</button></div>
+        <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
+        <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>
+        <input id="acReason" type="text" maxlength="100" placeholder="例如：臉書權杖更換中">
+        <div class="row" id="acReasonRow" hidden><button id="acReasonSave" type="button">儲存原因</button></div>
         <p class="msg" id="acMsg" role="status"></p>
       </section>
 

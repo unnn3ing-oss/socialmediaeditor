@@ -1,6 +1,6 @@
 // 排程發布後端：/fb/*（權限見 access.js：管理頁切換只開放管理員／開放公司帳號）與管理路由 /admin/fb/*、/admin/rundown*
 import { ok, fail, readBody } from '../core/http.js';
-import { fbAccess, accessMode, setAccessMode, ACCESS_MODES } from './access.js';
+import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, checkNewToken, FbSetupError } from './pages.js';
 import { saveToken, clearToken } from './tokenstore.js';
 import { GraphError } from './graph.js';
@@ -122,12 +122,15 @@ adminRoute('DELETE', /^\/admin\/fb\/token$/, async (request, env) => {
   await clearPageCache(env);
   return ok(request, env, await tokenStatus(env));
 });
-adminRoute('GET', /^\/admin\/fb\/access$/, async (request, env) => ok(request, env, { mode: await accessMode(env) }));
+adminRoute('GET', /^\/admin\/fb\/access$/, async (request, env) => ok(request, env, await accessState(env)));
+// 開放／關閉＋關閉原因；沒帶 reason＝保留原本的原因
 adminRoute('POST', /^\/admin\/fb\/access$/, async (request, env) => {
-  const body = await readJsonBody(request, 1024);
+  const body = await readJsonBody(request, 2048);
   if (!body || !ACCESS_MODES.includes(body.mode)) return fail(request, env, 'bad_request');
-  await setAccessMode(env, body.mode);
-  return ok(request, env, { mode: await accessMode(env) });
+  if (body.reason !== undefined && (typeof body.reason !== 'string' || [...body.reason.trim()].length > MAX_REASON)) return fail(request, env, 'bad_request', '關閉原因最多 ' + MAX_REASON + ' 字。');
+  const reason = body.reason !== undefined ? body.reason : (await accessState(env)).reason;
+  await setAccessState(env, { mode: body.mode, reason });
+  return ok(request, env, await accessState(env));
 });
 adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => { await clearPageCache(env); return ok(request, env, { cleared: true }); });
 

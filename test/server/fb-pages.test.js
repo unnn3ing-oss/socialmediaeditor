@@ -249,24 +249,37 @@ test('舊資料表沒有 utm_text 欄位：自動補上', async (t) => {
   assert.deepEqual(s, { utm: '?&a=1', utmText: '', rd: 'news' });
 });
 
-test('開放切換：預設只開放管理員；管理頁切成 company 後公司憑證可用；值壞掉退回 admin', async (t) => {
+test('開放／關閉：預設關閉；開放後公司憑證可用；關閉原因隨 403 回給前端、開放後保留；舊值與壞值', async (t) => {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
   const env = fbEnv();
   const adm = await auth(env, 'admin');
   const company = await auth(env, 'company');
-  const set = (mode, h = adm) => call(env, '/admin/fb/access', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ mode }) });
-  assert.deepEqual((await (await call(env, '/admin/fb/access', { headers: adm })).json()).data, { mode: 'admin' });
-  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
-  assert.equal((await set('company', company)).status, 401, '公司憑證不能切換');
-  assert.equal((await set('everyone')).status, 400);
-  const r = await set('company');
-  assert.deepEqual((await r.json()).data, { mode: 'company' });
+  const set = (body, h = adm) => call(env, '/admin/fb/access', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  assert.deepEqual((await (await call(env, '/admin/fb/access', { headers: adm })).json()).data, { mode: 'admin', reason: '' });
+  const r0 = await call(env, '/fb/pages', { headers: company });
+  assert.equal(r0.status, 403);
+  assert.deepEqual((await r0.json()).detail, { reason: '' });
+  assert.equal((await set({ mode: 'company' }, company)).status, 401, '公司憑證不能切換');
+  assert.equal((await set({ mode: 'everyone' })).status, 400);
+  assert.equal((await set({ mode: 'admin', reason: '字'.repeat(101) })).status, 400);
+  assert.equal((await set({ mode: 'admin', reason: 5 })).status, 400);
+  // 關閉＋原因
+  assert.deepEqual((await (await set({ mode: 'admin', reason: '  臉書權杖更換中 ' })).json()).data, { mode: 'admin', reason: '臉書權杖更換中' });
+  const r1 = await call(env, '/fb/pages', { headers: company });
+  const j1 = await r1.json();
+  assert.equal(r1.status, 403); assert.equal(j1.code, 'fb_forbidden');
+  assert.deepEqual(j1.detail, { reason: '臉書權杖更換中' });
+  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company', true) })).status, 200, '管理員一直可用');
+  // 開放（沒帶 reason＝保留）
+  assert.deepEqual((await (await set({ mode: 'company' })).json()).data, { mode: 'company', reason: '臉書權杖更換中' });
   assert.equal((await call(env, '/fb/pages', { headers: company })).status, 200);
   assert.deepEqual((await (await call(env, '/fb/access', { headers: company })).json()).data, { mode: 'company' });
   assert.equal((await call(env, '/fb/pages')).status, 401, '沒登入仍不行');
-  await set('admin');
-  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
-  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company', true) })).status, 200, '管理員一直可用');
+  // 清空原因
+  assert.deepEqual((await (await set({ mode: 'admin', reason: '' })).json()).data, { mode: 'admin', reason: '' });
+  // 舊版純字串、壞值
+  env.DB.raw.prepare("UPDATE fb_settings SET v = 'company' WHERE k = 'access'").run();
+  assert.equal((await call(env, '/fb/pages', { headers: company })).status, 200, '舊版純字串仍有效');
   env.DB.raw.prepare("UPDATE fb_settings SET v = 'bogus' WHERE k = 'access'").run();
   assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
 });

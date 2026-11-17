@@ -10,7 +10,7 @@ export const MESSAGES = {
   misconfigured: '後端設定不完整，請檢查 Secrets。',
   fb_off: '後端尚未設定 FB_USER_TOKEN。',
   fb_token: '臉書 token 無效或過期。',
-  fb_forbidden: '目前只有管理員可以使用排程發布。',
+  fb_forbidden: '排程發布目前關閉。',
   fb_no_pages: '臉書 token 沒有可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts 權限。',
   fb_error: '臉書回應錯誤。',
   fb_bad_time: '排程時間必須在 10 分鐘到 30 天之間。',

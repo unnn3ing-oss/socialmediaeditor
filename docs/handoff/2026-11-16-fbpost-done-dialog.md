@@ -44,10 +44,10 @@
 - 卡片標題「排程發布」，按鈕「開放」「關閉」（mode company／admin 不變）；關閉＝只有管理員密碼。
 - 關閉原因選填 ≤100 字，存 `fb_settings` k=`access` 的 v 改 JSON `{mode,reason}`（相容舊值純字串）；開放後保留原因。
 - 公司帳號被擋：`fb_forbidden` 帶 `detail:{reason}`，fbpost 停用頁顯示「原因：…」（沒填不顯示）。
-- [ ] 後端 access.js／index.js＋測試
-- [ ] 兩個管理頁
-- [ ] fbpost app.js＋e2e
-- [ ] 審查、截圖，等使用者說「推」
+- [x] 後端 access.js（`accessState`／`setAccessState`）／index.js（POST 沒帶 reason＝保留）＋測試；`fb_forbidden` 文字改「排程發布目前關閉。」
+- [x] 兩個管理頁（`#acOpen`／`#acClose`／`#acReason`／`#acReasonSave`）
+- [x] fbpost app.js 顯示 `detail.reason`＋e2e；npm test 613、e2e 117、build --check 通過
+- [ ] 審查，等使用者說「推」
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`

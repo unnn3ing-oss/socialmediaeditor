@@ -28,10 +28,10 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     if (p.startsWith('/fb/')) fbCalls.push(p);
     if (p === '/auth/status') {
       if (mode === 'denied') return json({ ok: false, code: 'unauthorized', error: '請先登入' }, 401);
-      return json(mode === 'admin' || mode === 'tokenbad' ? { company: true, exp: soon, admin: true } : { company: true, exp: soon });
+      return json(mode === 'admin' || mode === 'tokenbad' ? { company: true, exp: soon, admin: true } : { company: true, exp: soon });   // closedReason／companyOpen＝一般公司帳號
     }
     // 開放範圍：company＝只開放管理員時的公司帳號（403）；companyOpen＝已開放給公司帳號
-    if (mode === 'company' && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_forbidden', error: '目前只有管理員可以使用排程發布。' }, 403);
+    if ((mode === 'company' || mode === 'closedReason') && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_forbidden', error: '排程發布目前關閉。', detail: { reason: mode === 'closedReason' ? '臉書權杖更換中' : '' } }, 403);
     if (p === '/fb/access') return json({ mode: mode === 'companyOpen' ? 'company' : 'admin' });
     if (p === '/fb/pages') return mode === 'tokenbad' ? json({ ok: false, code: 'fb_token', error: '臉書 token 無效或過期。' }, 502) : json(PAGES);
     if (p === '/fb/post') {
@@ -64,7 +64,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
 const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
 for (const mode of ['company', 'denied']) {
-  test(`只開放管理員時，公司帳號（${mode}）只顯示功能停用`, async () => {
+  test(`關閉時，公司帳號（${mode}）只顯示功能停用`, async () => {
     const { page, errors, fbCalls } = await newPage(mode, { width: 390, height: 700 });
     await page.goto(srv.url + 'tools/fbpost/index.html');
     const box = page.locator('#fbpostOff');
@@ -73,11 +73,22 @@ for (const mode of ['company', 'denied']) {
     await page.waitForTimeout(400);
     assert.equal(await page.locator('#fbpostApp').isVisible(), false);
     assert.deepEqual(fbCalls, mode === 'company' ? ['/fb/pages'] : [], '公司帳號只問一次 /fb/pages（403），沒登入不問');
-    assert.equal(await page.isHidden('#offReason'), true, '權限不足不顯示原因');
+    assert.equal(await page.isHidden('#offReason'), true, '沒填關閉原因不顯示');
     assert.deepEqual(errors, []);
     await page.close();
   });
 }
+
+test('關閉且有填原因：公司帳號的停用頁顯示原因', async () => {
+  const { page, errors } = await newPage('closedReason');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#offReason:not([hidden])');
+  assert.equal(await page.textContent('#offReason'), '原因：臉書權杖更換中');
+  assert.equal(await page.locator('#fbpostApp').isVisible(), false);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-closed.png') });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
 
 test('已開放給公司帳號：公司帳號可以用，不顯示「測試模式」標籤；管理員在只開放管理員時有標籤', async () => {
   const { page, errors } = await newPage('companyOpen');

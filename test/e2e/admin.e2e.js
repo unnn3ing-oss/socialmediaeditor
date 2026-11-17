@@ -7,6 +7,7 @@ const { launch } = require('../helpers/browser.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const API = 'https://toolbox-api.19jpz-3.workers.dev';
+const SHOT = process.env.SHOT_DIR;
 let srv, browser;
 test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
@@ -14,7 +15,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 let PG_SAVED = null;
 let PS_SAVED = null;
 let TOK_SAVED = null;
-let AC_MODE = 'admin';
+let AC = { mode: 'admin', reason: '' };
 const PAGES = [
   { id: '1', name: 'TVBS 新聞', short: '新聞', utm: '', rd: 'news', order: 0, show: 1 },
   { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', utmText: '?&utm_medium=text', rd: 'ent', order: 1, show: 1 },
@@ -28,8 +29,8 @@ const DATA = {
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
   'POST /admin/fb/refresh': {},
-  'GET /admin/fb/access': () => ({ mode: AC_MODE }),
-  'POST /admin/fb/access': (b) => { AC_MODE = b.mode; return { mode: AC_MODE }; },
+  'GET /admin/fb/access': () => AC,
+  'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
   'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP' }; },
   'DELETE /admin/fb/token': { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'secret', app: 'DEV-TOOL' },
   'GET /admin/rundown': { configured: true },
@@ -278,23 +279,33 @@ test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後
   assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });
 
-test('排程發布開放範圍：讀取目前狀態、切換打 /admin/fb/access', async () => {
-  AC_MODE = 'admin';
+test('排程發布開放／關閉：讀取狀態與原因、關閉帶原因、開放保留原因、只改原因', async () => {
+  AC = { mode: 'admin', reason: '' };
   const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
-  await page.waitForFunction(() => document.getElementById('acState').textContent === '狀態：只開放管理員');
-  assert.equal(await page.getAttribute('#acAdmin', 'aria-pressed'), 'true');
+  await page.waitForFunction(() => document.getElementById('acState').textContent === '狀態：關閉');
+  assert.deepEqual(await page.$$eval('#acCard .ac-row button', (bs) => bs.map((b) => b.textContent)), ['開放', '關閉']);
+  assert.equal(await page.getAttribute('#acClose', 'aria-pressed'), 'true');
+  assert.equal(await page.isVisible('#acReasonSave'), true, '關閉中可以只存原因');
   const cards = await page.$$eval('#panel-fb section.card', (els) => els.map((e) => e.id));
   assert.equal(cards[0], 'acCard', '放在臉書發文最上面');
-  await page.click('#acCompany');
-  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已切換為「開放給公司帳號」');
-  assert.equal(AC_MODE, 'company');
-  assert.equal(await page.getAttribute('#acCompany', 'aria-pressed'), 'true');
-  assert.match(await page.textContent('#acState'), /開放給公司帳號/);
+  await page.fill('#acReason', '臉書權杖更換中');
+  await page.click('#acReasonSave');
+  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已儲存原因');
+  assert.deepEqual(AC, { mode: 'admin', reason: '臉書權杖更換中' });
+  assert.equal(await page.textContent('#acState'), '狀態：關閉（原因：臉書權杖更換中）');
+  if (SHOT) await page.locator('#acCard').screenshot({ path: path.join(SHOT, 'admin-access.png') });
+  await page.click('#acOpen');
+  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已開放');
+  assert.deepEqual(AC, { mode: 'company', reason: '臉書權杖更換中' });
+  assert.equal(await page.textContent('#acState'), '狀態：開放');
+  assert.equal(await page.isHidden('#acReasonSave'), true);
+  assert.equal(await page.inputValue('#acReason'), '臉書權杖更換中', '開放後原因保留');
+  await page.fill('#acReason', '');
+  await page.click('#acClose');
+  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已關閉');
+  assert.deepEqual(AC, { mode: 'admin', reason: '' });
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/access' && c.auth === 'Bearer T'));
-  await page.click('#acAdmin');
-  await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已切換為「只開放管理員」');
-  assert.equal(AC_MODE, 'admin');
 });
 
 test('素材上傳：順序是等級、素材名稱、檔案、上傳；選檔自動帶名稱，替換帶入的名稱不被覆蓋', async () => {
