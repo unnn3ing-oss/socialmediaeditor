@@ -284,3 +284,15 @@ test('標題最多 4 行：第 5 行起顯示提示；4 行時最後一行對齊
   assert.equal(r.four, r.three);
   assert.equal(r.one, 880, '1～3 行仍以 880 置中');
 });
+
+test('手機：每組右上的紅色 × 維持正圓', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 760 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.goto(srv.url + 'tools/pattern/index.html');
+  const btn = page.locator('.batch-item-head .remove-btn').first();
+  await btn.waitFor();
+  const box = await btn.boundingBox();
+  assert.ok(Math.abs(box.width - box.height) < 1, `寬 ${box.width}、高 ${box.height}`);
+  assert.ok(box.width >= 24);
+  await ctx.close();
+});

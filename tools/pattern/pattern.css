@@ -614,6 +614,8 @@
   /* iOS 的輸入框字級小於 16px 時，點進去整個頁面會被放大；預覽上的標題框（.title-overlay）字級是跟著畫布算的，不動 */
   input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]), select, textarea:not(.title-overlay) { font-size: 16px; }
   .batch-item-head button { min-height: 36px; }
+  /* 紅色 × 要維持正圓：跟著高度一起變 36×36 */
+  .batch-item-head .remove-btn { width: 36px; height: 36px; }
   /* 右下角「其他工具」縮小一點、貼角落，少蓋到內容 */
   .tools-fab { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   .tools-btn { width: 40px; height: 40px; font-size: 17px; }

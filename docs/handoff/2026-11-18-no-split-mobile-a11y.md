@@ -32,6 +32,7 @@
 - [x] 各工具 CSS／標籤（livereq minmax、linepush 頂列換行＋貼圖列可捲＋× 32px＋標籤／alt、pattern 標籤／alt、design `row()` 用 label for＋寬高可換行、collage／watermark 滑桿 24px、collage 按鈕不斷字）
 - [x] 手機 e2e、npm test 618、e2e 136、build --check 通過；量測腳本 7 寬度 × 11 頁 0 項問題
 - [x] 獨立審查：通過，無修改（小遺憾：設計「弧度」列第二個數字框沒名稱，原本就有）
+- [x] 使用者回報：圖片套版手機上紅色 × 變橢圓（舊 BUG：`.batch-item-head button { min-height:36px }` 把 30px 寬的 × 拉成 30×36）→ 手機改 36×36，加 e2e
 - [ ] 截圖給使用者，等「推」
 
 ## 測試
