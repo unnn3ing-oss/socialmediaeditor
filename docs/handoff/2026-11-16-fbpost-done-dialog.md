@@ -38,7 +38,16 @@
 - [x] 管理頁：`admin/`、`server/core/admin-page.js`（同一支腳本改兩邊：卡片 `.pg-card`、`#acCard`、素材順序＋`autoKey`）
 - [x] fbpost 前端：app.js 改看 `st.company`＋`/fb/pages` 403、`.test-pill` 依 `/fb/access` 隱藏；send.js 純文字送出前 confirmBox
 - [x] npm test 613、e2e 116、build --check 通過；截圖已拍
-- [x] 獨立審查通過（未改檔）；等使用者說「推」
+- [x] 獨立審查通過（未改檔）
+
+## 追加 2：開放／關閉＋關閉原因（使用者已說「開始」）
+- 卡片標題「排程發布」，按鈕「開放」「關閉」（mode company／admin 不變）；關閉＝只有管理員密碼。
+- 關閉原因選填 ≤100 字，存 `fb_settings` k=`access` 的 v 改 JSON `{mode,reason}`（相容舊值純字串）；開放後保留原因。
+- 公司帳號被擋：`fb_forbidden` 帶 `detail:{reason}`，fbpost 停用頁顯示「原因：…」（沒填不顯示）。
+- [ ] 後端 access.js／index.js＋測試
+- [ ] 兩個管理頁
+- [ ] fbpost app.js＋e2e
+- [ ] 審查、截圖，等使用者說「推」
 
 ## 測試
 `npm test`、`npx playwright test tests/e2e/fbpost.e2e.js`、`node build.js --check`
