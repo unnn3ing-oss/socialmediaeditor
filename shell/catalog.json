@@ -78,6 +78,17 @@
       "entry": "tools/fbpost/index.html?v=cf714c12cd"
     },
     {
+      "id": "livereq",
+      "name": "直播需求單",
+      "group": "發文與素材",
+      "desc": "貼上直播單，補 FB 粉專、值班小編、內文",
+      "tier": "public",
+      "requires": [],
+      "icon": "tools/livereq/icon.svg",
+      "thumb": "tools/livereq/thumb.svg",
+      "entry": "tools/livereq/index.html?v=c937722a18"
+    },
+    {
       "id": "ytdl",
       "name": "YT 批量下載",
       "group": "發文與素材",

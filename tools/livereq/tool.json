@@ -1,0 +1,15 @@
+{
+  "id": "livereq",
+  "name": "直播需求單",
+  "group": "發文與素材",
+  "desc": "貼上直播單，補 FB 粉專、值班小編、內文",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "assets": {},
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}
