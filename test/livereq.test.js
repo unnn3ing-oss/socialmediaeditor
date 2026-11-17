@@ -167,4 +167,6 @@ test('時間格式 00:00', async () => {
   assert.equal(P.fmtTime('21:00~21:XX:XX(第一段廣告前)'), '21:00');
   assert.equal(P.fmtTime('9:05'), '09:05');
   assert.equal(P.fmtTime('晚間'), '晚間');
+  assert.equal(P.fmtTime('2026/11/16 2100'), '21:00');
+  assert.equal(P.fmtTime('2026.11.16'), '2026.11.16');
 });

@@ -356,7 +356,7 @@ export function fmtTime(s) {
   const pad = (h, m) => String(+h).padStart(2, '0') + ':' + m;
   let m = /(\d{1,2})\s*[:：]\s*(\d{2})/.exec(t);
   if (m && ok(m[1], m[2])) return pad(m[1], m[2]);
-  m = /(?<!\d)(\d{1,2})(\d{2})(?!\d)/.exec(t);
+  m = /(?<![\d/.])(\d{1,2})(\d{2})(?!\d|[/.]\d)/.exec(t);
   if (m && ok(m[1], m[2])) return pad(m[1], m[2]);
   return t.trim();
 }
