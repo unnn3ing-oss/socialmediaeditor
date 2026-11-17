@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800;900&display=swap');
 /* 做圖工具共用底（拼圖／尺寸／浮水印各帶一份）：從舊的「套版產生器」style.css 抽出這幾個工具用得到的部分，
    外觀盡量維持原樣。公司字型與其他功能的樣式一律沒有帶。 */
 :root {

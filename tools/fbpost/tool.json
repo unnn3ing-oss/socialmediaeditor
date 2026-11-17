@@ -11,31 +11,31 @@
   "assets": {
     "sticker.smile": {
       "company": "tbao-smile",
-      "public": "../../assets-public/stickers/smile.png"
+      "public": "../../assets-public/stickers/smile.webp"
     },
     "sticker.shock": {
       "company": "tbao-shock",
-      "public": "../../assets-public/stickers/shock.png"
+      "public": "../../assets-public/stickers/shock.webp"
     },
     "sticker.cry": {
       "company": "tbao-cry",
-      "public": "../../assets-public/stickers/cry.png"
+      "public": "../../assets-public/stickers/cry.webp"
     },
     "sticker.angry": {
       "company": "tbao-angry",
-      "public": "../../assets-public/stickers/angry.png"
+      "public": "../../assets-public/stickers/angry.webp"
     },
     "sticker.kiss": {
       "company": "tbao-kiss",
-      "public": "../../assets-public/stickers/kiss.png"
+      "public": "../../assets-public/stickers/kiss.webp"
     },
     "sticker.laugh": {
       "company": "tbao-laugh",
-      "public": "../../assets-public/stickers/laugh.png"
+      "public": "../../assets-public/stickers/laugh.webp"
     },
     "sticker.meh": {
       "company": "tbao-meh",
-      "public": "../../assets-public/stickers/meh.png"
+      "public": "../../assets-public/stickers/meh.webp"
     },
     "frame.ent.ribbon": {
       "company": "pattern-ribbon-ent",

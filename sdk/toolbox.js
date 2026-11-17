@@ -9,12 +9,13 @@ import { createStatus } from './status.js';
 
 const api = createApi();
 
+// tool.json 只抓一次：同時要好幾個素材時共用同一個請求。
 let toolSpec = null;
 async function getSpec(key) {
   if (!toolSpec) {
-    try { toolSpec = (await (await fetch(new URL('tool.json', location.href))).json()).assets || {}; } catch { toolSpec = {}; }
+    toolSpec = fetch(new URL('tool.json', location.href)).then((r) => r.json()).then((j) => j.assets || {}).catch(() => ({}));
   }
-  return toolSpec[key] || null;
+  return (await toolSpec)[key] || null;
 }
 function isCompany() {
   try { return Boolean(window.parent !== window && window.parent.tbxShell?.company().unlocked); } catch { return false; }

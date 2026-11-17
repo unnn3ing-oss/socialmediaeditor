@@ -7,7 +7,7 @@
 
 | 代號 | 公司版（後端代號） | 通用版 | 用在 |
 |---|---|---|---|
-| `sticker.smile` / `shock` / `cry` / `angry` / `kiss` / `laugh` / `meh` | `tbao-<同名>` | `stickers/<同名>.png` | 圖片套版、LINE 推播、設計 |
+| `sticker.smile` / `shock` / `cry` / `angry` / `kiss` / `laugh` / `meh` | `tbao-<同名>` | `stickers/<同名>.webp` | 圖片套版、LINE 推播、設計 |
 | `frame.ent.ribbon`、`frame.news.ribbon` | `pattern-ribbon-ent`、`pattern-ribbon-news` | 無（改畫通用框 C） | 圖片套版 |
 | `frame.logo` | `pattern-logo-white` | 無 | 圖片套版 |
 | `line.header` | `line-header` | 無（不加標題條） | LINE 推播 |
@@ -17,7 +17,7 @@
 | `font.line` | `font-taipei-sans-bold`（woff2，台北黑體粗體，同舊 LINE 工具） | 無（用 Noto Sans TC 粗體） | LINE 推播 |
 
 ## 貼圖來源與授權
-`stickers/*.png` 由 Google **Noto Color Emoji** 字型輸出，加白色描邊與陰影（400×400 透明底）。
+`stickers/*.webp` 由 Google **Noto Color Emoji** 字型輸出，加白色描邊與陰影（400×400 透明底）。
 字型以 SIL Open Font License 1.1 授權、Noto Emoji 圖像以 Apache License 2.0 授權，皆可商用、可修改、可公開散布。
 來源：https://github.com/googlefonts/noto-emoji
 

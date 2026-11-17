@@ -73,7 +73,7 @@ test('沒密碼：加入圖片檔（setInputFiles）後畫布有圖', async () =
 test('沒密碼：通用貼紙生效、沒有 TVBS 字樣與 WHZ-Heavy', async () => {
   const { frame, requested } = await open();
   const src = await frame.getAttribute('#designApp [data-add="sticker:smile"] img', 'src');
-  assert.match(src, /assets-public\/stickers\/smile\.png$/);
+  assert.match(src, /assets-public\/stickers\/smile\.webp$/);
   assert.ok(await frame.evaluate(() => [...document.querySelectorAll('.dz-sticker img')].every((i) => i.complete && i.naturalWidth > 0)));
   await add(frame, 'text');
   const opts = await frame.locator('#dzFont option').evaluateAll((o) => o.map((x) => x.value));
