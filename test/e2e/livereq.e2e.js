@@ -112,3 +112,18 @@ test('沒寫新聞事件：卡片要求補上，補了才算', async () => {
   assert.match(await card.locator('[data-out]').inputValue(), /●內文：測試，讓TVBS新聞帶您一起來了解。/);
   await page.close();
 });
+
+test('再貼一份：取代上一份，只留新的卡片', async () => {
+  const { frame, page } = await open();
+  const pasteEvt = (text) => frame.evaluate((t) => {
+    const dt = new DataTransfer(); dt.setData('text/plain', t);
+    document.getElementById('src').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, text);
+  await pasteEvt(fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  assert.equal(await frame.locator('.lr-card').count(), 6);
+  await pasteEvt(fs.readFileSync(path.join(FIX, 'weather.txt'), 'utf8'));
+  assert.equal(await frame.locator('.lr-card').count(), 1);
+  assert.match(await frame.inputValue('#src'), /^11月16日《18氣象站》/);
+  assert.equal(await frame.textContent('#count'), '共 1 場');
+  await page.close();
+});

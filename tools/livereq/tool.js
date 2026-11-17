@@ -154,7 +154,14 @@ function run() {
 }
 
 $('run').addEventListener('click', run);
-src.addEventListener('paste', () => setTimeout(run, 0));
+// 一次一份：貼上就取代框內舊的需求單並馬上解析，不累加
+src.addEventListener('paste', (e) => {
+  const text = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (!text) { setTimeout(run, 0); return; }
+  e.preventDefault();
+  src.value = text;
+  run();
+});
 $('clear').addEventListener('click', () => {
   src.value = ''; cards.length = 0; list.replaceChildren(); empty.hidden = true; count.textContent = '';
   src.focus();
