@@ -144,3 +144,17 @@ test('直播時間：必填；九點熱話題開頭時間算有；18氣象站自
   const c = P.parse('●新聞事件：A\n●直播時間：\n●直播平台：\nTVBS NEWS\n●YT標：B')[0];
   assert.match(P.build(c, { ...OPT, timeOverride: '0900' }), /●直播時間：0900\n/);
 });
+
+test('固定時段節目沒寫直播時間：只提醒、不擋；一般活動照擋', async () => {
+  const P = await load();
+  const prog = P.parse('**導播好～ 【#TVBS十點不一樣】 直播需要麻煩**\n●直播平台：\nTVBS NEWS\n●畫面來源：X\n●YT標：B')[0];
+  assert.equal(prog.program, true);
+  const r = P.check(prog, OPT);
+  assert.ok(!r.missing.includes('直播時間'));
+  assert.ok(r.warnings.includes('直播時間：沒寫（固定時段）'));
+  assert.equal(P.parse('●新聞事件：2100 看世界\n●直播平台：\nFB：\n新聞粉\n●YT標：B')[0].program, true);
+  assert.equal(P.parse('●新聞事件：21:00直播\n●YT標：B')[0].program, true);
+  const ev = P.parse('●新聞事件：記者會\n●直播平台：\nTVBS NEWS\n●YT標：B')[0];
+  assert.equal(ev.program, false);
+  assert.ok(P.check(ev, OPT).missing.includes('直播時間'));
+});

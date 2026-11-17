@@ -117,13 +117,16 @@ function makeCard(a, idx) {
       ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
     ];
     const ul = q('[data-checks]');
-    ul.replaceChildren(...items.map(([k, label]) => {
+    const timeWarn = warnings.some((w) => w.startsWith('直播時間'));
+    const okItems = items.filter(([k]) => !(k === '直播時間' && timeWarn)).map(([k, label]) => {
       const li = document.createElement('li');
       const bad = missing.includes(k);
       li.className = bad ? 'bad' : 'ok';
       li.textContent = (bad ? '缺 ' : '✓ ') + (bad ? k : label);
       return li;
-    }), ...warnings.map((t) => { const li = document.createElement('li'); li.className = 'warn'; li.textContent = t; return li; }));
+    });
+    const warnItems = warnings.map((t) => { const li = document.createElement('li'); li.className = 'warn'; li.textContent = t; return li; });
+    ul.replaceChildren(...okItems, ...warnItems);
     if (!dirty) { out.value = build(a, opt); out.rows = Math.min(Math.max(out.value.split('\n').length + 1, 6), 40); }
     copyBtn.disabled = missing.length > 0;
     msg.className = 'lr-msg' + (missing.length ? ' is-bad' : '');

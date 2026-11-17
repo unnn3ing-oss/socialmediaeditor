@@ -2,6 +2,13 @@
 // 純函式，不碰 DOM。規則見 docs/superpowers/specs/2026-11-17-livereq-design.md。
 
 export const PAGES = ['新聞', '少康', '娛樂', '國際'];
+// 固定時段節目：沒寫直播時間只提醒、不擋
+export const PROGRAMS = ['九點熱話題', '十點不一樣', '最前線新聞', '21直播', '20直播', '2100看世界', '18氣象站'];
+const progKey = (s) => String(s).replace(/[\s:：]/g, '').replace(/(\d{1,2})00/g, '$1');
+export function isProgram(event, lines = []) {
+  const hay = progKey([event, ...lines.slice(0, 3)].join(' '));
+  return PROGRAMS.some((p) => hay.includes(progKey(p)));
+}
 export const BODY_TAIL = '，讓TVBS新聞帶您一起來了解。';
 const KEYWORD_RE = /(事件|平台|畫面來源|直播形式|訊號|時間|標|文|值班)/;
 const HEADER_RE = /導播好|直播需求|直播單/;
@@ -195,6 +202,7 @@ export function analyze(lines) {
     title, titles, body: bodyF ? bodyF.text : '', source,
     sourcePending: !source || source === '待補', fbExisting: plat.fb,
     weather: /氣象/.test(event),
+    program: isProgram(event, lines),
   };
 }
 
@@ -210,12 +218,14 @@ export function pagesToAdd(fbExisting, checked) {
 export function check(a, { checked = [], duty = {}, eventOverride = '', timeOverride = '' } = {}) {
   const missing = [];
   if (!(a.event || eventOverride.trim())) missing.push('新聞事件');
-  if (!(a.time || timeOverride.trim())) missing.push('直播時間');
+  const noTime = !(a.time || timeOverride.trim());
+  if (noTime && !a.program) missing.push('直播時間');
   if (!a.fbExisting.length && !checked.length) missing.push('FB 粉專');
   if (!String(duty.name || '').trim() || !String(duty.contact || '').trim()) missing.push('值班小編');
   if (!a.title) missing.push('標題');
   if (!a.body.trim() && !a.title) missing.push('內文');
   const warnings = [];
+  if (noTime && a.program) warnings.push('直播時間：沒寫（固定時段）');
   if (a.sourcePending) warnings.push('畫面來源：待補');
   return { missing, warnings };
 }
