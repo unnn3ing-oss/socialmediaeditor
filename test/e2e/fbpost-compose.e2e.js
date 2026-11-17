@@ -44,9 +44,10 @@ async function openFb() {
   });
   await page.goto(srv.url + 'test/fixtures/company-host.html?tool=fbpost');
   const frame = await (await page.waitForSelector('iframe[name=tool]')).contentFrame();
-  await frame.waitForSelector('#pages .chip', { state: 'attached' });
-  await frame.click('#newBtn');
+  await frame.waitForSelector('#newBtn:not([hidden])');
+  await frame.click('#newBtn');   // 第一次開啟才載入做圖模組
   await frame.waitForSelector('#postDlg:not([hidden])');
+  await frame.waitForSelector('#pages .chip', { state: 'attached' });
   return { page, frame, posts, errors, articles };
 }
 const canvasHash = (frame, sel) => frame.evaluate(async (s) => {

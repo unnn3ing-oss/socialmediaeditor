@@ -237,3 +237,7 @@ body.no-scroll { overflow: hidden; }
 @media (max-width: 820px) { .post-head .pill.warn { display: none; } .post-head { flex-wrap: nowrap; } .post-head h2 { font-size: 1rem; white-space: nowrap; } .post-head .seg button { padding: 0 10px; } }
 .fp .card:hover { transform: none; }
 @media (max-width: 480px) { .post-head { flex-wrap: wrap; row-gap: 8px; } .post-head #modeSeg { order: 3; width: 100%; } .post-head #modeSeg button { flex: 1; } }
+
+/* 1280×720 塞得下：預覽高度隨視窗縮放（高螢幕仍是欄寬，外觀不變）；說明收進「？」 */
+.canvas-wrap { width: min(100%, max(200px, calc(100vh - 410px))); }
+.help { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; align-self: center; border-radius: 50%; border: 1px solid var(--line-strong); color: var(--muted); font-size: 13px; cursor: help; }

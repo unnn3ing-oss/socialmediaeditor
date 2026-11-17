@@ -21,7 +21,7 @@ async function open(ctxOpts, init) {
 
 test('extension pill settles', async () => {
   const page = await open({ viewport: { width: 1280, height: 820 } });
-  await page.waitForSelector('#status .sk');
+  // 外掛偵測 0.4 秒內就會先顯示結果，骨架可能一閃而過，所以不等骨架出現
   await page.waitForSelector('#status .pill-warn', { timeout: 3500 });
   assert.equal(await page.textContent('#status .pill-warn'), '未安裝外掛');
   assert.equal(await page.locator('#status .sk').count(), 0);

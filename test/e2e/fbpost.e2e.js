@@ -161,9 +161,9 @@ const p2 = (n) => String(n).padStart(2, '0');
 const hm = (ms) => { const d = new Date(ms); return p2(d.getHours()) + p2(d.getMinutes()); };
 async function openPost(page) {
   await page.waitForSelector('#fbpostApp:not([hidden])');
-  await page.waitForSelector('#pages .chip', { state: 'attached' });
-  await page.click('#newBtn');
+  await page.click('#newBtn');   // 第一次開啟才載入做圖模組，按鈕先顯示「載入中…」
   await page.waitForSelector('#postDlg:not([hidden])');
+  await page.waitForSelector('#pages .chip', { state: 'attached' });
 }
 const chip = (id) => `#pages .chip[data-page="${id}"]`;
 // 模擬在新增發文視窗按 Ctrl+V 貼上圖片
@@ -265,7 +265,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   await page.click('#schedList li >> text=取消');
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfYes');
-  await page.waitForFunction(() => document.getElementById('schedHint').textContent.includes('共'));
+  await page.waitForFunction(() => /共|沒有排程/.test(document.getElementById('schedHint').textContent));
   assert.deepEqual(api.cancels, [{ page: '111' }]);
 
   // 已發佈
@@ -576,4 +576,69 @@ test('舊版版面：1280×800 與窄寬度下，新增發文底列（粉專、�
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, '沒有橫向捲動');
     await page.close();
   }
+});
+
+test('U6：開視窗焦點在文章網址、背景 inert（Tab 不跑到背景）、關閉後還原；開頁不載做圖模組', async () => {
+  const { page, errors } = await newPage('admin');
+  const reqs = [];
+  page.on('request', (r) => reqs.push(r.url()));
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.waitForTimeout(300);
+  assert.equal(reqs.some((u) => /ui\/compose\/(render|fx|assets)\.js|titleedit\.js|news-article\.js/.test(u)), false, '開頁不載做圖模組');
+  await openPost(page);
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'link');
+  assert.equal(await page.$eval('#fbpostApp', (e) => e.inert), true);
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement === document.body || !!document.activeElement.closest('#postDlg')), true, 'Tab 沒跑到背景');
+  }
+  await page.keyboard.press('Escape');
+  assert.equal(await page.isHidden('#postDlg'), true);
+  assert.equal(await page.$eval('#fbpostApp', (e) => e.inert), false);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('U7：換粉專清空列表且不查詢；改時間、取消成功只更新該列、不重查', async () => {
+  const { page, errors, fbCalls, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.click('#schedReload');
+  await page.waitForSelector('#schedList li');
+  const n0 = fbCalls.filter((c) => c === '/fb/scheduled').length;
+  await page.selectOption('#schedPage', '222');
+  assert.equal(await page.locator('#schedList li').count(), 0);
+  assert.match(await page.textContent('#schedHint'), /按「刷新」/);
+  await page.waitForTimeout(200);
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n0, '換粉專不自動查詢');
+  await page.click('#schedReload');
+  await page.waitForSelector('#schedList li');
+  const n1 = fbCalls.filter((c) => c === '/fb/scheduled').length;
+  const before = await page.getAttribute('#schedList li', 'data-at');
+  await page.click('#schedList li >> text=改時間');
+  const later = new Date(Date.now() + 5 * 3600 * 1000), z = (x) => String(x).padStart(2, '0');
+  await page.fill('#schedList li input[type=datetime-local]', `${later.getFullYear()}-${z(later.getMonth() + 1)}-${z(later.getDate())}T${z(later.getHours())}:${z(later.getMinutes())}`);
+  await page.click('#schedList li >> text=確認改時間');
+  await page.waitForFunction((b) => document.querySelector('#schedList li').dataset.at !== b, before);
+  assert.equal(api.reschedules.length, 1);
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n1, '改時間不重查');
+  page.once('dialog', (d) => d.accept());
+  await page.click('#schedList li >> text=取消');
+  await page.click('#cfYes');
+  await page.waitForFunction(() => !document.querySelector('#schedList li'));
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n1, '取消不重查');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('U8：1280×720 預覽、貼圖按鈕、底列都在視窗內', async () => {
+  const { page } = await newPage('admin', { width: 1280, height: 720 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  for (const sel of ['#cv', '#fxBtn', '#pages .chip', '#clearBtn', '#sendBtn']) {
+    const box = await page.locator(sel).first().boundingBox();
+    assert.ok(box && box.y >= 0 && box.y + box.height <= 720.5, sel + ' 在畫面內');
+  }
+  await page.close();
 });

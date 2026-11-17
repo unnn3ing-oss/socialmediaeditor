@@ -1,18 +1,12 @@
 // 排程發布（測試版，只給管理員）：只負責組裝各模組與切換分頁。
+//   做圖相關模組第一次開視窗才動態載入（開頁請求數少）。
 //   進入是已排程／已發佈（manage.js）；「＋ 新增發文」開彈出視窗（dialog.js），裡面是 compose.js 做圖＋帶入、
 //   targets.js 粉專膠囊＋timepop.js 排程時間、rd.js 排入 RD、send.js 送出；time.js、slug.js、rules.js 是純規則，util.js 共用小工具
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
-import { loadComposeAssets } from '../../ui/compose/assets.js';
 import { $, errText } from './util.js';
-import { createComposer } from './compose.js';
-import { createTargets } from './targets.js';
-import { createSender } from './send.js';
 import { createManage } from './manage.js';
-import { createTimePop } from './timepop.js';
 import { createDialog } from './dialog.js';
-import { createRd } from './rd.js';
-import { createComments } from './comments.js';
 
 tb.init('fbpost');
 
@@ -44,14 +38,22 @@ $('tabs').addEventListener('click', (e) => {
   }).catch(() => {});
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;
-  const dialog = createDialog();   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
-  const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
-  let sender;
-  const targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
-  sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }),
-    onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
+  // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
+  let currentPages = pages, targets = null, loading = null;
+  const ensureCompose = () => loading || (loading = (async () => {
+    const [{ loadComposeAssets }, { createComposer }, { createTargets }, { createSender }, { createTimePop }, { createRd }, { createComments }] =
+      await Promise.all([import('../../ui/compose/assets.js'), import('./compose.js'), import('./targets.js'), import('./send.js'),
+        import('./timepop.js'), import('./rd.js'), import('./comments.js')]);
+    const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
+    let sender;
+    targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
+    sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }),
+      onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
+    targets.setPages(currentPages);
+  })().catch((e) => { loading = null; throw e; }));
+  const dialog = createDialog({ beforeOpen: ensureCompose });   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
   const manage = createManage({ tb });
-  const showPages = (list) => { $('pagesState').textContent = `已連線 ${list.length} 個粉專`; targets.setPages(list); manage.setPages(list); };
+  const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); };
   showPages(pages);
   $('pagesRefresh').addEventListener('click', async () => {
     const b = $('pagesRefresh'); b.disabled = true;
