@@ -12,9 +12,16 @@
 ## 實作輪次（使用者已確認）
 | 輪 | 內容 | 狀態 |
 |---|---|---|
-| 1 | tokens＋單列導覽（桌面 disclosure 下拉／≤820px 或觸控「工具」面板）＋首頁 3／2／1 欄 | ⬜ |
-| 2 | 圖片套版桌面＋手機（編輯／預覽切換、底部操作列），只改排版、輸出逐像素比對 | ⬜ |
-| 3 | 其他 8 工具依 mobile spec §6（含 YT 下載、尺寸按鈕對齊） | ⬜ |
+| 1 | tokens＋單列導覽（桌面 disclosure 下拉／≤820px 或觸控「工具」面板）＋首頁 3／2／1 欄 | ✅ `4669287`（shell e2e 22、company／status／tokens e2e、npm test 618、build --check 通過） |
+| 2 | （子代理進行中）圖片套版桌面＋手機（編輯／預覽切換、底部操作列），只改排版、輸出逐像素比對 | ⬜ |
+| 3 | （3 個子代理進行中：linepush／collage／watermark／resize、design／livereq、fbpost／ytdl）其他 8 工具依 mobile spec §6（含 YT 下載、尺寸按鈕對齊） | ⬜ |
+
+### 第 1 輪實作重點
+- 導覽同一份 DOM：`#toolbar` 內 `#tools-btn`（≤820px 才顯示）＋`#tools-panel`（工具首頁、各分類 `.nav-group`＞`.nav-trigger`＋`.nav-menu`、手機狀態槽）。工具按鈕 `#toolbar button[data-tool]`，目前工具用 `aria-current="page"`（取代 aria-pressed）。
+- hover 只在 `(hover:hover) and (pointer:fine)` 且 >820px；`window blur`（點進 iframe）、外部 pointerdown、focusout 收起；Esc 還焦點；ArrowDown 進第一項；選工具後焦點進 iframe。
+- ≤820px 把 `#status` 搬進面板（`.nav-status`），公司狀態 warn 時「工具」鈕加提示點。
+- 首頁卡片標籤：`tool.json` 新增選填 `badges`（build.js 傳進 catalog），`requires` 自動加「需要外掛」「需要下載助手」。
+- 安裝教學 CSS、`ui/compose/fx.css` 換新色與圓角；`shell/installer.js`（Windows 安裝程式畫面）不動。
 
 ## 已定案的決定
 
