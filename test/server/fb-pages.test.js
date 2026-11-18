@@ -19,7 +19,7 @@ async function auth(env, kind, adm = false) {
 }
 const ACCOUNTS = { data: [{ id: '111', name: 'TVBS 新聞', access_token: 'PT111' }, { id: '222', name: '少康戰情室', access_token: 'PT222' }, { id: '333', name: '氣象站', access_token: 'PT333' }] };
 const fbEnv = () => mkEnv({ FB_USER_TOKEN: 'USERTOKEN' });
-// 授權名單裡加一個人（預設權限組 2＝發文，沒有 bypass），回帶 uid 的公司憑證標頭
+// 授權名單裡加一個人（預設權限組 2＝發文），回帶 uid 的公司憑證標頭
 async function staffAuth(env, id = 'A001', group = 2) {
   const adm = await auth(env, 'admin');
   const r = await call(env, '/admin/staff', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ id, name: '測試', group }) });

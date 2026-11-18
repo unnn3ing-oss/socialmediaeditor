@@ -168,7 +168,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
     <section class="card" id="acCard">
         <h2>排程發布</h2>
-        <p>開放時，授權名單內的人依權限組使用；關閉時，只有管理員密碼登入與權限組勾了「關閉時仍可使用」的人能用，其他人會看到「功能停用」和下面填的原因。用公司密碼登入的人一律不能用排程發布。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <p>開放時，授權名單內的人依權限組使用；關閉時，只有管理員密碼登入能用，員工編號（不分權限組）會看到「功能停用」和下面填的原因。用公司密碼登入的人一律不能用排程發布。切換後馬上生效，已排定的貼文與留言不受影響。</p>
         <p class="fb-state" id="acState">狀態：尚未讀取</p>
         <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
         <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>

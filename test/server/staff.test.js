@@ -35,8 +35,8 @@ test('管理 API：要管理憑證；預設 3 組權限組；新增驗證、編�
   const { env, adm } = await setup(t);
   assert.equal((await call(env, '/admin/staff')).status, 401);
   const { body } = await call(env, '/admin/staff', { headers: adm });
-  assert.deepEqual(body.data.groups.map((g) => [g.name, g.perms]), [['管理', ['view', 'post', 'edit', 'delete', 'bypass']], ['發文', ['view', 'post', 'edit', 'delete']], ['檢視', ['view']]]);
-  assert.equal(body.data.perms.length, 5);
+  assert.deepEqual(body.data.groups.map((g) => [g.name, g.perms]), [['管理', ['view', 'post', 'edit', 'delete']], ['發文', ['view', 'post', 'edit', 'delete']], ['檢視', ['view']]]);
+  assert.equal(body.data.perms.length, 4);
   const g = groupId(body.data, '發文');
   assert.equal((await post(env, adm, '/admin/staff', { id: 'a 1', name: '甲', group: g })).status, 400);
   assert.equal((await post(env, adm, '/admin/staff', { id: 'A1', name: '', group: g })).status, 400);
@@ -123,7 +123,7 @@ test('權限組：檢視組不能發文／改時間／刪除；/fb/me 回權限�
   assert.equal((await post(env, h, '/fb/posts/111_1/delete', { page: '111' })).body.code, 'fb_no_perm');
 });
 
-test('關閉時：管理組（bypass）可用、發文組被擋並看到原因；管理員密碼一直可用', async (t) => {
+test('關閉時：員工編號不分權限組都被擋並看到原因（含舊資料存的 bypass）；管理員密碼一直可用', async (t) => {
   const { env, adm } = await setup(t);
   const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
   await post(env, adm, '/admin/fb/access', { mode: 'admin', reason: '維護中' });
@@ -131,7 +131,10 @@ test('關閉時：管理組（bypass）可用、發文組被擋並看到原因�
   await post(env, adm, '/admin/staff', { id: 'P1', name: '小編', group: groupId(d, '發文') });
   const m = bearer((await login(env, 'M1')).body.data.token);
   const p = bearer((await login(env, 'P1')).body.data.token);
-  assert.equal((await call(env, '/fb/pages', { headers: m })).status, 200);
+  env.DB.raw.prepare("UPDATE staff_groups SET perms = '[\"view\",\"bypass\"]' WHERE name = '管理'").run();
+  const rm = await call(env, '/fb/pages', { headers: m });
+  assert.equal(rm.status, 403); assert.equal(rm.body.code, 'fb_forbidden');
+  assert.deepEqual((await call(env, '/admin/staff', { headers: adm })).body.data.groups[0].perms, ['view'], '舊的 bypass 讀出來就消失');
   const r = await call(env, '/fb/pages', { headers: p });
   assert.equal(r.status, 403); assert.equal(r.body.code, 'fb_forbidden'); assert.deepEqual(r.body.detail, { reason: '維護中' });
   const { signToken } = await tok();

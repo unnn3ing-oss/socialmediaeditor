@@ -1,5 +1,5 @@
 // 排程發布的開放／關閉：管理頁切換，存在 D1 fb_settings 一列（k='access'，v＝JSON {mode, reason}；舊版純字串也接受）
-//   'company'＝開放（授權名單內的人依權限組使用）；'admin'＝關閉（只有管理員密碼登入與權限組有 bypass 的人能用，預設）
+//   'company'＝開放（授權名單內的人依權限組使用）；'admin'＝關閉（只有管理員密碼登入能用，員工編號一律擋，預設）
 //   公司密碼登入（沒有員工編號）一律不能用排程發布
 //   讀不到或值壞掉＝關閉（保守）；reason＝關閉原因（選填，≤100 字，開放後保留）
 import { bearer } from '../core/auth.js';
@@ -36,7 +36,7 @@ export async function setAccessState(env, { mode, reason }) {
 }
 
 export const ADMIN_WHO = { uid: 'ADMIN', name: '管理員' };
-const ALL_PERMS = ['view', 'post', 'edit', 'delete', 'bypass'];
+const ALL_PERMS = ['view', 'post', 'edit', 'delete'];
 
 // 目前登入者：{ who:{uid,name}, admin, staff, perms, mode, reason }；需要 need 權限（null＝名單內即可）
 // 不通過回 { denied: Response }
@@ -47,7 +47,7 @@ export async function fbAccess(request, env, need = null) {
   if (t.adm) return { who: ADMIN_WHO, admin: true, staff: null, perms: ALL_PERMS, mode: st.mode, reason: st.reason };
   if (!t.staff) return { denied: fail(request, env, 'fb_need_staff') };
   const perms = t.staff.perms;
-  if (st.mode !== 'company' && !perms.includes('bypass')) return { denied: fail(request, env, 'fb_forbidden', undefined, { reason: st.reason }) };
+  if (st.mode !== 'company') return { denied: fail(request, env, 'fb_forbidden', undefined, { reason: st.reason }) };
   if (need && !perms.includes(need)) return { denied: fail(request, env, 'fb_no_perm') };
   return { who: { uid: t.staff.id, name: t.staff.name }, admin: false, staff: t.staff, perms, mode: st.mode, reason: st.reason };
 }

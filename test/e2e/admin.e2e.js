@@ -39,12 +39,12 @@ const DATA = {
 
 // 授權名單的假後端：記錄收到的 body／query，回整份最新狀態
 const SF = { bodies: [], audit: [] };
-const PERMS = [{ key: 'view', label: '檢視已排程／已發佈' }, { key: 'post', label: '新增發文（含排入 Rundown）' }, { key: 'edit', label: '改排程時間' }, { key: 'delete', label: '刪除貼文' }, { key: 'bypass', label: '關閉時仍可使用' }];
+const PERMS = [{ key: 'view', label: '檢視已排程／已發佈' }, { key: 'post', label: '新增發文（含排入 Rundown）' }, { key: 'edit', label: '改排程時間' }, { key: 'delete', label: '刪除貼文' }];
 let STAFF = [];
 const GROUPS = [
   { id: 'viewer', name: '唯讀', perms: ['view'] },
   { id: 'editor', name: '小編', perms: ['view', 'post', 'edit'] },
-  { id: 'lead', name: '主管', perms: ['view', 'post', 'edit', 'delete', 'bypass'] }];
+  { id: 'lead', name: '主管', perms: ['view', 'post', 'edit', 'delete'] }];
 function sfState() { return { staff: STAFF, groups: GROUPS.map((g) => ({ ...g, used: STAFF.filter((s) => s.group === g.id).length })), perms: PERMS }; }
 function staffRoute(req, u, key) {
   const p = u.pathname;
@@ -417,7 +417,7 @@ test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增�
   await page.waitForSelector('#sgRows .sg-row');
   const del = await page.$$eval('#sgRows .sg-row', (rs) => rs.map((r) => [r.querySelector('.danger').disabled, r.querySelector('.danger').title]));
   assert.deepEqual(del, [[true, '還有 1 人使用'], [true, '還有 1 人使用'], [true, '還有 1 人使用']]);
-  assert.equal(await page.$$eval('#sgRows .sg-row:nth-child(1) input[type=checkbox]', (c) => c.length), 5);
+  assert.equal(await page.$$eval('#sgRows .sg-row:nth-child(1) input[type=checkbox]', (c) => c.length), 4);
   await page.check('#sgRows .sg-row:nth-child(1) input[value=post]');
   await page.click('#sgRows .sg-row:nth-child(1) button.primary');
   await page.waitForFunction(() => /已儲存/.test(document.getElementById('sgMsg').textContent));
