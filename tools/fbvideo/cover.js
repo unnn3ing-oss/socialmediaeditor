@@ -57,22 +57,26 @@ export function pickCover(v) {
       const t = vid.currentTime;
       c.toBlob((blob) => { if (!blob) return finish(null); finish({ blob, url: URL.createObjectURL(blob), t }); }, 'image/jpeg', 0.9);
     };
-    dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); }, { once: true });
+    dlg.oncancel = (e) => { e.preventDefault(); finish(null); };
     dlg.showModal();
 
     // 平均取 8 格（另一個 video 依序跳，畫成小圖；點了跳到那一格）
     (async () => {
       await loaded(vid);
+      if (closed) return;
       await seek(vid, v.cover ? v.cover.t : Math.min(1, (vid.duration || 0) / 3));
+      if (closed) return;
       sync();
       const d = vid.duration || 0;
       if (!d) return;
       const tmp = document.createElement('video');
       tmp.muted = true; tmp.preload = 'auto'; tmp.src = v.url;
       await loaded(tmp);
+      if (closed) { tmp.removeAttribute('src'); tmp.load(); return; }
       for (let i = 0; i < STRIP && !closed; i++) {
         const t = (d * (i + 0.5)) / STRIP;
         await seek(tmp, t);
+        if (closed) break;
         const c = grab(tmp, 240);
         const b = document.createElement('button'); b.type = 'button'; b.className = 'strip-btn'; b.dataset.t = String(tmp.currentTime);
         b.setAttribute('aria-label', '跳到 ' + durText(t));
