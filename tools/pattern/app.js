@@ -485,7 +485,7 @@ let batchItems = [];   // { id, title, bg: {type,image,color}, frame, fontSize, 
 let batchIdCounter = 0;
 
 // Only one item's full edit block is shown at a time (accordion); every
-// other item collapses into a summary row, whether it's done or not.
+// other item is not listed on the left (switch via the thumbnail strip).
 let expandedBatchItemId = null;
 // 底部「下載這張」的對象：目前展開的那一組；產生後會收合，就沿用最後一次展開的
 let lastActiveItemId = null;
@@ -507,7 +507,7 @@ function setBatchPreviewTitle(item) {
   layoutTitleOverlay(batchPreviewTitleInput, batchCanvas, item.bg, item.title, effectiveCanvaSize(item.bg, item.fontSize), item.frame);
 }
 
-// Expand this item's edit block (collapsing every other item into a row)
+// Show this item's edit block on the left (only the selected item is shown)
 // and load it into the shared canvas — used by both a row click and a
 // thumbnail click in the preview strip below the canvas.
 function expandBatchItem(item) {
@@ -725,7 +725,7 @@ async function renderItemBlob(item) {
   };
 }
 
-// Round red "×" used for 移除 on both the collapsed row and the open block.
+// Round red "×" used for 移除 on the open block's header.
 // The glyph is an SVG so it looks the same whatever UI font is in effect.
 function createRemoveButton(onClick) {
   const btn = document.createElement('button');
