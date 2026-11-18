@@ -1,5 +1,5 @@
 # 圖片套版介面調整＋管理員看全部貼圖
-- 狀態：進行中　- 分支：claude/zealous-hopper-p48pli　- 最後更新：2026-11-18
+- 狀態：待使用者確認　- 分支：claude/zealous-hopper-p48pli　- 最後更新：2026-11-18
 - 使用者原始需求：純色背景預設隨機色；刪「完成」、產生此張改「下載這張」；貼圖與馬賽克改預覽右下角按鈕才彈出；灰字說明與狀態拿掉，需處理時由下往上彈提醒；標題字移到預覽上方；縮圖列最右「＋」新增、拿掉左側再做一張與全部清除。「管理員登入後在所有介面公司素材與通用素材全部都會出現」。
 
 ## 已定案的決定
@@ -21,13 +21,14 @@
 | sdk/assets.js、sdk/toolbox.js、sdk/README.md | 實作為 `getPublic(key)`＋`admin()` | ✅ |
 | ui/compose/assets.js、ui/compose/fx.js | 貼圖列支援 14 張＋分隔（通用版 id 加 -p） | ✅ |
 | tools/design（core 加 PUBLIC_STICKERS）、tools/linepush | 同上 | ✅ |
-| tools/pattern/（index.html、app.js、layout.js、pattern.css） | 介面 6 項 | ⬜ |
-| test/ | pattern e2e 改寫＋新增；sdk 單元；管理員 14 張 e2e | ⬜ |
+| tools/pattern/（index.html、app.js、layout.js、pattern.css、stickers.js） | 介面 6 項（9399afe）；彈窗灰字改 title 提示 | ✅ |
+| test/ | pattern e2e 新增 5 項、admin-stickers 3 項、sdk 單元 1 項；fbpost-compose 比對圖改等畫面穩定 | ✅ |
 
 ## 下一步
 - [x] 管理員貼圖（主對話，d052626；e2e admin-stickers 3 項）
-- [ ] 圖片套版介面（子代理）
-- [ ] 整合：npm test、全部 e2e、build --check、截圖 1280／390、獨立審查
+- [x] 圖片套版介面（子代理）
+- [x] 整合：npm test 619、e2e 164、build --check、獨立審查通過；截圖已給使用者
+- [ ] 等使用者確認畫面、說「推」併入 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 測試
 `npm test`、`npm run e2e`、`node build.js --check`。
