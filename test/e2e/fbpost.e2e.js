@@ -697,3 +697,63 @@ test('U8：1280×720 預覽、貼圖按鈕、底列都在視窗內', async () =>
   }
   await page.close();
 });
+
+test('送出提示不佔位：平常隱藏，游標移到送出鈕才浮出；被擋原因同樣只在游標移上時顯示', async () => {
+  const { page, errors } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  const foot = async () => (await page.locator('.post-foot').boundingBox()).height;
+  const h0 = await foot();
+  assert.match(await page.textContent('#sendErr'), /請先勾選要發的粉專/);
+  assert.equal(await page.locator('#sendErr').evaluate((e) => getComputedStyle(e).visibility), 'hidden', '平常隱藏');
+  await page.hover('#sendWrap');
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('#sendErr').evaluate((e) => getComputedStyle(e).visibility), 'visible', '游標移上顯示');
+  assert.equal(await page.locator('#sendErr').evaluate((e) => getComputedStyle(e).position), 'absolute');
+  await page.mouse.move(5, 5);
+  await page.fill('#msg', 'm');
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#sendBtn');
+  assert.match(await page.textContent('#sendErr'), /請貼上文章網址/);
+  assert.equal(await foot(), h0, '提示不撐高底列');
+  await page.mouse.move(5, 5); await page.waitForTimeout(200);
+  assert.equal(await page.locator('#sendErr').evaluate((e) => getComputedStyle(e).visibility), 'hidden');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('電腦版新增發文：左邊預覽固定，只有右邊捲動', async () => {
+  const { page, errors } = await newPage('admin', { width: 1280, height: 720 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  const st = await page.evaluate(() => {
+    const body = document.querySelector('.post-body'), left = document.querySelector('.compose > .left'), right = document.querySelector('.compose > .right');
+    return { body: getComputedStyle(body).overflowY, left: getComputedStyle(left).overflowY, right: getComputedStyle(right).overflowY, rScroll: right.scrollHeight > right.clientHeight };
+  });
+  assert.equal(st.body, 'hidden');
+  assert.equal(st.right, 'auto');
+  assert.ok(st.rScroll, '右邊內容超出可捲');
+  const y0 = (await page.locator('#cvWrap').boundingBox()).y;
+  await page.locator('.compose > .right').evaluate((e) => { e.scrollTop = 400; });
+  assert.equal((await page.locator('#cvWrap').boundingBox()).y, y0, '右邊捲動時預覽不動');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('已排程查詢中顯示 3 列骨架，讀完換成結果', async () => {
+  const { page, errors } = await newPage('admin');
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await page.route(API_BASE + '/fb/scheduled**', async (r) => { await gate; await r.fallback(); });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#schedReload');
+  await page.click('#schedReload');
+  await page.waitForSelector('#schedList li.sk-row');
+  assert.equal(await page.locator('#schedList li.sk-row').count(), 3);
+  release();
+  await page.waitForSelector('#schedList li:not(.sk-row)');
+  assert.equal(await page.locator('#schedList li.sk-row').count(), 0);
+  assert.equal(await page.locator('#schedList li').count(), 1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

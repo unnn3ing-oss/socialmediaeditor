@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=1a6501b10c"
+      "entry": "tools/pattern/index.html?v=827806098c"
     },
     {
       "id": "linepush",
@@ -78,7 +78,7 @@
       ],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=3c2602465b"
+      "entry": "tools/fbpost/index.html?v=ebe351d5a7"
     },
     {
       "id": "livereq",
@@ -103,7 +103,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=72eea340d7"
+      "entry": "tools/ytdl/index.html?v=7522f79ddd"
     }
   ]
 }

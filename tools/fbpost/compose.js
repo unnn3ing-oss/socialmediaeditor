@@ -198,6 +198,8 @@ export function createComposer({ tb, assets }) {
     busy = true; lastPulled = url;
     if (titleEd) titleEd.end();                    // 預覽上編輯中：先收起，免得舊內容蓋掉帶入的標題
     say('pullHint', '讀取中…');
+    const skel = (on) => { $('cvSkel').hidden = !on; $('cvWrap').setAttribute('aria-busy', on ? 'true' : 'false'); };
+    skel(true);
     try {
       let article;
       try {
@@ -205,6 +207,7 @@ export function createComposer({ tb, assets }) {
         article = parseArticle((d && d.html) || '', (d && d.url) || url);
       } catch (e) { say('pullHint', '帶入失敗：' + errText(e), true); return; }
       if (!article.title && !article.images.length) { say('pullHint', '帶入失敗：文章裡找不到標題或圖片', true); return; }
+      skel(false);
       if (($('title').value.trim() || $('msg').value.trim() || st.photo) &&
           !(await confirmBox('要用文章內容覆蓋嗎？', '目前已有標題、貼文內容或照片，帶入會覆蓋它們（框也會依網址切換）。'))) {
         say('pullHint', '已取消帶入'); return;
@@ -215,10 +218,12 @@ export function createComposer({ tb, assets }) {
       $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags }); msgCount();
       done.push('貼文內容');
       let imgFail = false;
+      skel(true);
       if (article.images.length) { if (await firstImage(article.images)) done.push('主圖'); else imgFail = true; } else imgFail = true;
       draw();
       say('pullHint', '已帶入：' + done.join('、') + (imgFail ? '（主圖讀取失敗，請在預覽按 Ctrl+V 貼上照片）' : ''));
     } finally {
+      skel(false);
       busy = false;
       const now = $('link').value.trim();
       if (pending && now !== lastPulled) { pending = false; pull(); } else pending = false;

@@ -30,6 +30,14 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
     }
   }
 
+  // 手機沒有游標：點一下送出鈕（停用時也算）顯示提示約 3 秒
+  let tipTimer = 0;
+  $('sendWrap').addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    $('sendWrap').classList.add('tip-on');
+    clearTimeout(tipTimer); tipTimer = setTimeout(() => $('sendWrap').classList.remove('tip-on'), 3000);
+  });
+
   $('sendBtn').addEventListener('click', async () => {
     const err = $('sendErr'); err.textContent = ''; err.dataset.auto = '';
     const c = targets.collect();

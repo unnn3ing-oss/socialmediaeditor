@@ -58,7 +58,9 @@
     const url = input.value.trim();
     if (!/^https?:\/\//i.test(url)) { say('請貼文章網址（https:// 開頭）', true); return; }
     busy = true; btn.disabled = true;
-    say('讀取中…');
+    const skelEl = document.getElementById('qfSkel');
+    const skel = (on) => { if (skelEl) skelEl.hidden = !on; };
+    say('讀取中…'); skel(true);
     try {
       let article;
       try {
@@ -69,6 +71,7 @@
 
       let item = targetItem();
       if (item.title.trim() || hasBackground(item.bg)) {
+        skel(false);
         const ok = await askConfirm({
           title: '要用文章內容覆蓋嗎？',
           message: `目前這一組已有標題或照片，帶入會覆蓋它們（框也會依網址切換）。`,
@@ -77,7 +80,7 @@
         if (!ok) { say('已取消帶入'); return; }
         item = targetItem();
       }
-      say('帶入中…');
+      say('帶入中…'); skel(true);
       const done = [];
       const block = batchItemsList.querySelector(`[data-item-id="${item.id}"]`);
 
@@ -107,6 +110,7 @@
 
       say('已帶入：' + done.join('、') + (imgFail ? '（主圖讀取失敗，請手動放照片）' : ''), false);
     } finally {
+      skel(false);
       busy = false; btn.disabled = false;
     }
   }

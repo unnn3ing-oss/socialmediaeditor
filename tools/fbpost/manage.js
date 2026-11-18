@@ -65,6 +65,24 @@ function byAt(x, y, order) {
 }
 function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; if (fn) b.onclick = fn; return b; }
 
+// 查詢中骨架：3 列灰色占位（樣式 .sk 來自 ui/tokens.css）。重新查詢時先收起舊列，失敗再放回
+function skelStart(ul, more) {
+  if (!more && !ul._kept) { ul._kept = [...ul.children].filter((li) => !li.classList.contains('sk-row')); ul.textContent = ''; }
+  ul.querySelectorAll('.sk-row').forEach((li) => li.remove());
+  for (let i = 0; i < 3; i++) {
+    const li = document.createElement('li'); li.className = 'sk-row'; li.setAttribute('aria-hidden', 'true');
+    li.innerHTML = '<span class="sk sk-thumb"></span><span class="sk-lines"><span class="sk sk-l1"></span><span class="sk sk-l2"></span></span><span class="sk sk-when"></span>';
+    ul.append(li);
+  }
+  ul.setAttribute('aria-busy', 'true');
+}
+function skelEnd(ul, restore) {
+  ul.querySelectorAll('.sk-row').forEach((li) => li.remove());
+  if (restore && ul._kept) ul.append(...ul._kept);
+  ul._kept = null; ul.setAttribute('aria-busy', 'false');
+}
+function skelDrop(ul) { ul._kept = null; ul.textContent = ''; ul.setAttribute('aria-busy', 'false'); }
+
 export function createManage({ tb }) {
   // 排序只重排畫面上的列，不重查臉書
   function sortSched() {
@@ -76,11 +94,12 @@ export function createManage({ tb }) {
     const page = $('schedPage').value; if (!page) return;
     const my = ++schedSeq;
     say('schedHint', '查詢中…');
+    skelStart($('schedList'), false);
     try {
       const items = (await tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page))).slice();
       if (my !== schedSeq) return;
       items.sort((a, b) => byAt(a.at, b.at, $('schedSort').value));
-      const ul = $('schedList'); ul.textContent = '';
+      const ul = $('schedList'); skelEnd(ul, false); ul.textContent = '';
       const pageName = $('schedPage').selectedOptions[0]?.textContent || '';
       for (const it of items) {
         const li = rowBase(it, it.at * 1000, pageName); li.dataset.at = String(it.at || '');
@@ -115,7 +134,7 @@ export function createManage({ tb }) {
         li.insertBefore(acts, li.querySelector('.when')); li.append(edit); ul.append(li);
       }
       say('schedHint', items.length ? `共 ${items.length} 則` : '沒有排程貼文');
-    } catch (e) { if (my === schedSeq) say('schedHint', errText(e), true); }
+    } catch (e) { if (my === schedSeq) { skelEnd($('schedList'), true); say('schedHint', errText(e), true); } }
   }
 
   let pubNext = null;
@@ -123,10 +142,11 @@ export function createManage({ tb }) {
     const page = $('pubPage').value; if (!page) return;
     const my = ++pubSeq;
     say('pubHint', '查詢中…');
+    skelStart($('pubList'), more);
     try {
       const d = await tb.api.call('/fb/published?page=' + encodeURIComponent(page) + (more && pubNext ? '&after=' + encodeURIComponent(pubNext) : ''));
       if (my !== pubSeq) return;
-      const ul = $('pubList'); if (!more) ul.textContent = '';
+      const ul = $('pubList'); skelEnd(ul, false); if (!more) ul.textContent = '';
       const pageName = $('pubPage').selectedOptions[0]?.textContent || '';
       for (const it of d.items || []) {
         const li = rowBase(it, new Date(it.time).getTime(), pageName, it.url ? openablePreview(it) : null);
@@ -141,15 +161,15 @@ export function createManage({ tb }) {
       }
       pubNext = d.next || null; $('pubMore').hidden = !pubNext;
       say('pubHint', ul.children.length ? `共 ${ul.children.length} 則` : '沒有已發佈貼文');
-    } catch (e) { if (my === pubSeq) say('pubHint', errText(e), true); }
+    } catch (e) { if (my === pubSeq) { skelEnd($('pubList'), true); say('pubHint', errText(e), true); } }
   }
 
   $('schedReload').onclick = loadSched;
   // 排序只重排畫面上的列，不重查臉書
   $('schedSort').onchange = sortSched;
   // 換粉專：清掉舊粉專的列表，等按「刷新」才查（不自動查詢）
-  $('schedPage').onchange = () => { schedSeq++; $('schedList').textContent = ''; say('schedHint', '按「刷新」讀取 Facebook 排程'); };
-  $('pubPage').onchange = () => { pubSeq++; $('pubList').textContent = ''; pubNext = null; $('pubMore').hidden = true; say('pubHint', '按「刷新」讀取 Facebook 已發佈貼文'); };
+  $('schedPage').onchange = () => { schedSeq++; skelDrop($('schedList')); say('schedHint', '按「刷新」讀取 Facebook 排程'); };
+  $('pubPage').onchange = () => { pubSeq++; skelDrop($('pubList')); pubNext = null; $('pubMore').hidden = true; say('pubHint', '按「刷新」讀取 Facebook 已發佈貼文'); };
   $('pubReload').onclick = () => loadPub(false);
   $('pubMore').onclick = () => loadPub(true);
 
