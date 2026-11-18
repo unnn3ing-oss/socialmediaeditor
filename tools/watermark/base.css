@@ -17,9 +17,9 @@
   --shadow: none;
   --ui-font: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
   --shadow-btn: none;
-  --radius-card: 10px;
-  --radius-control: 8px;
-  --radius-dialog: 12px;
+  --radius-card: 18px;
+  --radius-control: 12px;
+  --radius-dialog: 20px;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

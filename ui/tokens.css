@@ -19,10 +19,10 @@
   --shadow: 0 1px 2px rgba(16, 24, 40, .04);
   --shadow-btn: none;
   --shadow-menu: 0 8px 24px rgba(16, 24, 40, .14), 0 2px 6px rgba(16, 24, 40, .06);
-  --radius-control: 8px;
-  --radius-card: 10px;
-  --radius-menu: 10px;
-  --radius-dialog: 12px;
+  --radius-control: 12px;
+  --radius-card: 18px;
+  --radius-menu: 14px;
+  --radius-dialog: 20px;
   --ok-bg: #ecfdf3; --ok-line: #abefc6; --ok-text: #067647;
   --warn-bg: #fffaeb; --warn-line: #fedf89; --warn-text: #93370d;
   --bad-bg: #fef3f2; --bad-line: #fecdca; --bad-text: #b42318;

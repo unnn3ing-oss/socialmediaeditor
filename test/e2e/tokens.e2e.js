@@ -21,7 +21,7 @@ test('tokens.css computed styles', async () => {
       };
     });
     const p = await s('#p');
-    assert.equal(p.borderRadius, '8px');
+    assert.equal(p.borderRadius, '12px');
     assert.equal(p.height, '44px');
     assert.equal(p.backgroundColor, 'rgb(21, 94, 239)');
     assert.equal((await s('#s')).borderTopColor, 'rgb(125, 141, 163)');

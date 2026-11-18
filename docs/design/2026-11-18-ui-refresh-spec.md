@@ -65,10 +65,11 @@
   --ok-bg: #ECFDF3; --ok-line: #ABEFC6; --ok-text: #067647;
   --warn-bg: #FFFAEB; --warn-line: #FEDF89; --warn-text: #93370D;
   --bad-bg: #FEF3F2; --bad-line: #FECDCA; --bad-text: #B42318;
-  --radius-control: 8px;
-  --radius-card: 10px;
-  --radius-menu: 10px;
-  --radius-dialog: 12px;
+  --radius-control: 12px;
+  --radius-card: 18px;
+  --radius-menu: 14px;
+  --radius-dialog: 20px;
+  /* 2026-11-18 使用者選 B：圓角加大（原 8／10／10／12） */
   --shadow: 0 1px 2px rgba(16,24,40,.04);
   --shadow-btn: none;
   --shadow-menu: 0 8px 24px rgba(16,24,40,.14), 0 2px 6px rgba(16,24,40,.06);
@@ -94,12 +95,12 @@
 | 欄位標籤 | 14px／600，標籤與欄位間距 6px |
 | 次要說明與狀態 | 13px／400–500，保持可讀，不用過淡灰色 |
 | 間距尺度 | 4／8／12／16／24／32／48px |
-| 一般按鈕與輸入框 | 高度至少 44px；左右 padding 14–16px；圓角 8px |
+| 一般按鈕與輸入框 | 高度至少 44px；左右 padding 14–16px；圓角 12px |
 | 工具選單列 | 高度至少 44px，圖示 20px，文字間隔 10px |
 | 桌面圖示鈕 | 視覺 36–40px，實際可按區域至少 44×44px |
-| 上傳區 | 1px 虛線，圓角 8px，內距 16px |
-| 面板／卡片 | 圓角 10px、1px 細線；不層層套卡片 |
-| 對話框 | 圓角 12px，內距 24px |
+| 上傳區 | 1px 虛線，圓角 12px，內距 16px |
+| 面板／卡片 | 圓角 18px、1px 細線；不層層套卡片 |
+| 對話框 | 圓角 20px，內距 24px |
 
 除了色票、狀態圓點、真正開關與必要圓形操作鈕，不使用全膠囊造型。移除厚陰影、背景光暈、卡片懸浮位移與按鈕縮放效果。圖示優先沿用既有 SVG／mask，線寬與大小一致，不加 emoji 或新圖示依賴。
 
