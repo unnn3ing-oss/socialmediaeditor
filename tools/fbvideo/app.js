@@ -295,6 +295,7 @@ async function pump() {
           v.next = r.next;
           apply(v, r);
         } catch (e) {
+          if (id !== v.uploadId) break;   // 舊上傳的錯誤（已重新上傳），不要蓋掉新的狀態
           v.upload = 'error'; v.err = errText(e); v.next = null; v.ed.renderUpload(); renderQueue();
         }
       }
