@@ -1,6 +1,6 @@
 // 圖片套版的排版切換（只管版面，不碰畫圖與輸出）：
 //  - 手機（≤820px）：工具內「編輯／預覽」局部切換（ARIA tabs；用 hidden 切換，共用同一份 DOM，不複製、不重建）
-//  - 手機：「全部下載」放進底部操作列的「更多」；桌面放回縮圖列右側
+//  - 手機：「全部下載」「全部清除」放進底部操作列的「更多」；桌面放回縮圖列右側
 //  - 回到桌面寬度：兩區都顯示、左右並列
 (function () {
   const mq = window.matchMedia('(max-width: 820px)');
@@ -8,8 +8,7 @@
   const tabs = $('mTabs'), tabEdit = $('tabEdit'), tabPreview = $('tabPreview');
   const panelEdit = $('panelEdit'), panelPreview = $('panelPreview');
   const moreWrap = $('moreWrap'), moreBtn = $('moreBtn'), moreMenu = $('moreMenu');
-  const dlAll = $('batchDownloadAllBtn'), dlAllSlot = $('dlAllSlot');
-  const mStatus = $('mStatus'), batchStatus = $('batchStatus');
+  const dlAll = $('batchDownloadAllBtn'), dlReset = $('batchResetBtn'), dlAllSlot = $('dlAllSlot');
   let mode = 'edit';
 
   function setMode(next, { focus = false } = {}) {
@@ -21,7 +20,6 @@
     tabPreview.tabIndex = mode === 'preview' ? 0 : -1;
     panelEdit.hidden = mobile && mode !== 'edit';
     panelPreview.hidden = mobile && mode !== 'preview';
-    mStatus.hidden = !(mobile && mode === 'edit');
     if (focus) (mode === 'edit' ? tabEdit : tabPreview).focus();
     if (mobile) window.scrollTo(0, 0);
   }
@@ -42,11 +40,12 @@
       if (mobile) { panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tab.id); panel.removeAttribute('aria-label'); }
       else { panel.removeAttribute('role'); panel.removeAttribute('aria-labelledby'); panel.setAttribute('aria-label', panel === panelEdit ? '設定' : '預覽'); }
     }
-    // 全部下載：手機在「更多」，桌面在縮圖列右側（同一個按鈕，事件不變）
-    (mobile ? moreMenu : dlAllSlot).appendChild(dlAll);
+    // 全部下載、全部清除：手機在「更多」，桌面在縮圖列右側（同一個按鈕，事件不變）
+    const dest = mobile ? moreMenu : dlAllSlot;
+    dest.appendChild(dlAll);
+    dest.appendChild(dlReset);
     if (!mobile) closeMore();
     setMode(mode);
-    syncMobileStatus();
   }
 
   // tabs
@@ -64,11 +63,6 @@
     setMode(order[i], { focus: true });
   });
 
-  // 產生成功切到預覽；失敗留在編輯（app.js 已把錯誤捲到可見並聚焦）
-  document.addEventListener('pattern:generated', (e) => {
-    if (mq.matches && e.detail && e.detail.ok) setMode('preview');
-  });
-
   // 更多
   moreBtn.addEventListener('click', () => {
     const open = moreMenu.hidden;
@@ -79,10 +73,6 @@
   moreMenu.addEventListener('click', (e) => { if (e.target.closest('button')) closeMore(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) { e.stopPropagation(); closeMore({ restore: true }); } }, true);
   document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !moreWrap.contains(e.target)) closeMore(); });
-
-  // 手機「編輯」頁沒有預覽區的狀態列：底部操作列上方單行同步顯示
-  function syncMobileStatus() { mStatus.textContent = batchStatus.textContent; }
-  new MutationObserver(syncMobileStatus).observe(batchStatus, { childList: true, characterData: true, subtree: true });
 
   mq.addEventListener('change', applyMedia);
   applyMedia();

@@ -290,7 +290,8 @@ function createBackgroundPicker(opts) {
     clearImageVisual();
     clearColorVisual();
     let kept = fresh ? null : memory[mode] || null;
-    if (mode === 'color' && !fresh && opts.randomColor) {
+    // 純色背景：這組沒選過顏色（或呼叫端要求每次隨機）就隨機挑一個色票，預覽立刻有色
+    if (mode === 'color' && !fresh && (opts.randomColor || !kept)) {
       kept = { bg: { type: 'color', image: null, color: PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)] } };
     }
     if (kept && mode === 'image') showImage(kept.bg.image, kept.fileName);
@@ -308,6 +309,7 @@ function createBackgroundPicker(opts) {
   function handleFile(file) {
     if (!isImageFile(file)) {
       hint.textContent = file ? `無法辨識「${file.name}」為圖片檔` : '';
+      if (file) showToast(`無法辨識「${file.name}」為圖片檔`);
       return;
     }
     // Object URL instead of FileReader→data URL: no base64 copy (+33% memory) and no extra decode pass.
@@ -318,6 +320,7 @@ function createBackgroundPicker(opts) {
     image.onerror = () => {
       URL.revokeObjectURL(url);
       hint.textContent = `「${file.name}」無法開啟，可能是不支援的圖片格式（例如 HEIC），請改用 JPG/PNG`;
+      showToast(`「${file.name}」無法開啟，請改用 JPG 或 PNG`);
     };
     image.onload = () => {
       if (currentUrl) URL.revokeObjectURL(currentUrl);
@@ -425,22 +428,42 @@ async function pngBlobWithDpi(targetCanvas, dpi) {
   return new Blob([blob.slice(0, ihdrEnd), physChunk, blob.slice(ihdrEnd)], { type: 'image/png' });
 }
 
-// 結果圖的 object URL：換掉或刪除項目時要 revoke
-function setItemResultUrl(item, url) {
-  if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
-  item.resultUrl = url;
+// ---- 提醒（底部滑出 toast）：只用在「需要使用者處理」的情況 ----
+const toastHost = document.getElementById('toastHost');
+let toastTimer = null;
+function showToast(message) {
+  if (!toastHost) return;
+  toastHost.textContent = '';
+  const box = document.createElement('div');
+  box.className = 'toast';
+  const text = document.createElement('span');
+  text.className = 'toast-text';
+  text.textContent = message;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'toast-close';
+  close.setAttribute('aria-label', '關閉提醒');
+  close.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>';
+  close.addEventListener('click', hideToast);
+  box.appendChild(text);
+  box.appendChild(close);
+  toastHost.appendChild(box);
+  requestAnimationFrame(() => box.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 4000);
+}
+function hideToast() {
+  clearTimeout(toastTimer);
+  if (toastHost) toastHost.textContent = '';
 }
 
 // ---- 批次（每張圖一組；網頁版固定用批次）----
 const batchItemsList = document.getElementById('batchItemsList');
-const addBatchItemBtn = document.getElementById('addBatchItemBtn');
 const batchDownloadAllBtn = document.getElementById('batchDownloadAllBtn');
-const genBtn = document.getElementById('genBtn');
 const dlBtn = document.getElementById('dlBtn');
 const batchResetBtn = document.getElementById('batchResetBtn');
 const batchCanvas = document.getElementById('batchCanvas');
 const batchCtx = batchCanvas.getContext('2d');
-const batchStatus = document.getElementById('batchStatus');
 const batchThumbs = document.getElementById('batchThumbs');
 const batchThumbsShelf = document.getElementById('batchThumbsShelf');
 const batchThumbsPrev = document.getElementById('batchThumbsPrev');
@@ -458,16 +481,13 @@ batchThumbs.addEventListener('scroll', () => updateThumbNav(), { passive: true }
 new ResizeObserver(() => updateThumbNav()).observe(batchThumbs);
 const batchPreviewTitle = document.getElementById('batchPreviewTitle');
 
-let batchItems = [];   // { id, title, bg: {type,image,color}, frame, fontSize, fontSizeTouched, done, resultBlob, resultUrl（blob 的 object URL，縮圖／預覽用）, resultFilename }
+let batchItems = [];   // { id, title, bg: {type,image,color}, frame, fontSize, fontSizeTouched, gen, thumbCanvas（縮圖小畫布） }
 let batchIdCounter = 0;
 
-function isItemDone(item) {
-  return !!(item.done && item.resultUrl);
-}
 // Only one item's full edit block is shown at a time (accordion); every
 // other item collapses into a summary row, whether it's done or not.
 let expandedBatchItemId = null;
-// 底部「產生此張／下載這張」的對象：目前展開的那一組；產生後會收合，就沿用最後一次展開的
+// 底部「下載這張」的對象：目前展開的那一組；產生後會收合，就沿用最後一次展開的
 let lastActiveItemId = null;
 
 function scrollToBatchItem(id) {
@@ -498,22 +518,10 @@ function expandBatchItem(item) {
   // 剛開啟只有第 1 組時不捲，讓最上面的文章網址留在畫面上
   if (batchItems.length > 1) scrollToBatchItem(item.id);
   setBatchPreviewTitle(item);
-  const index = batchItems.indexOf(item);
-  if (isItemDone(item)) {
-    // Load the saved result as-is — just viewing it should never flip its
-    // completed status or claim it's "still a preview".
-    const img = new Image();
-    img.onload = () => {
-      batchCtx.clearRect(0, 0, SIZE, SIZE);
-      batchCtx.drawImage(img, 0, 0, SIZE, SIZE);
-    };
-    img.src = item.resultUrl;
-    batchStatus.textContent = `已完成：${item.resultFilename}`;
-  } else if (hasBackground(item.bg)) {
+  if (hasBackground(item.bg)) {
     previewBatchItem(item);
   } else {
     batchCtx.clearRect(0, 0, SIZE, SIZE);
-    batchStatus.textContent = `圖片 #${index + 1} 尚未設定背景`;
   }
   syncBatchFx();
 }
@@ -525,7 +533,7 @@ function addBatchItem() {
     frame: COMPANY ? 'news' : 'generic',
     gen: GEN_DEFAULT(),
     fontSize: DEFAULT_CANVA_SIZE_IMAGE, fontSizeTouched: false,
-    done: false, resultUrl: null, resultBlob: null, resultFilename: null
+    thumbCanvas: null, thumbTimer: null
   };
   batchItems.push(item);
   expandBatchItem(item);
@@ -542,7 +550,7 @@ async function removeBatchItem(id) {
   });
   if (!ok) return;
   const wasExpanded = expandedBatchItemId === id;
-  setItemResultUrl(batchItems[index], null);
+  clearTimeout(batchItems[index].thumbTimer);
   batchItems = batchItems.filter(it => it.id !== id);
   if (!wasExpanded) {
     renderBatchItemsList();
@@ -558,59 +566,73 @@ async function removeBatchItem(id) {
     batchPreviewTitle.textContent = '';
     batchPreviewTitleInput.value = '';
     batchPreviewTitleInput.hidden = true;
-    batchStatus.textContent = '按某一組的「產生此張」後，預覽會顯示在這裡';
     renderBatchItemsList();
     renderBatchThumbs();
     syncBatchFx();
   }
 }
 
-// Thumbnail strip below the batch canvas, one per item (not just completed
-// ones) — a finished item shows its result, an unfinished one keeps its
-// title text and an "未完成" tag. Click any of them to jump to and expand
-// that item's edit block, collapsing every other item.
-// 按鈕顏色規則：全部都完成了 →「全部下載」變藍（下一步），否則白。
-function syncBatchActions() {
-  const allDone = batchItems.length > 0 && batchItems.every(isItemDone);
-  batchDownloadAllBtn.classList.toggle('primary', allDone);
+// 縮圖列（預覽下方）：每一組顯示「目前樣子」的小圖；沒有背景的組顯示淺色空框＋編號。
+// 點縮圖＝切換到該組；最後一格虛線「＋」＝新增一張。
+// 小圖用每組自己的小 canvas（不產生 URL，沒有東西要釋放），改動後約 300ms 才重畫（debounce）。
+const THUMB_PX = 176;   // 88px 的 2 倍，高解析螢幕也清楚
+const THUMB_DEBOUNCE_MS = 300;
+let thumbScratch = null;   // 離螢幕的 1080 畫布：先畫完整圖再縮小到縮圖
+
+function ensureThumbCanvas(item) {
+  if (!item.thumbCanvas) {
+    const c = document.createElement('canvas');
+    c.width = c.height = THUMB_PX;
+    c.setAttribute('aria-hidden', 'true');
+    item.thumbCanvas = c;
+  }
+  return item.thumbCanvas;
 }
+
+function drawThumb(item) {
+  if (!batchItems.includes(item)) return;
+  const c = ensureThumbCanvas(item);
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, THUMB_PX, THUMB_PX);
+  const has = hasBackground(item.bg);
+  if (has) {
+    if (!thumbScratch) { thumbScratch = document.createElement('canvas'); thumbScratch.width = thumbScratch.height = SIZE; }
+    const fontSize = canvaToPx(effectiveCanvaSize(item.bg, item.fontSize));
+    renderComposite(thumbScratch.getContext('2d'), item.bg, item.title, fontSize, item.frame, batchFx && batchFx.forItem(item), item.gen);
+    x.drawImage(thumbScratch, 0, 0, THUMB_PX, THUMB_PX);
+  }
+  const el = batchThumbs.querySelector(`[data-thumb-id="${item.id}"]`);
+  if (el) el.classList.toggle('thumb-empty', !has);
+}
+
+function scheduleThumb(item) {
+  clearTimeout(item.thumbTimer);
+  item.thumbTimer = setTimeout(() => drawThumb(item), THUMB_DEBOUNCE_MS);
+}
+
+function redrawAllThumbs() { batchItems.forEach(drawThumb); }
 
 function renderBatchThumbs() {
   batchDownloadAllBtn.disabled = batchItems.length === 0;
-  genBtn.disabled = dlBtn.disabled = batchItems.length === 0;
-  syncBatchActions();
+  batchResetBtn.disabled = batchItems.length === 0;
+  dlBtn.disabled = batchItems.length === 0;
   batchThumbs.innerHTML = '';
   batchItems.forEach((item, index) => {
-    const isDone = isItemDone(item);
     const firstLine = item.title.split('\n').find(l => l.trim()) || '';
+    const has = hasBackground(item.bg);
     const el = document.createElement('div');
-    el.className = 'thumb-item' + (isDone ? '' : ' thumb-placeholder');
+    el.className = 'thumb-item' + (has ? '' : ' thumb-empty');
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
-    if (isDone) {
-      const img = document.createElement('img');
-      img.alt = '';
-      img.src = item.resultUrl;
-      el.appendChild(img);
-    } else {
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'thumb-title';
-      titleSpan.textContent = firstLine || '（尚未輸入標題）';
-      const tagSpan = document.createElement('span');
-      tagSpan.className = 'thumb-tag';
-      tagSpan.textContent = '未完成';
-      el.appendChild(titleSpan);
-      el.appendChild(tagSpan);
-    }
+    el.appendChild(ensureThumbCanvas(item));
     const numEl = document.createElement('span');
     numEl.className = 'thumb-n';
     numEl.textContent = `#${index + 1}`;
     el.appendChild(numEl);
     el.dataset.thumbId = item.id;
-    el.dataset.thumbDone = isDone ? '1' : '';
     el.classList.toggle('active-thumb', item.id === expandedBatchItemId);
     el.title = `#${index + 1} ${firstLine}`;
-    el.setAttribute('aria-label', `圖片 #${index + 1}${isDone ? '，已完成' : '，未完成'}`);
+    el.setAttribute('aria-label', `圖片 #${index + 1}${firstLine ? '：' + firstLine : ''}`);
     if (item.id === expandedBatchItemId) el.setAttribute('aria-current', 'true');
     el.addEventListener('click', () => expandBatchItem(item));
     el.addEventListener('keydown', e => {
@@ -618,7 +640,15 @@ function renderBatchThumbs() {
     });
     batchThumbs.appendChild(el);
   });
-  batchThumbsShelf.hidden = batchItems.length === 0;
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'thumb-add';
+  add.id = 'thumbAddBtn';
+  add.setAttribute('aria-label', '新增一張');
+  add.title = '新增一張';
+  add.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>';
+  add.addEventListener('click', addBatchItem);
+  batchThumbs.appendChild(add);
   // Bring the open item into view, but only when it changes — this runs on
   // every keystroke of a title, and the row mustn't jump back while browsing.
   const active = batchThumbs.querySelector('.active-thumb');
@@ -631,14 +661,13 @@ function renderBatchThumbs() {
 
 let lastCenteredThumbId = null;
 
-// 打字時只更新這一格的文字（不重建整排縮圖）；完成狀態改變才整排重畫
+// 打字時只更新這一格的提示文字（不重建整排縮圖）；小圖由 scheduleThumb 另外重畫
 function updateBatchThumb(item) {
   const el = batchThumbs.querySelector(`[data-thumb-id="${item.id}"]`);
-  if (!el || Boolean(el.dataset.thumbDone) !== isItemDone(item)) { renderBatchThumbs(); return; }
+  if (!el) return;
   const firstLine = item.title.split('\n').find(l => l.trim()) || '';
-  const t = el.querySelector('.thumb-title');
-  if (t) t.textContent = firstLine || '（尚未輸入標題）';
   el.title = `#${batchItems.indexOf(item) + 1} ${firstLine}`;
+  el.setAttribute('aria-label', `圖片 #${batchItems.indexOf(item) + 1}${firstLine ? '：' + firstLine : ''}`);
 }
 
 function updateThumbNav() {
@@ -658,51 +687,44 @@ function refreshBatchItem(item) {
 }
 
 // Live-preview this item into the shared batch canvas as its fields change
-// (font size, title, frame, background) — without marking it done or saving
-// a result, so editing gives the same immediate feedback as single mode.
+// (font size, title, frame, background)，編輯時馬上有畫面回饋。
 async function previewBatchItem(item) {
   setBatchPreviewTitle(item);
   syncBatchFx();
+  scheduleThumb(item);
   if (!hasBackground(item.bg)) return;
-  // 不等字型：先用備用字型畫，字型載好後會重畫（輸出前 completeBatchItem 會等字型）
+  // 不等字型：先用備用字型畫，字型載好後會重畫（輸出前 renderItemBlob 會等字型）
   const fontSize = canvaToPx(effectiveCanvaSize(item.bg, item.fontSize));
   renderComposite(batchCtx, item.bg, item.title, fontSize, item.frame, batchFx && batchFx.forItem(item), item.gen);
-  const index = batchItems.indexOf(item);
-  batchStatus.textContent = `預覽中（尚未完成）：圖片 #${index + 1}`;
 }
 
-async function completeBatchItem(item) {
-  if (!hasBackground(item.bg) || !item.title.trim()) {
-    item.errorMsg = '需要同時有標題和背景（圖片或純色）才能完成';
-    refreshBatchItem(item);
-    return false;
-  }
-  item.errorMsg = null;
-  // Must wait for the ribbon/logo art too, not just the font — otherwise a
-  // batch item completed very early would permanently save a PNG missing
-  // its corner ribbon or bottom logo, since this snapshot is never redrawn.
+// 缺什麼：回傳要提醒的文字；都齊了回傳 ''
+function missingReason(item, index) {
+  const noBg = !hasBackground(item.bg), noTitle = !item.title.trim();
+  if (noBg && noTitle) return `圖片 #${index + 1} 還沒有背景（圖片或純色）和標題`;
+  if (noBg) return `圖片 #${index + 1} 還沒有背景，請放入圖片或選純色`;
+  if (noTitle) return `圖片 #${index + 1} 還沒有標題`;
+  return '';
+}
+
+// 當場產生這一組的 PNG（畫在離螢幕畫布，不動預覽；內容與檔名規則和以前相同）
+let exportCanvas = null;
+async function renderItemBlob(item) {
+  // Must wait for the ribbon/logo art too, not just the font — otherwise an
+  // export very early would permanently save a PNG missing its corner
+  // ribbon or bottom logo.
   await Promise.all([whzFontReady, ribbonReady, ribbonNewsReady, logoReady]);
+  if (!exportCanvas) { exportCanvas = document.createElement('canvas'); exportCanvas.width = exportCanvas.height = SIZE; }
   const fontSize = canvaToPx(effectiveCanvaSize(item.bg, item.fontSize));
-  renderComposite(batchCtx, item.bg, item.title, fontSize, item.frame, batchFx && batchFx.forItem(item), item.gen);
-  setBatchPreviewTitle(item);
+  renderComposite(exportCanvas.getContext('2d'), item.bg, item.title, fontSize, item.frame, batchFx && batchFx.forItem(item), item.gen);
   const index = batchItems.indexOf(item);
-  item.resultFilename = `${PA.tb.stampName(new Date(), index + 1)}.png`;
-  item.resultBlob = await pngBlobWithDpi(batchCanvas, PNG_DPI);
-  setItemResultUrl(item, URL.createObjectURL(item.resultBlob));
-  item.done = true;
-  batchStatus.textContent = `已完成：${item.resultFilename}`;
-  refreshBatchItem(item);
-  renderBatchThumbs();
-  return true;
+  return {
+    blob: await pngBlobWithDpi(exportCanvas, PNG_DPI),
+    name: `${PA.tb.stampName(new Date(), index + 1)}.png`
+  };
 }
 
-function downloadItem(item) {
-  PA.tb.download(item.resultBlob, item.resultFilename);
-}
-
-// After an item's 完成, fold it back into its summary row so the list stays
-// compact — it reopens only when picked again (its thumbnail below the
-// preview, or its row). The big preview keeps showing the finished result.
+// 點展開中那一組的標題列／外框，把它收回成一列（預覽維持原樣）；再點縮圖或那一列才重新展開。
 function collapseBatchItems() {
   expandedBatchItemId = null;
   renderBatchItemsList();
@@ -729,17 +751,10 @@ function buildBatchItemRow(item, index) {
   const row = document.createElement('div');
   row.className = 'batch-item-row';
   row.dataset.itemId = item.id;
-  if (item.errorMsg) row.title = item.errorMsg;
 
-  const isDone = isItemDone(item);
   const thumb = document.createElement('div');
   thumb.className = 'row-thumb';
-  if (isDone) {
-    const img = document.createElement('img');
-    img.alt = '';
-    img.src = item.resultUrl;
-    thumb.appendChild(img);
-  } else if (item.bg.type === 'image' && item.bg.image) {
+  if (item.bg.type === 'image' && item.bg.image) {
     const img = document.createElement('img');
     img.alt = '';
     img.src = item.bg.image.src;
@@ -755,15 +770,10 @@ function buildBatchItemRow(item, index) {
   const firstLine = item.title.split('\n').find(l => l.trim()) || '（尚未輸入標題）';
   title.textContent = `#${index + 1} ${firstLine}`;
 
-  const badge = document.createElement('span');
-  badge.className = 'row-badge' + (isDone ? '' : ' row-badge-pending');
-  badge.textContent = isDone ? '✓ 已完成' : '未完成';
-
   const removeBtn = createRemoveButton(e => { e.stopPropagation(); removeBatchItem(item.id); });
 
   row.appendChild(thumb);
   row.appendChild(title);
-  row.appendChild(badge);
   row.appendChild(removeBtn);
   row.addEventListener('click', () => expandBatchItem(item));
   return row;
@@ -783,21 +793,6 @@ function buildBatchItemBlock(item, index) {
   const label = document.createElement('span');
   label.className = 'label';
   label.textContent = `圖片 #${index + 1}`;
-  const doneTag = document.createElement('span');
-  doneTag.className = 'label-done-tag';
-  doneTag.textContent = '✓ 已完成';
-  doneTag.style.display = item.done ? '' : 'none';
-  label.appendChild(doneTag);
-  // Viewing a completed item (via its thumbnail or row) never touches its
-  // done state — only an actual edit to what gets rendered should. Each
-  // field handler below calls this first so the tag disappears live,
-  // without a full rebuild that would steal focus mid-edit.
-  function invalidateDone() {
-    if (!item.done) return;
-    item.done = false;
-    doneTag.style.display = 'none';
-    renderBatchThumbs();
-  }
   const headBtns = document.createElement('div');
   headBtns.className = 'head-btns';
   const removeBtn = createRemoveButton(() => removeBatchItem(item.id));
@@ -887,9 +882,9 @@ function buildBatchItemBlock(item, index) {
     swatchBtns.forEach(b => b.classList.toggle('selected', b.dataset.color === item.gen.color));
     customColor.value = item.gen.color;
   }
-  tagInput.addEventListener('input', () => { invalidateDone(); item.gen.tag = tagInput.value; previewBatchItem(item); });
-  swatchBtns.forEach(b => b.addEventListener('click', () => { invalidateDone(); item.gen.color = b.dataset.color; syncGenVisual(); previewBatchItem(item); }));
-  customColor.addEventListener('input', () => { invalidateDone(); item.gen.color = customColor.value; syncGenVisual(); previewBatchItem(item); });
+  tagInput.addEventListener('input', () => { item.gen.tag = tagInput.value; previewBatchItem(item); });
+  swatchBtns.forEach(b => b.addEventListener('click', () => { item.gen.color = b.dataset.color; syncGenVisual(); previewBatchItem(item); }));
+  customColor.addEventListener('input', () => { item.gen.color = customColor.value; syncGenVisual(); previewBatchItem(item); });
   syncGenVisual();
 
   const applyFrameVisual = () => {
@@ -899,7 +894,6 @@ function buildBatchItemBlock(item, index) {
     textarea.placeholder = titlePlaceholder(item.frame);
   };
   frameBtns.forEach(b => b.addEventListener('click', () => {
-    invalidateDone();
     item.frame = b.dataset.frame;
     applyFrameVisual();
     previewBatchItem(item);
@@ -923,10 +917,9 @@ function buildBatchItemBlock(item, index) {
   checkLines();
   textarea.addEventListener('input', () => {
     checkLines();
-    invalidateDone();
     item.title = textarea.value;
     previewBatchItem(item);
-    updateBatchThumb(item); // 只更新這一格的標題文字
+    updateBatchThumb(item); // 只更新這一格的提示文字
   });
 
   const fontSizeField = document.createElement('div');
@@ -936,7 +929,6 @@ function buildBatchItemBlock(item, index) {
   const fontStepper = createFontStepper({
     initial: item.fontSize,
     onChange: value => {
-      invalidateDone();
       item.fontSizeTouched = true;
       item.fontSize = value;
       previewBatchItem(item);
@@ -958,23 +950,23 @@ function buildBatchItemBlock(item, index) {
   const picker = createBackgroundPicker({
     memory: item.bgMemory || (item.bgMemory = {}),   // survives the block being rebuilt (collapse/expand)
     getBg: () => item.bg,
-    onImage: (image, fileName) => { invalidateDone(); item.bg = { type: 'image', image, color: null, view: newView() }; item.fileName = fileName; syncFontLock(); previewBatchItem(item); },
-    onColor: color => { invalidateDone(); item.bg = { type: 'color', image: null, color }; previewBatchItem(item); },
+    onImage: (image, fileName) => { item.bg = { type: 'image', image, color: null, view: newView() }; item.fileName = fileName; syncFontLock(); previewBatchItem(item); },
+    onColor: color => { item.bg = { type: 'color', image: null, color }; previewBatchItem(item); },
     onModeChange: (mode, remembered) => {
-      invalidateDone();
       item.bg = remembered || (mode === 'color' ? { type: 'color', image: null, color: null } : { type: 'image', image: null, color: null });
       // Pressing the 圖片背景／純色背景 toggle always resets to that type's
       // default font size, overriding any manual tweak.
       item.fontSizeTouched = false;
       item.fontSize = defaultCanvaSizeFor(mode);
       fontStepper.setValue(item.fontSize);
+      scheduleThumb(item);
       syncFontLock();
       setBatchPreviewTitle(item);
       if (remembered) previewBatchItem(item);   // a remembered picture/colour comes back — show it right away
     }
   });
   item.handleFile = picker.handleFile; // used by global paste routing
-  item.invalidateDone = invalidateDone; // used by preview-canvas pan/zoom
+  item.markEdited = () => scheduleThumb(item);   // 預覽畫布拖曳縮放、貼圖變動時用
 
   // Dragging or pasting an image directly onto the title textarea works too
   // — no need to click into the dropzone below just to attach a photo.
@@ -1003,15 +995,6 @@ function buildBatchItemBlock(item, index) {
     picker.restoreImage(item.bg.image, item.fileName || '');
   }
 
-  const errorEl = document.createElement('div');
-  errorEl.className = 'hint item-error';
-  errorEl.tabIndex = -1;
-  if (item.errorMsg) {
-    errorEl.setAttribute('role', 'alert');
-    errorEl.textContent = item.errorMsg;
-    errorEl.style.color = 'var(--bad-text)';
-  }
-
   applyFrameVisual();
   block.appendChild(head);
   block.appendChild(picker.root);   // 上傳區（圖片背景／純色背景）排最上面
@@ -1021,7 +1004,6 @@ function buildBatchItemBlock(item, index) {
   block.appendChild(textarea);
   block.appendChild(linesWarn);
   block.appendChild(fontSizeField);
-  block.appendChild(errorEl);
   return block;
 }
 
@@ -1193,92 +1175,89 @@ wirePreviewPanZoom(
   () => {
     const item = batchItems.find(it => it.id === expandedBatchItemId);
     if (!item) return;
-    if (item.invalidateDone) item.invalidateDone();
     previewBatchItem(item);
   }
 );
 
-addBatchItemBtn.addEventListener('click', addBatchItem);
-
-// ---- 底部操作列：產生此張／下載這張 ----
-// 對象＝目前展開的那一組；產生後會收合，就沿用最後一次展開的（沒有就最後一組）。
+// ---- 底部操作列：下載這張／全部下載／全部清除 ----
+// 對象＝目前展開的那一組；收合後就沿用最後一次展開的（沒有就最後一組）。
 function actionTarget() {
   return batchItems.find(it => it.id === expandedBatchItemId)
     || batchItems.find(it => it.id === lastActiveItemId)
     || batchItems[batchItems.length - 1] || null;
 }
-// 通知外殼排版（手機切到預覽／留在編輯），不碰畫圖邏輯
-function announceGenerated(ok) {
-  document.dispatchEvent(new CustomEvent('pattern:generated', { detail: { ok } }));
-}
-// 失敗：留在編輯，把錯誤訊息捲到可見並聚焦
-function focusItemError(item) {
-  if (expandedBatchItemId !== item.id) expandBatchItem(item);
-  const err = batchItemsList.querySelector(`.batch-item-block[data-item-id="${item.id}"] .item-error`);
-  if (err) { err.scrollIntoView({ block: 'center' }); err.focus({ preventScroll: true }); }
-}
-genBtn.addEventListener('click', async () => {
-  const item = actionTarget();
-  if (!item) return;
-  const ok = await completeBatchItem(item);
-  if (ok) collapseBatchItems(); else focusItemError(item);
-  announceGenerated(ok);
-});
 dlBtn.addEventListener('click', async () => {
   const item = actionTarget();
   if (!item) return;
-  if (isItemDone(item) || await completeBatchItem(item)) { downloadItem(item); }
-  else { focusItemError(item); announceGenerated(false); }
+  const reason = missingReason(item, batchItems.indexOf(item));
+  if (reason) {
+    if (expandedBatchItemId !== item.id) expandBatchItem(item);
+    showToast(reason);
+    return;
+  }
+  try {
+    const { blob, name } = await renderItemBlob(item);
+    PA.tb.download(blob, name);
+  } catch (e) {
+    showToast('下載失敗，請再按一次「下載這張」');
+  }
 });
 
-// 全部下載 finishes whatever is finishable first: if every item has a title
-// and a background, all of them get completed and downloaded; otherwise it
-// asks before downloading just the finishable ones and skipping the rest.
+// 全部下載：當場逐張產生。都不能下載就提醒；有缺標題或背景的先問要不要只下載可下載的。
 batchDownloadAllBtn.addEventListener('click', async () => {
   if (batchItems.length === 0) {
-    batchStatus.textContent = '請先按「＋ 再做一張」新增至少一組';
+    showToast('還沒有圖片，請先按縮圖列的「＋」新增一張');
     return;
   }
   const isReady = it => hasBackground(it.bg) && it.title.trim().length > 0;
   const ready = batchItems.filter(isReady);
   const missing = batchItems.length - ready.length;
   if (ready.length === 0) {
-    batchStatus.textContent = '還沒有可以下載的套圖：每組都需要標題和背景（圖片或純色）';
+    showToast('還沒有可以下載的圖：每組都需要標題和背景（圖片或純色）');
     return;
   }
   if (missing > 0) {
     const ok = await askConfirm({
-      title: '有未完成的套圖',
-      message: `有未完成的套圖（${missing} 組缺標題或背景），要先下載已完成的 ${ready.length} 組嗎？`,
-      okText: '下載已完成的'
+      title: '有缺標題或背景的圖',
+      message: `有 ${missing} 組缺標題或背景，要先下載可以下載的 ${ready.length} 組嗎？`,
+      okText: '下載可下載的'
     });
     if (!ok) return;
   }
-  for (const item of ready) {
-    if (!isItemDone(item)) await completeBatchItem(item);
+  try {
+    const files = [];
+    for (const item of ready) files.push(await renderItemBlob(item));
+    await PA.tb.download.batch(files.map(f => ({ blob: f.blob, name: f.name })));
+  } catch (e) {
+    showToast('下載失敗，請再按一次「全部下載」');
   }
-  // completeBatchItem leaves the shared canvas on whichever item it finished
-  // last — put it back on the one that's actually open.
-  const open = batchItems.find(it => it.id === expandedBatchItemId);
-  if (open) expandBatchItem(open);
-  await PA.tb.download.batch(ready.map(it => ({ blob: it.resultBlob, name: it.resultFilename })));
-  const skipNote = missing > 0 ? `，${missing} 組未完成已略過` : '';
-  batchStatus.textContent = `已下載 ${ready.length} 組${skipNote}`;
 });
 
 batchResetBtn.addEventListener('click', async () => {
   if (!(await askConfirm())) return;
-  batchItems.forEach(it => setItemResultUrl(it, null));
+  batchItems.forEach(it => clearTimeout(it.thumbTimer));
   batchItems = [];
   expandedBatchItemId = null;
   batchCtx.clearRect(0, 0, SIZE, SIZE);
   batchPreviewTitle.textContent = '';
   batchPreviewTitleInput.value = '';
   batchPreviewTitleInput.hidden = true;
-  batchStatus.textContent = '按某一組的「產生此張」後，預覽會顯示在這裡';
   renderBatchItemsList();
   renderBatchThumbs();
   syncBatchFx();
+});
+
+// ---- 貼圖與馬賽克：預覽右下角的圓形按鈕，彈出小視窗（內容是 stickers.js 填的 #batchFxSlot，不重建）----
+const fxBtn = document.getElementById('fxBtn');
+const fxPop = document.getElementById('fxPop');
+function setFxPop(open, { restoreFocus = false } = {}) {
+  fxPop.hidden = !open;
+  fxBtn.setAttribute('aria-expanded', String(open));
+  if (!open && restoreFocus) fxBtn.focus();
+}
+fxBtn.addEventListener('click', () => setFxPop(fxPop.hidden));
+document.addEventListener('pointerdown', e => {
+  if (!fxPop.hidden && !fxPop.contains(e.target) && !fxBtn.contains(e.target)) setFxPop(false);
 });
 
 // ---- help modal ----
@@ -1320,13 +1299,15 @@ confirmOverlay.addEventListener('click', e => { if (e.target === confirmOverlay)
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (confirmOverlay.classList.contains('open')) closeConfirm(false);
-  else closeHelp();
+  else if (helpOverlay.classList.contains('open')) closeHelp();
+  else if (!fxPop.hidden) setFxPop(false, { restoreFocus: true });
 });
 
 addBatchItem(); // start with one block
 
-// 緞帶／Logo 圖載好後，重畫目前預覽的那一組（沒完成的才重畫，完成的是存好的圖）
+// 緞帶／Logo／字型載好後，重畫目前預覽的那一組與所有縮圖
 Promise.all([ribbonReady, ribbonNewsReady, logoReady, whzFontReady]).then(() => {
   const it = batchItems.find(i => i.id === expandedBatchItemId);
-  if (it && !isItemDone(it) && hasBackground(it.bg)) previewBatchItem(it);
+  if (it && hasBackground(it.bg)) previewBatchItem(it);
+  redrawAllThumbs();
 });

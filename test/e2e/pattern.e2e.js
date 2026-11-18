@@ -121,7 +121,7 @@ test('工具內切換不清空內容：背景類型、各組收合展開、框',
   await frame.click('.batch-item-block .bg-toggle button:has-text("圖片背景")');
   await waitPx(frame, 40, 100, (p) => near(p, hex('#2f6b4f'), 2), '回到圖片背景後框還在');
   // 新增第二組，第一組收合成一列；再點回第一組
-  await frame.click('#addBatchItemBtn');
+  await frame.click('#thumbAddBtn');
   await frame.waitForFunction(() => document.querySelectorAll('.batch-item-row').length === 1);
   await frame.fill('.batch-item-block textarea', '第二組標題');
   await frame.click('.batch-item-row');
@@ -141,7 +141,8 @@ test('完成後可下載，檔名是 YYMMDDHHMM_編號.png', async () => {
     frame.click('#dlBtn'),
   ]);
   assert.match(dl.suggestedFilename(), /^\d{10}_1\.png$/);
-  // 貼圖：加一個後該組變回未完成之外不應出錯
+  // 貼圖在彈窗裡（按預覽右下角的按鈕才看得到）
+  await frame.click('#fxBtn');
   await frame.waitForSelector('.fx-sticker-tile');
   assert.equal(await frame.locator('.fx-sticker-tile').count(), 7);
 });
@@ -261,7 +262,7 @@ test('快速填入：有密碼時娛樂網址選粉框、新聞網址選藍框',
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent), null, { timeout: 8000 });
   assert.equal(await frame.getAttribute('.batch-item-block [data-frame="entertainment"]', 'class').then((c) => /active/.test(c)), true);
   // 新增一組、直接貼新聞網址（新組是空的，不需確認）
-  await frame.click('#addBatchItemBtn');
+  await frame.click('#thumbAddBtn');
   await frame.fill('#qfUrl', 'https://news.tvbs.com.tw/local/1');
   await frame.press('#qfUrl', 'Enter');
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent) && document.querySelector('.batch-item-block [data-frame="news"].active'), null, { timeout: 8000 });
@@ -308,15 +309,16 @@ async function putPhoto(page, frame, title) {
   if (title) await frame.fill('.batch-item-block textarea', title);
 }
 
-test('桌面 1280：設定欄與預覽左右並列，沒有編輯／預覽切換，產生／下載在設定欄尾端', async () => {
+test('桌面 1280：設定欄與預覽左右並列，沒有編輯／預覽切換，下載這張在設定欄尾端', async () => {
   const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(1280, 800));
   await frame.waitForSelector('.batch-item-block');
   const r = await frame.evaluate(() => {
     const b = (id) => document.getElementById(id).getBoundingClientRect();
     return {
       tabsHidden: document.getElementById('mTabs').hidden,
-      edit: b('panelEdit'), preview: b('panelPreview'), act: b('actionBar'), gen: b('genBtn'),
+      edit: b('panelEdit'), preview: b('panelPreview'), act: b('actionBar'), gen: b('dlBtn'),
       dlAllInShelf: document.getElementById('dlAllSlot').contains(document.getElementById('batchDownloadAllBtn')),
+      resetInShelf: document.getElementById('dlAllSlot').contains(document.getElementById('batchResetBtn')),
       moreHidden: document.getElementById('moreWrap').hidden,
       settingsW: b('panelEdit').width,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -325,9 +327,10 @@ test('桌面 1280：設定欄與預覽左右並列，沒有編輯／預覽切換
   assert.ok(r.tabsHidden && r.moreHidden);
   assert.ok(r.edit.right <= r.preview.left, '設定欄在預覽左邊');
   assert.ok(Math.abs(r.settingsW - 340) < 2, `設定欄 340px，實際 ${r.settingsW}`);
-  assert.ok(r.gen.left >= r.edit.left && r.gen.right <= r.edit.right + 1, '產生此張在左設定欄內');
+  assert.ok(r.gen.left >= r.edit.left && r.gen.right <= r.edit.right + 1, '下載這張在左設定欄內');
   assert.ok(r.act.top >= r.edit.bottom - 1, '操作列在設定欄尾端');
   assert.ok(r.dlAllInShelf, '全部下載在縮圖列右側');
+  assert.ok(r.resetInShelf, '全部清除在縮圖列右側');
   assert.equal(r.overflow, 0);
   await page.close();
 });
@@ -385,16 +388,23 @@ test('手機：編輯／預覽切換保留內容，canvas 與表單是同一個�
   await page.close();
 });
 
-test('手機：產生成功切到預覽；失敗留在編輯並顯示錯誤', async () => {
+test('手機：缺背景按下載這張出現提醒 toast、留在編輯；齊全後可下載', async () => {
   const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(390, 844));
   await frame.waitForSelector('.batch-item-block');
-  await frame.click('#genBtn');   // 還沒有背景與標題 -> 失敗
+  await frame.click('#dlBtn');   // 還沒有背景與標題 -> 提醒
   assert.equal(await frame.getAttribute('#tabEdit', 'aria-selected'), 'true');
-  assert.ok(await frame.locator('.item-error[role=alert]').isVisible());
-  await putPhoto(page, frame, '成功後看預覽');
-  await frame.click('#genBtn');
-  await frame.waitForFunction(() => document.getElementById('tabPreview').getAttribute('aria-selected') === 'true');
-  assert.equal(await frame.locator('#panelPreview').isVisible(), true);
+  await frame.waitForSelector('#toastHost .toast.show');
+  assert.match(await frame.textContent('#toastHost'), /還沒有背景/);
+  assert.equal(await frame.getAttribute('#toastHost', 'role'), 'status');
+  // toast 不被底部動作列遮住
+  const r = await frame.evaluate(() => ({ t: document.querySelector('.toast').getBoundingClientRect().bottom, a: document.getElementById('actionBar').getBoundingClientRect().top }));
+  assert.ok(r.t <= r.a + 0.5, `toast 底 ${r.t} 動作列頂 ${r.a}`);
+  // × 可關閉
+  await frame.click('.toast-close');
+  assert.equal(await frame.locator('.toast').count(), 0);
+  await putPhoto(page, frame, '成功後下載');
+  const [dl] = await Promise.all([page.waitForEvent('download'), frame.click('#dlBtn')]);
+  assert.match(dl.suggestedFilename(), /^\d{10}_1\.png$/);
   await page.close();
 });
 
@@ -402,7 +412,8 @@ test('手機：320／390／768／820 無整頁水平捲動（編輯與預覽兩�
   for (const w of [320, 390, 768, 820]) {
     const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(w, 800));
     await putPhoto(page, frame, '很長很長很長很長很長很長很長很長很長很長很長很長的標題');
-    await frame.click('#addBatchItemBtn');
+    await frame.click('#tabPreview');   // 縮圖列的「＋」在預覽頁
+    await frame.click('#thumbAddBtn');
     for (const tab of ['tabEdit', 'tabPreview']) {
       await frame.click('#' + tab);
       const o = await frame.evaluate(() => ({ d: document.documentElement.scrollWidth - document.documentElement.clientWidth, b: document.body.scrollWidth - document.body.clientWidth }));
@@ -431,7 +442,7 @@ test('手機：底部操作列黏在底部、不遮住最後一個欄位；按�
     // 觸控目標與文字大小
     const small = await frame.evaluate(() => {
       const bad = [];
-      for (const el of document.querySelectorAll('#actionBar button, #mTabs button, .bg-toggle button, #qfBtn, #addBatchItemBtn, #batchResetBtn, #helpBtn, .step-btn')) {
+      for (const el of document.querySelectorAll('#actionBar button, #mTabs button, .bg-toggle button, #qfBtn, #thumbAddBtn, #helpBtn, .step-btn')) {
         const r = el.getBoundingClientRect();
         if (r.width && (r.height < 44 || r.width < 44)) bad.push(el.id || el.className || el.textContent);
       }
@@ -447,18 +458,131 @@ test('手機：底部操作列黏在底部、不遮住最後一個欄位；按�
   }
 });
 
-test('手機：「更多」含全部下載、可開可關、Esc 關閉並還原焦點', async () => {
+test('手機：「更多」含全部下載與全部清除、可開可關、Esc 關閉並還原焦點', async () => {
   const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(390, 844));
   await frame.waitForSelector('.batch-item-block');
   assert.equal(await frame.locator('#moreMenu').isVisible(), false);
   await frame.click('#moreBtn');
   assert.equal(await frame.getAttribute('#moreBtn', 'aria-expanded'), 'true');
   assert.ok(await frame.locator('#moreMenu #batchDownloadAllBtn').isVisible());
+  assert.ok(await frame.locator('#moreMenu #batchResetBtn').isVisible());
+  assert.equal(await frame.locator('#actionBar button:visible').count() >= 2, true);
   await page.keyboard.press('Escape');
   assert.equal(await frame.locator('#moreMenu').isVisible(), false);
   assert.equal(await frame.evaluate(() => document.activeElement.id), 'moreBtn');
   await frame.click('#moreBtn');
   await frame.click('#moreBtn');
   assert.equal(await frame.locator('#moreMenu').isVisible(), false);
+  await page.close();
+});
+
+// ---- 介面調整：純色預設隨機、縮圖即時小圖與「＋」、貼圖彈窗、toast、無灰字說明 ----
+test('純色背景：沒選過顏色就隨機一個色票並立即預覽；選過則沿用', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await frame.waitForSelector('.batch-item-block');
+  await frame.click('.batch-item-block .bg-toggle button:has-text("純色背景")');
+  await frame.waitForSelector('.batch-item-block .color-swatch.selected');
+  const first = await frame.$eval('.batch-item-block .color-swatch.selected', (e) => e.title);
+  const p = await waitPx(frame, 540, 100, (q) => q[3] === 255, '純色預覽有畫');
+  assert.ok(p[3] === 255);
+  // 換一個顏色、切到圖片再切回：沿用上次選的
+  const other = await frame.$$eval('.batch-item-block .color-swatch', (els, f) => els.map((e) => e.title).find((t) => t !== f), first);
+  await frame.click(`.batch-item-block .color-swatch[title="${other}"]`);
+  await frame.click('.batch-item-block .bg-toggle button:has-text("圖片背景")');
+  await frame.click('.batch-item-block .bg-toggle button:has-text("純色背景")');
+  assert.equal(await frame.$eval('.batch-item-block .color-swatch.selected', (e) => e.title), other);
+  await page.close();
+});
+
+test('縮圖列：即時小圖、沒背景是空框、最後一格＋新增一組', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await frame.waitForSelector('.batch-item-block');
+  // 一開始就有縮圖列與「＋」；新組沒背景＝空框
+  assert.ok(await frame.isVisible('#batchThumbsShelf'));
+  assert.equal(await frame.getAttribute('#thumbAddBtn', 'aria-label'), '新增一張');
+  assert.equal(await frame.locator('.thumb-item.thumb-empty').count(), 1);
+  assert.equal(await frame.locator('#batchResetBtn, #addBatchItemBtn, #genBtn, #batchStatus, .preview-hint').count(), 1, '只剩全部清除這顆');
+  await setupItem(page, frame, '縮圖測試');
+  await frame.waitForFunction(() => !document.querySelector('.thumb-item').classList.contains('thumb-empty'));
+  // 小圖有畫：中心像素不透明
+  await frame.waitForFunction(() => { const c = document.querySelector('.thumb-item canvas'); return c.getContext('2d').getImageData(88, 88, 1, 1).data[3] === 255; });
+  // ＋ 新增一組並切過去；原組收成一列
+  await frame.click('#thumbAddBtn');
+  await frame.waitForFunction(() => document.querySelectorAll('.thumb-item').length === 2);
+  assert.equal(await frame.locator('.batch-item-block').count(), 1);
+  assert.equal(await frame.locator('.batch-item-row').count(), 1);
+  assert.equal(await frame.locator('.thumb-item.active-thumb').count(), 1);
+  assert.equal(await frame.locator('.thumb-item.thumb-empty').count(), 1);
+  // 點第一個縮圖切回去，標題還在
+  await frame.click('.thumb-item >> nth=0');
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '縮圖測試');
+  // 沒有完成相關字樣
+  const text = await frame.evaluate(() => document.body.textContent);
+  for (const w of ['已完成', '未完成', '產生此張', '再做一張']) assert.ok(!text.includes(w), `不應出現「${w}」`);
+  await page.close();
+});
+
+test('貼圖與馬賽克：按鈕開關彈窗，Esc 關閉後焦點回按鈕；彈窗不超出預覽、內容保留', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await setupItem(page, frame, '彈窗測試');
+  assert.equal(await frame.getAttribute('#fxBtn', 'aria-label'), '貼圖與馬賽克');
+  assert.equal(await frame.getAttribute('#fxBtn', 'aria-expanded'), 'false');
+  assert.equal(await frame.isVisible('#fxPop'), false);
+  await frame.click('#fxBtn');
+  assert.equal(await frame.getAttribute('#fxBtn', 'aria-expanded'), 'true');
+  await frame.waitForSelector('#fxPop .fx-sticker-tile');
+  const r = await frame.evaluate(() => {
+    const p = document.getElementById('fxPop').getBoundingClientRect(), w = document.querySelector('.canvas-wrap').getBoundingClientRect(), b = document.getElementById('fxBtn').getBoundingClientRect();
+    return { inside: p.left >= w.left - 1 && p.right <= w.right + 1 && p.top >= w.top - 1, above: p.bottom <= b.top + 1 };
+  });
+  assert.ok(r.inside, '彈窗在預覽範圍內');
+  assert.ok(r.above, '彈窗在按鈕上方');
+  // 加一張貼圖，關閉再開：還在（不重建）
+  await frame.click('#fxPop .fx-sticker-tile >> nth=0');
+  await page.keyboard.press('Escape');
+  assert.equal(await frame.isVisible('#fxPop'), false);
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'fxBtn');
+  await frame.click('#fxBtn');
+  assert.ok(await frame.isVisible('#fxPop .fx-sticker-tile'));
+  // 再按一次關閉；點外面也關閉
+  await frame.click('#fxBtn');
+  assert.equal(await frame.isVisible('#fxPop'), false);
+  await frame.click('#fxBtn');
+  await frame.click('.settings', { position: { x: 20, y: 400 } });
+  assert.equal(await frame.isVisible('#fxPop'), false);
+  await page.close();
+});
+
+test('缺背景按「下載這張」：出現 toast（role=status）並自動消失；沒有灰字說明；標題在預覽上方', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await frame.waitForSelector('.batch-item-block');
+  await frame.fill('.batch-item-block textarea', '只有標題');
+  await frame.click('#dlBtn');
+  await frame.waitForSelector('#toastHost .toast.show');
+  assert.match(await frame.textContent('#toastHost'), /還沒有背景/);
+  assert.equal(await frame.getAttribute('#toastHost', 'role'), 'status');
+  assert.equal(await frame.getAttribute('#toastHost', 'aria-live'), 'polite');
+  await frame.waitForFunction(() => !document.querySelector('.toast'), null, { timeout: 7000 });
+  // 全部下載：都不能下載 → 也是 toast
+  await frame.click('#batchDownloadAllBtn');
+  await frame.waitForSelector('#toastHost .toast');
+  assert.equal(await frame.locator('.preview-hint, #batchStatus, #mStatus').count(), 0);
+  assert.ok(!(await frame.evaluate(() => document.body.textContent)).includes('Ctrl+V 貼上圖片；滾輪縮放'));
+  // 標題字在 canvas 上方
+  await setupItem(page, frame, '標題在上方');
+  const t = await frame.locator('#batchPreviewTitle').boundingBox();
+  const c = await frame.locator('#batchCanvas').boundingBox();
+  assert.ok(t && c && t.y + t.height <= c.y + 1, `標題 ${t && t.y} 應在 canvas ${c && c.y} 上方`);
+  await page.close();
+});
+
+test('全部下載：部分缺標題或背景會問；確認後只下載可下載的', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  await setupItem(page, frame, '第一張');
+  await frame.click('#thumbAddBtn');   // 第二張空的
+  await frame.click('#batchDownloadAllBtn');
+  await frame.waitForSelector('#confirmOverlay.open');
+  assert.match(await frame.textContent('#confirmMessage'), /1 組缺標題或背景/);
+  await frame.click('#confirmCancelBtn');
   await page.close();
 });

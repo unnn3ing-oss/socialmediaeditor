@@ -33,8 +33,6 @@
         <div id="batchItemsList"></div>
 
         <div class="btn-row list-actions">
-          <button id="batchResetBtn" type="button">全部清除</button>
-          <button id="addBatchItemBtn" type="button">＋ 再做一張</button>
           <button id="helpBtn" type="button" class="quiet">使用說明</button>
         </div>
       </div>
@@ -42,31 +40,32 @@
 
     <section class="preview-col" id="panelPreview" aria-label="預覽">
       <div id="batchPreview">
+        <div class="preview-title" id="batchPreviewTitle"></div>
         <div class="canvas-wrap">
           <canvas id="batchCanvas" width="1080" height="1080"></canvas>
           <textarea class="title-overlay" id="batchPreviewTitleInput" aria-label="預覽上的標題" placeholder="點兩下輸入內容" spellcheck="false" tabindex="-1" hidden></textarea>
+          <!-- 貼圖與馬賽克：右下角圓形按鈕彈出小視窗（stickers.js 填 #batchFxSlot；每一組各自一份，編輯的是目前預覽的那一組） -->
+          <button type="button" class="fx-fab" id="fxBtn" aria-label="貼圖與馬賽克" title="貼圖與馬賽克" aria-expanded="false" aria-controls="fxPop">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle class="dot" cx="7.4" cy="8.4" r="1"/><circle class="dot" cx="12.6" cy="8.4" r="1"/><path d="M6.8 12.2c1 1.5 2.1 2.2 3.2 2.2s2.2-.7 3.2-2.2"/></svg>
+          </button>
+          <div class="fx-pop" id="fxPop" role="group" aria-label="貼圖與馬賽克" hidden>
+            <div class="fx-bar" id="batchFxSlot"></div>
+          </div>
         </div>
-        <!-- 貼圖與馬賽克（stickers.js 填內容）：每一組各自一份，編輯的是目前預覽的那一組 -->
-        <div class="fx-bar" id="batchFxSlot"></div>
-        <div class="thumbs-shelf" id="batchThumbsShelf" hidden>
+        <div class="thumbs-shelf" id="batchThumbsShelf">
           <button type="button" class="shelf-nav" id="batchThumbsPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
           <div class="batch-thumbs" id="batchThumbs"></div>
           <button type="button" class="shelf-nav" id="batchThumbsNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
-          <!-- 桌面：全部下載在縮圖列右側；手機：layout.js 把它移進「更多」 -->
-          <div class="shelf-act" id="dlAllSlot"><button id="batchDownloadAllBtn" type="button">全部下載</button></div>
+          <!-- 桌面：全部下載、全部清除在縮圖列右側；手機：layout.js 把它們移進「更多」 -->
+          <div class="shelf-act" id="dlAllSlot"><button id="batchDownloadAllBtn" type="button">全部下載</button><button id="batchResetBtn" type="button">全部清除</button></div>
         </div>
-        <div class="preview-title" id="batchPreviewTitle"></div>
-        <div class="status" id="batchStatus" role="status" aria-live="polite">按某一組的「產生此張」後，預覽會顯示在這裡</div>
-        <div class="hint preview-hint">點兩下預覽圖輸入標題；<span class="hint-desk">點一下即可 Ctrl+V 貼上圖片；滾輪縮放、</span><span class="hint-touch">雙指縮放、</span>拖曳調整位置。</div>
       </div>
     </section>
 
     <!-- 桌面：左設定欄尾端；手機：sticky 在工具內容底部（safe-area 只在這一層處理） -->
     <div class="actions" id="actionBar">
-      <div class="m-status" id="mStatus" aria-hidden="true"></div>
       <div class="act-row">
-        <button type="button" id="genBtn" class="primary" disabled>產生此張</button>
-        <button type="button" id="dlBtn" disabled>下載這張</button>
+        <button type="button" id="dlBtn" class="primary" disabled>下載這張</button>
         <div class="more-wrap" id="moreWrap" hidden>
           <button type="button" id="moreBtn" aria-haspopup="true" aria-expanded="false" aria-controls="moreMenu">更多</button>
           <div class="more-menu" id="moreMenu" role="group" aria-label="更多動作" hidden></div>
@@ -75,6 +74,9 @@
     </div>
   </div>
 </div>
+
+<!-- 提醒：只在需要使用者處理時從底部滑出，約 4 秒自動消失 -->
+<div class="toast-host" id="toastHost" role="status" aria-live="polite"></div>
 
 <div class="modal-overlay" id="helpOverlay">
   <div class="modal">
@@ -85,9 +87,10 @@
     <div class="modal-body">
       <h3>基本流程</h3>
       <ul>
-        <li>按「＋ 再做一張」新增一組，放入照片（點擊選取、拖曳或 Ctrl+V 貼上）、輸入標題。</li>
+        <li>按預覽下方縮圖列最後面的「＋」新增一張，放入照片（點擊選取、拖曳或 Ctrl+V 貼上）或選純色背景、輸入標題。</li>
         <li>預覽上滾輪（手機雙指）縮放照片、拖曳調整位置；點兩下預覽圖可以直接改標題。</li>
-        <li>按該組的「產生此張」存成圖（「下載這張」會自動先產生），全部做完按「全部下載」；檔名是「年月日時分_編號」。</li>
+        <li>縮圖列會即時顯示每一張目前的樣子，點縮圖就切換到那一張。</li>
+        <li>按「下載這張」當場存成圖；全部做完按縮圖列右側的「全部下載」，要重來按「全部清除」。檔名是「年月日時分_編號」。</li>
       </ul>
       <h3>通用框</h3>
       <ul>
@@ -96,12 +99,12 @@
       </ul>
       <h3>貼圖與馬賽克</h3>
       <ul>
-        <li>預覽下方點一下加到畫面，拖曳移動、滾輪縮放，按 × 或 Delete 刪除；每一組各自一份。</li>
+        <li>按預覽右下角的圓形按鈕打開貼圖與馬賽克，點一下加到畫面，拖曳移動、滾輪縮放，按 × 或 Delete 刪除；每一組各自一份。</li>
         <li>「抽色」可以把照片變成黑白（標題、邊框、貼圖仍是彩色）。</li>
       </ul>
       <h3>內容不會消失</h3>
       <ul>
-        <li>切換框、背景類型、收合展開各組，內容都會保留；重新整理頁面才會清除。</li>
+        <li>切換框、背景類型、收合展開各組、開關貼圖視窗，內容都會保留；重新整理頁面才會清除。</li>
       </ul>
     </div>
   </div>

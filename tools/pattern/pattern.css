@@ -18,6 +18,7 @@
   --warn-bg: #fffaeb; --warn-line: #fedf89; --warn-text: #93370d;
   --bad-bg: #fef3f2; --bad-line: #fecdca; --bad-text: #b42318;
   --radius-control: 12px;
+  --radius-menu: 14px;
   --radius-card: 18px;
   --radius-dialog: 20px;
   --shadow-menu: 0 8px 24px rgba(16, 24, 40, .14), 0 2px 6px rgba(16, 24, 40, .06);
@@ -119,9 +120,7 @@ textarea { min-height: 88px; resize: vertical; }
   border-radius: 0 0 var(--radius-card) var(--radius-card);
 }
 .act-row { display: flex; gap: 8px; align-items: stretch; }
-.act-row > #genBtn { flex: 1 1 0; }
-.act-row > #dlBtn { flex: 0 0 auto; }
-.m-status { display: none; }
+.act-row > #dlBtn { flex: 1 1 0; }
 .preview-col {
   grid-column: 2; grid-row: 1 / span 2;
   min-width: 0; min-height: 0;
@@ -154,7 +153,6 @@ textarea { min-height: 88px; resize: vertical; }
 .batch-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-bottom: 8px; cursor: pointer; }
 .batch-item-head .label { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; }
 .head-btns { display: flex; gap: 8px; align-items: center; flex: none; }
-.label-done-tag { font-size: 13px; color: var(--ok-text); font-weight: 600; }
 .collapse-chevron { display: inline-flex; width: 24px; height: 24px; border-radius: 6px; align-items: center; justify-content: center; background: var(--fill); }
 .collapse-chevron svg { width: 12px; height: 12px; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .batch-item-head:hover .collapse-chevron { background: var(--accent-soft); }
@@ -172,8 +170,6 @@ textarea { min-height: 88px; resize: vertical; }
 .row-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .row-thumb.row-thumb-empty { background: #ddd repeating-conic-gradient(#ccc 0% 25%, #ddd 0% 50%) 50% / 12px 12px; }
 .row-title { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-badge { font-size: 13px; color: var(--ok-text); font-weight: 600; flex: none; }
-.row-badge.row-badge-pending { color: var(--warn-text); }
 
 /* 紅色 × 移除：必要的圓形操作鈕；視覺 32px，可按範圍 44px */
 .remove-btn {
@@ -280,19 +276,44 @@ canvas.pannable.panning { cursor: grabbing; }
 
 .preview-title { font-size: 15px; font-weight: 600; text-align: center; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
 .preview-title:empty { display: none; }
-.status {
-  font-size: 14px; line-height: 1.5; color: var(--text);
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control);
-  padding: 8px 12px; margin: 0; width: fit-content; max-width: 100%; align-self: center;
-}
-.status:empty { display: none; }
-.preview-hint { text-align: center; margin: 0; }
-.hint-touch { display: none; }
-@media (hover: none) {
-  .hint-desk { display: none; }
-  .hint-touch { display: inline; }
-}
 .fx-bar { margin-top: 0; }
+
+/* 貼圖與馬賽克：預覽右下角圓形按鈕＋往上彈出的小視窗（內容是原本的 fx bar，不重建） */
+.fx-fab {
+  position: absolute; right: 12px; bottom: 12px; z-index: 6;
+  width: 36px; height: 36px; min-height: 0; padding: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-menu);
+}
+.fx-fab svg { width: 20px; height: 20px; fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: round; }
+.fx-fab svg .dot { fill: var(--text); stroke: none; }
+.fx-fab[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.fx-fab[aria-expanded="true"] svg { stroke: var(--accent-strong); }
+.fx-fab[aria-expanded="true"] svg .dot { fill: var(--accent-strong); }
+.fx-pop {
+  position: absolute; right: 12px; bottom: 56px; z-index: 7;
+  width: min(380px, calc(100% - 24px)); max-height: calc(100% - 68px); overflow-y: auto;
+  padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-menu, 14px); box-shadow: var(--shadow-menu);
+}
+/* 彈窗裡貼圖換行排列（最多 14 張），不橫向捲動 */
+.fx-pop .fx-bar .fx-row { flex-wrap: wrap; overflow-x: visible; padding: 8px; }
+.fx-pop .fx-bar .fx-sep { display: none; }
+
+/* 提醒 toast：底部滑出，約 4 秒自動消失；手機避開底部動作列與 safe-area */
+.toast-host { position: fixed; left: 0; right: 0; bottom: 16px; z-index: 200; display: flex; justify-content: center; padding: 0 16px; pointer-events: none; }
+.toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 8px; max-width: 480px;
+  padding: 10px 8px 10px 16px; border-radius: var(--radius-control);
+  background: var(--text); color: #fff; font-size: 14px; line-height: 1.5; box-shadow: var(--shadow-menu);
+  opacity: 0; transform: translateY(16px); transition: opacity .2s ease, transform .2s ease;
+}
+.toast.show { opacity: 1; transform: none; }
+.toast-text { flex: 1; min-width: 0; }
+.toast-close { flex: 0 0 auto; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; display: inline-flex; align-items: center; justify-content: center; position: relative; }
+.toast-close::after { content: ''; position: absolute; inset: -6px; }
+.toast-close svg { width: 12px; height: 12px; stroke: #fff; stroke-width: 2; stroke-linecap: round; fill: none; }
+.toast-close:hover:not(:disabled) { background: rgba(255, 255, 255, .18); color: #fff; border: 0; }
+.toast-close:focus-visible { outline-color: #fff; }
 
 /* 本次圖片列：只有這一列可橫向捲動；全部下載在右側 */
 .thumbs-shelf {
@@ -303,7 +324,7 @@ canvas.pannable.panning { cursor: grabbing; }
 .shelf-nav { flex: 0 0 36px; width: 36px; height: 36px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .shelf-nav svg { width: 14px; height: 14px; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .shelf-nav:disabled { opacity: .35; }
-.shelf-act { flex: 0 0 auto; }
+.shelf-act { flex: 0 0 auto; display: flex; gap: 8px; }
 .batch-thumbs {
   position: relative; flex: 1; min-width: 0;
   display: flex; gap: 8px;
@@ -317,7 +338,7 @@ canvas.pannable.panning { cursor: grabbing; }
   border: 2px solid var(--line); border-radius: var(--radius-control);
   overflow: hidden; cursor: pointer; background: var(--fill);
 }
-.thumb-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-item canvas { width: 100%; height: 100%; display: block; border-radius: 0; background: #fff; }
 .thumb-item:hover { border-color: var(--line-strong); }
 .thumb-item.active-thumb { border-color: var(--accent); }
 .thumb-n {
@@ -326,9 +347,16 @@ canvas.pannable.panning { cursor: grabbing; }
   background: rgba(24, 34, 48, .82); color: #fff;
 }
 .thumb-item.active-thumb .thumb-n { background: var(--accent); }
-.thumb-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px 6px 22px; text-align: center; border-style: dashed; }
-.thumb-title { font-size: 12px; color: var(--text); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
-.thumb-tag { font-size: 12px; color: var(--warn-text); font-weight: 700; }
+.thumb-item.thumb-empty { border-style: dashed; background: var(--fill); }
+.thumb-item.thumb-empty canvas { visibility: hidden; }
+.thumb-add {
+  position: relative; width: 88px; height: 88px; min-height: 0; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px dashed var(--line-strong); border-radius: var(--radius-control); background: transparent;
+}
+.thumb-add svg { width: 24px; height: 24px; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+.thumb-add:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.thumb-add:hover:not(:disabled) svg { stroke: var(--accent); }
 
 /* ---- 對話框 ---- */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(16, 24, 40, .45); align-items: center; justify-content: center; padding: 16px; z-index: 100; }
@@ -390,11 +418,8 @@ canvas.pannable.panning { cursor: grabbing; }
     border: 0; border-top: 1px solid var(--line); border-radius: 0;
     background: var(--surface);
   }
-  .m-status { display: block; font-size: 13px; line-height: 1.4; color: var(--muted); margin: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .m-status:empty { display: none; }
   .act-row { flex-wrap: wrap; gap: 8px; }
-  .act-row > #genBtn { flex: 2 1 150px; min-height: 48px; font-size: 16px; }
-  .act-row > #dlBtn { flex: 1 1 110px; min-height: 48px; font-size: 16px; }
+  .act-row > #dlBtn { flex: 1 1 150px; min-height: 48px; font-size: 16px; }
   .more-wrap { position: relative; flex: 0 0 auto; }
   .more-wrap > button { min-height: 48px; min-width: 64px; font-size: 16px; }
   .more-menu {
@@ -403,10 +428,6 @@ canvas.pannable.panning { cursor: grabbing; }
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-menu);
   }
   .more-menu button { width: 100%; min-height: 48px; text-align: left; font-size: 16px; }
-  @media (max-width: 370px) {
-    .act-row > #genBtn { flex: 1 1 100%; }
-    .act-row > #dlBtn { flex: 1 1 0; }
-  }
 
   /* 觸控目標與字級 */
   input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]), select, textarea:not(.title-overlay) { font-size: 16px; }
@@ -416,7 +437,11 @@ canvas.pannable.panning { cursor: grabbing; }
   .batch-item-row { min-height: 64px; }
   .batch-item-head { min-height: 48px; }
   .remove-btn::after { inset: -6px; }
-  .thumb-item { width: 72px; height: 72px; }
+  .thumb-item, .thumb-add { width: 72px; height: 72px; }
+  .thumb-add { min-height: 72px; }
+  .fx-fab { width: 44px; height: 44px; }
+  .fx-pop { bottom: 64px; }
+  .toast-host { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .shelf-nav { display: none; }
   .thumbs-shelf { padding: 6px; }
   .modal-head { padding: 12px 16px; }
@@ -424,6 +449,6 @@ canvas.pannable.panning { cursor: grabbing; }
   button.quiet { min-width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  button, .dropzone, .canvas-wrap .title-overlay { transition: none; }
+  button, .dropzone, .canvas-wrap .title-overlay, .toast { transition: none; transform: none; }
   .batch-thumbs { scroll-behavior: auto; }
 }
