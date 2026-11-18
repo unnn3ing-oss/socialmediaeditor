@@ -21,7 +21,7 @@
     <p class="updated">最後更新：2026 年 11 月 18 日</p>
 
     <h2>1. 營運者與用途</h2>
-    <p>「小編工具箱」（以下稱本工具）是社群編輯團隊的內部工作工具，用來在團隊自己管理的臉書粉絲專頁上發布、排程貼文與留言，並提供製圖等輔助功能。本工具<strong>不提供一般大眾以臉書帳號登入</strong>，臉書相關功能只由團隊內部人員使用。</p>
+    <p>「小編工具箱」（以下稱本工具）是社群編輯團隊的內部工作工具，用來在團隊自己管理的臉書粉絲專頁上發布、排程貼文與留言，並提供製圖等輔助功能。本工具<strong>不提供一般大眾以臉書帳號登入</strong>，臉書相關功能只由管理員授權名單內的團隊人員以員工編號登入使用。</p>
 
     <h2>2. 使用的臉書權限與用途</h2>
     <div class="tbl"><table>
@@ -45,6 +45,8 @@
         <tr><td>粉專顯示設定（簡稱、追蹤參數、排序）</td><td>Cloudflare D1</td><td>直到管理員修改或刪除</td></tr>
         <tr><td>留言範本（管理員設定的固定文字）</td><td>Cloudflare D1</td><td>直到管理員修改或刪除</td></tr>
         <tr><td>待發留言（貼文 ID、留言文字、發送狀態）</td><td>Cloudflare Durable Objects</td><td>該貼文的留言全部完成、取消或失敗後 14 天自動刪除</td></tr>
+        <tr><td>授權名單（員工編號、姓名、權限組、最後登入時間）</td><td>Cloudflare D1</td><td>直到管理員將該員工移除</td></tr>
+        <tr><td>排程發布操作紀錄（員工編號、姓名、動作、粉專 ID、貼文 ID、時間）</td><td>Cloudflare D1</td><td>90 天後自動刪除</td></tr>
         <tr><td>錯誤紀錄（工具名稱、錯誤代碼、版本、瀏覽器版本字串；不含貼文內容）</td><td>Cloudflare D1</td><td>30 天後自動刪除</td></tr>
         <tr><td>「排入 Rundown」寫入的內容（文章 ID、類型、SLUG）</td><td>由本工具轉送至團隊自己的 Google 試算表（Google Apps Script），本工具不另存</td><td>依團隊試算表自身的管理，由團隊內部刪除</td></tr>
         <tr><td>工具偏好設定（例如「排入 Rundown」開關）與登入憑證</td><td>使用者自己的瀏覽器（localStorage）</td><td>登入憑證到期後失效；使用者可隨時清除瀏覽器資料</td></tr>
@@ -84,7 +86,7 @@
     <p class="updated">Last updated: November 18, 2026</p>
 
     <h2>1. Operator and Purpose</h2>
-    <p>"Social Media Editor Toolbox" (the "Tool") is an internal tool used by a social media editing team to publish and schedule posts and comments on Facebook Pages managed by the team, along with image-making utilities. The Tool <strong>does not offer Facebook Login to the general public</strong>; its Facebook features are used only by internal team members.</p>
+    <p>"Social Media Editor Toolbox" (the "Tool") is an internal tool used by a social media editing team to publish and schedule posts and comments on Facebook Pages managed by the team, along with image-making utilities. The Tool <strong>does not offer Facebook Login to the general public</strong>; its Facebook features are used only by team members on an administrator-managed allowlist, who sign in with their employee ID.</p>
 
     <h2>2. Facebook Permissions and How They Are Used</h2>
     <div class="tbl"><table>
@@ -108,6 +110,8 @@
         <tr><td>Page display settings (short name, tracking parameters, order)</td><td>Cloudflare D1</td><td>Until changed or removed by an administrator</td></tr>
         <tr><td>Comment templates (fixed text set by an administrator)</td><td>Cloudflare D1</td><td>Until changed or removed by an administrator</td></tr>
         <tr><td>Pending comments (post ID, comment text, status)</td><td>Cloudflare Durable Objects</td><td>Deleted automatically 14 days after all comments for that post are completed, canceled, or failed</td></tr>
+        <tr><td>Staff allowlist (employee ID, name, permission group, last sign-in time)</td><td>Cloudflare D1</td><td>Until an administrator removes that employee</td></tr>
+        <tr><td>Scheduling activity log (employee ID, name, action, Page ID, post ID, time)</td><td>Cloudflare D1</td><td>Deleted automatically after 90 days</td></tr>
         <tr><td>Error logs (tool name, error code, version, browser user-agent; no post content)</td><td>Cloudflare D1</td><td>Deleted automatically after 30 days</td></tr>
         <tr><td>Content written by "Add to Rundown" (article ID, type, slug)</td><td>Forwarded by the Tool to the team's own Google Sheet (Google Apps Script); not otherwise stored by the Tool</td><td>Managed within the team's own spreadsheet; deleted internally by the team</td></tr>
         <tr><td>Tool preferences (e.g., the "Add to Rundown" switch) and sign-in credential</td><td>The user's own browser (localStorage)</td><td>The credential expires automatically; users may clear their browser data at any time</td></tr>

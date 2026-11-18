@@ -345,8 +345,8 @@ if (window.top !== window.self) {
 
   function signOut() {
     token = ''; pending = '';
-    $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('login').hidden = false;
-    fbLoaded = false; rdLoaded = false; pgItems = []; psItems = [];
+    $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('sfConfirm').hidden = true; $('login').hidden = false;
+    fbLoaded = false; rdLoaded = false; staffLoaded = false; sfState = null; sfPending = null; pgItems = []; psItems = [];
     try { $('pw').focus(); } catch (e) {}
   }
   $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
@@ -375,7 +375,133 @@ if (window.top !== window.self) {
     }).catch(function () { say($('rdMsg'), '讀取設定狀態失敗。', 'err'); });
   }
 
-  var TABS = ['fb', 'rd', 'assets', 'logs'];
+    // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
+  var sfState = null, sfPending = null, staffLoaded = false;
+  var SF_ACT = { publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除' };
+  function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function sfCall(path, method, body, msgEl, done) {
+    var o = { method: method };
+    if (body) { o.headers = { 'Content-Type': 'application/json' }; o.body = JSON.stringify(body); }
+    return api(path, o).then(function (res) {
+      if (res.ok) { sfState = res.data; sfRender(); if (done) say(msgEl, done, 'good'); return true; }
+      if (res.code === 'unauthorized') { expired(); return false; }
+      say(msgEl, res.error || '操作失敗。', 'err'); return false;
+    }).catch(function () { say(msgEl, '連不上後端，請稍後再試。', 'err'); return false; });
+  }
+  function sfGroupSelect(cur, label) {
+    var s = document.createElement('select'); s.setAttribute('aria-label', label);
+    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; s.appendChild(o); });
+    s.value = cur; return s;
+  }
+  function sfRender() {
+    if (!sfState) return;
+    var keep = $('sfGroup').value;
+    $('sfGroup').textContent = '';
+    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('sfGroup').appendChild(o); });
+    if (keep) $('sfGroup').value = keep;
+    var tb = $('sfRows'); tb.textContent = '';
+    sfState.staff.forEach(function (s) {
+      var tr = document.createElement('tr');
+      tr.appendChild(sfEl('td', '', s.id)); tr.appendChild(sfEl('td', '', s.name));
+      var tg = document.createElement('td'), sel = sfGroupSelect(s.group, s.name + ' 的權限組');
+      sel.onchange = function () { sel.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { group: sel.value }, $('sfMsg'), '已更新「' + s.name + '」的權限組。').then(function (ok) { if (!ok) sfRender(); }); };
+      tg.appendChild(sel); tr.appendChild(tg);
+      var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
+      tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
+      var ac = sfEl('td', 'sf-ops');
+      var tgl = sfEl('button', '', s.enabled ? '停用' : '啟用'); tgl.type = 'button';
+      tgl.onclick = function () { tgl.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { enabled: !s.enabled }, $('sfMsg'), s.enabled ? '已停用「' + s.name + '」。' : '已啟用「' + s.name + '」。'); };
+      var del = sfEl('button', 'danger', '移除'); del.type = 'button';
+      del.onclick = function () { sfPending = s.id; $('sfCfText').textContent = s.name + '（' + s.id + '）會從名單移除，對方下一次操作就會被擋。'; $('sfConfirm').hidden = false; $('sfCfYes').focus(); };
+      ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
+      tb.appendChild(tr);
+    });
+    $('sfWrap').hidden = !sfState.staff.length; $('sfEmpty').hidden = !!sfState.staff.length;
+    sgRender();
+  }
+  function sgRow(g) {   // g：{ id, name, perms, used }；id 空白＝新增中的一組
+    var row = sfEl('div', 'pg-card sg-row');
+    var name = document.createElement('input'); name.type = 'text'; name.maxLength = 20; name.value = g.name; name.setAttribute('aria-label', '權限組名稱'); name.placeholder = '權限組名稱';
+    row.appendChild(name);
+    var boxes = sfEl('div', 'sg-perms');
+    sfState.perms.forEach(function (p) {
+      var l = sfEl('label', 'sg-perm'), c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key; c.checked = g.perms.indexOf(p.key) >= 0;
+      l.appendChild(c); l.appendChild(document.createTextNode(p.label)); boxes.appendChild(l);
+    });
+    row.appendChild(boxes);
+    var act = sfEl('div', 'row');
+    var save = sfEl('button', 'primary', '儲存'); save.type = 'button';
+    save.onclick = function () {
+      var nm = name.value.trim(); if (!nm) { name.focus(); return say($('sgMsg'), '請填權限組名稱。', 'err'); }
+      var perms = Array.prototype.filter.call(boxes.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+      var body = { name: nm, perms: perms }; if (g.id) body.id = g.id;
+      save.disabled = true; say($('sgMsg'), '儲存中');
+      sfCall('/admin/staff-groups', 'POST', body, $('sgMsg'), '已儲存「' + nm + '」。').then(function (ok) { if (!ok) save.disabled = false; });
+    };
+    var del = sfEl('button', 'danger', '刪除'); del.type = 'button';
+    if (!g.id) del.onclick = function () { row.remove(); };
+    else if (g.used > 0) { del.disabled = true; del.title = '還有 ' + g.used + ' 人使用'; }
+    else del.onclick = function () {
+      if (!window.confirm('刪除權限組「' + g.name + '」？')) return;
+      sfCall('/admin/staff-groups/' + encodeURIComponent(g.id), 'DELETE', null, $('sgMsg'), '已刪除「' + g.name + '」。');
+    };
+    act.appendChild(save); act.appendChild(del);
+    if (g.id) act.appendChild(sfEl('span', 'sg-used', g.used + ' 人使用'));
+    row.appendChild(act);
+    return row;
+  }
+  function sgRender() {
+    var box = $('sgRows'); box.textContent = '';
+    sfState.groups.forEach(function (g) { box.appendChild(sgRow(g)); });
+  }
+  $('sgNew').onclick = function () {
+    if (!sfState) return;
+    var r = sgRow({ id: '', name: '', perms: [], used: 0 }); $('sgRows').appendChild(r); r.querySelector('input').focus();
+  };
+  function sfLoad() {
+    say($('sfMsg'), '讀取中');
+    return api('/admin/staff').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      sfState = res.data; sfRender(); say($('sfMsg'), '');
+    }).catch(function (e) { staffLoaded = false; say($('sfMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('sfForm').onsubmit = function (e) {
+    e.preventDefault();
+    var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value };
+    $('sfAdd').disabled = true; say($('sfMsg'), '新增中');
+    sfCall('/admin/staff', 'POST', body, $('sfMsg'), '已新增「' + body.name + '」。').then(function (ok) {
+      if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfId').focus(); }
+      $('sfAdd').disabled = false;
+    });
+  };
+  $('sfCfNo').onclick = function () { sfPending = null; $('sfConfirm').hidden = true; };
+  $('sfCfYes').onclick = function () {
+    var id = sfPending; if (!id) return;
+    $('sfCfYes').disabled = true;
+    sfCall('/admin/staff/' + encodeURIComponent(id), 'DELETE', null, $('sfMsg'), '已移除。').then(function () {
+      $('sfConfirm').hidden = true; sfPending = null; $('sfCfYes').disabled = false;
+    });
+  };
+  $('auBtn').onclick = function () {
+    var q = 'days=' + encodeURIComponent($('auDays').value), uid = $('auUid').value.trim();
+    if (uid) q += '&uid=' + encodeURIComponent(uid);
+    $('auBtn').disabled = true; say($('auMsg'), '查詢中');
+    api('/admin/audit?' + q).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('auMsg'), res.error || '查詢失敗。', 'err'); return; }
+      var tb = $('auRows'); tb.textContent = '';
+      res.data.forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.appendChild(sfEl('td', 'num', fmtTime(r.at))); tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
+        tr.appendChild(sfEl('td', '', SF_ACT[r.action] || r.action)); tr.appendChild(sfEl('td', 'num', r.page || '')); tr.appendChild(sfEl('td', 'num', r.post || ''));
+        tb.appendChild(tr);
+      });
+      $('auWrap').hidden = !res.data.length;
+      say($('auMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '這段期間沒有紀錄。');
+    }).catch(function () { say($('auMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('auBtn').disabled = false; });
+  };
+
+  var TABS = ['fb', 'staff', 'rd', 'assets', 'logs'];
   var assetsLoaded = false;
   function tabFromHash() { var t = location.hash.slice(1); return TABS.indexOf(t) >= 0 ? t : TABS[0]; }
   function showTab(id, focus) {
@@ -387,6 +513,7 @@ if (window.top !== window.self) {
     if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
     if (focus) $('tab-' + id).focus();
     if (id === 'fb' && !fbLoaded && token) fbLoad();
+    if (id === 'staff' && !staffLoaded && token) { staffLoaded = true; sfLoad(); }
     if (id === 'rd' && !rdLoaded && token) rdLoad();
     if (id === 'assets' && !assetsLoaded && token) { assetsLoaded = true; load(); }
   }

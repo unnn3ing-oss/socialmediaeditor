@@ -130,6 +130,8 @@ test('第一個粉專失敗不影響第二個；時間超出範圍不呼叫臉�
   const [a, b] = r.body.data.results;
   assert.equal(a.ok, false); assert.match(a.error, /no permission/);
   assert.equal(b.ok, true); assert.equal(b.comment, 'retry', '第 1 則失敗交給計時器重試'); assert.match(b.commentError, /boom/);
+  assert.deepEqual(env.DB.raw.prepare('SELECT uid, action, page, post FROM fb_audit').all().map((x) => ({ ...x })),
+    [{ uid: 'ADMIN', action: 'publish', page: '222', post: '222_1' }], '操作紀錄只記成功的粉專');
   const n = f.calls.length;
   const r2 = await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: nowSec() + 300 }, { page: '222', at: nowSec() + 31 * 86400 }]) });
   assert.deepEqual(r2.body.data.results.map((x) => [x.ok, x.error]), [[false, 'fb_bad_time'], [false, 'fb_bad_time']]);

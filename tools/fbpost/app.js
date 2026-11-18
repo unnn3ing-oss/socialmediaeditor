@@ -28,6 +28,11 @@ $('tabs').addEventListener('click', (e) => {
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
     // 關閉中：有填關閉原因才顯示；其他（token 過期、沒設定、沒有粉專）把錯誤原因顯示出來
+    if (e && e.code === 'fb_need_staff') {   // 公司密碼登入不能用：請改用員工編號
+      $('needStaff').hidden = false;
+      $('needStaffBtn').onclick = () => tb.company.login();
+      return;
+    }
     const why = e && e.code === 'fb_forbidden' ? ((e.detail && e.detail.reason) || '') : errText(e);
     if (why) { $('offReason').textContent = '原因：' + why; $('offReason').hidden = false; }
     return;
@@ -35,6 +40,16 @@ $('tabs').addEventListener('click', (e) => {
   // 已開放給公司帳號就不顯示「測試模式」標籤（讀不到維持顯示）
   tb.api.call('/fb/access').then((a) => {
     if (a && a.mode === 'company') for (const el of document.querySelectorAll('.test-pill')) el.hidden = true;
+  }).catch(() => {});
+  // 依權限顯示：讀不到 /fb/me 就當全部都有（後端仍會擋）
+  tb.api.call('/fb/me').then((me) => {
+    if (!me) return;
+    const perms = me.admin ? ['view', 'post', 'edit', 'delete'] : (me.perms || []);
+    const app = $('fbpostApp');
+    for (const k of ['view', 'post', 'edit', 'delete']) app.classList.toggle('no-' + k, !perms.includes(k));
+    $('noView').hidden = perms.includes('view');
+    const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
+    if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
   }).catch(() => {});
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;

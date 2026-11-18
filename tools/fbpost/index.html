@@ -25,6 +25,10 @@
     <p>這個工具正在重新撰寫，暫時無法使用。</p>
     <p>臉書上已經排好的貼文不受影響。</p>
     <p id="offReason" class="off-reason" hidden></p>
+    <div id="needStaff" hidden>
+      <p class="off-reason">排程發布需要用員工編號登入</p>
+      <button type="button" class="btn btn-primary" id="needStaffBtn">用員工編號登入</button>
+    </div>
   </section>
 </main>
 
@@ -32,13 +36,15 @@
   <header class="fp-head">
     <h1>排程發布</h1>
     <span class="pill ok" id="pagesState">已連線 0 個粉專</span>
+    <span class="who" id="whoAmI" hidden></span>
     <span class="pill warn test-pill">測試模式（僅管理員）</span>
     <button type="button" class="btn btn-secondary btn-sm" id="pagesRefresh">重新整理粉專</button>
     <span class="grow"></span>
     <button type="button" class="btn btn-primary new-btn" id="newBtn">＋ 新增發文</button>
   </header>
 
-  <section class="card">
+  <p class="noview" id="noView" role="status" hidden>你的權限組不能檢視列表</p>
+  <section class="card" id="listCard">
     <div class="seg tabs" role="tablist" aria-label="分頁" id="tabs">
       <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
       <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>

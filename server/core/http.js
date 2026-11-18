@@ -11,6 +11,9 @@ export const MESSAGES = {
   fb_off: '後端尚未設定 FB_USER_TOKEN。',
   fb_token: '臉書 token 無效或過期。',
   fb_forbidden: '排程發布目前關閉。',
+  bad_staff: '查不到這個員工編號，或已停用。',
+  fb_need_staff: '排程發布需要用員工編號登入。',
+  fb_no_perm: '你的權限組不能使用這個功能。',
   fb_no_pages: '臉書 token 沒有可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts 權限。',
   fb_error: '臉書回應錯誤。',
   fb_bad_time: '排程時間必須在 10 分鐘到 30 天之間。',
@@ -18,7 +21,7 @@ export const MESSAGES = {
   rundown_failed: '連不上 Rundown 的 Apps Script。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
-  fb_off: 503, fb_token: 502, fb_forbidden: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
+  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

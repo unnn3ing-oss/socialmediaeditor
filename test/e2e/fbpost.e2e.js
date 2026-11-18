@@ -28,8 +28,11 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     if (p.startsWith('/fb/')) fbCalls.push(p);
     if (p === '/auth/status') {
       if (mode === 'denied') return json({ ok: false, code: 'unauthorized', error: '請先登入' }, 401);
+      if (mode === 'needStaff') return json({ company: true, exp: soon });
       return json(mode === 'admin' || mode === 'tokenbad' ? { company: true, exp: soon, admin: true } : { company: true, exp: soon });   // closedReason／companyOpen＝一般公司帳號
     }
+    if (mode === 'needStaff' && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_need_staff', error: '排程發布需要用員工編號登入。' }, 403);
+    if (p === '/fb/me' && opts.me) return json(opts.me);
     // 開放範圍：company＝只開放管理員時的公司帳號（403）；companyOpen＝已開放給公司帳號
     if ((mode === 'company' || mode === 'closedReason') && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_forbidden', error: '排程發布目前關閉。', detail: { reason: mode === 'closedReason' ? '臉書權杖更換中' : '' } }, 403);
     if (p === '/fb/access') return json({ mode: mode === 'companyOpen' ? 'company' : 'admin' });
@@ -756,4 +759,54 @@ test('已排程查詢中顯示 3 列骨架，讀完換成結果', async () => {
   assert.equal(await page.locator('#schedList li').count(), 1);
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+test('公司密碼登入（fb_need_staff）：顯示請用員工編號登入與按鈕，按下通知外殼', async () => {
+  const { page, errors } = await newPage('needStaff', { width: 1280, height: 700 });
+  await page.addInitScript(() => { window.__logins = 0; });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#needStaff:not([hidden])');
+  assert.match(await page.textContent('#needStaff'), /排程發布需要用員工編號登入/);
+  assert.equal(await page.locator('#fbpostApp').isVisible(), false);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-need-staff.png') });
+  assert.equal(await page.textContent('#needStaffBtn'), '用員工編號登入');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('只有 view 權限：看不到新增發文、改時間、刪除；標題列顯示姓名與權限組', async () => {
+  const t = await newPage('companyOpen', { width: 1280, height: 700 }, { me: { admin: false, id: 'A1', name: '王小明', group: '唯讀組', perms: ['view'], mode: 'company' } });
+  await t.page.goto(srv.url + 'tools/fbpost/index.html');
+  await t.page.waitForSelector('#fbpostApp:not([hidden])');
+  await t.page.waitForFunction(() => document.getElementById('whoAmI') && !document.getElementById('whoAmI').hidden);
+  assert.equal(await t.page.textContent('#whoAmI'), '王小明．唯讀組');
+  assert.equal(await t.page.isVisible('#newBtn'), false);
+  await t.page.click('#schedReload');
+  await t.page.waitForSelector('#schedList li');
+  assert.equal(await t.page.locator('#schedList li .act-time:visible').count(), 0);
+  assert.equal(await t.page.locator('#schedList li .btn-del:visible').count(), 0);
+  await t.page.click('#tabs [data-tab=pub]');
+  await t.page.click('#pubReload');
+  await t.page.waitForSelector('#pubList li');
+  assert.equal(await t.page.locator('#pubList li .btn-del:visible').count(), 0);
+  await t.page.click('#tabs [data-tab=sched]');
+  if (SHOT) await t.page.screenshot({ path: path.join(SHOT, 'fbpost-view-only.png') });
+  assert.deepEqual(t.errors, []);
+  await t.page.close();
+});
+
+test('沒有 view 權限：列表區隱藏並提示；讀不到 /fb/me 視為全權限', async () => {
+  const a = await newPage('companyOpen', { width: 1280, height: 700 }, { me: { admin: false, id: 'A2', name: '乙', group: '只發文', perms: ['post'], mode: 'company' } });
+  await a.page.goto(srv.url + 'tools/fbpost/index.html');
+  await a.page.waitForSelector('#noView:not([hidden])');
+  assert.equal(await a.page.isVisible('#listCard'), false);
+  assert.equal(await a.page.isVisible('#newBtn'), true);
+  await a.page.close();
+  const b = await newPage('companyOpen', { width: 1280, height: 700 });   // /fb/me 404
+  await b.page.goto(srv.url + 'tools/fbpost/index.html');
+  await b.page.waitForSelector('#fbpostApp:not([hidden])');
+  await b.page.waitForTimeout(300);
+  assert.equal(await b.page.isVisible('#newBtn'), true);
+  assert.equal(await b.page.isVisible('#listCard'), true);
+  await b.page.close();
 });
