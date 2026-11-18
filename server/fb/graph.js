@@ -37,10 +37,13 @@ export async function graph(env, method, path, params, token) {
   } catch (e) {
     throw new GraphError(-1, '連不上臉書', 0, undefined, true);
   }
-  if (res.ok && !data) throw new GraphError(-1, '讀不到臉書的回應', res.status, undefined, true);
+  if (res.ok && data == null) throw new GraphError(-1, '讀不到臉書的回應', res.status, undefined, true);
   if (!res.ok || !data || data.error) {
     const err = (data && data.error) || {};
-    throw new GraphError(Number(err.code) || -1, err.message || '臉書回應錯誤（HTTP ' + res.status + '）', res.status, err.error_subcode);
+    const code = Number(err.code) || -1;
+    // 5xx／讀不到內容／臉書的「未知錯誤」(1)、「暫時無法服務」(2)：請求可能已被處理，發文要當待確認
+    const uncertain = !res.ok && (res.status >= 500 || data == null || code === 1 || code === 2);
+    throw new GraphError(code, err.message || '臉書回應錯誤（HTTP ' + res.status + '）', res.status, err.error_subcode, uncertain);
   }
   return data;
 }

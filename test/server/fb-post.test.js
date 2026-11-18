@@ -318,3 +318,16 @@ test('防重複：sendId／retry 格式驗證、沒帶 sendId 照舊、清理 7 
   await sends.cleanupSends(env, Date.now());
   assert.deepEqual(env.DB.raw.prepare('SELECT send_id FROM fb_sends').all().map((x) => x.send_id), ['fresh-0001'], '只刪 7 天前的');
 });
+
+test('防重複：臉書回 5xx／錯誤碼 2 也是待確認，不能直接重送；一般錯誤仍是失敗', async (t) => {
+  let mode = 503;
+  const { env, headers } = await setup(t, { 'POST /111/feed': () => (mode === 503 ? gErr(2, 503, 'temporarily unavailable') : gErr(100, 400, 'bad')) });
+  const targets = JSON.stringify([{ page: '111', at: null }]);
+  const r1 = (await send(env, headers, { message: 'm', targets, sendId: SID })).body.data.results[0];
+  assert.equal(r1.unknown, true); assert.equal(rowOf(env, '111').status, 'unknown');
+  mode = 400;
+  const SID2 = 'other-send-0002';
+  const r3 = (await send(env, headers, { message: 'm', targets, sendId: SID2 })).body.data.results[0];
+  assert.ok(!r3.unknown);
+  assert.equal(env.DB.raw.prepare('SELECT status FROM fb_sends WHERE send_id = ?').get(SID2).status, 'failed');
+});
