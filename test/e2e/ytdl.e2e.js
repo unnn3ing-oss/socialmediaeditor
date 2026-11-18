@@ -194,7 +194,7 @@ test('YT 下載（沒裝外掛）：手機顯示「需在電腦使用」、不�
   } finally { await browser.close(); await srv.close(); }
 });
 
-test('YT 下載：工作區卡片有間距，新增列各元件同高 44px、更新列橫排', async () => {
+test('YT 下載：工作區卡片有間距，新增列各元件同高 48px、更新列橫排', async () => {
   const { serve } = require('../helpers/serve.js');
   const { launch } = require('../helpers/browser.js');
   const srv = await serve(ROOT);
@@ -208,7 +208,7 @@ test('YT 下載：工作區卡片有間距，新增列各元件同高 44px、更
     const gap = await page.$eval('#work', (el) => getComputedStyle(el).rowGap);
     assert.equal(gap, '14px');
     const hs = await page.evaluate(() => ['#add-card .in', '#mode', '#quality', '#add-btn'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().height)));
-    assert.deepEqual(hs, [44, 44, 44, 44]);
+    assert.deepEqual(hs, [48, 48, 48, 48]);
     const ys = await page.evaluate(() => ['#add-card .in', '#mode', '#quality', '#add-btn'].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); return Math.round(r.top + r.height / 2); }));
     assert.equal(new Set(ys).size, 1, '垂直置中對齊 ' + ys);
     const o = await page.evaluate(() => ['#outdir', '#save-outdir'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().height)));

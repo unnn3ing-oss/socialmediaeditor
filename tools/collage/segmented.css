@@ -13,9 +13,9 @@
 
 .seg-thumb {
   position: absolute; left: 0; top: 0; z-index: 0;
-  width: 0; height: 0; border-radius: 6px;
-  background: var(--field-bg, #fff);
-  box-shadow: none; outline: 1px solid var(--accent);
+  width: 0; height: 0; border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #cfd6e0, 0 1px 3px rgba(16, 24, 40, .14); outline: none;
   pointer-events: none;
   opacity: 0;                    /* 還沒量測完之前先藏著，免得閃一下 */
   transform: translate3d(0, 0, 0);

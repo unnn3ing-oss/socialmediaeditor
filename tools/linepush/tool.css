@@ -44,19 +44,19 @@ p.sub { margin: 0; color: var(--muted); font-size: 13px; }
     border-bottom: 1px solid var(--border);
   }
 .tb-left { display: flex; align-items: center; gap: 16px; flex: none; }
-.mode-tabs,
-.page-tabs,
 .tb-tools {
     display: flex; align-items: center; gap: 2px;
     background: var(--track); border: none; border-radius: var(--radius-control); padding: 3px;
-    
   }
+/* 切換鈕（統一樣式 v2）：底軌實色、內距 5、外框 18／按鈕 13 圓角 */
+.mode-tabs,
+.page-tabs { display: flex; align-items: center; gap: 5px; background: #e7ecf3; border: none; border-radius: 18px; padding: 5px; }
 .seg-track { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
 .seg-track > button { position: relative; z-index: 1; transition: color .2s ease; }
 .seg-track > button.hot,
 .seg-track.dragging > button.hot:hover { color: var(--accent); }
 .seg-track.dragging > button.active:not(.hot) { color: var(--muted); }
-.seg-knob { position: absolute; z-index: 0; left: 0; top: 3px; bottom: 3px; width: 0; border-radius: 6px; background: var(--knob); box-shadow: none; outline: 1px solid var(--accent); pointer-events: none; opacity: 0; }
+.seg-knob { position: absolute; z-index: 0; left: 0; top: 5px; bottom: 5px; width: 0; border-radius: 13px; background: #fff; box-shadow: 0 0 0 1px #cfd6e0, 0 1px 3px rgba(16, 24, 40, .14); outline: none; pointer-events: none; opacity: 0; }
 .seg-track.ready .seg-knob { opacity: 1; transition: transform .3s cubic-bezier(.3, .9, .3, 1), width .3s cubic-bezier(.3, .9, .3, 1); }
 .seg-track.dragging .seg-knob { transition: none; }
 .seg-track.dragging { cursor: grabbing; }
@@ -193,13 +193,13 @@ button.primary {
 button.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .canvas-wrap { display: flex; justify-content: center; width: 100%; }
-.mode-tab { white-space: nowrap; background: transparent; border: none; border-radius: var(--radius-control); padding: 6px 18px; color: var(--muted); font-size: 15px; font-weight: 500; }
+.mode-tab { white-space: nowrap; background: transparent; border: none; border-radius: 13px; padding: 0 18px; color: #475467; font-size: 13px; font-weight: 500; }
 .mode-tab:hover { color: var(--text); }
 .mode-tab.active,
-.mode-tab.active:hover { color: var(--accent); }
-.seg { display: flex; gap: 4px; background: var(--track); border: none; border-radius: var(--radius-control); padding: 4px; }
-.seg button { flex: 1; border: none; background: transparent; border-radius: var(--radius-control); padding: 6px 8px; font-size: 14px; color: var(--muted); font-weight: 500; }
-.seg button.active { background: var(--knob); color: var(--accent); box-shadow: none; outline: 1px solid var(--accent); }
+.mode-tab.active:hover { color: var(--accent); font-weight: 600; }
+.seg { display: flex; gap: 5px; background: #e7ecf3; border: none; border-radius: 18px; padding: 5px; }
+.seg button { flex: 1; border: none; background: transparent; border-radius: 13px; padding: 0 8px; font-size: 13px; color: #475467; font-weight: 500; }
+.seg button.active { background: #fff; color: var(--accent); font-weight: 600; outline: none; box-shadow: 0 0 0 1px #cfd6e0, 0 1px 3px rgba(16, 24, 40, .14); }
 .seg-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .seg-row .swatch-label { width: 78px; flex-shrink: 0; }
 .seg-row .seg { flex: 1; }
@@ -260,10 +260,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .dock-switch { display: inline-flex; margin: 0; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
 .dock-switch[hidden] { display: none; }
 .dock-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-.sw-track { position: relative; flex: none; width: 42px; height: 24px; border-radius: 12px; background: #9aa5b8; transition: background .2s ease; }
-.sw-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); transition: transform .2s ease; }
-.dock-switch input:checked + .sw-track { background: #34c759; }
-.dock-switch input:checked + .sw-track .sw-knob { transform: translateX(18px); }
+.sw-track { position: relative; flex: none; width: 52px; height: 30px; border-radius: 15px; background: #c3ccd8; transition: background .2s ease; }
+.sw-knob { position: absolute; top: 5px; left: 5px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(16, 24, 40, .25); transition: transform .2s ease; }
+.dock-switch input:checked + .sw-track { background: var(--accent); }
+.dock-switch input:checked + .sw-track .sw-knob { transform: translateX(22px); }
 .dock-switch input:focus-visible + .sw-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gap-tip { position: fixed; z-index: 70; max-width: 260px; background: #1f2328; color: #fff; border-radius: var(--radius-card); padding: 10px 16px; box-shadow: none; font-size: 13px; line-height: 1.5; pointer-events: none; opacity: 0; transition: opacity .3s ease; }
 .gap-tip.show { opacity: 1; }
@@ -342,10 +342,10 @@ canvas {
 .status-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .status-toast[hidden] { display: none; }
 .page-tabs { margin: 0; }
-.page-tab { background: transparent; border: none; border-radius: var(--radius-control); padding: 6px 20px; color: var(--muted); font-weight: 500; font-size: 15px; }
+.page-tab { background: transparent; border: none; border-radius: 13px; padding: 0 20px; color: #475467; font-weight: 500; font-size: 13px; }
 .page-tab:hover { color: var(--text); }
 .page-tab.active,
-.page-tab.active:hover { color: var(--accent); }
+.page-tab.active:hover { color: var(--accent); font-weight: 600; }
 .page-tabs[hidden] { display: none; }
 .float-stack > .top-label-box,
 .float-stack > #cellsList .cell-box,
@@ -555,8 +555,9 @@ canvas {
 .dock-colors input[type=color] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: transparent; cursor: pointer; }
 
 /* 手機：觸控目標 >=44px、輸入文字 >=16px、不撐出整頁（不用 overflow-x:hidden 掩蓋） */
-.mode-tab, .page-tab, .step-btn, .tb-tools button { min-height: 44px; }
-.seg button { min-height: 44px; }
+.step-btn, .tb-tools button { min-height: 44px; }
+.mode-tab, .page-tab, .seg button { min-height: 38px; }
+@media (max-width: 820px) { .mode-tab, .page-tab, .seg button { min-height: 44px; } }
 .seg-row { gap: 8px; }
 .sticker-palette { gap: 10px; }
 @media (max-width: 820px) {

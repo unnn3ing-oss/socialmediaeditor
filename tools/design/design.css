@@ -17,9 +17,10 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
   font: inherit; color: var(--text); background: var(--field-bg); border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: 6px 10px; box-sizing: border-box; min-height: 44px;
 }
 .dz input[type="checkbox"], .dz input[type="radio"], .dz input[type="range"], .dz input[type="color"] { padding: 0; }
-.bg-toggle { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-control); background: var(--accent-tint); }
-.bg-toggle button { flex: 1; color: var(--muted); border: none !important; background: transparent !important; padding: 6px; font-size: 13px; }
-.bg-toggle button.active { background: var(--field-bg) !important; color: var(--accent); outline: 1px solid var(--line); }
+.bg-toggle { display: flex; gap: 5px; padding: 5px; border-radius: 18px; background: #e7ecf3; }
+.bg-toggle button { flex: 1; min-height: 38px; color: #475467; border: none !important; background: transparent !important; border-radius: 13px; padding: 0 6px; font-size: 13px; font-weight: 500; }
+.bg-toggle button.active { background: #fff !important; color: var(--accent); font-weight: 600; outline: none; box-shadow: 0 0 0 1px #cfd6e0, 0 1px 3px rgba(16, 24, 40, .14); }
+@media (max-width: 820px) { .bg-toggle button { min-height: 44px; } }
 
 /* =====================================================================================
    設計分頁（網頁版專用，design-ui.js）：左工具列、中間畫布舞台＋頁面列、右屬性面板。
@@ -176,7 +177,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .dz-grid2 .dz-lbl { flex-basis: 30px; }
 .dz-toggle { width: 100%; margin: 0; }
-.dz-toggle button { font-size: 13px !important; padding: 6px 4px !important; }
+.dz-toggle button { font-size: 13px !important; padding: 0 4px !important; }
 .dz-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .dz-btns > button { flex: 1 1 auto; }
 .dz-icon-row { display: flex; flex-wrap: wrap; gap: 4px; }
