@@ -301,9 +301,9 @@ body.no-scroll { overflow: hidden; }
 /* ==== 桌面（有滑鼠、>820px）列表區精簡：使用者 2026-11-18 嫌按鈕太大；手機／觸控維持 44px ==== */
 @media (min-width: 821px) and (hover: hover) and (pointer: fine) {
   .tabs button, .seg.tabs button { height: 34px; min-height: 34px; padding: 0 14px; font-size: 14px; }
-  .bar select { height: 34px; min-height: 34px; padding: 0 8px; font-size: 14px; }
-  .bar .btn, .bar .btn-sm { height: 34px; min-height: 34px; padding: 0 12px; font-size: 14px; }
-  .list .acts .btn, .list .acts button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+  .bar select { height: 30px; min-height: 30px; padding: 0 8px; font-size: 14px; }
+  .bar .btn, .bar .btn-sm { height: 30px; min-height: 30px; padding: 0 12px; font-size: 14px; }
+  .list .acts .btn, .list .acts button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 14px; }
   .list .edit input { min-height: 34px; font-size: 14px; }
   .list .edit .btn { height: 34px; min-height: 34px; }
 }
