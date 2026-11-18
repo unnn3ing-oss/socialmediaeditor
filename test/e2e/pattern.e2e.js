@@ -616,3 +616,21 @@ test('左側只顯示選中的那一組；刪除選前一張；手機切換列',
   assert.equal(await frame.isDisabled('#mPagerNext'), true);
   await page.close();
 });
+
+test('快速填入讀取中：預覽顯示骨架，確認視窗前收起，讀完收起', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  const errors = watchErrors(page);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await fakeBackend(page);
+  await page.route(API_BASE + '/fetch/article**', async (r) => { if (r.request().method() !== 'OPTIONS') await gate; await r.fallback(); });
+  await frame.waitForSelector('.batch-item-block');
+  assert.equal(await frame.isHidden('#qfSkel'), true);
+  await frame.fill('#qfUrl', 'https://news.tvbs.com.tw/local/123456');
+  await frame.press('#qfUrl', 'Enter');
+  await frame.waitForSelector('#qfSkel:not([hidden])');
+  release();
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent), null, { timeout: 8000 });
+  assert.equal(await frame.isHidden('#qfSkel'), true);
+  assert.deepEqual(errors, []);
+});

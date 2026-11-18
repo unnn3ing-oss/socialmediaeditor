@@ -87,6 +87,7 @@
             <div class="canvas-wrap" id="cvWrap">
               <canvas id="cv" width="1080" height="1080" aria-label="圖片預覽（點兩下改標題、Ctrl+V 貼上照片）"></canvas>
               <p class="cv-empty" id="cvEmpty">貼上文章網址自動帶入，或在這裡按 Ctrl+V 貼上照片</p>
+              <div class="cv-skel" id="cvSkel" aria-hidden="true" hidden><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
             </div>
             <p class="hint bad" id="fontWarn" hidden></p>
             <div class="seg wide" id="frameSeg" role="group" aria-label="套版">
@@ -103,7 +104,6 @@
             </div>
             <div class="tools-row">
               <button type="button" class="soft-btn" id="fxBtn" aria-expanded="false" aria-controls="fxBar">T寶／馬賽克<span class="fx-count" id="fxCount"></span></button>
-              <span class="help" id="cvHelp" tabindex="0" role="note" aria-label="預覽說明" title="預覽就是實際送出的圖；點兩下預覽可直接改標題。拖曳移動、滾輪縮放照片；Ctrl+V 換照片。">？</span>
             </div>
             <div class="fx-bar" id="fxBar" hidden>
               <div id="fxSlot"></div>
@@ -139,9 +139,11 @@
           <input type="text" id="rdSlug" maxlength="40" placeholder="SLUG（空白＝標題前 4 字）" aria-label="SLUG">
         </div>
         <button type="button" class="btn btn-secondary clear-btn" id="clearBtn">清空頁面</button>
-        <button type="button" class="send" id="sendBtn" disabled>全部送出（0 個粉專）</button>
+        <div class="send-wrap" id="sendWrap">
+          <button type="button" class="send" id="sendBtn" disabled aria-describedby="sendErr">全部送出（0 個粉專）</button>
+          <p class="send-tip" id="sendErr" role="alert"></p>
+        </div>
       </div>
-      <p class="hint bad" id="sendErr" role="alert"></p>
     </footer>
   </section>
 </div>

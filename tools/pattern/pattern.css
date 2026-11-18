@@ -439,3 +439,11 @@ canvas.pannable.panning { cursor: grabbing; }
   button, .dropzone, .canvas-wrap .title-overlay, .toast { transition: none; transform: none; }
   .batch-thumbs { scroll-behavior: auto; }
 }
+
+/* 快速帶入讀取中骨架（本工具不載入 ui/tokens.css，所以這裡自帶 .sk） */
+@keyframes qf-shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+.qf-skel { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: var(--fill); border-radius: inherit; pointer-events: none; }
+.qf-skel[hidden] { display: none; }
+.qf-skel .sk { display: block; width: min(100cqw - 32px, 100cqh - 32px); aspect-ratio: 1; border-radius: 6px;
+  background: linear-gradient(90deg, #e3e8ef 25%, #fff 50%, #e3e8ef 75%); background-size: 200% 100%; animation: qf-shimmer 1.5s infinite; }
+@media (prefers-reduced-motion: reduce) { .qf-skel .sk { animation: none; } }

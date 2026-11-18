@@ -220,3 +220,30 @@ test('YT 下載：工作區卡片有間距，新增列各元件同高 48px、更
     await page.close();
   } finally { await browser.close(); await srv.close(); }
 });
+
+test('YT 下載：抓取影片資訊中的列，封面與標題顯示骨架；抓到後換成標題', async () => {
+  const { serve } = require('../helpers/serve.js');
+  const { launch } = require('../helpers/browser.js');
+  const srv = await serve(ROOT);
+  const browser = await launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(srv.url + 'tools/ytdl/index.html');
+    const r = await page.evaluate(async () => {
+      const { renderQueue } = await import('./web/queue-view.js');
+      document.getElementById('work').hidden = false;
+      const ul = document.getElementById('queue-list'), noop = () => {};
+      const h = { cover: noop, copy: noop, retry: noop, remove: noop };
+      const item = { uid: 1, status: 'fetching', url: 'https://www.youtube.com/watch?v=abc', title: '' };
+      renderQueue(ul, { items: [item], hostConnected: true }, Date.now(), h);
+      const row = ul.querySelector('.qrow');
+      const out = { fetching: row.classList.contains('is-fetching'), sk: !!row.querySelector('.qtitle .sk'), anim: getComputedStyle(row.querySelector('.qph')).animationName };
+      renderQueue(ul, { items: [{ ...item, status: 'waiting', id: 'abc', title: '影片標題' }], hostConnected: true }, Date.now(), h);
+      out.after = { fetching: row.classList.contains('is-fetching'), sk: !!row.querySelector('.qtitle .sk'), title: row.querySelector('.qtitle').textContent };
+      return out;
+    });
+    assert.deepEqual(r, { fetching: true, sk: true, anim: 'sk-shimmer', after: { fetching: false, sk: false, title: '影片標題' } });
+    await page.close();
+  } finally { await browser.close(); await srv.close(); }
+});

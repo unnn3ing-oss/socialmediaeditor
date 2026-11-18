@@ -189,7 +189,11 @@ function updateRow(row, state, item, index, now, showText = false) {
   const q = (selector) => row.querySelector(selector);
   q(".qno").textContent = String(index + 1);
   const title = q(".qtitle");
-  title.textContent = item.status === "fetching" ? "" : item.title;
+  const fetching = item.status === "fetching";
+  row.classList.toggle("is-fetching", fetching);
+  if (fetching) {
+    if (!title.querySelector(".sk")) { title.textContent = ""; title.append(el("span", "sk qtitle-sk")); }
+  } else title.textContent = item.title;
   q(".qbar i").style.width = `${info.percent}%`;
   const bar = q(".qbar");
   bar.setAttribute("aria-valuenow", String(Math.round(info.percent)));

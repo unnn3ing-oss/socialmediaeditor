@@ -139,3 +139,8 @@ body.no-desktop #setup-card, body.no-desktop #open-setup, body.no-desktop #conn-
   .qacts button { width: 44px; height: 44px; }
   .qh .act .btn, .clear-ask button { min-height: 44px; }
 }
+
+/* 讀取影片資訊中：封面與標題顯示骨架（.sk 與 sk-shimmer 來自 ui/tokens.css） */
+.qtitle .qtitle-sk { display: block; width: 70%; height: 14px; margin: 3px 0; }
+.qrow.is-fetching .qph { background: linear-gradient(90deg, var(--fill) 25%, #fff 50%, var(--fill) 75%); background-size: 200% 100%; animation: sk-shimmer 1.5s infinite; }
+@media (prefers-reduced-motion: reduce) { .qrow.is-fetching .qph { animation: none; } }

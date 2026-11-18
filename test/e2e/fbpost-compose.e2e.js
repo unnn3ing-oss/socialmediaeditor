@@ -308,3 +308,16 @@ test('選套版標題照舊版排法：最後一行中心在 y 931、行距 93�
   assert.ok(Math.abs(three[2] - 931) <= 8 && Math.abs(three[1] - 838) <= 8 && Math.abs(three[0] - 745) <= 8, '三行：' + three);
   await page.close();
 });
+
+test('貼網址讀取中：預覽顯示骨架，讀完收起；T寶／馬賽克旁沒有「？」', async () => {
+  const { page, frame, errors } = await openFb();
+  assert.equal(await frame.locator('#cvHelp').count(), 0);
+  assert.equal(await frame.isHidden('#cvSkel'), true, '平常不顯示骨架');
+  await frame.fill('#link', 'https://news.tvbs.com.tw/slow/1234567');
+  await frame.waitForSelector('#cvSkel:not([hidden])');
+  assert.equal(await frame.locator('#cvSkel .sk').count(), 3);
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  assert.equal(await frame.isHidden('#cvSkel'), true, '讀完收起');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
