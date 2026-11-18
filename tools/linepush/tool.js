@@ -546,7 +546,7 @@ function drawCellStickers(ctx, state, interactive) {
       ctx.save();
       ctx.beginPath();
       ctx.arc(bx, by, STICKER_DELETE_R, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(20,20,20,0.65)';
+      ctx.fillStyle = '#d92d20';   // 貼圖的刪除 ×：紅色（只畫在預覽，不進輸出）
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2.5;

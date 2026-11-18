@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=48618629d0"
+      "entry": "tools/pattern/index.html?v=d29d0dfcc2"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=27d828a79b"
+      "entry": "tools/linepush/index.html?v=26dfb1832c"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=fefed3f7cf"
+      "entry": "tools/collage/index.html?v=669e58f5c2"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=e10e66e222"
+      "entry": "tools/watermark/index.html?v=bc4b8f8c48"
     },
     {
       "id": "resize",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=aa4e1c37fb"
+      "entry": "tools/resize/index.html?v=6d3bba6d4c"
     },
     {
       "id": "design",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=6ae4f428dc"
+      "entry": "tools/design/index.html?v=335baf296f"
     },
     {
       "id": "fbpost",
@@ -78,7 +78,7 @@
       ],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=e143a71d13"
+      "entry": "tools/fbpost/index.html?v=f19e4406da"
     },
     {
       "id": "livereq",
@@ -89,7 +89,7 @@
       "requires": [],
       "icon": "tools/livereq/icon.svg",
       "thumb": "tools/livereq/thumb.svg",
-      "entry": "tools/livereq/index.html?v=364d5b042e"
+      "entry": "tools/livereq/index.html?v=e16f1e95c8"
     },
     {
       "id": "ytdl",
@@ -103,7 +103,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=1d7162e25e"
+      "entry": "tools/ytdl/index.html?v=1b8e91fa48"
     }
   ]
 }
