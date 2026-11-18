@@ -14,10 +14,15 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| tools/fbpost/index.html | 加 `#tpMenu`，移除 `.tp-mode` | ⬜ |
-| tools/fbpost/timepop.js | 選單＋視窗、鍵盤、外點關閉 | ⬜ |
-| tools/fbpost/fbpost.css | `.tp-menu`、快捷鈕、時間欄 | ⬜ |
-| test/e2e/fbpost.e2e.js | `#timePop [data-tp=sched]` 改 `#tpMenu [data-tp=sched]`，加選單測試 | ⬜ |
+| tools/fbpost/index.html | 加 `#tpMenu`，移除 `.tp-mode` | ✅ |
+| tools/fbpost/timepop.js | 選單＋視窗、鍵盤、外點關閉 | ✅ |
+| tools/fbpost/fbpost.css | `.tp-menu`、快捷鈕、時間欄 | ✅ |
+| test/e2e/fbpost.e2e.js | `#timePop [data-tp=sched]` 改 `#tpMenu [data-tp=sched]`，加選單測試 | ✅ |
 
 ## 測試
 npm test、fbpost e2e、全部 e2e、build --check；截圖給使用者。
+
+## 進度
+- ✅ 實作 b65fc57；npm test 619、e2e 169、build --check、獨立審查通過（未改檔）
+- 已知小事（未改）：選單開著按 Tab 離開不會自動關（點外面／Esc 會關）
+- [ ] 使用者看截圖確認 → 說「推」才併 main（更新 CLAUDE.md 目前進度；純網站，不部署後端、外掛不升版）
