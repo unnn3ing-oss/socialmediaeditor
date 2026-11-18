@@ -1,5 +1,5 @@
 # 小編工具箱 UI 更新：設計交接
-- 狀態：三輪實作完成，待使用者看截圖與實機確認（未併入 main）
+- 狀態：已併入 main（2026-11-18）；npm test 618、e2e 156（fbpost-compose 比對圖偶發 1 次，見 CLAUDE.md），實機未驗
 - 文件分支：`codex/ui-design-handoff-20261118`
 - PR 目標開發分支：`dev/ui-refresh`（由 main `137f961f31c50579ef6f05bf91d045618be4dbd2` 建立）
 - 最後更新：2026-11-18（Asia/Taipei）
