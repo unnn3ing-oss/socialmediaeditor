@@ -17,15 +17,15 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| shell/company.js、shell/main.js | 公司狀態帶 `admin` | ⬜ |
-| sdk/assets.js、sdk/toolbox.js、sdk/README.md | 新增 `tb.assets.getAll(key)`：管理員回 [公司, 通用]，否則同 get | ⬜ |
-| ui/compose/assets.js、ui/compose/fx.js | 貼圖列支援 14 張＋分隔 | ⬜ |
-| tools/design/tool.js、tools/linepush/tool.js | 同上 | ⬜ |
+| shell/company.js、shell/main.js | 公司狀態帶 `admin` | ✅ |
+| sdk/assets.js、sdk/toolbox.js、sdk/README.md | 實作為 `getPublic(key)`＋`admin()` | ✅ |
+| ui/compose/assets.js、ui/compose/fx.js | 貼圖列支援 14 張＋分隔（通用版 id 加 -p） | ✅ |
+| tools/design（core 加 PUBLIC_STICKERS）、tools/linepush | 同上 | ✅ |
 | tools/pattern/（index.html、app.js、layout.js、pattern.css） | 介面 6 項 | ⬜ |
 | test/ | pattern e2e 改寫＋新增；sdk 單元；管理員 14 張 e2e | ⬜ |
 
 ## 下一步
-- [ ] 管理員貼圖（主對話）
+- [x] 管理員貼圖（主對話，d052626；e2e admin-stickers 3 項）
 - [ ] 圖片套版介面（子代理）
 - [ ] 整合：npm test、全部 e2e、build --check、截圖 1280／390、獨立審查
 
