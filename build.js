@@ -102,6 +102,7 @@ async function build(root, { check = false, write = true } = {}) {
   outputs['shell/catalog.json'] = JSON.stringify({
     tools: tools.map((t) => ({
       id: t.id, name: t.name, group: t.group, desc: t.desc, tier: t.tier, requires: t.requires,
+      ...(Array.isArray(t.badges) && t.badges.length ? { badges: t.badges } : {}),
       icon: at(t.id, t.icon), thumb: at(t.id, t.thumb), entry: `${at(t.id, t.entry)}?v=${contentHash(root, [`tools/${t.id}`, 'sdk', 'ui'])}`,
     })),
   }, null, 2) + '\n';

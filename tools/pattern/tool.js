@@ -48,6 +48,7 @@ try {
   await loadScript('app.js');
   await loadScript('stickers.js');
   await loadScript('quickfill.js');
+  await loadScript('layout.js');
 } catch (e) {
   tb.log.error('pattern-load-failed');
   throw e;

@@ -8,6 +8,7 @@
   "entry": "index.html",
   "tier": "public",
   "requires": [],
+  "badges": ["管理員測試"],
   "assets": {
     "sticker.smile": {
       "company": "tbao-smile",

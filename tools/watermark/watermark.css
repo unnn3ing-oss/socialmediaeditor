@@ -1,10 +1,10 @@
 /* 浮水印專用樣式（共用的上傳區、展示窗、縮圖樣式在 base.css） */
 /* ---- 浮水印 ---- */
 /* 位置：一個縮小的照片框，四個角各一顆按鈕（緊湊的 2×2，箭頭指向各自的角落） */
-.wm-corners { display: grid; grid-template-columns: repeat(2, 76px); grid-auto-rows: 52px; gap: 8px; width: max-content; padding: 8px; margin: 4px 0 8px; border-radius: 14px; border: 1px solid var(--border); background: rgba(0, 74, 173, 0.04); }
+.wm-corners { display: grid; grid-template-columns: repeat(2, 76px); grid-auto-rows: 52px; gap: 8px; width: max-content; padding: 8px; margin: 4px 0 8px; border-radius: var(--radius-card); border: 1px solid var(--border); background: var(--fill); }
 .wm-corners button {
-  display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--field-bg); color: #9aa8c2; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0; border-radius: var(--radius-control); border: 1px solid var(--line-strong);
+  background: var(--field-bg); color: #5f6b82; min-height: 44px; cursor: pointer;
 }
 .wm-corners button svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .wm-corners button:nth-child(2) svg { transform: rotate(90deg); }    /* ↗ */
@@ -13,13 +13,13 @@
 .wm-corners button:hover:not(.active) { color: var(--accent); }
 .wm-corners button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .wm-corners button.auto-pick { border-color: var(--accent); border-style: dashed; color: var(--accent); }   /* 自動模式下這張挑到的角 */
-.wm-corners .wm-auto { grid-column: 1 / -1; height: 40px; border-radius: 999px; align-self: center; font-size: 13px; font-weight: 600; color: var(--muted); }
+.wm-corners .wm-auto { grid-column: 1 / -1; height: 44px; border-radius: var(--radius-control); align-self: center; font-size: 13px; font-weight: 600; color: var(--muted); }
 #watermarkApp label { display: flex; justify-content: space-between; align-items: baseline; }
 #watermarkApp output { font-weight: 600; color: var(--accent); font-size: 14px; }
-#watermarkApp input[type=range] { width: 100%; height: 24px; accent-color: var(--accent); margin: 6px 0 0; }
+#watermarkApp input[type=range] { width: 100%; height: 32px; accent-color: var(--accent); margin: 6px 0 0; }
 #watermarkApp .dropzone input { display: none; }
-#watermarkApp .batch-item-thumb { max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 10px; margin-bottom: 8px; }
-#watermarkApp .wm-logo-drop { margin-top: 10px; padding: 14px 10px; font-size: 13px; }
+#watermarkApp .batch-item-thumb { max-width: 100%; max-height: 120px; object-fit: contain; border-radius: var(--radius-control); margin-bottom: 8px; }
+#watermarkApp .wm-logo-drop { margin-top: 10px; padding: 14px 10px; font-size: 14px; }
 #watermarkApp .wm-logo-drop[hidden] { display: none; }
 #watermarkApp .batch-item-thumb[hidden] { display: none; }
 
@@ -27,7 +27,7 @@
 #wmCanvas {
   display: block; width: auto; height: auto; aspect-ratio: auto; background: none;     /* 蓋掉 style.css 給正方形預覽圖的設定 */
   max-width: 100%; max-height: max(260px, calc(100vh - 300px));
-  border-radius: 12px; box-shadow: 0 20px 40px -24px rgba(0, 30, 70, 0.55);
+  border-radius: var(--radius-control); box-shadow: none; outline: 1px solid var(--border);
   touch-action: none; cursor: default;
 }
 #wmCanvas.over-logo { cursor: grab; }

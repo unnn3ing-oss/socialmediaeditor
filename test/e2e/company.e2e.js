@@ -81,7 +81,8 @@ test('wrong password message', async () => {
 test('expiry pops login and keeps pane', async () => {
   const { page, api } = await open();
   await unlock(page);
-  await page.waitForSelector('#toolbar button[data-tool=secret]');
+  await page.waitForSelector('#toolbar button[data-tool=secret]', { state: 'attached' });
+  await page.click('.nav-group:has(button[data-tool=secret]) .nav-trigger');
   await page.click('#toolbar button[data-tool=secret]');
   await page.frameLocator('.pane[data-tool=secret] iframe').locator('#t').fill('機密內容');
   const created = await page.getAttribute('.pane[data-tool=secret] iframe', 'data-created');
@@ -106,7 +107,8 @@ test('expiry pops login and keeps pane', async () => {
 test('cancel keeps locked', async () => {
   const { page, api } = await open();
   await unlock(page);
-  await page.waitForSelector('#toolbar button[data-tool=secret]');
+  await page.waitForSelector('#toolbar button[data-tool=secret]', { state: 'attached' });
+  await page.click('.nav-group:has(button[data-tool=secret]) .nav-trigger');
   await page.click('#toolbar button[data-tool=secret]');
   api.statusCode = 401;
   await page.evaluate(() => window.tbxShell.__checkCompany());
@@ -121,7 +123,7 @@ test('cancel keeps locked', async () => {
 test('logout hides company tool', async () => {
   const { page } = await open();
   await unlock(page);
-  await page.waitForSelector('#toolbar button[data-tool=secret]');
+  await page.waitForSelector('#toolbar button[data-tool=secret]', { state: 'attached' });
   await page.click('#status [data-status=company]');
   await page.click('#company-logout-dialog .btn-primary');
   await page.waitForFunction(() => !document.querySelector('#toolbar button[data-tool=secret]'));

@@ -1,27 +1,69 @@
-// 已排程／已發佈：選粉專＋刷新才查；改時間、取消、刪除
-import { $, fmt, errText, bounds, inRange, toLocalInput, commentState, say, confirmBox } from './util.js';
+// 已排程／已發佈：選粉專＋刷新才查；編輯（尚未推出）、改時間、刪除
+import { $, errText, bounds, inRange, toLocalInput, commentState, say, confirmBox } from './util.js';
+
+// 列表（2026-11-18 使用者定版）：縮圖｜內容（一行）＋「相片／文字．粉專．留言」｜按鈕｜時間欄
+const pad2 = (n) => String(n).padStart(2, '0');
+const fmtDay = (ms) => { if (!Number.isFinite(ms)) return '時間不明'; const d = new Date(ms); return `${d.getMonth() + 1}月${d.getDate()}日 ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const OPEN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
 function thumb(url) {
   if (url) { const i = document.createElement('img'); i.className = 'thumb'; i.src = url; i.alt = ''; return i; }
   const d = document.createElement('div'); d.className = 'noimg'; d.textContent = '無圖'; return d;
 }
-function rowBase(it, whenMs) {
+// 已發佈的預覽：點一下變半透明並出現「開新分頁」圖示，按圖示才打開貼文
+function openablePreview(it) {
+  const box = document.createElement('div'); box.className = 'pv';
+  const arm = document.createElement('button'); arm.type = 'button'; arm.className = 'pv-arm';
+  arm.setAttribute('aria-label', '顯示開啟貼文的按鈕'); arm.setAttribute('aria-expanded', 'false');
+  arm.append(thumb(it.picture));
+  const open = document.createElement('a'); open.className = 'pv-open'; open.href = it.url; open.target = '_blank'; open.rel = 'noopener';
+  open.setAttribute('aria-label', '在新分頁開啟這則貼文'); open.title = '在新分頁開啟'; open.innerHTML = OPEN_ICON;
+  open.tabIndex = -1;
+  arm.onclick = () => {
+    const on = !box.classList.contains('armed');
+    for (const x of document.querySelectorAll('.pv.armed')) disarm(x);
+    if (on) { box.classList.add('armed'); arm.setAttribute('aria-expanded', 'true'); open.tabIndex = 0; open.focus(); }
+  };
+  open.onclick = () => disarm(box);
+  box.append(arm, open);
+  return box;
+}
+function disarm(box) {
+  box.classList.remove('armed');
+  box.querySelector('.pv-arm').setAttribute('aria-expanded', 'false');
+  box.querySelector('.pv-open').tabIndex = -1;
+}
+document.addEventListener('pointerdown', (e) => { for (const x of document.querySelectorAll('.pv.armed')) if (!x.contains(e.target)) disarm(x); });
+document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; for (const x of document.querySelectorAll('.pv.armed')) { disarm(x); x.querySelector('.pv-arm').focus(); } });
+
+function metaText(it, pageName) {
+  const c = commentState(it.comment);
+  return [it.picture ? '相片' : '文字', pageName, c].filter(Boolean).join('．');
+}
+function rowBase(it, whenMs, pageName, preview) {
   const li = document.createElement('li'); li.dataset.id = it.id;
   const body = document.createElement('div'); body.className = 'body';
-  const m = document.createElement('div'); m.textContent = (it.message || '').slice(0, 60);
-  const c = commentState(it.comment);
-  const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = fmt(whenMs) + (c ? '　' + c : '');
+  const m = document.createElement('div'); m.className = 'msg'; m.textContent = (it.message || '').replace(/\s+/g, ' ').trim() || '（沒有文字）'; m.title = it.message || '';
+  const meta = document.createElement('div'); meta.className = 'meta';
+  const kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = metaText(it, pageName);
+  const t2 = document.createElement('span'); t2.className = 'when-m'; t2.textContent = fmtDay(whenMs);   // 手機：時間併到這一行
+  meta.append(kind, t2);
   body.append(m, meta);
-  li.append(thumb(it.picture), body);
+  const when = document.createElement('div'); when.className = 'when'; when.textContent = fmtDay(whenMs);
+  li.append(preview || thumb(it.picture), body, when);
+  li._setWhen = (ms) => { when.textContent = t2.textContent = fmtDay(ms); };
   return li;
 }
+// 「編輯」尚未推出：先放按鈕、不能按（2026-11-18 使用者選 A）
+function editSoon() { const b = btn('編輯', 'btn-secondary', null); b.disabled = true; b.title = '即將推出'; b.setAttribute('aria-description', '即將推出'); return b; }
+
 // 排序：near＝時間由近到遠、far＝由遠到近；缺時間一律放最後
 function byAt(x, y, order) {
   const a = Number(x) || 0, b = Number(y) || 0;
   if (!a || !b) return (a ? 0 : 1) - (b ? 0 : 1);
   return order === 'far' ? b - a : a - b;
 }
-function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; b.onclick = fn; return b; }
+function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; if (fn) b.onclick = fn; return b; }
 
 export function createManage({ tb }) {
   // 排序只重排畫面上的列，不重查臉書
@@ -39,8 +81,9 @@ export function createManage({ tb }) {
       if (my !== schedSeq) return;
       items.sort((a, b) => byAt(a.at, b.at, $('schedSort').value));
       const ul = $('schedList'); ul.textContent = '';
+      const pageName = $('schedPage').selectedOptions[0]?.textContent || '';
       for (const it of items) {
-        const li = rowBase(it, it.at * 1000); li.dataset.at = String(it.at || '');
+        const li = rowBase(it, it.at * 1000, pageName); li.dataset.at = String(it.at || '');
         const acts = document.createElement('div'); acts.className = 'acts';
         const edit = document.createElement('div'); edit.className = 'edit'; edit.hidden = true;
         const dt = document.createElement('input'); dt.type = 'datetime-local';
@@ -51,7 +94,7 @@ export function createManage({ tb }) {
             await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/reschedule`, { method: 'POST', body: { page, at } });
             // 成功：直接更新這一列的時間並重排，不整份重查臉書
             it.at = at; li.dataset.at = String(at); edit.hidden = true;
-            const c2 = commentState(it.comment); li.querySelector('.meta').textContent = fmt(at * 1000) + (c2 ? '　' + c2 : '');
+            li._setWhen(at * 1000);
             sortSched(); say('schedHint', `共 ${$('schedList').children.length} 則，已改時間`);
           }
           catch (e) { say('schedHint', errText(e), true); }
@@ -60,16 +103,16 @@ export function createManage({ tb }) {
         const bEdit = btn('改時間', 'btn-secondary', () => {
           const { min, max } = bounds(); dt.min = min; dt.max = max; dt.value = toLocalInput(it.at * 1000); edit.hidden = !edit.hidden;
         });
-        const bCancel = btn('取消', 'btn-secondary', async () => {
-          if (!await confirmBox('取消排程', '確定要取消這則排程貼文嗎？')) return;
+        const bCancel = btn('刪除', 'btn-secondary btn-del', async () => {
+          if (!await confirmBox('刪除排程貼文', '確定要刪除這則排程貼文嗎？刪除後不會發布，無法復原。')) return;
           try {
             await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/cancel`, { method: 'POST', body: { page } });
             li.remove(); const n = $('schedList').children.length; say('schedHint', n ? `共 ${n} 則` : '沒有排程貼文');   // 直接移除這一列，不重查
           }
           catch (e) { say('schedHint', errText(e), true); }
         });
-        acts.append(bEdit, bCancel);
-        li.append(acts, edit); ul.append(li);
+        acts.append(editSoon(), bEdit, bCancel);
+        li.insertBefore(acts, li.querySelector('.when')); li.append(edit); ul.append(li);
       }
       say('schedHint', items.length ? `共 ${items.length} 則` : '沒有排程貼文');
     } catch (e) { if (my === schedSeq) say('schedHint', errText(e), true); }
@@ -84,16 +127,17 @@ export function createManage({ tb }) {
       const d = await tb.api.call('/fb/published?page=' + encodeURIComponent(page) + (more && pubNext ? '&after=' + encodeURIComponent(pubNext) : ''));
       if (my !== pubSeq) return;
       const ul = $('pubList'); if (!more) ul.textContent = '';
+      const pageName = $('pubPage').selectedOptions[0]?.textContent || '';
       for (const it of d.items || []) {
-        const li = rowBase(it, new Date(it.time).getTime());
+        const li = rowBase(it, new Date(it.time).getTime(), pageName, it.url ? openablePreview(it) : null);
         const acts = document.createElement('div'); acts.className = 'acts';
-        if (it.url) { const a = document.createElement('a'); a.className = 'btn btn-sm btn-secondary'; a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '開啟'; acts.append(a); }
-        acts.append(btn('刪除', 'btn-secondary', async () => {
+        acts.append(editSoon());
+        acts.append(btn('刪除', 'btn-secondary btn-del', async () => {
           if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
           try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/delete`, { method: 'POST', body: { page } }); li.remove(); const n = ul.children.length; say('pubHint', n ? `共 ${n} 則` : '沒有已發佈貼文'); }
           catch (e) { say('pubHint', errText(e), true); }
         }));
-        li.append(acts); ul.append(li);
+        li.insertBefore(acts, li.querySelector('.when')); ul.append(li);
       }
       pubNext = d.next || null; $('pubMore').hidden = !pubNext;
       say('pubHint', ul.children.length ? `共 ${ul.children.length} 則` : '沒有已發佈貼文');

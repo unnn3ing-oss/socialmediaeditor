@@ -169,3 +169,54 @@ test('快捷鍵提示預設收起，按「？快捷鍵」顯示，Esc 關閉；�
   assert.ok(h[0] < 48, `套用按鈕高度 ${h[0]}`);
   await t.page.close();
 });
+
+// ---- 手機：畫布優先，屬性／圖層用底部抽屜 ----
+async function openMobile(w = 390) {
+  const t = await openTool(browser, srv.url, 'design', { viewport: { width: w, height: 760 } });
+  t.errors = [];
+  t.page.on('pageerror', (e) => t.errors.push(e.message));
+  await t.frame.waitForFunction(() => document.documentElement.dataset.designReady === '1' && window.QPTDesign.ui && QPTDesign.ui.state.zoom > 0);
+  return t;
+}
+
+test('手機：屬性／圖層抽屜切換後內容保留，ARIA 正確，320px 無水平溢位', async () => {
+  for (const w of [320, 390]) {
+    const { page, frame, errors } = await openMobile(w);
+    assert.equal(await frame.isVisible('#dzPanel'), false, '預設收合，畫布優先');
+    assert.equal(await frame.getAttribute('#dzSheetProps', 'aria-expanded'), 'false');
+    await add(frame, 'text');
+    await frame.click('#dzSheetProps');
+    assert.equal(await frame.isVisible('#dzPanel'), true);
+    assert.equal(await frame.getAttribute('#dzSheetProps', 'aria-expanded'), 'true');
+    assert.equal(await frame.getAttribute('#dzSheetLayers', 'aria-expanded'), 'false');
+    // 改一個屬性值（弧度數字框），切到圖層再切回，值與 DOM 節點都還在
+    await frame.evaluate(() => { window.__mark = document.getElementById('dzPanelBody').firstElementChild; });
+    await frame.fill('#dzF-arcNum', '45');
+    await frame.click('#dzSheetLayers');
+    assert.equal(await frame.isVisible('#dzLayers'), true);
+    assert.equal(await frame.isVisible('#dzPanelBody'), false);
+    assert.ok(await frame.locator('.dz-layer').count() >= 1);
+    await frame.click('#dzSheetProps');
+    assert.equal(await frame.inputValue('#dzF-arcNum'), '45');
+    assert.equal(await frame.evaluate(() => window.__mark === document.getElementById('dzPanelBody').firstElementChild), true, 'DOM 沒有重建');
+    // 收合後再開，內容仍在
+    await frame.click('#dzSheetClose');
+    assert.equal(await frame.isVisible('#dzPanel'), false);
+    await frame.click('#dzSheetProps');
+    assert.equal(await frame.inputValue('#dzF-arcNum'), '45');
+    // 保留的功能入口都還在
+    for (const id of ['#dzUndoBtn', '#dzRedoBtn', '#dzOpenBtn', '#dzSaveBtn', '#dzPageAdd', '#dzExportBtn']) assert.equal(await frame.locator(id).count(), 1, id);
+    // 無整頁水平捲動
+    const ov = await frame.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+    assert.ok(ov.sw <= ov.cw, `${w}px 水平溢位 ${ov.sw}>${ov.cw}`);
+    // 面板內可輸入欄位都有可及名稱、輸入字 >=16px
+    const bad = await frame.evaluate(() => [...document.querySelectorAll('#dzPanel input, #dzPanel select, #dzPanel textarea')].filter((e) => e.type !== 'hidden' && e.offsetParent !== null).filter((e) => {
+      const lab = e.getAttribute('aria-label') || (e.labels && e.labels.length) || e.getAttribute('aria-labelledby') || e.title;
+      const small = parseFloat(getComputedStyle(e).fontSize) < 16 && !['range', 'checkbox', 'radio', 'color'].includes(e.type);
+      return !lab || small;
+    }).map((e) => e.id || e.className));
+    assert.deepEqual(bad, []);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+});

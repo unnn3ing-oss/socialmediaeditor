@@ -1,6 +1,6 @@
 /* 「安裝外掛」全螢幕教學（沿用 QuickPatterntool 網頁版 deploy.css 的全螢幕教學部分）。
    教學畫面固定用淺色：深色模式下也把色票改回淺色，避免白底配淺字。 */
-.ds{--accent:#004aad;--accent-dark:#003a87;--accent-soft:#e8f0fc;--text:#1f2a3d;--muted:#5f6b82;--border:rgba(0,74,173,.14);
+.ds{--accent:#155eef;--accent-dark:#004eeb;--accent-soft:#e8f0fc;--text:#1f2a3d;--muted:#5f6b82;--border:rgba(0,74,173,.14);
   --success:#17682e;--ui-font:var(--font, inherit);color-scheme:light}
 html.ds-lock, html.ds-lock body { overflow: hidden; }
 .ds {
@@ -22,7 +22,7 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 .ds-close {
   margin: 0 0 0 auto; flex: none; width: 42px; height: 42px; padding: 0; border-radius: 50%;
   border: 1px solid var(--border); background: #fff; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer;
-  box-shadow: 0 6px 16px -10px rgba(0, 43, 102, .5); transition: color .15s ease, border-color .15s ease;
+  transition: color .15s ease, border-color .15s ease;
 }
 .ds-close:hover { color: var(--text); border-color: var(--accent); }
 
@@ -60,10 +60,10 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 @keyframes ds-text-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 
 .ds-art {
-  padding: 14px; border-radius: 26px; background: #fff; border: 1px solid var(--border);
-  box-shadow: 0 30px 60px -34px rgba(0, 43, 102, .45);
+  padding: 14px; border-radius: 12px; background: #fff; border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
-.ds-art .sv { border-radius: 16px; background: linear-gradient(180deg, #f3f7ff, #e9f0fd); }
+.ds-art .sv { border-radius: 8px; background: var(--stage); }
 
 .ds-text { min-width: 0; max-width: 520px; }
 .ds-kicker { margin: 0 0 6px; font-size: 13px; font-weight: 700; letter-spacing: .08em; color: var(--accent); }
@@ -75,7 +75,7 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
   background: var(--accent-soft); color: var(--accent); padding: 2px 8px; border-radius: 8px;
   font: 600 .92em ui-monospace, "SF Mono", Menlo, Consolas, monospace; word-break: break-all;
 }
-.ds-copy code { font-size: 17px; padding: 8px 14px; border-radius: 12px; }
+.ds-copy code { font-size: 17px; padding: 8px 14px; border-radius: 8px; }
 
 .ds-do { list-style: none; counter-reset: dsdo; margin: 14px 0 12px; padding: 0; display: grid; gap: 12px; }
 .ds-do li { counter-increment: dsdo; position: relative; padding-left: 38px; font-size: 15.5px; line-height: 1.7; }
@@ -87,9 +87,9 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
   display: inline-block; min-width: 1.6em; padding: 1px 7px; border: 1px solid #c3cfe4; border-bottom-width: 2px; border-radius: 7px;
   background: #fff; color: var(--text); font: 700 .85em ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-align: center;
 }
-.ds-tip { margin: 14px 0 0; padding: 11px 14px; border-radius: 14px; background: var(--accent-soft); font-size: 14px; line-height: 1.7; color: #2c3a52; }
+.ds-tip { margin: 14px 0 0; padding: 11px 14px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; line-height: 1.7; color: #2c3a52; }
 .ds-tip b { color: var(--accent); }
-.ds-more { margin: 12px 0 0; border: 1px solid var(--border); border-radius: 14px; background: rgba(255, 255, 255, .7); padding: 0 14px; }
+.ds-more { margin: 12px 0 0; border: 1px solid var(--border); border-radius: 8px; background: rgba(255, 255, 255, .7); padding: 0 14px; }
 .ds-more summary { padding: 11px 0; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--muted); }
 .ds-more[open] summary { color: var(--text); }
 .ds-more p { margin: 0 0 12px; font-size: 14px; line-height: 1.7; }
@@ -105,8 +105,8 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 [data-only][hidden] { display: none; }
 
 .ds-btn {
-  margin: 0; padding: 10px 22px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--text);
-  font: 500 15px/1.2 var(--ui-font); cursor: pointer; box-shadow: 0 6px 16px -12px rgba(0, 43, 102, .5);
+  margin: 0; padding: 10px 22px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text);
+  font: 500 15px/1.2 var(--ui-font); cursor: pointer; box-shadow: none;
   transition: border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
 }
 .ds-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
@@ -266,7 +266,7 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 .ds-btn:active:not(:disabled) { background: var(--accent-soft); }
 .ds-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: var(--shadow-btn); font-weight: 500; }
 .ds-btn.primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
-.ds-btn.primary:active:not(:disabled) { background: var(--accent); box-shadow: inset 0 2px 4px rgba(0, 0, 0, .3); }
+.ds-btn.primary:active:not(:disabled) { background: var(--accent); background: var(--accent-strong); box-shadow: none; }
 .ds-btn:focus-visible, .ds-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ds-btn:disabled { background: #eceef0; color: #6b7077; opacity: 1; }
 .ds-close { width: 44px; height: 44px; font-size: 22px; box-shadow: none; border-color: var(--line-strong, #c4c7cc); }

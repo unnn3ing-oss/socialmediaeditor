@@ -74,3 +74,25 @@ test('沒密碼與有密碼：畫面都沒有 TVBS 字樣，也不會要公司�
     assert.deepEqual(requested, []);
   }
 });
+
+test('對調鈕與寬高輸入框同高（桌面與手機）', async () => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 800 }]) {
+    const { page, frame } = await openPlain({ viewport });
+    const h = await frame.evaluate(() => ['rsW', 'rsSwapBtn', 'rsH'].map((id) => document.getElementById(id).getBoundingClientRect().height));
+    assert.ok(h[0] >= 44, `輸入框高度 ${h[0]}`);
+    assert.equal(h[1], h[0]); assert.equal(h[2], h[0]);
+    await page.close();
+  }
+});
+
+test('四個做圖工具在 320 與 390 寬沒有整頁水平溢位', async () => {
+  for (const id of ['linepush', 'collage', 'watermark', 'resize']) {
+    for (const width of [320, 390]) {
+      const { page, frame } = await openTool(browser, srv.url, id, { viewport: { width, height: 800 } });
+      await page.waitForTimeout(500);
+      const over = await frame.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(over <= 0, `${id} @${width} 溢位 ${over}px`);
+      await page.close();
+    }
+  }
+});

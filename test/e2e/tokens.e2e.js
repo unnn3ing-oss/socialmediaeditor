@@ -21,13 +21,13 @@ test('tokens.css computed styles', async () => {
       };
     });
     const p = await s('#p');
-    assert.equal(p.borderRadius, '999px');
+    assert.equal(p.borderRadius, '12px');
     assert.equal(p.height, '44px');
-    assert.equal(p.backgroundColor, 'rgb(0, 74, 173)');
-    assert.equal((await s('#s')).borderTopColor, 'rgba(0, 74, 173, 0.12)');
+    assert.equal(p.backgroundColor, 'rgb(21, 94, 239)');
+    assert.equal((await s('#s')).borderTopColor, 'rgb(125, 141, 163)');
     assert.equal((await s('#sm')).height, '36px');
     const d = await s('#d');
-    assert.equal(d.backgroundColor, 'rgb(238, 241, 246)');
+    assert.equal(d.backgroundColor, 'rgb(238, 242, 246)');
     assert.equal(d.color, 'rgb(107, 114, 128)');
     const sw = await s('#sw');
     assert.equal(sw.width, '48px');
@@ -35,12 +35,12 @@ test('tokens.css computed styles', async () => {
     assert.match((await s('#num')).fvn, /tabular-nums/);
     assert.notEqual((await s('#sk')).animationName, 'none');
 
-    // 按下：scale(.97)
+    // 按下：不縮放（規範 §4 移除按鈕縮放效果）
     const box = await (await page.$('#p')).boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(300);
-    assert.equal((await s('#p')).transform, 'matrix(0.97, 0, 0, 0.97, 0, 0)');
+    assert.equal((await s('#p')).transform, 'none');
     await page.mouse.up();
 
     // 鍵盤焦點
@@ -51,7 +51,7 @@ test('tokens.css computed styles', async () => {
       const c = getComputedStyle(document.activeElement);
       return [c.outlineWidth, c.outlineStyle, c.outlineColor, c.outlineOffset];
     });
-    assert.deepEqual(f, ['2px', 'solid', 'rgb(0, 74, 173)', '2px']);
+    assert.deepEqual(f, ['2px', 'solid', 'rgb(21, 94, 239)', '2px']);
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal((await s('#sk')).animationName, 'none');

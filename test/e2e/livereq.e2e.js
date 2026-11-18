@@ -197,3 +197,37 @@ test('進入工具：貼上框自動聚焦（值班小編欄位仍在上方）�
   assert.doesNotMatch(await frame.getAttribute('#run', 'class'), /btn-primary/);
   await page.close();
 });
+
+test('手機 320px：上下單欄無水平溢位、粉專整列 44px 可按、缺漏提示可跳到欄位', async () => {
+  const t = await openTool(browser, srv.url, 'livereq', { viewport: { width: 320, height: 700 } });
+  const { frame, page } = t;
+  await frame.evaluate(() => localStorage.clear());
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  const ov = await frame.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+  assert.ok(ov.sw <= ov.cw, `水平溢位 ${ov.sw}>${ov.cw}`);
+  const box = await frame.locator('#pagesBar .lr-pages:visible .lr-box').first().boundingBox();
+  assert.ok(box.height >= 44, '粉專列高 ' + box.height);
+  // 點整列文字（不是勾選框）也能勾
+  await frame.locator('#pagesBar .lr-pages:visible .lr-box').first().click({ position: { x: box.width - 6, y: box.height / 2 } });
+  assert.equal(await frame.locator('#pagesBar .lr-pages:visible input').first().isChecked(), true);
+  // 缺值班小編 → 點提示跳到值班欄位
+  await frame.locator('.lr-card:visible .lr-jump', { hasText: '缺 值班小編' }).click();
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'dutyName');
+  // 按鈕與輸入框高度
+  const small = await frame.evaluate(() => [...document.querySelectorAll('.lr button, .lr input[type=text], .lr textarea')].filter((e) => e.offsetParent && !e.closest('.lr-box') && e.getBoundingClientRect().height < 43).map((e) => e.id || e.className));
+  assert.deepEqual(small, []);
+  await page.close();
+});
+
+test('複製失敗：選取全文讓使用者手動複製', async () => {
+  const { frame, page } = await open();
+  await frame.evaluate(() => { localStorage.clear(); Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('no')) }, configurable: true }); document.execCommand = () => false; });
+  await frame.fill('#dutyName', '小編A'); await frame.fill('#dutyContact', '#85001');
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  await frame.locator('#pagesBar .lr-pages:visible input').first().check();
+  await frame.locator('.lr-card:visible [data-copy]').click();
+  assert.match(await frame.locator('.lr-card:visible [data-msg]').textContent(), /手動複製/);
+  const sel = await frame.evaluate(() => { const t = document.activeElement; return t.tagName === 'TEXTAREA' && t.selectionStart === 0 && t.selectionEnd === t.value.length && t.value.length > 0; });
+  assert.equal(sel, true);
+  await page.close();
+});

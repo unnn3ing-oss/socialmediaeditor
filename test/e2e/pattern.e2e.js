@@ -135,10 +135,10 @@ test('工具內切換不清空內容：背景類型、各組收合展開、框',
 test('完成後可下載，檔名是 YYMMDDHHMM_編號.png', async () => {
   const { page, frame } = await openTool(browser, srv.url, 'pattern');
   await setupItem(page, frame, '下載測試');
-  await frame.waitForSelector('.batch-item-block button:has-text("下載")');
+  await frame.waitForSelector('#dlBtn:not([disabled])');
   const [dl] = await Promise.all([
     page.waitForEvent('download'),
-    frame.click('.batch-item-block .batch-item-head button:has-text("下載")'),
+    frame.click('#dlBtn'),
   ]);
   assert.match(dl.suggestedFilename(), /^\d{10}_1\.png$/);
   // 貼圖：加一個後該組變回未完成之外不應出錯
@@ -295,4 +295,170 @@ test('手機：每組右上的紅色 × 維持正圓', async () => {
   assert.ok(Math.abs(box.width - box.height) < 1, `寬 ${box.width}、高 ${box.height}`);
   assert.ok(box.width >= 24);
   await ctx.close();
+});
+
+// ---- UI 改版第 2 輪：桌面兩欄、手機編輯／預覽切換、底部操作列 ----
+const mobile = (w, h = 800) => ({ viewport: { width: w, height: h } });
+
+async function putPhoto(page, frame, title) {
+  await frame.waitForSelector('.batch-item-block .dropzone input[type=file]', { state: 'attached' });
+  await frame.setInputFiles('.batch-item-block .dropzone input[type=file]', {
+    name: 'photo.png', mimeType: 'image/png', buffer: await photoBuffer(page),
+  });
+  if (title) await frame.fill('.batch-item-block textarea', title);
+}
+
+test('桌面 1280：設定欄與預覽左右並列，沒有編輯／預覽切換，產生／下載在設定欄尾端', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(1280, 800));
+  await frame.waitForSelector('.batch-item-block');
+  const r = await frame.evaluate(() => {
+    const b = (id) => document.getElementById(id).getBoundingClientRect();
+    return {
+      tabsHidden: document.getElementById('mTabs').hidden,
+      edit: b('panelEdit'), preview: b('panelPreview'), act: b('actionBar'), gen: b('genBtn'),
+      dlAllInShelf: document.getElementById('dlAllSlot').contains(document.getElementById('batchDownloadAllBtn')),
+      moreHidden: document.getElementById('moreWrap').hidden,
+      settingsW: b('panelEdit').width,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  assert.ok(r.tabsHidden && r.moreHidden);
+  assert.ok(r.edit.right <= r.preview.left, '設定欄在預覽左邊');
+  assert.ok(Math.abs(r.settingsW - 340) < 2, `設定欄 340px，實際 ${r.settingsW}`);
+  assert.ok(r.gen.left >= r.edit.left && r.gen.right <= r.edit.right + 1, '產生此張在左設定欄內');
+  assert.ok(r.act.top >= r.edit.bottom - 1, '操作列在設定欄尾端');
+  assert.ok(r.dlAllInShelf, '全部下載在縮圖列右側');
+  assert.equal(r.overflow, 0);
+  await page.close();
+});
+
+test('桌面 1024：設定欄 320px、無水平溢位', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(1024, 768));
+  await frame.waitForSelector('.batch-item-block');
+  const r = await frame.evaluate(() => ({
+    w: document.getElementById('panelEdit').getBoundingClientRect().width,
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  }));
+  assert.ok(Math.abs(r.w - 320) < 2, `實際 ${r.w}`);
+  assert.equal(r.overflow, 0);
+  await page.close();
+});
+
+test('手機：編輯／預覽切換保留內容，canvas 與表單是同一個元素，非選中頁不可 Tab', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(390, 844));
+  await putPhoto(page, frame, '切換保留測試');
+  await frame.evaluate(() => { document.getElementById('batchCanvas').__mark = 1; document.querySelector('.batch-item-block textarea').__mark = 1; });
+  const st = () => frame.evaluate(() => ({
+    editSel: document.getElementById('tabEdit').getAttribute('aria-selected'),
+    prevSel: document.getElementById('tabPreview').getAttribute('aria-selected'),
+    editHidden: document.getElementById('panelEdit').hidden,
+    prevHidden: document.getElementById('panelPreview').hidden,
+    tabIdx: [document.getElementById('tabEdit').tabIndex, document.getElementById('tabPreview').tabIndex],
+    role: document.getElementById('panelEdit').getAttribute('role'),
+  }));
+  let s = await st();
+  assert.deepEqual([s.editSel, s.prevSel, s.editHidden, s.prevHidden, s.role], ['true', 'false', false, true, 'tabpanel']);
+  assert.deepEqual(s.tabIdx, [0, -1]);
+  await frame.click('#tabPreview');
+  s = await st();
+  assert.deepEqual([s.editSel, s.prevSel, s.editHidden, s.prevHidden], ['false', 'true', true, false]);
+  // 隱藏的編輯頁裡沒有任何可聚焦（Tab）的元素可見
+  assert.equal(await frame.locator('#panelEdit textarea').isVisible(), false);
+  await frame.click('#tabEdit');
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '切換保留測試');
+  const same = await frame.evaluate(() => [document.getElementById('batchCanvas').__mark, document.querySelector('.batch-item-block textarea').__mark]);
+  assert.deepEqual(same, [1, 1]);
+  // 方向鍵切換
+  await frame.focus('#tabEdit');
+  await page.keyboard.press('ArrowRight');
+  s = await st();
+  assert.equal(s.prevSel, 'true');
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'tabPreview');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal((await st()).editSel, 'true');
+  // 回到桌面寬度：兩區都顯示、並列；再縮回手機仍是原本分頁
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // 斷點 change 事件是非同步的，等它套用
+  await frame.waitForFunction(() => !document.getElementById('panelEdit').hidden && !document.getElementById('panelPreview').hidden);
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '切換保留測試');
+  await page.close();
+});
+
+test('手機：產生成功切到預覽；失敗留在編輯並顯示錯誤', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(390, 844));
+  await frame.waitForSelector('.batch-item-block');
+  await frame.click('#genBtn');   // 還沒有背景與標題 -> 失敗
+  assert.equal(await frame.getAttribute('#tabEdit', 'aria-selected'), 'true');
+  assert.ok(await frame.locator('.item-error[role=alert]').isVisible());
+  await putPhoto(page, frame, '成功後看預覽');
+  await frame.click('#genBtn');
+  await frame.waitForFunction(() => document.getElementById('tabPreview').getAttribute('aria-selected') === 'true');
+  assert.equal(await frame.locator('#panelPreview').isVisible(), true);
+  await page.close();
+});
+
+test('手機：320／390／768／820 無整頁水平捲動（編輯與預覽兩頁）', async () => {
+  for (const w of [320, 390, 768, 820]) {
+    const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(w, 800));
+    await putPhoto(page, frame, '很長很長很長很長很長很長很長很長很長很長很長很長的標題');
+    await frame.click('#addBatchItemBtn');
+    for (const tab of ['tabEdit', 'tabPreview']) {
+      await frame.click('#' + tab);
+      const o = await frame.evaluate(() => ({ d: document.documentElement.scrollWidth - document.documentElement.clientWidth, b: document.body.scrollWidth - document.body.clientWidth }));
+      assert.ok(o.d <= 0 && o.b <= 0, `${w}px ${tab} 水平溢位 ${JSON.stringify(o)}`);
+    }
+    await page.close();
+  }
+});
+
+test('手機：底部操作列黏在底部、不遮住最後一個欄位；按鈕與輸入符合觸控尺寸', async () => {
+  for (const w of [320, 390]) {
+    const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(w, 640));
+    await frame.waitForSelector('.batch-item-block');
+    await frame.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const r = await frame.evaluate(() => {
+      const bar = document.getElementById('actionBar').getBoundingClientRect();
+      const last = document.getElementById('helpBtn').getBoundingClientRect();
+      return { barTop: bar.top, barBottom: bar.bottom, vh: window.innerHeight, lastBottom: last.bottom };
+    });
+    assert.ok(Math.abs(r.barBottom - r.vh) <= 1, `${w}px 操作列貼底 ${JSON.stringify(r)}`);
+    assert.ok(r.lastBottom <= r.barTop + 0.5, `${w}px 最後欄位被遮 ${JSON.stringify(r)}`);
+    // 捲回頂端時操作列仍在畫面底部
+    await frame.evaluate(() => window.scrollTo(0, 0));
+    const b2 = await frame.evaluate(() => document.getElementById('actionBar').getBoundingClientRect().bottom - window.innerHeight);
+    assert.ok(Math.abs(b2) <= 1, `${w}px 捲回頂端操作列貼底`);
+    // 觸控目標與文字大小
+    const small = await frame.evaluate(() => {
+      const bad = [];
+      for (const el of document.querySelectorAll('#actionBar button, #mTabs button, .bg-toggle button, #qfBtn, #addBatchItemBtn, #batchResetBtn, #helpBtn, .step-btn')) {
+        const r = el.getBoundingClientRect();
+        if (r.width && (r.height < 44 || r.width < 44)) bad.push(el.id || el.className || el.textContent);
+      }
+      const fs = [...document.querySelectorAll('.batch-item-block input[type=text], .batch-item-block textarea, #qfUrl')].filter((e) => e.offsetParent).map((e) => parseFloat(getComputedStyle(e).fontSize));
+      return { bad, minFont: Math.min(...fs) };
+    });
+    assert.deepEqual(small.bad, [], `${w}px 觸控目標不足`);
+    assert.ok(small.minFont >= 16, `${w}px 輸入字級 ${small.minFont}`);
+    // 按鈕不截字
+    const clipped = await frame.evaluate(() => [...document.querySelectorAll('#actionBar button')].filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.textContent));
+    assert.deepEqual(clipped, []);
+    await page.close();
+  }
+});
+
+test('手機：「更多」含全部下載、可開可關、Esc 關閉並還原焦點', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(390, 844));
+  await frame.waitForSelector('.batch-item-block');
+  assert.equal(await frame.locator('#moreMenu').isVisible(), false);
+  await frame.click('#moreBtn');
+  assert.equal(await frame.getAttribute('#moreBtn', 'aria-expanded'), 'true');
+  assert.ok(await frame.locator('#moreMenu #batchDownloadAllBtn').isVisible());
+  await page.keyboard.press('Escape');
+  assert.equal(await frame.locator('#moreMenu').isVisible(), false);
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'moreBtn');
+  await frame.click('#moreBtn');
+  await frame.click('#moreBtn');
+  assert.equal(await frame.locator('#moreMenu').isVisible(), false);
+  await page.close();
 });
