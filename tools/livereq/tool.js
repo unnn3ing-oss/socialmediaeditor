@@ -17,7 +17,17 @@ let cur = 0;
 // ---- 值班小編（依班別到期） ----
 let dutyExp = 0;
 const fmt = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// 分機：剛好 5 位數字就在前面加 #（手機或已經有 # 的不動）
+export const fmtContact = (v) => { const t = String(v || '').trim(); return /^\d{5}$/.test(t) ? '#' + t : t; };
+// 值班姓名、分機或手機都必填：空的那一欄紅框（不列在底列狀態鈕）
+function markDuty() {
+  for (const el of [dutyName, dutyContact]) {
+    const bad = !el.value.trim();
+    el.classList.toggle('is-bad', bad); el.setAttribute('aria-invalid', String(bad));
+  }
+}
 function showDutyHint() {
+  markDuty();
   dutyHint.textContent = dutyExp && (dutyName.value.trim() || dutyContact.value.trim())
     ? `本班保留到 ${fmt(dutyExp)}，之後自動清空（早班 08:00～16:30、晚班 16:00～00:00）`
     : '依班別保留：早班 08:00～16:30、晚班 16:00～00:00，下班後自動清空';
@@ -50,10 +60,11 @@ function expireDuty() {
 }
 dutyName.addEventListener('input', saveDuty);
 dutyContact.addEventListener('input', saveDuty);
+dutyContact.addEventListener('blur', () => { const v = fmtContact(dutyContact.value); if (v !== dutyContact.value) { dutyContact.value = v; saveDuty(); } });
 setInterval(expireDuty, 30000);
 loadDuty();
 
-const duty = () => ({ name: dutyName.value, contact: dutyContact.value });
+const duty = () => ({ name: dutyName.value, contact: fmtContact(dutyContact.value) });
 
 // ---- 複製 ----
 async function copyText(text) {
@@ -137,7 +148,7 @@ function makeCard(a, idx) {
     evIn.setAttribute('aria-invalid', String(!evIn.value.trim()));
     tmIn.setAttribute('aria-invalid', String(!tmIn.value.trim()));
     q('.lr-time').textContent = fmtTime(a.time || tmIn.value.trim());
-    const keys = ['新聞事件', '直播時間', 'FB 粉專', '畫面來源', '值班小編', '標題', '內文'];
+    const keys = ['新聞事件', '直播時間', 'FB 粉專', '畫面來源', '標題', '內文'];   // 值班小編必填，但只在上方欄位標紅框
     // 依順序排；直播時間、畫面來源有提醒時，就在原位置顯示黃色
     const warnOf = (k) => warnings.find((w) => w.startsWith(k));
     self.items = keys.map((k) => {

@@ -52,7 +52,7 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 .lr-box:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .lr-box:has(input:disabled) { cursor: default; opacity: .75; }
 .lr-have { font-size: 13px; color: var(--muted); }
-.lr-event input.is-bad { border-color: var(--bad-text); }
+.lr-event input.is-bad, .lr-dutyf input.is-bad { border-color: var(--bad-text); }
 .lr-weather { border-top: 1px dashed var(--line-strong); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .lr-pre { margin: 0; padding: 12px; background: var(--fill); border-radius: var(--radius-control); white-space: pre-wrap; font: 400 14px/1.6 var(--font); }
 .lr-sel { user-select: text; -webkit-user-select: text; }

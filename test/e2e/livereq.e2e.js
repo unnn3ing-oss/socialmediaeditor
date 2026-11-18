@@ -34,7 +34,14 @@ test('貼上 6 場：拆卡片、缺值班小編與粉專時不能複製', async
   const first = frame.locator('.lr-card').first();
   assert.equal(await frame.locator('#copy').isDisabled(), true);
   assert.match(await frame.locator('.lr-st[data-key="FB 粉專"]').getAttribute('title'), /缺少：FB 粉專/);
-  assert.match(await frame.locator('.lr-st[data-key="值班小編"]').getAttribute('title'), /缺少：值班小編/);
+  // 值班小編必填，但不列在底列狀態鈕：上方欄位紅框、複製鈕 title 帶原因
+  assert.equal(await frame.locator('.lr-st[data-key="值班小編"]').count(), 0);
+  assert.match(await frame.getAttribute('#copy', 'title'), /值班小編/);
+  for (const id of ['dutyName', 'dutyContact']) assert.equal(await frame.getAttribute('#' + id, 'aria-invalid'), 'true');
+  await frame.fill('#dutyName', '甲');
+  assert.equal(await frame.getAttribute('#dutyName', 'aria-invalid'), 'false');
+  assert.equal(await frame.getAttribute('#dutyContact', 'aria-invalid'), 'true', '只填姓名：分機仍紅框');
+  await frame.fill('#dutyName', '');
   // 2100看世界：需求單已有新聞粉、國際粉 → 打勾鎖住，不算缺粉專
   const p5 = frame.locator('.lr-card').nth(4).locator('.lr-pages');
   assert.equal(await p5.locator('input[value=新聞]').isChecked(), true);
@@ -175,7 +182,7 @@ test('畫面來源在狀態鈕列，待補標黃不擋；三種狀態有 class �
   await frame.fill('#dutyName', '王小明');
   await frame.fill('#dutyContact', '#85001');
   const btn = (k) => frame.locator(`.lr-st[data-key="${k}"]`);
-  assert.deepEqual(await frame.locator('.lr-st').evaluateAll((e) => e.map((x) => x.dataset.key)), ['新聞事件', '直播時間', 'FB 粉專', '畫面來源', '值班小編', '標題', '內文']);
+  assert.deepEqual(await frame.locator('.lr-st').evaluateAll((e) => e.map((x) => x.dataset.key)), ['新聞事件', '直播時間', 'FB 粉專', '畫面來源', '標題', '內文']);
   assert.equal(await btn('畫面來源').getAttribute('data-state'), 'ok');
   assert.equal(await btn('畫面來源').getAttribute('aria-disabled'), 'true');
   assert.equal(await btn('畫面來源').locator('svg').count(), 1);
@@ -239,9 +246,6 @@ test('手機 320px：上下單欄無水平溢位、粉專整列 44px 可按、�
   // 點整列文字（不是勾選框）也能勾
   await frame.locator('.lr-card:visible .lr-pages .lr-box').first().click({ position: { x: box.width - 6, y: box.height / 2 } });
   assert.equal(await frame.locator('.lr-card:visible .lr-pages input').first().isChecked(), true);
-  // 缺值班小編 → 點狀態鈕跳到值班欄位（先展開貼上區不需要，值班欄位一直在）
-  await frame.locator('.lr-st[data-key="值班小編"]').click();
-  assert.equal(await frame.evaluate(() => document.activeElement.id), 'dutyName');
   // 按鈕與輸入框高度
   const small = await frame.evaluate(() => [...document.querySelectorAll('.lr button, .lr input[type=text], .lr textarea')].filter((e) => e.offsetParent && !e.closest('.lr-box') && e.getBoundingClientRect().height < 43).map((e) => e.id || e.className));
   assert.deepEqual(small, []);
@@ -279,5 +283,19 @@ test('新版面：320px 與 390px 狀態鈕、按鈕不水平溢位；電腦版�
   assert.equal(Math.round(h), 34);
   const xs = await frame.evaluate(() => [document.querySelector('.lr-st').getBoundingClientRect().left, document.getElementById('copy').getBoundingClientRect().left]);
   assert.ok(xs[1] > xs[0]);
+  await page.close();
+});
+
+test('分機：剛好 5 位數字自動加 #，其他不動；複製出去用補好的', async () => {
+  const { frame, page } = await open();
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  for (const [v, want] of [['85001', '#85001'], ['#85001', '#85001'], ['0921925913', '0921925913'], ['8500', '8500'], [' 85002 ', '#85002']]) {
+    await frame.fill('#dutyContact', v);
+    await frame.locator('#dutyName').focus();
+    assert.equal(await frame.inputValue('#dutyContact'), want, v);
+  }
+  await frame.fill('#dutyName', '王小明');
+  await frame.fill('#dutyContact', '85001');   // 還沒離開欄位：需求單也已經用 #85001
+  assert.match(await frame.locator('.lr-card:visible [data-out]').inputValue(), /王小明 #85001/);
   await page.close();
 });
