@@ -14,18 +14,20 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/staff.js` | `staff.contact`（舊表自動補欄）；`GET`／`POST /staff/me`（員工憑證，只能改自己）；管理 API 名單／新增／修改含 contact | ⬜ |
-| `server/schema.sql` | staff 加 contact | ⬜ |
-| `admin/`、`server/core/admin-page.js` | 名單表格加「分機／手機」欄（Enter／離開欄位存）、新增列選填 | ⬜ |
-| `tools/livereq/tool.js`、`index.html` | 員工登入 → 讀 `/staff/me` 帶入、分機自動存；否則照舊 | ⬜ |
-| `privacy/` | 授權名單列加分機／手機 | ⬜ |
-| 測試 | staff.test、admin.e2e、livereq.e2e | ⬜ |
+| `server/core/staff.js` | `staff.contact`（舊表自動補欄）；`GET`／`POST /staff/me`（員工憑證，只能改自己）；管理 API 名單／新增／修改含 contact | ✅ |
+| `server/schema.sql` | staff 加 contact | ✅ |
+| `admin/`、`server/core/admin-page.js` | 名單表格加「分機／手機」欄（Enter／離開欄位存）、新增列選填 | ✅ |
+| `tools/livereq/tool.js`、`index.html` | 員工登入 → 讀 `/staff/me` 帶入、分機自動存；否則照舊 | ✅ |
+| `privacy/` | 授權名單列加分機／手機 | ✅ |
+| 測試 | staff.test、admin.e2e、livereq.e2e | ✅ |
 
 ## 下一步
-- [ ] 後端＋單元測試
-- [ ] 管理頁兩份
-- [ ] 直播需求單
-- [ ] 隱私權政策、全部測試、獨立審查、截圖
+- [x] 後端＋單元測試、管理頁兩份、直播需求單、隱私權政策（`34f81bd`）
+- [x] npm test 633、全部 e2e 202、build --check 通過
+- [x] 獨立審查修正後通過：ALTER 補欄並發時吞掉 duplicate column；另修 livereq 連續儲存舊回應蓋掉新狀態（staffSeq）
+- [x] 截圖給使用者
+- [ ] 使用者說「推」→ 併入 main、更新 CLAUDE.md
+- [ ] 使用者部署後端 → 用員工編號開直播需求單實測
 
 ## 注意事項
 - 後端要重新部署（欄位自動補）。外掛不升版號。

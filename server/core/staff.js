@@ -40,7 +40,7 @@ export async function ensureStaff(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS fb_audit_at ON fb_audit(at)')
   ]);
   // 舊表沒有 contact（分機／手機）就補欄位
-  try { await first(env, 'SELECT contact FROM staff LIMIT 1'); } catch { await run(env, "ALTER TABLE staff ADD COLUMN contact TEXT NOT NULL DEFAULT ''"); }
+  try { await first(env, 'SELECT contact FROM staff LIMIT 1'); } catch { try { await run(env, "ALTER TABLE staff ADD COLUMN contact TEXT NOT NULL DEFAULT ''"); } catch { /* 另一個 isolate 剛補過（duplicate column） */ } }
   const n = await first(env, 'SELECT COUNT(*) AS n FROM staff_groups');
   if (!n || !n.n) {
     const now = Date.now();

@@ -41,7 +41,7 @@ function loadDuty() {
   showDutyHint();
 }
 // ---- 員工編號登入：姓名帶入名單（可臨時改、不存回），分機存在自己的帳號（/staff/me），不用班別清空 ----
-let staff = null, staffTimer = 0, staffSaved = '';
+let staff = null, staffTimer = 0, staffSaved = '', staffSeq = 0;   // staffSeq：只採用最後一次儲存的回應
 function showStaffHint(state) {
   markDuty();
   const head = `已用員工編號 ${staff.id} 登入：分機存在你的帳號，下次自動帶入`;
@@ -52,11 +52,14 @@ async function saveStaffContact() {
   const contact = fmtContact(dutyContact.value);
   if (contact === staffSaved) return;
   showStaffHint('儲存中…');
+  const seq = ++staffSeq;
   try {
     const me = await tb.api.call('/staff/me', { method: 'POST', body: { contact } });
+    if (seq !== staffSeq) return;
     staffSaved = me.contact || '';
     if (fmtContact(dutyContact.value) === staffSaved) showStaffHint('已儲存');
   } catch (e) {
+    if (seq !== staffSeq) return;
     showStaffHint('儲存失敗：' + ((e && e.message) || '請稍後再試'));
   }
 }
