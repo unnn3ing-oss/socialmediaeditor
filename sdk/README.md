@@ -27,6 +27,8 @@
 | `tb.ext.on(tool, cb)` | 訂閱外掛推播：工具背景模組（`ext.dir` 的 `init(ctx)`）用 `ctx.push(data)` 推來的資料交給 `cb(data)`；回傳取消訂閱函式；外掛重新載入後自動再訂閱 | `const off = tb.ext.on('ytdl', (s) => draw(s))` |
 | `tb.api.call(path, { method, body, raw })` | 呼叫後端，自動帶公司憑證；`ok: false` 時 reject 帶 `code`；`body` 是 `FormData` 時以 multipart 原樣送出（回應照樣解析 JSON） | `await tb.api.call('/logs', { method: 'POST', body })` |
 | `tb.assets.get(key)` | 取素材：公司模式先抓後端版，失敗退回通用版；回傳 `{ url }`、`{ upload: true }` 或 `null` | `const logo = await tb.assets.get('logo')` |
+| `tb.assets.getPublic(key)` | 一律取通用版（不打後端），回傳同 `get` | 管理員要同時列出通用版時用 |
+| `tb.assets.admin()` | 是否為網站管理密碼登入（`adm:1`）；是的話工具可把公司版與通用版都列出來（目前用在貼圖） | `if (tb.assets.admin()) …` |
 | `tb.status.get(id)` | 讀外殼狀態（`{ state, text }`）；單獨開啟工具頁時回「請從小編工具箱開啟」 | `tb.status.get('extension')` |
 | `tb.status.on(fn)` | 狀態改變時通知，回傳取消函式 | `const off = tb.status.on((id, v) => {})` |
 

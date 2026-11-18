@@ -9,7 +9,7 @@ export function resolveAsset(spec, { company }) {
 }
 
 // getSpec(key) -> spec；isCompany() -> boolean；base 是工具頁網址。皆可注入。
-export function createAssets({ api, getSpec, isCompany, base = globalThis.location?.href, createObjectURL = (b) => URL.createObjectURL(b) }) {
+export function createAssets({ api, getSpec, isCompany, isAdmin = () => false, base = globalThis.location?.href, createObjectURL = (b) => URL.createObjectURL(b) }) {
   async function get(key, forceNoCompany = false) {
     const spec = await getSpec(key);
     const r = resolveAsset(spec, { company: forceNoCompany ? false : isCompany() });
@@ -23,5 +23,6 @@ export function createAssets({ api, getSpec, isCompany, base = globalThis.locati
       return get(key, true);
     }
   }
-  return { get: (key) => get(key) };
+  // getPublic：一律拿通用版（不打後端）；admin()：是否為管理員登入（工具決定要不要把兩種版本都列出來）
+  return { get: (key) => get(key), getPublic: (key) => get(key, true), admin: () => Boolean(isAdmin()) };
 }

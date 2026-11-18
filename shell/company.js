@@ -86,7 +86,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
 
   // admin：前端用管理密碼登入（12 小時、不受暫停排程發布限制），剩餘時間改用小時
   function unlocked(exp, admin = false) {
-    internal.setCompany({ unlocked: true, exp });
+    internal.setCompany({ unlocked: true, exp, admin: Boolean(admin) });
     const left = exp * 1000 - Date.now();
     const text = admin ? `公司素材已解鎖（管理員），剩 ${Math.max(0, Math.ceil(left / 3600000))} 小時`
       : `公司素材已解鎖，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`;
@@ -96,7 +96,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   function locked() {
-    internal.setCompany({ unlocked: false, exp: null });
+    internal.setCompany({ unlocked: false, exp: null, admin: false });
     shell.setStatus('company', { state: 'hidden', text: '' });
     button.hidden = false;
   }

@@ -15,7 +15,7 @@ function fakeAsset(color = [255, 0, 255]) {
 
 // 回傳 { page, frame }：frame 是工具頁（沒密碼時就是 page.mainFrame()）。
 // opts.company = true 時：注入假憑證、假外殼，後端 /assets/<key> 回 opts.assets[key]（Buffer，預設洋紅假圖）。
-async function openTool(browser, srvUrl, id, { company = false, assets = {}, viewport } = {}) {
+async function openTool(browser, srvUrl, id, { company = false, admin = false, assets = {}, viewport } = {}) {
   const page = await browser.newPage(viewport ? { viewport } : {});
   const requested = [];
   await page.route(API_BASE + '/**', (route) => {
@@ -34,7 +34,7 @@ async function openTool(browser, srvUrl, id, { company = false, assets = {}, vie
   await page.addInitScript(() => {
     try { localStorage.setItem('tbx.company', JSON.stringify({ token: 'test', exp: Math.floor(Date.now() / 1000) + 3600 })); } catch {}
   });
-  await page.goto(srvUrl + 'test/fixtures/company-host.html?tool=' + encodeURIComponent(id));
+  await page.goto(srvUrl + 'test/fixtures/company-host.html?tool=' + encodeURIComponent(id) + (admin ? '&admin=1' : ''));
   const handle = await page.waitForSelector('iframe[name=tool]');
   const frame = await handle.contentFrame();
   await frame.waitForLoadState('load');

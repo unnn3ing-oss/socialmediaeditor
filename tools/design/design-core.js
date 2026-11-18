@@ -22,6 +22,9 @@
   const MAX_PAGES = 20, MAX_OBJECTS = 200;
   const DOC_VERSION = 1;
   const STICKERS = ['angry', 'cry', 'kiss', 'laugh', 'meh', 'shock', 'smile'];
+  // 管理員登入時另列的通用版貼圖（id 加 -p）；一律可讀寫，沒登入也畫得出來（通用版是公開檔）
+  const PUBLIC_STICKERS = STICKERS.map(s => s + '-p');
+  const isSticker = s => STICKERS.includes(s) || PUBLIC_STICKERS.includes(s);
   const SNAP_PX = 6;                       // 吸附門檻（螢幕像素）
   const TYPES = ['text', 'image', 'shape', 'sticker', 'mosaic'];
   const SHAPE_KINDS = ['rect', 'ellipse', 'line', 'arrow', 'polygon', 'star'];
@@ -177,7 +180,7 @@
         }
         return null;
       case 'sticker':
-        return STICKERS.includes(o.sticker) ? null : `沒有這個貼圖：${o.sticker}`;
+        return isSticker(o.sticker) ? null : `沒有這個貼圖：${o.sticker}`;
       case 'mosaic':
         return o.rot === 0 ? null : '馬賽克不能旋轉';
     }
@@ -1128,7 +1131,7 @@
 
   const api = {
     // 常數
-    setDefaultFont: id => { if (typeof id === 'string' && id) defaultFont = id; }, SIZES, SIDE_MIN, SIDE_MAX, MAX_PAGES, MAX_OBJECTS, DOC_VERSION, STICKERS, SNAP_PX, BLEND_MODES, NAME_MAX,
+    setDefaultFont: id => { if (typeof id === 'string' && id) defaultFont = id; }, SIZES, SIDE_MIN, SIDE_MAX, MAX_PAGES, MAX_OBJECTS, DOC_VERSION, STICKERS, PUBLIC_STICKERS, SNAP_PX, BLEND_MODES, NAME_MAX,
     // 文件
     createDoc, defaults, validate, migrate, serialize, deserialize,
     // 頁面

@@ -15,11 +15,21 @@ const [title, ...stickers] = await Promise.all([
 
 const stickerUrls = {};
 stickerIds.forEach((s, i) => { stickerUrls[s] = stickers[i] && stickers[i].url ? stickers[i].url : ''; });
+// 通用版（-p）一律取得（公開檔，不打後端）：舊稿有用到就畫得出來；只有管理員登入才列在貼圖列
+const admin = Boolean(tb.assets.admin?.());
+const publics = await Promise.all(stickerIds.map((s) => tb.assets.getPublic('sticker.' + s).catch(() => null)));
+const extraIds = [];
+stickerIds.forEach((s, i) => {
+  const u = publics[i] && publics[i].url ? publics[i].url : '';
+  stickerUrls[s + '-p'] = u;
+  if (admin && u && u !== stickerUrls[s]) extraIds.push(s + '-p');
+});
 
 Q.fonts.configure({ titleUrl: title && title.url ? title.url : null });
 Q.core.setDefaultFont(Q.fonts.defaultId());
 Q.host = {
   stickerUrl: (s) => stickerUrls[s] || '',
+  shownStickers: () => [...stickerIds, ...extraIds],
   download: (blob, name) => tb.download(blob, name),
 };
 

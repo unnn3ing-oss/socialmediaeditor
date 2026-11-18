@@ -7,6 +7,11 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r,
 async function urlOf(tb, key) {
   try { return (await tb.assets.get(key))?.url || null; } catch { return null; }
 }
+async function publicUrlOf(tb, key) {
+  try { return (await tb.assets.getPublic(key))?.url || null; } catch { return null; }
+}
+// 管理員登入：貼圖公司版與通用版都列（通用版的 id 加 PUBLIC_SUFFIX）
+export const PUBLIC_SUFFIX = '-p';
 
 // 回傳 { ok, error }：error 是載入失敗的原因（給工具顯示，方便查字型檔問題）
 async function loadTitleFont(url) {
@@ -43,6 +48,10 @@ export async function loadComposeAssets(tb, { waitFont = true } = {}) {
   };
   const stickers = {};
   STICKER_IDS.forEach((id, i) => { if (stickerUrls[i]) stickers[id] = stickerUrls[i]; });
+  if (tb.assets.admin?.()) {
+    const pub = await Promise.all(STICKER_IDS.map((id) => publicUrlOf(tb, 'sticker.' + id)));
+    STICKER_IDS.forEach((id, i) => { if (pub[i] && pub[i] !== stickers[id]) stickers[id + PUBLIC_SUFFIX] = pub[i]; });
+  }
   const base = { company: Boolean(ribbonEnt || ribbonNews), ribbonEnt, ribbonNews, logo, stickers };
   if (!waitFont) return { ...base, fontLoaded: false, fontError: '', fontReady: loadFonts() };
   const f = await loadFonts();

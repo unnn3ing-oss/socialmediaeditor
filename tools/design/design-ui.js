@@ -25,6 +25,9 @@
   // 由 tool.js 先設定好：host.stickerUrl(id) 取貼圖網址（有密碼是公司版）、host.download(blob, name)
   const host = Q.host || {};
   const stickerSrc = s => (host.stickerUrl && host.stickerUrl(s)) || '';
+  // 貼圖列要顯示哪些：預設 7 張；管理員登入時 tool.js 另給通用版（-p）
+  const shownStickers = () => (host.shownStickers ? host.shownStickers() : core().STICKERS);
+  const stickerName = s => { const b = s.endsWith('-p') ? s.slice(0, -2) : s; return (STICKER_NAMES[b] || b) + (b !== s ? '（通用）' : ''); };
 
   // ---- 常數 --------------------------------------------------------------------------
   const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
@@ -261,7 +264,7 @@
         <span class="dz-tool-label">形狀</span>
         ${SHAPES.map(([k, n]) => `<button type="button" class="dz-tool" data-add="shape:${k}" title="加入${n}">${icon(k)}<span>${n}</span></button>`).join('')}
         <span class="dz-tool-label">貼圖</span>
-        ${core().STICKERS.map(s => `<button type="button" class="dz-tool dz-sticker" data-add="sticker:${s}" title="加入貼圖：${STICKER_NAMES[s] || s}"><img src="${stickerSrc(s)}" alt="${STICKER_NAMES[s] || s}" draggable="false"></button>`).join('')}
+        ${shownStickers().map(s => `<button type="button" class="dz-tool dz-sticker" data-add="sticker:${s}" title="加入貼圖：${stickerName(s)}"><img src="${stickerSrc(s)}" alt="${stickerName(s)}" draggable="false"></button>`).join('')}
         <span class="dz-tool-label">遮蓋</span>
         <button type="button" class="dz-tool" data-add="mosaic" title="加入馬賽克（打格子它底下的所有圖層）">${icon('mosaic')}<span>馬賽克</span></button>
         <input type="file" id="dzImgFile" accept="image/*" multiple hidden>
@@ -598,7 +601,7 @@
     return assets.wait[id];
   }
   function loadStickers() {
-    for (const s of core().STICKERS) {
+    for (const s of [...core().STICKERS, ...core().PUBLIC_STICKERS]) {
       if (stickerWait[s]) continue;
       const im = new Image();
       stickerWait[s] = new Promise(res => {
@@ -1539,7 +1542,7 @@
         o.kind === 'rect' ? numField('dzF-radius', '圓角', () => cur(id).radius, v => up({ radius: v }), { min: 0, max: 2000, step: 1, unit: 'px' }) : null));
     } else if (o.type === 'sticker') {
       const grid = el('div', { class: 'dz-sticker-pick', id: 'dzF-sticker', role: 'group', 'aria-label': '換貼圖' },
-        C.STICKERS.map(s => el('button', { type: 'button', 'data-v': s, title: STICKER_NAMES[s] || s }, el('img', { src: stickerSrc(s), alt: STICKER_NAMES[s] || s, draggable: 'false' }))));
+        shownStickers().map(s => el('button', { type: 'button', 'data-v': s, title: stickerName(s) }, el('img', { src: stickerSrc(s), alt: stickerName(s), draggable: 'false' }))));
       grid.addEventListener('click', e => { const b = e.target.closest('button'); if (b) act('換貼圖', () => up({ sticker: b.dataset.v })); });
       bound.push({ el: grid, get: () => cur(id).sticker, kind: 'toggle' });
       kids.push(sec('貼圖', grid));

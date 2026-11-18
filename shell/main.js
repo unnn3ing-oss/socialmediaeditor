@@ -18,7 +18,7 @@ let loaded = false;
 const statuses = new Map();
 const statusSubs = new Set();
 // ---- 公司模式資料（Task 10 的 company.js 會更新） ----
-let companyState = { unlocked: false, exp: null };
+let companyState = { unlocked: false, exp: null, admin: false };
 const companySubs = new Set();
 
 // 安裝教學（程式與樣式約 74KB）按了才載入，首頁不先下載。

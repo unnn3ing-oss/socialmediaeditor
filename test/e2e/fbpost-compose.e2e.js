@@ -98,6 +98,18 @@ test('已有內容時帶入先確認，按返回不覆蓋', async () => {
   await page.close();
 });
 
+// 字型載完後工具會非同步重畫：連續兩次（間隔 150ms）雜湊相同才算畫好，最多等約 3 秒
+async function stableHash(frame, sel) {
+  let prev = await canvasHash(frame, sel);
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 150));
+    const h = await canvasHash(frame, sel);
+    if (h === prev) return h;
+    prev = h;
+  }
+  return prev;
+}
+
 test('同樣的輸入與字級，排程發布與共用畫圖核心畫出來的圖完全相同（選套版 66px＋標題靠下排法、純文字圖 76px）', async () => {
   const { page, frame } = await openFb();
   // 作圖框：帶入（新聞框）
@@ -105,12 +117,12 @@ test('同樣的輸入與字級，排程發布與共用畫圖核心畫出來的�
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
   await frame.fill('#title', '藍營大老拋\n兩岸統一「10年計畫」\n關中、丁守中急切割');
   await frame.evaluate(async () => { await (await import('../../ui/compose/render.js')).loadTitleGlyphs(document.getElementById('title').value); await new Promise((r) => setTimeout(r, 100)); });
-  const fbImage = await canvasHash(frame, '#cv');
+  const fbImage = await stableHash(frame, '#cv');
   // 純文字底圖（預設紅）
   await frame.click('#modeSeg [data-mode=color]');
   await frame.fill('#title', '快訊／\n蔣萬安激戰沈伯洋\nTVBS封關民調出爐！');
   await frame.evaluate(async () => { await (await import('../../ui/compose/render.js')).loadTitleGlyphs(document.getElementById('title').value); await new Promise((r) => setTimeout(r, 100)); });
-  const fbColor = await canvasHash(frame, '#cv');
+  const fbColor = await stableHash(frame, '#cv');
   await page.close();
 
   const { page: pp, frame: pf } = await openTool(browser, srv.url, 'pattern', { company: true });

@@ -15,6 +15,10 @@ const [headerAsset, grid4Asset, ...stickerAssets] = await Promise.all([
   ...STICKER_IDS.map(id => tb.assets.get(`sticker.${id}`)),
 ]);
 const fontAsset = await tb.assets.get('font.line');
+// 管理員登入：公司版貼圖後面再列通用版（網址相同就不重複）
+const publicStickerAssets = tb.assets.admin?.()
+  ? await Promise.all(STICKER_IDS.map(id => tb.assets.getPublic(`sticker.${id}`).catch(() => null)))
+  : [];
 const COMPANY = Boolean(headerAsset?.url || grid4Asset?.url);
 
 // 標題字型：公司版台北黑體粗體（同舊工具，FontFace 載入）；通用版 Noto Sans TC 900（Google Fonts）。
@@ -219,8 +223,11 @@ const templatesReady = Promise.all([
 
 // Small face-covering stickers the user can drop onto a cell's photo to hide
 // a bystander. Loaded once up front the same way as the template artwork.
-const STICKER_DEFS = STICKER_IDS.map((id, i) => ({ key: `t${i + 1}`, src: stickerAssets[i]?.url || '' }))
-  .filter(def => def.src);
+const STICKER_DEFS = [
+  ...STICKER_IDS.map((id, i) => ({ key: `t${i + 1}`, src: stickerAssets[i]?.url || '' })),
+  ...STICKER_IDS.map((id, i) => ({ key: `p${i + 1}`, src: publicStickerAssets[i]?.url || '', extra: true }))
+    .filter((def, i) => def.src && def.src !== stickerAssets[i]?.url),
+].filter(def => def.src);
 const stickerImages = {};
 const stickersReady = Promise.all(
   STICKER_DEFS.map(def => loadImage(def.src).then(img => { stickerImages[def.key] = img; }))
@@ -2532,7 +2539,13 @@ helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) helpO
 // >>> 原檔 4773-4798
 const stickerHintShown = { news: false, ent: false };
 const stickerPalette = document.getElementById('stickerPalette');
-STICKER_DEFS.forEach(def => {
+STICKER_DEFS.forEach((def, i) => {
+  if (def.extra && i > 0 && !STICKER_DEFS[i - 1].extra) {
+    const sep = document.createElement('span');
+    sep.className = 'sticker-sep';
+    sep.setAttribute('aria-hidden', 'true');
+    stickerPalette.appendChild(sep);
+  }
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'sticker-btn';

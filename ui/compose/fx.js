@@ -7,10 +7,12 @@
 // 操作：拖曳移動；滑鼠在方框上滾輪縮放；觸控兩指縮放；× 或 Delete 刪除。
 import { SIZE } from './render.js';
 
-const ALL_STICKERS = [
+const BASE_STICKERS = [
   { id: 'smile', name: '笑臉' }, { id: 'shock', name: '驚嚇' }, { id: 'cry', name: '大哭' }, { id: 'angry', name: '生氣' },
   { id: 'kiss', name: '親親' }, { id: 'laugh', name: '笑哭' }, { id: 'meh', name: '無言' }
 ];
+// 管理員登入時另有通用版（id 加 -p，見 assets.js 的 PUBLIC_SUFFIX），排在後面、中間加分隔線
+const ALL_STICKERS = [...BASE_STICKERS, ...BASE_STICKERS.map(s => ({ id: s.id + '-p', name: s.name + '（通用）', extra: true }))];
 
 // stickerUrls：{ smile: url, ... }（取不到的就不列）
 export function createFxKit({ stickerUrls = {} } = {}) {
@@ -302,7 +304,14 @@ export function createFxKit({ stickerUrls = {} } = {}) {
     const sep = document.createElement('span');
     sep.className = 'fx-sep';
     row.appendChild(sep);
-    STICKERS.forEach(s => {
+    let sepDone = false;
+    STICKERS.forEach((s, i) => {
+      if (s.extra && i > 0 && !STICKERS[i - 1].extra && !sepDone) {
+        sepDone = true;
+        const sep2 = document.createElement('span');
+        sep2.className = 'fx-sep';
+        row.appendChild(sep2);
+      }
       const b = tile('fx-sticker-tile', `貼圖：${s.name}`);
       const img = document.createElement('img');
       img.src = STICKER_URLS[s.id];

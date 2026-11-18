@@ -135,6 +135,21 @@ test('assets.get: public url, upload, company with fallback', async () => {
   assert.equal(await a.get('nope'), null);
 });
 
+test('assets.getPublic 一律回通用版、admin() 依管理員登入', async () => {
+  const { createAssets } = await import('../sdk/assets.js');
+  const specs = { st: { company: 'tbao', public: 'st.webp' } };
+  let admin = true;
+  const api = { call: async (path) => ({ blob: async () => 'BLOB:' + path }) };
+  const a = createAssets({ api, getSpec: async (k) => specs[k], isCompany: () => true, isAdmin: () => admin, base: 'https://s/tools/t/index.html', createObjectURL: (b) => 'blob:' + b });
+  assert.deepEqual(await a.get('st'), { url: 'blob:BLOB:/assets/tbao' });
+  assert.deepEqual(await a.getPublic('st'), { url: 'https://s/tools/t/st.webp' });
+  assert.equal(a.admin(), true);
+  admin = false;
+  assert.equal(a.admin(), false);
+  const b = createAssets({ api, getSpec: async (k) => specs[k], isCompany: () => true });
+  assert.equal(b.admin(), false, '沒注入 isAdmin 時一律 false');
+});
+
 test('status standalone returns warn; with shell delegates', async () => {
   const { createStatus } = await import('../sdk/status.js');
   const alone = createStatus({ getShell: () => null });
