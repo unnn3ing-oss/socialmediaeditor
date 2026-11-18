@@ -114,7 +114,8 @@ export async function adminStaff(request, env, path) {
 
   const sm = /^\/admin\/staff\/([^/]+)$/.exec(path);
   if (sm) {
-    const id = normId(decodeURIComponent(sm[1]));
+    let raw = sm[1]; try { raw = decodeURIComponent(raw); } catch { raw = ''; }   // 壞掉的 %編碼當查無此人，不讓 Worker 500
+    const id = normId(raw);
     if (!id || !(await first(env, 'SELECT id FROM staff WHERE id = ?', id))) return fail(request, env, 'not_found', '名單裡沒有這個員工編號。');
     if (method === 'DELETE') {
       await run(env, 'DELETE FROM staff WHERE id = ?', id);

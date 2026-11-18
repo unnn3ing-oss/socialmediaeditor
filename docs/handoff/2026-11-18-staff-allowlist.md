@@ -24,15 +24,20 @@
 | `server/core/http.js` | 錯誤碼 `bad_staff`、`fb_need_staff`、`fb_no_perm` | ✅ |
 | `server/fb/access.js`、`server/fb/index.js` | 每條路由標所需權限；`GET /fb/me`；寫操作紀錄 | ✅ |
 | `server/index.js`、`server/schema.sql` | 掛管理路由、cron 清 90 天紀錄 | ✅ |
-| 子代理 A：`admin/`、`server/core/admin-page.js` | 「授權名單」分類（名單、權限組、操作紀錄）；開放／關閉說明文字 | 🚧 |
-| 子代理 B：`shell/company.js`、`tools/fbpost/`、`sdk/` | 登入視窗「員工編號／公司密碼」分頁、頂列顯示姓名；排程發布依 `/fb/me` 隱藏按鈕、`fb_need_staff` 提示 | 🚧 |
+| 子代理 A：`admin/`、`server/core/admin-page.js` | 「授權名單」分類（名單、權限組、操作紀錄）；開放／關閉說明文字 | ✅ |
+| 子代理 B：`shell/company.js`、`tools/fbpost/`、`sdk/` | 登入視窗「員工編號／公司密碼」分頁、頂列顯示姓名；排程發布依 `/fb/me` 隱藏按鈕、`fb_need_staff` 提示 | ✅ |
 | `privacy/`、`data-deletion/` | 加授權名單與操作紀錄兩列 | ✅ |
 
 ## 下一步
 - [x] 後端＋單元測試 → commit `3999fd1`（npm test 631）
 - [x] 派子代理 A、B（sonnet，背景執行）
 - [x] 隱私權政策更新（授權名單、操作紀錄兩列）
-- [ ] 整合跑全部 e2e、獨立審查、截圖
+- [x] 整合：npm test 631、全部 e2e 200、build --check 通過（`80d3ac1`）
+- [x] 獨立審查：修正後通過（`/admin/staff/<id>` 壞掉的 % 編碼改回 404）
+- [x] 截圖給使用者
+- [ ] 使用者說「推」→ 併入 main、更新 CLAUDE.md
+- [ ] 使用者部署後端 → 管理頁新增同事 → 實測員工編號登入
+- [ ] 待使用者決定：排程發布卡片說明「測試中，僅管理員可用」與「管理員測試」標籤是否改掉
 
 ## 測試
 `npm test`、`npm run e2e`、`node build.js --check`
