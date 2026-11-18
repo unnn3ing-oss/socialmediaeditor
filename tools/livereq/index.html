@@ -13,34 +13,48 @@
 <body>
 <main class="lr">
   <h1 class="tool-h1">直播需求單</h1>
-  <section class="lr-top">
-    <div class="lr-duty">
-      <label class="field">值班小編
-        <input id="dutyName" type="text" autocomplete="off" placeholder="姓名">
+  <section class="lr-top" id="top">
+    <div class="lr-toprow">
+      <span class="lr-step"><span class="lr-badge">1</span>貼上需求單</span>
+      <div class="lr-pastebox">
+        <label class="field lr-srcwrap" id="srcWrap">
+          <span class="lr-sr">貼上直播需求單（可一次貼多場；再貼會取代上一份）</span>
+          <textarea id="src" rows="3" spellcheck="false" placeholder="貼上直播需求單（可一次貼多場；再貼會取代上一份）"></textarea>
+        </label>
+        <button type="button" class="lr-pastebtn" id="pasteBtn" hidden></button>
+      </div>
+      <label class="field lr-dutyf">
+        <span class="lr-sr">值班小編姓名</span>
+        <input id="dutyName" type="text" autocomplete="off" placeholder="值班：姓名">
       </label>
-      <label class="field">分機或手機
-        <input id="dutyContact" type="text" autocomplete="off" placeholder="#85001 或 09xx">
+      <label class="field lr-dutyf">
+        <span class="lr-sr">分機或手機</span>
+        <input id="dutyContact" type="text" autocomplete="off" placeholder="分機或手機 #85001">
       </label>
-      <p class="lr-hint" id="dutyHint"></p>
     </div>
-    <label class="field">貼上直播需求單（可一次貼多場；再貼會取代上一份）
-      <textarea id="src" rows="3" spellcheck="false"></textarea>
-    </label>
     <div class="lr-actions">
+      <p class="lr-hint" id="dutyHint"></p>
       <span class="lr-count" id="count"></span>
       <button type="button" class="btn btn-secondary btn-sm" id="clear">清空</button>
       <button type="button" class="btn btn-secondary btn-sm" id="run">解析</button>
     </div>
   </section>
   <p class="lr-empty" id="empty" hidden>找不到需求單欄位（●／◎ 開頭的「新聞事件」「直播平台」「YT標」等），請確認貼上的內容。</p>
-  <nav class="lr-nav" id="nav" hidden aria-label="場次">
-    <button type="button" class="btn btn-secondary btn-sm" id="prev">‹ 上一張</button>
-    <span class="lr-pos" id="pos"></span>
-    <span class="lr-dots" id="dots"></span>
-    <button type="button" class="btn btn-secondary btn-sm" id="next">下一張 ›</button>
-  </nav>
-  <section class="lr-pagesbar" id="pagesBar" hidden></section>
-  <section class="lr-list" id="list" aria-live="polite"></section>
+  <section class="lr-stage" id="stage" hidden>
+    <div class="lr-stagehead">
+      <span class="lr-step"><span class="lr-badge">2</span>逐張確認</span>
+      <span class="lr-dots" id="dots" role="group" aria-label="場次"></span>
+      <span class="lr-pos" id="pos"></span>
+    </div>
+    <div class="lr-list" id="list" aria-live="polite"></div>
+  </section>
+  <section class="lr-bar" id="bar" hidden aria-label="檢查與複製">
+    <div class="lr-st-group" id="stBar" role="group" aria-label="檢查項目"></div>
+    <div class="lr-acts">
+      <button type="button" class="btn btn-secondary lr-prev" id="prev">‹ 上一張</button>
+      <button type="button" class="btn btn-primary lr-copy" id="copy">複製並下一張 ›</button>
+    </div>
+  </section>
 </main>
 <template id="cardTpl">
   <article class="lr-card">
@@ -48,7 +62,7 @@
       <h2 class="lr-title"></h2>
       <span class="lr-time"></span>
       <span class="lr-tag" data-repeat hidden>更正版</span>
-      <button type="button" class="btn btn-primary lr-copy" data-copy>複製</button>
+      <span class="lr-pageslot" data-pageslot></span>
     </header>
     <label class="field lr-event" hidden>新聞事件（需求單沒寫，請補上）
       <input type="text" data-event autocomplete="off">
@@ -56,7 +70,6 @@
     <label class="field lr-event" data-timewrap hidden>直播時間（需求單沒寫，請補上）
       <input type="text" data-time autocomplete="off" placeholder="例如 1430">
     </label>
-    <ul class="lr-checks" data-checks></ul>
     <label class="field">完整需求單（可直接改，複製以這裡為準）
       <textarea data-out rows="10" spellcheck="false"></textarea>
     </label>
