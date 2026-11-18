@@ -248,7 +248,11 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   // 已排程
   await page.click('#schedReload');
   await page.waitForSelector('#schedList li img.thumb[src]');
-  assert.ok((await page.textContent('#schedList .body div')).length <= 60);
+  // 列表一列：內容一行截斷、相片．粉專．留言、編輯（即將推出）／改時間／刪除、時間欄
+  assert.equal(await page.$eval('#schedList .msg', (e) => getComputedStyle(e).whiteSpace), 'nowrap');
+  assert.match(await page.textContent('#schedList .meta .kind'), /^相片．新聞．留言：/);
+  assert.deepEqual(await page.$$eval('#schedList li:first-child .acts button', (b) => b.map((x) => [x.textContent, x.disabled])), [['編輯', true], ['改時間', false], ['刪除', false]]);
+  assert.match(await page.textContent('#schedList .when'), /^\d+月\d+日 \d\d:\d\d$/);
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-sched-desktop.png') });
   await page.click('#schedList li >> text=改時間');
   const at = Math.floor(Date.now() / 1000) + 3 * 3600;
@@ -258,11 +262,11 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   await page.waitForFunction(() => document.getElementById('schedHint').textContent.includes('共'));
   assert.equal(api.reschedules.length, 1);
   assert.ok(Math.abs(api.reschedules[0].at - at) <= 60);
-  await page.click('#schedList li >> text=取消');
+  await page.click('#schedList li .acts >> text=刪除');
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfNo');
   assert.equal(api.cancels.length, 0);
-  await page.click('#schedList li >> text=取消');
+  await page.click('#schedList li .acts >> text=刪除');
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfYes');
   await page.waitForFunction(() => /共|沒有排程/.test(document.getElementById('schedHint').textContent));
@@ -274,6 +278,14 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   await page.waitForSelector('#pubList li');
   assert.match(await page.textContent('#pubList .noimg'), /無圖/);
   assert.equal(await page.getAttribute('#pubList a', 'target'), '_blank');
+  // 預覽：點一下轉半透明並出現開新分頁圖示，按圖示才打開；已發佈沒有改時間
+  assert.equal(await page.isVisible('#pubList .pv-open'), false);
+  await page.click('#pubList .pv-arm');
+  assert.equal(await page.isVisible('#pubList .pv-open'), true);
+  assert.equal(await page.getAttribute('#pubList .pv-arm', 'aria-expanded'), 'true');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.isVisible('#pubList .pv-open'), false);
+  assert.deepEqual(await page.$$eval('#pubList li:first-child .acts button', (b) => b.map((x) => x.textContent)), ['編輯', '刪除']);
   await page.click('#pubList li >> text=刪除');
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfYes');
@@ -643,7 +655,7 @@ test('U7：換粉專清空列表且不查詢；改時間、取消成功只更新
   assert.equal(api.reschedules.length, 1);
   assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n1, '改時間不重查');
   page.once('dialog', (d) => d.accept());
-  await page.click('#schedList li >> text=取消');
+  await page.click('#schedList li .acts >> text=刪除');
   await page.click('#cfYes');
   await page.waitForFunction(() => !document.querySelector('#schedList li'));
   assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n1, '取消不重查');
