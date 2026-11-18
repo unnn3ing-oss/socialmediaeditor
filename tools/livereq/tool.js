@@ -8,15 +8,26 @@ const $ = (id) => document.getElementById(id);
 const src = $('src'), list = $('list'), empty = $('empty'), count = $('count');
 const dutyName = $('dutyName'), dutyContact = $('dutyContact'), dutyHint = $('dutyHint');
 const tpl = $('cardTpl'), pagesTpl = $('pagesTpl');
-const pagesBar = $('pagesBar'), nav = $('nav'), pos = $('pos'), dots = $('dots');
+const stage = $('stage'), bar = $('bar'), stBar = $('stBar'), pos = $('pos'), dots = $('dots');
+const pasteBtn = $('pasteBtn'), srcWrap = $('srcWrap'), copyNext = $('copy');
 const KEY = 'tbx.livereq.duty';
-const cards = []; // { a, el, pagesEl, refresh, copied }
+const cards = []; // { a, el, refresh, copied, items, lastMissing, doCopy }
 let cur = 0;
 
 // ---- 值班小編（依班別到期） ----
 let dutyExp = 0;
 const fmt = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// 分機：剛好 5 位數字就在前面加 #（手機或已經有 # 的不動）
+export const fmtContact = (v) => { const t = String(v || '').trim(); return /^\d{5}$/.test(t) ? '#' + t : t; };
+// 值班姓名、分機或手機都必填：空的那一欄紅框（不列在底列狀態鈕）
+function markDuty() {
+  for (const el of [dutyName, dutyContact]) {
+    const bad = !el.value.trim();
+    el.classList.toggle('is-bad', bad); el.setAttribute('aria-invalid', String(bad));
+  }
+}
 function showDutyHint() {
+  markDuty();
   dutyHint.textContent = dutyExp && (dutyName.value.trim() || dutyContact.value.trim())
     ? `本班保留到 ${fmt(dutyExp)}，之後自動清空（早班 08:00～16:30、晚班 16:00～00:00）`
     : '依班別保留：早班 08:00～16:30、晚班 16:00～00:00，下班後自動清空';
@@ -49,10 +60,11 @@ function expireDuty() {
 }
 dutyName.addEventListener('input', saveDuty);
 dutyContact.addEventListener('input', saveDuty);
+dutyContact.addEventListener('blur', () => { const v = fmtContact(dutyContact.value); if (v !== dutyContact.value) { dutyContact.value = v; saveDuty(); } });
 setInterval(expireDuty, 30000);
 loadDuty();
 
-const duty = () => ({ name: dutyName.value, contact: dutyContact.value });
+const duty = () => ({ name: dutyName.value, contact: fmtContact(dutyContact.value) });
 
 // ---- 複製 ----
 async function copyText(text) {
@@ -81,13 +93,14 @@ function makeCard(a, idx) {
   const el = tpl.content.firstElementChild.cloneNode(true);
   const q = (s) => el.querySelector(s);
   const title = q('.lr-title'), evWrap = q('.lr-event'), evIn = q('[data-event]'), tmIn = q('[data-time]');
-  const out = q('[data-out]'), msg = q('[data-msg]'), copyBtn = q('[data-copy]'), regen = q('[data-regen]');
+  const out = q('[data-out]'), msg = q('[data-msg]'), regen = q('[data-regen]');
+  const self = { a, el, copied: false, items: [], lastMissing: [], refresh: null, doCopy: null };
   el.dataset.idx = String(idx);
   q('[data-repeat]').hidden = !a.repeat;
   evWrap.hidden = !!a.event;
   q('[data-timewrap]').hidden = !!a.time;
 
-  // 粉專：放在輸入區與卡片之間（每張一排，只顯示目前這張）；需求單已經有的打勾並鎖住
+  // 粉專：放在標題右側；需求單已經有的打勾並鎖住
   const pagesEl = pagesTpl.content.firstElementChild.cloneNode(true);
   const pq = (s) => pagesEl.querySelector(s);
   const have = new Set(a.fbExisting.map((s) => s.replace(/\s+/g, '').replace(/(粉專|粉)$/, '')));
@@ -101,6 +114,7 @@ function makeCard(a, idx) {
     pq('[data-boxes]').append(lab);
     return cb;
   });
+  q('[data-pageslot]').append(pagesEl);
   pq('[data-have]').textContent = a.fbExisting.length ? `需求單已有：${a.fbExisting.join('、')}` : '';
 
   const w = weatherNote(a);
@@ -111,7 +125,6 @@ function makeCard(a, idx) {
   }
 
   // 缺漏提示 → 對應欄位（只指到畫面上看得到的欄位；其餘落在完整需求單）
-  const focusField = (t) => { if (!t) return; t.scrollIntoView({ block: 'center' }); t.focus({ preventScroll: true }); };
   function jumpTarget(k) {
     if (k === '新聞事件') return !evWrap.hidden ? () => evIn : () => out;
     if (k === '直播時間') return !q('[data-timewrap]').hidden ? () => tmIn : () => out;
@@ -120,7 +133,6 @@ function makeCard(a, idx) {
     return () => out;
   }
   let dirty = false;
-  let lastMissing = [];
   out.addEventListener('input', () => { dirty = true; regen.hidden = false; });
   regen.addEventListener('click', () => { dirty = false; regen.hidden = true; refresh(); });
 
@@ -128,7 +140,6 @@ function makeCard(a, idx) {
     const checked = boxes.filter((b) => b.checked && !b.disabled).map((b) => b.value);
     const opt = { checked, duty: duty(), eventOverride: evIn.value, timeOverride: tmIn.value };
     const { missing, warnings } = check(a, opt);
-    lastMissing = missing;
     const name = (a.event || evIn.value.trim() || '（未填新聞事件）') + (a.repeat && !(a.event || '').includes(a.repeat) ? ' ' + a.repeat : '');
     title.textContent = name;
     title.classList.toggle('is-bad', !a.event && !evIn.value.trim());
@@ -137,44 +148,32 @@ function makeCard(a, idx) {
     evIn.setAttribute('aria-invalid', String(!evIn.value.trim()));
     tmIn.setAttribute('aria-invalid', String(!tmIn.value.trim()));
     q('.lr-time').textContent = fmtTime(a.time || tmIn.value.trim());
-    const items = [
-      ['新聞事件', '新聞事件'], ['直播時間', '直播時間'], ['FB 粉專', 'FB 粉專'], ['畫面來源', '畫面來源'], ['值班小編', '值班小編'], ['標題', '標題'], ['內文', a.body.trim() ? '內文' : '內文（由標題補上）'],
-    ];
-    const ul = q('[data-checks]');
+    const keys = ['新聞事件', '直播時間', 'FB 粉專', '畫面來源', '標題', '內文'];   // 值班小編必填，但只在上方欄位標紅框
     // 依順序排；直播時間、畫面來源有提醒時，就在原位置顯示黃色
     const warnOf = (k) => warnings.find((w) => w.startsWith(k));
-    ul.replaceChildren(...items.map(([k, label]) => {
-      const li = document.createElement('li');
+    self.items = keys.map((k) => {
       const bad = missing.includes(k), warn = !bad && warnOf(k);
-      li.className = bad ? 'bad' : warn ? 'warn' : 'ok';
-      const text = bad ? '缺 ' + k : warn || '✓ ' + label;
-      const target = (bad || warn) ? jumpTarget(k) : null;
-      if (target) {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'lr-jump'; b.textContent = text;
-        b.setAttribute('aria-label', text + '，前往填寫');
-        b.addEventListener('click', () => focusField(target()));
-        li.append(b);
-      } else li.textContent = text;
-      return li;
-    }));
+      const state = bad ? 'bad' : warn ? 'warn' : 'ok';
+      const reason = bad ? `缺少：${k}` : warn ? `提醒：${warn}` : k === '內文' && !a.body.trim() ? '完成：內文（由標題補上）' : `完成：${k}`;
+      return { k, state, reason, target: state === 'ok' ? null : jumpTarget(k) };
+    });
+    self.lastMissing = missing;
     if (!dirty) { out.value = build(a, opt); out.rows = Math.min(Math.max(out.value.split('\n').length + 1, 6), 40); }
-    copyBtn.disabled = missing.length > 0;
-    msg.className = 'lr-msg' + (missing.length ? ' is-bad' : '');
-    msg.textContent = missing.length ? `缺：${missing.join('、')}` : '';
+    if (cards[cur] === self) renderBar();
   }
+  self.refresh = refresh;
   boxes.forEach((b) => b.addEventListener('change', refresh));
   evIn.addEventListener('input', refresh);
   tmIn.addEventListener('input', refresh);
 
-  copyBtn.addEventListener('click', async () => {
+  self.doCopy = async () => {
     expireDuty(); // 值班到期後馬上失效，不等 30 秒的計時
-    if (lastMissing.length) return;
+    if (self.lastMissing.length) return;
     const ok = await copyText(out.value);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
     msg.textContent = ok ? '已複製完整需求單' : '複製失敗，已選取全文，請長按或按 Ctrl+C 手動複製';
     if (ok) afterCopy(idx); else selectManual(out);
-  });
+  };
   q('[data-weather]').addEventListener('click', async () => {
     const ok = await copyText(w.text);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
@@ -183,14 +182,47 @@ function makeCard(a, idx) {
   });
 
   refresh();
-  return { a, el, pagesEl, refresh, copied: false };
+  return self;
+}
+
+// ---- 底列狀態鈕 ----
+const SVG = 'http://www.w3.org/2000/svg';
+function icon(state) {
+  const s = document.createElementNS(SVG, 'svg');
+  s.setAttribute('viewBox', '0 0 20 20'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'lr-ic');
+  const mk = (n, at) => { const e = document.createElementNS(SVG, n); for (const k in at) e.setAttribute(k, at[k]); s.append(e); };
+  if (state === 'warn') {
+    mk('path', { d: 'M10 2.2 19 17.8H1z', fill: '#f79009', stroke: '#f79009', 'stroke-width': '1.6', 'stroke-linejoin': 'round' });
+    mk('path', { d: 'M10 7.6v4.4M10 14.4v.1', stroke: '#fff', 'stroke-width': '2', 'stroke-linecap': 'round', fill: 'none' });
+  } else {
+    mk('circle', { cx: 10, cy: 10, r: 10, fill: state === 'ok' ? '#17b26a' : '#f04438' });
+    mk('path', { d: state === 'ok' ? 'M5.6 10.4l2.8 2.8 5.8-6' : 'M6.6 6.6l6.8 6.8M13.4 6.6l-6.8 6.8', stroke: '#fff', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' });
+  }
+  return s;
+}
+const focusField = (t) => { if (!t) return; t.scrollIntoView({ block: 'center' }); t.focus({ preventScroll: true }); };
+function renderBar() {
+  const c = cards[cur];
+  if (!c) return;
+  stBar.replaceChildren(...c.items.map((it) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lr-st is-' + it.state; b.dataset.state = it.state; b.dataset.key = it.k;
+    b.title = it.reason; b.setAttribute('aria-label', it.state === 'ok' ? it.reason : it.reason + '，前往填寫');
+    b.append(icon(it.state), document.createTextNode(it.k));
+    if (it.state === 'ok') b.setAttribute('aria-disabled', 'true');
+    else b.addEventListener('click', () => focusField(it.target()));
+    return b;
+  }));
+  copyNext.disabled = c.lastMissing.length > 0;
+  const miss = c.lastMissing.length ? '缺：' + c.lastMissing.join('、') : '';
+  copyNext.title = miss;
 }
 
 // ---- 一次一張 ----
 function show(i) {
   if (!cards.length) return;
   cur = Math.max(0, Math.min(cards.length - 1, i));
-  cards.forEach((c, k) => { c.el.hidden = k !== cur; c.pagesEl.hidden = k !== cur; });
+  cards.forEach((c, k) => { c.el.hidden = k !== cur; });
   pos.textContent = `第 ${cur + 1}／${cards.length} 場`;
   [...dots.children].forEach((d, k) => {
     d.classList.toggle('is-cur', k === cur);
@@ -199,7 +231,7 @@ function show(i) {
     d.setAttribute('aria-current', k === cur ? 'true' : 'false');
   });
   $('prev').disabled = cur === 0;
-  $('next').disabled = cur === cards.length - 1;
+  renderBar();
 }
 function afterCopy(i) {
   cards[i].copied = true;
@@ -210,24 +242,30 @@ function afterCopy(i) {
   msg.textContent = left ? `已複製；還有 ${left} 張沒複製` : '已複製，全部完成';
 }
 $('prev').addEventListener('click', () => show(cur - 1));
-$('next').addEventListener('click', () => show(cur + 1));
+copyNext.addEventListener('click', () => { if (cards[cur]) cards[cur].doCopy(); });
 
+function setCollapsed(on) {
+  srcWrap.hidden = on; pasteBtn.hidden = !on; $('run').hidden = on;
+}
 function run() {
   cards.length = 0;
   const all = parse(src.value);
   list.replaceChildren(...all.map((a, i) => { const c = makeCard(a, i); cards.push(c); return c.el; }));
-  pagesBar.replaceChildren(...cards.map((c) => c.pagesEl));
   dots.replaceChildren(...cards.map((c, k) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'lr-dot'; b.setAttribute('aria-label', `第 ${k + 1} 場`);
     b.addEventListener('click', () => show(k));
     return b;
   }));
-  pagesBar.hidden = nav.hidden = !all.length;
+  stage.hidden = bar.hidden = !all.length;
+  cur = 0;
   show(0);
   empty.hidden = !!all.length || !src.value.trim();
   count.textContent = all.length ? `共 ${all.length} 場` : '';
+  pasteBtn.textContent = `已貼上 ${all.length} 場（點這裡重新貼上）`;
+  setCollapsed(!!all.length);
 }
+pasteBtn.addEventListener('click', () => { setCollapsed(false); src.focus(); src.select(); });
 
 $('run').addEventListener('click', run);
 // 一次一份：貼上就取代框內舊的需求單並馬上解析，不累加
@@ -245,7 +283,8 @@ window.addEventListener('focus', () => {
   if (!a || a === document.body) src.focus({ preventScroll: true });
 });
 $('clear').addEventListener('click', () => {
-  src.value = ''; cards.length = 0; list.replaceChildren(); pagesBar.replaceChildren(); dots.replaceChildren();
-  pagesBar.hidden = nav.hidden = true; empty.hidden = true; count.textContent = '';
+  src.value = ''; cards.length = 0; list.replaceChildren(); dots.replaceChildren(); stBar.replaceChildren();
+  stage.hidden = bar.hidden = true; empty.hidden = true; count.textContent = '';
+  setCollapsed(false);
   src.focus();
 });

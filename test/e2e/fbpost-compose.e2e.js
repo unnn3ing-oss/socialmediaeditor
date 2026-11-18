@@ -66,7 +66,7 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   assert.ok(title.split('\n').length >= 2, '標題已自動換行：' + title);
   assert.equal(title.replace(/\n/g, ''), TITLE.replace(/\s/g, ''));
   const msg = await frame.inputValue('#msg');
-  assert.match(msg, new RegExp('^【' + TITLE.replace(/[?？()（）]/g, '.') + '】'));
+  assert.match(msg, new RegExp('^\n【' + TITLE.replace(/[?？()（）]/g, '.') + '】'));
   assert.match(msg, /（圖／TVBS）/);
   assert.match(msg, /#監視器 #吃到飽 #詐欺/);
   assert.equal(await frame.isHidden('#cvEmpty'), true, '預覽已有圖');
@@ -81,6 +81,7 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   const body = posts[0].toString('latin1');
   assert.match(body, /name="image"; filename="fbpost\.png"\r\nContent-Type: image\/png/);
   assert.match(Buffer.from(body, 'latin1').toString('utf8'), /name="commentLead"\r\n\r\n完整報導看這裡/);
+  assert.match(Buffer.from(body, 'latin1').toString('utf8'), /name="message"\r\n\r\n【/, '開頭留給小編文的空行沒填，送出時拿掉');
   assert.match(body, /name="link"\r\n\r\nhttps:\/\/news\.tvbs\.com\.tw\/sports\/4051394/);
   assert.deepEqual(errors, []);
   await page.close();
@@ -319,5 +320,109 @@ test('貼網址讀取中：預覽顯示骨架，讀完收起；T寶／馬賽克�
   await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
   assert.equal(await frame.isHidden('#cvSkel'), true, '讀完收起');
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+// 白字範圍（r,g,b 都 > 200）的外框；兩張截圖比對預覽編輯框的字和畫布上的字是否同一位置
+const whiteBox = (page, pngs) => page.evaluate(async (list) => Promise.all(list.map(async (b64) => {
+  const im = new Image(); im.src = 'data:image/png;base64,' + b64; await im.decode();
+  const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+  const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  let l = 1e9, t = 1e9, r = -1, bt = -1;
+  for (let y = 20; y < c.height - 20; y++) for (let i = 20; i < c.width - 20; i++) {   // 避開圓角外的白底
+    const p = (y * c.width + i) * 4;
+    if (d[p] > 200 && d[p + 1] > 200 && d[p + 2] > 200) { l = Math.min(l, i); r = Math.max(r, i); t = Math.min(t, y); bt = Math.max(bt, y); }
+  }
+  return { l, t, r, b: bt };
+})), pngs);
+
+for (const mode of ['image', 'color']) {
+  test(`預覽上點一下標題（${mode === 'image' ? '選套版' : '純文字圖'}）：游標落在點的字，編輯框的字和畫布同一位置`, async () => {
+    const { page, frame, errors } = await openFb();
+    await frame.evaluate((b64) => {
+      const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const dt = new DataTransfer(); dt.items.add(new File([u8], 'x.png', { type: 'image/png' }));
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    }, PHOTO.toString('base64'));
+    await frame.waitForSelector('#cvEmpty', { state: 'hidden' });
+    if (mode === 'color') { await frame.click('#modeSeg [data-mode=color]'); await frame.click('.shelf .swatches .sw'); }
+    await frame.fill('#title', '第一行標題\n第二行比較長的標題');
+    await page.waitForTimeout(400);
+    const cv = frame.locator('#cv');
+    const before = (await cv.screenshot()).toString('base64');
+    const at = { len1: '第一行標題'.length };
+    const box = await cv.boundingBox();
+    // 用畫布座標換算：找第 2 行白字的範圍，取它前 3 個字的右緣
+    const lineRect = await frame.evaluate(() => {
+      const c = document.getElementById('cv'), x = c.getContext('2d');
+      const d = x.getImageData(0, 0, 1080, 1080).data;
+      // 由下往上找白字行
+      const rows = [];
+      for (let y = 0; y < 1080; y++) { let n = 0; for (let i = 0; i < 1080; i++) { const p = (y * 1080 + i) * 4; if (d[p] > 230 && d[p + 1] > 230 && d[p + 2] > 230) n++; } rows.push(n); }
+      const bands = []; let s = -1;
+      rows.forEach((n, y) => { if (n && s < 0) s = y; if (!n && s >= 0) { bands.push([s, y]); s = -1; } });
+      const big = bands.filter(([a, b]) => b - a > 20);
+      const [y0, y1] = big[big.length - 1];
+      let l = 1080, r = 0;
+      for (let y = y0; y < y1; y++) for (let i = 0; i < 1080; i++) { const p = (y * 1080 + i) * 4; if (d[p] > 230 && d[p + 1] > 230 && d[p + 2] > 230) { l = Math.min(l, i); r = Math.max(r, i); } }
+      return { y: (y0 + y1) / 2, l, r };
+    });
+    const k = box.width / 1080, charW = (lineRect.r - lineRect.l) / 9;
+    await page.mouse.click(box.x + (lineRect.l + charW * 2.8) * k, box.y + lineRect.y * k);
+    await frame.waitForSelector('#cvWrap .cv-title:not([hidden])');
+    const sel = await frame.evaluate(() => document.querySelector('#cvWrap .cv-title').selectionStart);
+    assert.equal(sel, at.len1 + 1 + 3, '游標在第 2 行第 3 個字後面');
+    // 拿掉虛線框與游標，比對字的位置
+    await frame.addStyleTag({ content: '#cvWrap .cv-title{outline:none!important;caret-color:transparent!important}' });
+    await page.waitForTimeout(200);
+    const after = (await cv.screenshot()).toString('base64');
+    const [a, b] = await whiteBox(page, [before, after]);
+    assert.ok(a.r > a.l && a.b > a.t && a.r - a.l > 100, '畫布上有抓到標題白字 ' + JSON.stringify(a));
+    for (const key of ['l', 't', 'r', 'b']) assert.ok(Math.abs(a[key] - b[key]) <= 3, `${key}：畫布 ${a[key]}、編輯框 ${b[key]}`);
+    await frame.press('#cvWrap .cv-title', 'Escape');
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+}
+
+test('貼文內容：有填小編文就照原樣送出；字數不算開頭空行', async () => {
+  const { page, frame, posts } = await openFb();
+  await frame.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  const msg = await frame.inputValue('#msg');
+  assert.equal(msg[0], '\n', '第一行空白');
+  assert.match(await frame.textContent('#msgCount'), new RegExp(`^${[...msg.slice(1)].length} 字`));
+  await frame.focus('#msg');
+  await frame.evaluate(() => { const t = document.getElementById('msg'); t.setSelectionRange(0, 0); });
+  await frame.type('#msg', '小編文');
+  await frame.click('#pages .chip[data-page="111"] .chip-l');
+  await frame.click('#sendBtn');
+  await frame.waitForSelector('#doneList li');
+  assert.match(posts[0].toString('utf8'), /name="message"\r\n\r\n小編文\r?\n【/);
+  await page.close();
+});
+
+test('標題右側每行字數和輸入框的行對齊；電腦版聚焦外框不被裁切', async () => {
+  const { page, frame } = await openFb();
+  await frame.fill('#title', '第一行\n第二行標題\n第三行\n第四行');
+  const r = await frame.evaluate(() => {
+    const ta = document.getElementById('title'), cs = getComputedStyle(ta);
+    const lh = parseFloat(cs.lineHeight), top = ta.getBoundingClientRect().top + parseFloat(cs.paddingTop) + parseFloat(cs.borderTopWidth);
+    return [...document.querySelectorAll('#titleLines div')].map((d, i) => { const b = d.getBoundingClientRect(); return Math.abs((b.top + b.height / 2) - (top + lh * (i + 0.5))); });
+  });
+  assert.equal(r.length, 4);
+  r.forEach((d, i) => assert.ok(d < 2, `第 ${i + 1} 行差 ${d}px`));
+  assert.equal(await frame.getAttribute('#title', 'wrap'), 'off');
+  // 聚焦外框（outline 2px＋offset 2px）完整落在捲動區內
+  for (const id of ['link', 'msg']) {
+    await frame.focus('#' + id);
+    const ok = await frame.evaluate((id) => {
+      const el = document.getElementById(id), sc = el.closest('.compose > .right');
+      const a = el.getBoundingClientRect(), b = sc.getBoundingClientRect();
+      return a.left - 4 >= b.left && a.right + 4 <= b.right - (sc.offsetWidth - sc.clientWidth);
+    }, id);
+    assert.ok(ok, id + ' 的外框被裁切');
+  }
   await page.close();
 });

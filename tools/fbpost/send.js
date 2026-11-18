@@ -1,6 +1,6 @@
 // 送出：組 FormData（圖、內文、文章網址、留言文字、各粉專目標）→ /fb/post → 排入 RD → 顯示每個粉專的結果
 // 全部粉專成功＝清空頁面、跳「送出完成」（再發一則／返回列表）；有任一失敗＝結果留在頁面、不清空
-import { $, fmt, errText, COMMENT, confirmBox, copyText } from './util.js';
+import { $, fmt, errText, COMMENT, confirmBox, copyText, stripLead } from './util.js';
 
 export function createSender({ tb, composer, targets, rd, comments, onBack }) {
   function updateButton() {
@@ -49,7 +49,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
     const btn = $('sendBtn'); btn.disabled = true; btn.textContent = '送出中…';
     try {
       const image = await composer.image();
-      const msg = $('msg').value;
+      const msg = stripLead($('msg').value);   // 開頭留給小編文的空行沒填就拿掉
       if (!msg.trim() && !image) { err.textContent = '請輸入貼文內容，或貼上網址帶入照片。'; return; }
       // 純文字（沒附圖）用各粉專的「文字」UTM；沒設定的提醒一下（留言連結不會加 UTM）
       if (!image) {
