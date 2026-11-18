@@ -64,3 +64,7 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
   .lr-dots { order: 3; flex: 1 0 100%; }
   .lr-pos { margin-right: auto; }
 }
+
+/* 工具標題：全工具統一 16px（使用者 2026-11-18 指定） */
+.tool-h1 { margin: 0 0 12px; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--text); }
+.lr > .tool-h1 { margin: 0; }

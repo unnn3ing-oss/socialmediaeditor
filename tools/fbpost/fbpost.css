@@ -1,6 +1,6 @@
 .fp { max-width: 760px; margin: 0 auto; padding: 16px; }
 .fp-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.fp-head h1 { margin: 0; font-size: 1.4rem; }
+.fp-head h1 { margin: 0; font-size: 16px; }
 .pill { display: inline-block; padding: 2px 12px; border-radius: var(--radius-control); font-size: 13px; background: var(--accent-soft); color: var(--accent); }
 .pill.warn { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-line); }
 .tabs { display: flex; gap: 6px; margin: 14px 0; flex-wrap: wrap; }
@@ -164,7 +164,7 @@ body.no-scroll { overflow: hidden; }
 /* ==== 舊版版面（2026-11-16）：入口＝標題列＋白卡片；新增發文＝頂部／中間捲動／底列固定 ==== */
 .fp { max-width: 960px; padding: 24px 16px 40px; display: flex; flex-direction: column; gap: 14px; }
 .fp-head { gap: 10px; }
-.fp-head h1 { font-size: 1.25rem; }
+.fp-head h1 { font-size: 16px; }
 .fp-head .pill { font-size: 12px; font-weight: 600; padding: 3px 12px; }
 .pill.ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid var(--ok-line); }
 .pill.ok::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; }

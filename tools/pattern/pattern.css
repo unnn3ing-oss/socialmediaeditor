@@ -95,9 +95,9 @@ textarea { min-height: 88px; resize: vertical; }
   grid-template-columns: 340px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   column-gap: 16px;
-  /* 扣掉標題（22px×1.35＋下距 12px）才不會整頁多出捲軸 */
-  height: calc(100vh - 2 * var(--pad) - 42px);
-  height: calc(100dvh - 2 * var(--pad) - 42px);
+  /* 扣掉標題（16px×1.4＋下距 12px）才不會整頁多出捲軸 */
+  height: calc(100vh - 2 * var(--pad) - 35px);
+  height: calc(100dvh - 2 * var(--pad) - 35px);
   min-height: 560px;
 }
 .settings {
@@ -134,7 +134,7 @@ textarea { min-height: 88px; resize: vertical; }
   .layout { grid-template-columns: 320px minmax(0, 1fr); }
 }
 .m-tabs { display: none; }
-.tool-h1 { margin: 0 0 12px; font-size: 22px; font-weight: 700; line-height: 1.35; }
+.tool-h1 { margin: 0 0 12px; font-size: 16px; font-weight: 700; line-height: 1.4; }
 
 /* ---- 設定欄內容 ---- */
 .quickfill { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }

@@ -30,7 +30,7 @@ body {
     color: var(--text);
     min-height: 100vh;
   }
-h1 { font-size: 18px; margin: 0; white-space: nowrap; }
+h1 { font-size: 16px; font-weight: 700; margin: 0; white-space: nowrap; }
 p.sub { margin: 0; color: var(--muted); font-size: 13px; }
 .topbar {
     position: sticky; top: 0; z-index: 40;

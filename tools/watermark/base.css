@@ -154,3 +154,6 @@ canvas { width: 100%; max-width: 520px; background: #ddd repeating-conic-gradien
 }
 
 @media (max-width: 820px) { .wm-thumb .wm-thumb-rm { width: 44px; height: 44px; right: -12px; top: -12px; } }
+
+/* 工具標題：全工具統一 16px（使用者 2026-11-18 指定） */
+.tool-h1 { margin: 0 0 12px; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--text); }

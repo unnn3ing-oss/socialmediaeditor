@@ -393,3 +393,6 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-sheetbar button[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .dz-sheet-head { align-items: center; justify-content: space-between; gap: 8px; }
 .dz-sheet-head strong { font-size: 15px; }
+
+/* 工具標題：全工具統一 16px（使用者 2026-11-18 指定） */
+.tool-h1 { margin: 0 0 12px; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--text); }
