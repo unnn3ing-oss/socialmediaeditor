@@ -13,12 +13,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| tools/{resize,watermark,collage}/base.css、segmented.css | bg-toggle／seg-thumb | ⬜ |
-| tools/linepush/*.css | mode/page tabs、seg-knob、dock-switch | ⬜ |
-| tools/design/design.css | dz-toggle | ⬜ |
-| tools/pattern/pattern.css | m-tabs | ⬜ |
-| tools/ytdl/ytdl.css | segmented | ⬜ |
-| tools/fbpost/*.css | seg、rd-switch | ⬜ |
+| tools/{resize,watermark,collage}/base.css、segmented.css | bg-toggle／seg-thumb | ✅ |
+| tools/linepush/*.css | mode/page tabs、seg-knob、dock-switch | ✅ |
+| tools/design/design.css | dz-toggle | ✅ |
+| tools/pattern/pattern.css | m-tabs | ✅ |
+| tools/ytdl/ytdl.css | segmented | ✅ |
+| tools/fbpost/*.css | seg、rd-switch | ✅ |
 
 ## 測試
 npm test、npm run e2e、node build.js --check；截圖給使用者（scratchpad）。
+
+## 進度
+- ✅ 實作（1d03e2a）＋審查修正（a1fb745：fbpost `.tabs button` 高 44 蓋掉 38、選中底色改 #fff）
+- ✅ npm test 619、e2e 169（ytdl 新增列同高 44→48 已改測試）、build --check、獨立審查通過
+- 手機 ≤820px 切換按鈕維持 44px 觸控高度；排程發布桌面分頁 34px（先前指定）保留
+- [ ] 使用者看截圖確認 → 說「推」才併 main（併入時更新 CLAUDE.md 目前進度；純網站，不部署後端、外掛不升版）
