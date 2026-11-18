@@ -19,4 +19,5 @@
 ## 下一步
 - [x] 後端 parsePublish／publish 改 per-page at＋測試
 - [x] 前端 index.html／fbvideo.css／app.js／editor.js 改版（e2e 6 項通過）
-- [ ] e2e 更新、獨立審查、截圖
+- [x] e2e 6 項、獨立審查（修正後通過：重新上傳時舊分段的錯誤不蓋掉新狀態）、截圖已給使用者
+- [ ] 使用者確認畫面 → 說「推」才併入 main（同 commit 更新 CLAUDE.md「目前進度」，含 v1＋v2）
