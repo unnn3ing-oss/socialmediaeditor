@@ -1,5 +1,5 @@
 # Skeleton＋排程發布介面五項
-- 狀態：進行中　- 分支：claude/vigilant-fermi-oqzctf　- 最後更新：2026-11-18
+- 狀態：完成，等使用者說「推」　- 分支：claude/vigilant-fermi-oqzctf　- 最後更新：2026-11-18
 - 使用者原始需求：送出提示「游標移到送出按鈕才跳提示，不要在下方佔位」（被擋原因選 B＝也只在 hover 顯示）；「？」不需要；貼網址預覽要有 Skeleton，且「整個網頁中有用到預覽區且會有載入的框架都要用上」（LINE 推播不用）；新增發文左邊預覽固定、右邊可捲；純文字圖底色選框高度與方向鈕縮小 1/3。
 
 ## 已定案的決定
@@ -14,8 +14,14 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| tools/fbpost/index.html、send.js、fbpost.css | 送出提示泡泡、刪 ？、左右捲、底色框 | ⬜ |
-| tools/fbpost/compose.js、manage.js | Skeleton | ⬜ |
-| tools/pattern/quickfill.js＋css | Skeleton | ⬜ |
-| tools/ytdl/web/queue-view.js＋ytdl.css | Skeleton | ⬜ |
-| test/e2e | 對應測試 | ⬜ |
+| tools/fbpost/index.html、send.js、fbpost.css | 送出提示泡泡、刪 ？、左右捲、底色框 | ✅ |
+| tools/fbpost/compose.js、manage.js | Skeleton | ✅ |
+| tools/pattern/quickfill.js＋css | Skeleton | ✅ |
+| tools/ytdl/web/queue-view.js＋ytdl.css | Skeleton | ✅ |
+| test/e2e | 對應測試 | ✅ |
+
+## 結果
+- commit `7bedb17`＋審查後小修（已發佈刷新中隱藏「載入更多」，避免兩個請求互蓋）。
+- 鍵盤：提示用 `:focus-visible` 顯示（滑鼠點擊不會讓提示一直掛著）；停用的送出鈕無法 Tab 到，未勾粉專提示只有游標／觸控看得到。
+- npm test 619、e2e 175、build --check、獨立審查通過。純網站，不需部署後端、外掛不升版號。
+- 未做：LINE 推播骨架（使用者說不需要）；觸控點擊後 `:hover` 殘留可能讓提示超過 3 秒（可接受）。

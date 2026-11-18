@@ -143,6 +143,7 @@ export function createManage({ tb }) {
     const my = ++pubSeq;
     say('pubHint', '查詢中…');
     skelStart($('pubList'), more);
+    $('pubMore').hidden = true;   // 查詢中不能再按「載入更多」，免得兩個請求互相蓋掉
     try {
       const d = await tb.api.call('/fb/published?page=' + encodeURIComponent(page) + (more && pubNext ? '&after=' + encodeURIComponent(pubNext) : ''));
       if (my !== pubSeq) return;
@@ -161,7 +162,7 @@ export function createManage({ tb }) {
       }
       pubNext = d.next || null; $('pubMore').hidden = !pubNext;
       say('pubHint', ul.children.length ? `共 ${ul.children.length} 則` : '沒有已發佈貼文');
-    } catch (e) { if (my === pubSeq) { skelEnd($('pubList'), true); say('pubHint', errText(e), true); } }
+    } catch (e) { if (my === pubSeq) { skelEnd($('pubList'), true); $('pubMore').hidden = !pubNext; say('pubHint', errText(e), true); } }
   }
 
   $('schedReload').onclick = loadSched;
