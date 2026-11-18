@@ -100,6 +100,14 @@ document.querySelector('.skip').addEventListener('click', (e) => {
   focusTool();
 });
 
+// 工具回報「忙碌中」（tb.busy）：有任何工具忙碌時，關分頁／重新整理／離開網站先確認
+const busyTools = new Map();
+window.addEventListener('beforeunload', (e) => {
+  if (!busyTools.size) return;
+  e.preventDefault();
+  e.returnValue = [...busyTools.values()][0];
+});
+
 window.tbxShell = {
   getStatus: (id) => statuses.get(id) || { state: 'checking', text: '' },
   setStatus(id, value) {
@@ -111,6 +119,7 @@ window.tbxShell = {
   onCompany(fn) { companySubs.add(fn); return () => companySubs.delete(fn); },
   focusTool: (id) => { if (byId(id)) set(L.open(state, id)); },
   openInstall: () => openInstall(),
+  setBusy(id, msg) { if (msg) busyTools.set(String(id), String(msg)); else busyTools.delete(String(id)); },
   // 內部掛點：給 company.js 等外殼模組使用，不屬於 SDK。
   _internal: {
     panes,

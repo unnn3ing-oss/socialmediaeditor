@@ -31,6 +31,7 @@
 | `tb.assets.admin()` | 是否為網站管理密碼登入（`adm:1`）；是的話工具可把公司版與通用版都列出來（目前用在貼圖） | `if (tb.assets.admin()) …` |
 | `tb.company.staff()` | 員工編號登入時回 `{ id, name, group }`，其他登入方式或未登入回 `null` | `const me = tb.company.staff()` |
 | `tb.company.login()` | 請外殼跳出登入視窗（員工編號／公司密碼） | `tb.company.login()` |
+| `tb.busy(訊息或 null)` | 正在做不能中斷的事（例：上傳中）：關分頁、重新整理、離開網站前由瀏覽器確認；傳 `null` 解除。外殼切換工具不會中斷工具（iframe 只隱藏） | `tb.busy('影片上傳中')` |
 | `tb.status.get(id)` | 讀外殼狀態（`{ state, text }`）；單獨開啟工具頁時回「請從小編工具箱開啟」 | `tb.status.get('extension')` |
 | `tb.status.on(fn)` | 狀態改變時通知，回傳取消函式 | `const off = tb.status.on((id, v) => {})` |
 

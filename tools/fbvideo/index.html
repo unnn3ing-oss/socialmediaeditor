@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>影片發布</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../../ui/tokens.css">
+<link rel="stylesheet" href="fbvideo.css">
+</head>
+<body>
+<main class="off" id="offMain">
+  <section class="off-box" role="status" aria-labelledby="offTitle">
+    <h1 id="offTitle">影片發布 功能停用</h1>
+    <p>這個工具目前只開放給管理員測試。</p>
+    <p id="offReason" class="off-reason" hidden></p>
+    <div id="needStaff" hidden>
+      <p class="off-reason">影片發布需要用員工編號登入</p>
+      <button type="button" class="btn btn-primary" id="needStaffBtn">用員工編號登入</button>
+    </div>
+  </section>
+</main>
+
+<main class="fv" id="app" hidden>
+  <header class="fv-head">
+    <h1>影片發布</h1>
+    <span class="pill" id="pagesState">已連線 0 個粉專</span>
+    <span class="who" id="whoAmI" hidden></span>
+    <span class="pill pill-warn test-pill">測試模式（僅管理員）</span>
+    <span class="grow"></span>
+    <div class="seg" role="tablist" aria-label="分頁" id="tabs">
+      <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="new">新增影片</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="log">送出紀錄</button>
+    </div>
+  </header>
+
+  <!-- 新增影片 -->
+  <section id="tab-new" class="fv-new">
+    <div class="drop" id="drop">
+      <input type="file" id="fileIn" accept="video/mp4,video/quicktime,.mp4,.mov" multiple hidden>
+      <button type="button" class="btn btn-secondary" id="pickBtn">選擇影片</button>
+      <span class="hint">或把影片拖到這裡（mp4／mov，可一次多支）</span>
+    </div>
+
+    <details class="vq" id="vq" hidden>
+      <summary><span id="vqSum">影片</span><span class="vq-caret" aria-hidden="true"></span></summary>
+      <ul class="vq-list" id="vqList" aria-label="影片列表"></ul>
+    </details>
+
+    <div id="editors"></div>
+    <p class="empty hint" id="emptyHint">還沒有影片。選好粉專與影片後會在背景開始上傳，上傳時可以繼續填文案。</p>
+  </section>
+
+  <!-- 送出紀錄 -->
+  <section id="tab-log" class="card" hidden>
+    <div class="bar">
+      <button type="button" class="btn btn-secondary btn-sm" id="logReload">刷新</button>
+      <p class="hint" id="logHint" role="status">按「刷新」讀取最近 7 天這個工具送出的影片</p>
+    </div>
+    <ul class="log" id="logList"></ul>
+  </section>
+
+  <footer class="fv-foot" id="foot">
+    <div class="foot-row">
+      <span class="foot-lbl">粉專</span>
+      <div class="chips" id="pageChips" role="group" aria-label="發布到哪些粉專"></div>
+    </div>
+    <div class="foot-row">
+      <span class="foot-lbl">時間</span>
+      <div class="seg seg-sm" id="timeModeSeg" role="group" aria-label="時間設定方式">
+        <button type="button" data-tm="all" class="is-on" aria-pressed="true">全部統一</button>
+        <button type="button" data-tm="each" aria-pressed="false">每支各自</button>
+      </div>
+      <div class="when" id="allWhen"></div>
+      <span class="grow"></span>
+      <label class="switch-wrap rd-wrap"><input type="checkbox" class="switch" id="rdOn"> 排入 RD</label>
+    </div>
+    <div class="foot-row foot-act">
+      <p class="hint" id="footMsg" role="status"></p>
+      <span class="grow"></span>
+      <button type="button" class="btn btn-secondary" id="stopBtn" hidden>停止上傳</button>
+      <button type="button" class="btn btn-primary" id="sendBtn">全部送出</button>
+    </div>
+  </footer>
+</main>
+
+<!-- 每支影片的編輯區（隱藏切換，內容保留） -->
+<template id="edTpl">
+  <section class="ed card">
+    <div class="ed-grid">
+      <div class="ed-left">
+        <video class="pv" controls preload="metadata" playsinline></video>
+        <p class="meta hint"></p>
+        <div class="up">
+          <div class="bar-track"><div class="bar-fill"></div></div>
+          <p class="up-text hint" role="status"></p>
+          <ul class="jobs"></ul>
+          <button type="button" class="btn btn-secondary btn-sm restart" hidden>重新上傳</button>
+        </div>
+      </div>
+      <fieldset class="ed-right">
+        <legend class="sr">影片內容</legend>
+        <div class="row">
+          <span class="lbl">類型</span>
+          <div class="seg seg-sm kind" role="group" aria-label="影片類型">
+            <button type="button" data-kind="video" aria-pressed="false">橫式影片</button>
+            <button type="button" data-kind="reel" aria-pressed="false">Reels</button>
+          </div>
+          <span class="kind-why hint"></span>
+        </div>
+        <p class="kind-warn warn" hidden></p>
+        <label class="lbl">臉書標題<input type="text" class="title" maxlength="255"></label>
+        <label class="lbl">貼文內容<textarea class="msg" rows="7"></textarea></label>
+        <p class="msg-warn warn" hidden></p>
+        <div class="tags" role="group" aria-label="hashtag"></div>
+        <label class="lbl">影片授權<input type="text" class="lic" placeholder="照原樣放在 hashtag 下一行，空白＝不放"></label>
+        <div class="when-each" hidden>
+          <span class="lbl">時間</span>
+          <div class="when"></div>
+        </div>
+        <div class="cm">
+          <div class="cm-list"></div>
+          <button type="button" class="btn btn-secondary btn-sm cm-add">＋ 新增留言</button>
+        </div>
+        <label class="lbl rd-slug-l">RD SLUG<input type="text" class="slug" maxlength="20"></label>
+      </fieldset>
+    </div>
+  </section>
+</template>
+
+<div class="toast" id="toast" role="alert" hidden></div>
+
+<dialog class="dlg" id="cfDlg" aria-labelledby="cfTitle">
+  <h2 id="cfTitle"></h2>
+  <p id="cfBody"></p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="cfNo">返回</button>
+    <button type="button" class="btn btn-primary" id="cfYes">確定</button>
+  </div>
+</dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>

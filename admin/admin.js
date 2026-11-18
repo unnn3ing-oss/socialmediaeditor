@@ -239,7 +239,7 @@ if (window.top !== window.self) {
   var fbLoaded = false;
   function fbLoad() {
     fbLoaded = true; say($('fbMsg'), '');
-    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad()]);
+    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad()]);
   }
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
@@ -272,6 +272,28 @@ if (window.top !== window.self) {
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbRefresh').disabled = false; });
   };
+  // ---- 影片設定（/admin/fb/video-settings）----
+  function vsLines(id) { return $(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
+  function vsShow(d) { $('vsPre').value = d.prefixes.join('\n'); $('vsSuf').value = d.suffixes.join('\n'); $('vsReels').value = d.reelsTag; $('vsTags').value = d.tags.join('\n'); }
+  function vsLoad() {
+    say($('vsMsg'), '讀取中');
+    return api('/admin/fb/video-settings').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      vsShow(res.data); say($('vsMsg'), '');
+    }).catch(function (e) { say($('vsMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('vsSave').onclick = function () {
+    var body = { prefixes: vsLines('vsPre'), suffixes: vsLines('vsSuf'), reelsTag: $('vsReels').value.trim(), tags: vsLines('vsTags') };
+    if (body.prefixes.length > 20 || body.suffixes.length > 20 || body.tags.length > 20) return say($('vsMsg'), '前綴、後綴、hashtag 按鈕各最多 20 個。', 'err');
+    $('vsSave').disabled = true; say($('vsMsg'), '儲存中');
+    api('/admin/fb/video-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (res.ok) { vsShow(res.data); say($('vsMsg'), '已儲存', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('vsMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('vsMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('vsSave').disabled = false; });
+  };
+
   // ---- 活動留言（/admin/fb/presets）----
   var psItems = [];   // { name, body }
   var PS_MAX = 20;

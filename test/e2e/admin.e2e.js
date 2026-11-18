@@ -14,6 +14,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 
 let PG_SAVED = null;
 let PS_SAVED = null;
+let VS_SAVED = null;
 let TOK_SAVED = null;
 let AC = { mode: 'admin', reason: '' };
 const PAGES = [
@@ -28,6 +29,8 @@ const DATA = {
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
+  'GET /admin/fb/video-settings': { prefixes: ['1118_'], suffixes: [], reelsTag: '#焦點新聞影音都在TVBS', tags: ['#國際'] },
+  'POST /admin/fb/video-settings': (b) => { VS_SAVED = b; return b; },
   'POST /admin/fb/refresh': {},
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
@@ -250,6 +253,19 @@ test('Rundown 分類：測試連線打 /admin/rundown/ping 並顯示試算表名
   await page.click('#rdPing');
   await page.waitForFunction(() => /連線正常：FB RUNDOWN\(2026\)/.test(document.getElementById('rdMsg').textContent));
   assert.ok(calls.some((c) => c.key === 'POST /admin/rundown/ping' && c.auth === 'Bearer T'));
+});
+
+test('影片設定：讀到既有設定；每行一個，儲存時去空白行', async () => {
+  VS_SAVED = null;
+  const { page } = await open({ width: 1280, height: 860 }, '#fb');
+  await login(page);
+  await page.waitForFunction(() => document.getElementById('vsReels').value === '#焦點新聞影音都在TVBS');
+  assert.equal(await page.inputValue('#vsPre'), '1118_');
+  await page.fill('#vsSuf', '_v2\n\n_final ');
+  await page.fill('#vsTags', '#國際\n#TVBS新聞');
+  await page.click('#vsSave');
+  await page.waitForFunction(() => document.getElementById('vsMsg').textContent === '已儲存');
+  assert.deepEqual(VS_SAVED, { prefixes: ['1118_'], suffixes: ['_v2', '_final'], reelsTag: '#焦點新聞影音都在TVBS', tags: ['#國際', '#TVBS新聞'] });
 });
 
 test('活動留言：顯示既有兩則；新增、刪除後儲存，body 依順序', async () => {

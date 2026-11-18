@@ -211,6 +211,17 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
 </section>
 
+<section class="card" id="vsCard">
+<h2>影片設定（影片發布）</h2>
+<p>影片檔名轉標題時要去掉的前綴／後綴（<code>Reels_</code>、<code>Shorts_</code> 一定會去掉，不用填），檔名開頭是 <code>Reels_</code> 時自動加的 hashtag，以及發文時可以按的 hashtag 按鈕。每行一個，各最多 20 個。</p>
+<p class="msg" id="vsMsg" role="status"></p>
+<label>要去掉的前綴（例：<code>1118_</code>）<textarea id="vsPre" rows="3"></textarea></label>
+<label>要去掉的後綴（例：<code>_v2</code>）<textarea id="vsSuf" rows="3"></textarea></label>
+<label>Reels 自動 hashtag（空白＝不加）<input type="text" id="vsReels" maxlength="100"></label>
+<label>hashtag 按鈕（每行一個，例：<code>#國際</code>）<textarea id="vsTags" rows="4"></textarea></label>
+<div class="row"><button id="vsSave" class="primary" type="button">儲存</button></div>
+</section>
+
     <section class="card" id="rdCard">
       <h2>Rundown 連線</h2>
       <p>Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。這裡只檢查有沒有設定與連不連得上，不顯示網址與金鑰。</p>
@@ -472,7 +483,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   }
   function fbLoad() {
     say($('fbMsg'), '');
-    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad()]);
+    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad()]);
   }
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
@@ -505,6 +516,28 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbRefresh').disabled = false; });
   };
+  // ---- 影片設定（/admin/fb/video-settings）----
+  function vsLines(id) { return $(id).value.split('\\n').map(function (s) { return s.trim(); }).filter(Boolean); }
+  function vsShow(d) { $('vsPre').value = d.prefixes.join('\\n'); $('vsSuf').value = d.suffixes.join('\\n'); $('vsReels').value = d.reelsTag; $('vsTags').value = d.tags.join('\\n'); }
+  function vsLoad() {
+    say($('vsMsg'), '讀取中');
+    return api('/admin/fb/video-settings').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      vsShow(res.data); say($('vsMsg'), '');
+    }).catch(function (e) { say($('vsMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('vsSave').onclick = function () {
+    var body = { prefixes: vsLines('vsPre'), suffixes: vsLines('vsSuf'), reelsTag: $('vsReels').value.trim(), tags: vsLines('vsTags') };
+    if (body.prefixes.length > 20 || body.suffixes.length > 20 || body.tags.length > 20) return say($('vsMsg'), '前綴、後綴、hashtag 按鈕各最多 20 個。', 'err');
+    $('vsSave').disabled = true; say($('vsMsg'), '儲存中');
+    api('/admin/fb/video-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (res.ok) { vsShow(res.data); say($('vsMsg'), '已儲存', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('vsMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('vsMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('vsSave').disabled = false; });
+  };
+
   // ---- 活動留言（/admin/fb/presets）----
   var psItems = [];   // { name, body }
   var PS_MAX = 20;

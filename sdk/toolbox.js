@@ -34,6 +34,20 @@ function login() {
   try { window.parent.dispatchEvent(new window.parent.CustomEvent('tbx:company-login', { detail: { fresh: true } })); } catch { /* 靜默 */ }
 }
 
+// 工具正在做不能中斷的事（例：影片上傳中）：關分頁／重新整理／離開網站前先由瀏覽器確認。
+//   在外殼裡交給外殼（外殼切工具時 iframe 只是隱藏、不會中斷）；單獨開啟工具頁時自己掛 beforeunload。
+let busyMsg = null;
+function onUnload(e) { if (!busyMsg) return; e.preventDefault(); e.returnValue = busyMsg; return busyMsg; }
+function busy(msg) {
+  busyMsg = msg ? String(msg) : null;
+  let viaShell = false;
+  try {
+    if (window.parent !== window && window.parent.tbxShell?.setBusy) { window.parent.tbxShell.setBusy(tb.toolId || 'unknown', busyMsg); viaShell = true; }
+  } catch { viaShell = false; }
+  window.removeEventListener('beforeunload', onUnload);
+  if (!viaShell && busyMsg) window.addEventListener('beforeunload', onUnload);
+}
+
 export const tb = {
   toolId: null,
   init(toolId) {
@@ -50,6 +64,7 @@ export const tb = {
   assets: createAssets({ api, getSpec, isCompany, isAdmin }),
   status: createStatus(),
   company: { staff: staffInfo, login },
+  busy,
 };
 
 globalThis.tb = tb;

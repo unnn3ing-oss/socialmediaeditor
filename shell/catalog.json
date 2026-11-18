@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=3379fff443"
+      "entry": "tools/pattern/index.html?v=d47cf81738"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=9afed0ad66"
+      "entry": "tools/linepush/index.html?v=8ddce8fbf6"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=75c13bf642"
+      "entry": "tools/collage/index.html?v=b593e4621c"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=dd0007a608"
+      "entry": "tools/watermark/index.html?v=6d8d21eb29"
     },
     {
       "id": "resize",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=1c3e8bb42d"
+      "entry": "tools/resize/index.html?v=431f5a189a"
     },
     {
       "id": "design",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=29d05a7ef8"
+      "entry": "tools/design/index.html?v=6d2dcb86fb"
     },
     {
       "id": "fbpost",
@@ -78,7 +78,21 @@
       ],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=8a96d855f2"
+      "entry": "tools/fbpost/index.html?v=e841e34014"
+    },
+    {
+      "id": "fbvideo",
+      "name": "影片發布",
+      "group": "發文與素材",
+      "desc": "多粉專上傳影片（橫式／Reels），測試中僅管理員可用",
+      "tier": "public",
+      "requires": [],
+      "badges": [
+        "管理員測試"
+      ],
+      "icon": "tools/fbvideo/icon.svg",
+      "thumb": "tools/fbvideo/thumb.svg",
+      "entry": "tools/fbvideo/index.html?v=c5d009a2b1"
     },
     {
       "id": "livereq",
@@ -89,7 +103,7 @@
       "requires": [],
       "icon": "tools/livereq/icon.svg",
       "thumb": "tools/livereq/thumb.svg",
-      "entry": "tools/livereq/index.html?v=f30460bd3e"
+      "entry": "tools/livereq/index.html?v=63c672dec8"
     },
     {
       "id": "ytdl",
@@ -103,7 +117,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=9494841160"
+      "entry": "tools/ytdl/index.html?v=88069d5232"
     }
   ]
 }

@@ -88,6 +88,17 @@
       <div id="psRows"></div>
       <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
       </section>
+
+<section class="card" id="vsCard">
+<h2>影片設定（影片發布）</h2>
+<p>影片檔名轉標題時要去掉的前綴／後綴（<code>Reels_</code>、<code>Shorts_</code> 一定會去掉，不用填），檔名開頭是 <code>Reels_</code> 時自動加的 hashtag，以及發文時可以按的 hashtag 按鈕。每行一個，各最多 20 個。</p>
+<p class="msg" id="vsMsg" role="status"></p>
+<label>要去掉的前綴（例：<code>1118_</code>）<textarea id="vsPre" rows="3"></textarea></label>
+<label>要去掉的後綴（例：<code>_v2</code>）<textarea id="vsSuf" rows="3"></textarea></label>
+<label>Reels 自動 hashtag（空白＝不加）<input type="text" id="vsReels" maxlength="100"></label>
+<label>hashtag 按鈕（每行一個，例：<code>#國際</code>）<textarea id="vsTags" rows="4"></textarea></label>
+<div class="row"><button id="vsSave" class="primary" type="button">儲存</button></div>
+</section>
     </div>
 
     <!-- 授權名單 -->

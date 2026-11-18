@@ -14,14 +14,15 @@ export function readCompany(storage, nowMs = Date.now()) {
 // fetchFn、storage、now 可注入，方便 Node 測試。
 export function createApi({ fetchFn = (...a) => globalThis.fetch(...a), storage = globalThis.localStorage, base = API_BASE, now = Date.now } = {}) {
   return {
-    async call(path, { method = 'GET', body, raw = false } = {}) {
+    // binary：body（Blob／ArrayBuffer）原樣送出，回應照常解析 JSON
+    async call(path, { method = 'GET', body, raw = false, binary = false } = {}) {
       const headers = {};
       const cred = readCompany(storage, now());
       if (cred) headers.Authorization = `Bearer ${cred.token}`;
       const init = { method, headers };
       if (body !== undefined) {
         // raw 或 FormData（multipart，瀏覽器自己帶 boundary）原樣送出
-        if (raw || (typeof FormData !== 'undefined' && body instanceof FormData)) init.body = body;
+        if (raw || binary || (typeof FormData !== 'undefined' && body instanceof FormData)) init.body = body;
         else { headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
       }
       const res = await fetchFn(base + path, init);

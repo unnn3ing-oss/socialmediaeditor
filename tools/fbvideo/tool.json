@@ -1,0 +1,16 @@
+{
+  "id": "fbvideo",
+  "name": "影片發布",
+  "group": "發文與素材",
+  "desc": "多粉專上傳影片（橫式／Reels），測試中僅管理員可用",
+  "icon": "icon.svg",
+  "thumb": "thumb.svg",
+  "entry": "index.html",
+  "tier": "public",
+  "requires": [],
+  "badges": ["管理員測試"],
+  "assets": {},
+  "ext": null,
+  "api": null,
+  "sdk": 1
+}
