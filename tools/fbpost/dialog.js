@@ -29,7 +29,7 @@ export function createDialog({ beforeOpen } = {}) {
   $('dlgClose').addEventListener('click', close);
   // Esc：排程時間小視窗或確認對話開著時由它們自己處理
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || veil.hidden || !$('timePop').hidden || $('cfDlg').open || $('doneDlg').open) return;
+    if (e.key !== 'Escape' || veil.hidden || !$('timePop').hidden || !$('tpMenu').hidden || $('cfDlg').open || $('doneDlg').open) return;
     close();
   });
   return { open, close, isOpen: () => !veil.hidden };

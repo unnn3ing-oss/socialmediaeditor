@@ -200,10 +200,24 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   });
   assert.ok(off[0] <= 1 && off[1] <= 1, '置中偏差 ' + off);
 
-  // 排程時間小視窗：切排程 → 打 4 碼 → ↑ 加 10 分
+  // 右半先跳小選單（立即發布／排程發布…），目前是立即 → 「立即發布」標示
   await page.click(chip(222) + ' .chip-r');
+  await page.waitForSelector('#tpMenu:not([hidden])');
+  assert.equal(await page.isHidden('#timePop'), true, '先跳選單，不直接開時間視窗');
+  assert.deepEqual(await page.locator('#tpMenu [data-tp]').allTextContents(), ['立即發布', '排程發布…']);
+  assert.equal(await page.getAttribute('#tpMenu [data-tp=now]', 'aria-checked'), 'true');
+  assert.equal(await page.$eval('#tpMenu [data-tp=now]', (b) => b === document.activeElement), true, '焦點在目前選項');
+  const mw = (await page.locator('#tpMenu').boundingBox()).width;
+  assert.ok(mw < 160, '選單貼合文字寬度 ' + mw);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#tpMenu', { state: 'hidden' });
+  assert.equal(await page.isVisible('#postDlg'), true, 'Esc 只關選單');
+  // 排程發布… → 排程時間小視窗（沒有立即／排程切換）：打 4 碼 → ↑ 加 10 分
+  await page.click(chip(222) + ' .chip-r');
+  await page.click('#tpMenu [data-tp=sched]');
   await page.waitForSelector('#timePop:not([hidden])');
-  await page.click('#timePop [data-tp=sched]');
+  assert.equal(await page.isHidden('#tpMenu'), true);
+  assert.equal(await page.locator('#timePop [data-tp]').count(), 0, '視窗內沒有立即／排程切換');
   const want = Math.ceil((Date.now() + 3 * 3600000) / 600000) * 600000;
   if (new Date(want).getDate() !== new Date().getDate()) await page.fill('#tpDate', `${new Date(want).getFullYear()}-${p2(new Date(want).getMonth() + 1)}-${p2(new Date(want).getDate())}`);
   await page.fill('#tpTime', '');
@@ -216,6 +230,16 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   await page.keyboard.press('Escape');
   await page.waitForSelector('#timePop', { state: 'hidden' });
   assert.equal(await page.isVisible('#postDlg'), true, 'Esc 先關小視窗，不關彈出視窗');
+  // 已排程再點右半：選單標示「排程發布…」；選「立即發布」切回立即
+  await page.click(chip(222) + ' .chip-r');
+  await page.waitForSelector('#tpMenu:not([hidden])');
+  assert.equal(await page.getAttribute('#tpMenu [data-tp=sched]', 'aria-checked'), 'true');
+  await page.click('#tpMenu [data-tp=now]');
+  await page.waitForSelector('#tpMenu', { state: 'hidden' });
+  assert.equal((await page.textContent(chip(222) + ' .chip-r')).trim(), '立即 ▾');
+  await page.click(chip(222) + ' .chip-r');
+  await page.click('#tpMenu [data-tp=sched]');
+  await page.keyboard.press('Escape');
 
   await pasteImage(page, fakeAsset());
   await page.waitForSelector('#cvEmpty', { state: 'hidden' });
@@ -302,7 +326,7 @@ test('管理員：排程時間超出範圍顯示紅字、不送出', async () =>
   await page.fill('#msg', 'x');
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(111) + ' .chip-r');
-  await page.click('#timePop [data-tp=sched]');
+  await page.click('#tpMenu [data-tp=sched]');
   await page.fill('#tpDate', '2020-01-01');
   await page.dispatchEvent('#tpDate', 'change');
   assert.match(await page.textContent('#tpHint'), /至少要晚 10 分鐘/);
@@ -320,7 +344,7 @@ test('排程時間快捷：+30 分、+1 小時、明天', async () => {
   await openPost(page);
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(111) + ' .chip-r');
-  await page.click('#timePop [data-tp=sched]');
+  await page.click('#tpMenu [data-tp=sched]');
   const read = () => page.evaluate(() => new Date(document.getElementById('tpDate').value + 'T' + document.getElementById('tpTime').value).getTime());
   const t0 = await read();
   await page.click('#timePop [data-q="30"]');
@@ -406,7 +430,7 @@ test('管理員手機 390px 無橫向捲動', async () => {
   await openPost(page);
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(111) + ' .chip-r');
-  await page.click('#timePop [data-tp=sched]');
+  await page.click('#tpMenu [data-tp=sched]');
   await page.fill('#msg', '手機'.repeat(40));
   await page.fill('#link', 'https://news.tvbs.com.tw/life/1234567890123456789');
   assert.ok((await overflow(page)) <= 0, '新增發文：' + (await overflow(page)));

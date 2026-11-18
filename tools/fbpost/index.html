@@ -146,10 +146,14 @@
   </section>
 </div>
 
+<!-- 粉專膠囊右半的小選單（立即發布／排程發布…） -->
+<div class="tp-menu" id="tpMenu" role="menu" aria-label="發布時間" hidden>
+  <button type="button" role="menuitemradio" data-tp="now">立即發布</button>
+  <button type="button" role="menuitemradio" data-tp="sched">排程發布…</button>
+</div>
 <!-- 排程時間小視窗（貼在點到的粉專膠囊上方） -->
 <div class="timepop" id="timePop" role="dialog" aria-label="排程時間" hidden>
   <h3>排程時間</h3>
-  <div class="seg tp-mode"><button type="button" data-tp="now">立即</button><button type="button" data-tp="sched">排程</button></div>
   <div class="tp-row">
     <input type="date" id="tpDate" aria-label="日期">
     <input type="text" id="tpTime" inputmode="numeric" maxlength="5" aria-label="時間">
