@@ -18,20 +18,20 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/staff.js`（新） | `staff`、`staff_groups`、`fb_audit` 三表（自動建立＋預設 3 組）；查詢、管理 API `/admin/staff*`、`/admin/audit`；稽核清理 | ⬜ |
-| `server/core/token.js` | 憑證帶 `uid` | ⬜ |
-| `server/core/auth.js` | `/auth` 接受 `{ staffId }`；`bearer()` 有 uid 就查名單；`/auth/status` 回 `staff`、續期保留 uid | ⬜ |
-| `server/core/http.js` | 錯誤碼 `bad_staff`、`fb_need_staff`、`fb_no_perm` | ⬜ |
-| `server/fb/access.js`、`server/fb/index.js` | 每條路由標所需權限；`GET /fb/me`；寫操作紀錄 | ⬜ |
-| `server/index.js`、`server/schema.sql` | 掛管理路由、cron 清 90 天紀錄 | ⬜ |
-| 子代理 A：`admin/`、`server/core/admin-page.js` | 「授權名單」分類（名單、權限組、操作紀錄）；開放／關閉說明文字 | ⬜ |
-| 子代理 B：`shell/company.js`、`tools/fbpost/` | 登入視窗「公司密碼／員工編號」分頁、頂列顯示姓名；排程發布依權限隱藏按鈕、`fb_need_staff` 提示 | ⬜ |
-| `privacy/`、`data-deletion/` | 加授權名單與操作紀錄兩列 | ⬜ |
+| `server/core/staff.js`（新） | `staff`、`staff_groups`、`fb_audit` 三表（自動建立＋預設 3 組）；查詢、管理 API `/admin/staff*`、`/admin/audit`；稽核清理 | ✅ |
+| `server/core/token.js` | 憑證帶 `uid` | ✅ |
+| `server/core/auth.js` | `/auth` 接受 `{ staffId }`；`bearer()` 有 uid 就查名單；`/auth/status` 回 `staff`、續期保留 uid | ✅ |
+| `server/core/http.js` | 錯誤碼 `bad_staff`、`fb_need_staff`、`fb_no_perm` | ✅ |
+| `server/fb/access.js`、`server/fb/index.js` | 每條路由標所需權限；`GET /fb/me`；寫操作紀錄 | ✅ |
+| `server/index.js`、`server/schema.sql` | 掛管理路由、cron 清 90 天紀錄 | ✅ |
+| 子代理 A：`admin/`、`server/core/admin-page.js` | 「授權名單」分類（名單、權限組、操作紀錄）；開放／關閉說明文字 | 🚧 |
+| 子代理 B：`shell/company.js`、`tools/fbpost/`、`sdk/` | 登入視窗「員工編號／公司密碼」分頁、頂列顯示姓名；排程發布依 `/fb/me` 隱藏按鈕、`fb_need_staff` 提示 | 🚧 |
+| `privacy/`、`data-deletion/` | 加授權名單與操作紀錄兩列 | ✅ |
 
 ## 下一步
-- [ ] 後端＋單元測試 → commit
-- [ ] 派子代理 A、B
-- [ ] 隱私權政策更新
+- [x] 後端＋單元測試 → commit `3999fd1`（npm test 631）
+- [x] 派子代理 A、B（sonnet，背景執行）
+- [x] 隱私權政策更新（授權名單、操作紀錄兩列）
 - [ ] 整合跑全部 e2e、獨立審查、截圖
 
 ## 測試
