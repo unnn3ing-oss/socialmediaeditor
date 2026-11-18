@@ -1,5 +1,5 @@
 # 排程發布防重複貼文（送出 ID＋待確認）
-- 狀態：進行中　- 分支：claude/sleepy-mendel-au8kxg　- 最後更新：2026-11-18
+- 狀態：已完成（已併入 main）　- 分支：claude/sleepy-mendel-au8kxg　- 最後更新：2026-11-18
 - 使用者原始需求：依 Meta 發布流程審查（交接檔 meta-publishing-review-handoff，未進 repo）的偏差 #1～#3，修正「逾時／部分失敗再送會重複發文」。使用者回「開始」。
 
 ## 審查結論（背景）
@@ -37,7 +37,7 @@
 - [x] 前端：sendId、換網址換新、待確認確認框（返回不送／確定帶 retry）、結果文字；rd.js 跳過 dup
 - [x] npm test 638、fbpost e2e 32、build --check 通過
 - [x] 獨立審查：修正後通過（`168f07d`：臉書回 5xx、讀不到內容、錯誤碼 1／2 也算待確認）；npm test 639、fbpost e2e 32
-- [ ] 給使用者看 → 使用者說「推」才併 main（同時更新 CLAUDE.md 目前進度）
+- [x] 給使用者看：使用者選方案 A（維持現行，不加後端整則完成標籤），說「推」→ 併入 main → 使用者說「推」才併 main（同時更新 CLAUDE.md 目前進度）
 
 ## 測試
 `node --test test/server/fb-post.test.js`、`npm test`、`npx playwright test test/e2e/fbpost.e2e.js --trace off`。
