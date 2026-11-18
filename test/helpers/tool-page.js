@@ -15,11 +15,13 @@ function fakeAsset(color = [255, 0, 255]) {
 
 // 回傳 { page, frame }：frame 是工具頁（沒密碼時就是 page.mainFrame()）。
 // opts.company = true 時：注入假憑證、假外殼，後端 /assets/<key> 回 opts.assets[key]（Buffer，預設洋紅假圖）。
-async function openTool(browser, srvUrl, id, { company = false, admin = false, assets = {}, viewport } = {}) {
+// opts.staff＝員工編號（假裝員工編號登入）；opts.api(route) 處理 /assets 以外的後端請求（回 true＝已處理）。
+async function openTool(browser, srvUrl, id, { company = false, admin = false, staff = '', api = null, assets = {}, viewport } = {}) {
   const page = await browser.newPage(viewport ? { viewport } : {});
   const requested = [];
   await page.route(API_BASE + '/**', (route) => {
     const m = /\/assets\/([^/?]+)/.exec(route.request().url());
+    if (!m && api && api(route)) return;
     if (!m) return route.fulfill({ status: 404, body: '' });
     const key = decodeURIComponent(m[1]);
     requested.push(key);
@@ -34,7 +36,7 @@ async function openTool(browser, srvUrl, id, { company = false, admin = false, a
   await page.addInitScript(() => {
     try { localStorage.setItem('tbx.company', JSON.stringify({ token: 'test', exp: Math.floor(Date.now() / 1000) + 3600 })); } catch {}
   });
-  await page.goto(srvUrl + 'test/fixtures/company-host.html?tool=' + encodeURIComponent(id) + (admin ? '&admin=1' : ''));
+  await page.goto(srvUrl + 'test/fixtures/company-host.html?tool=' + encodeURIComponent(id) + (admin ? '&admin=1' : '') + (staff ? '&staff=' + encodeURIComponent(staff) : ''));
   const handle = await page.waitForSelector('iframe[name=tool]');
   const frame = await handle.contentFrame();
   await frame.waitForLoadState('load');

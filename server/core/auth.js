@@ -1,6 +1,6 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
-import { findStaff, normId, touchLogin } from './staff.js';
+import { findStaff, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG } from './staff.js';
 
 export const MIN_SECRET = 32;
 const num = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
@@ -80,8 +80,23 @@ async function companyLogin(request, env) {
   return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, adm), exp, ...(adm ? { admin: true } : {}) });
 }
 
+// 員工自己的資料：GET 讀（姓名、權限組、分機），POST { contact } 只能改自己的分機
+async function staffMe(request, env) {
+  const t = await bearer(request, env, 'company');
+  if (!t) return fail(request, env, 'unauthorized');
+  if (!t.staff) return fail(request, env, 'fb_need_staff', '需要用員工編號登入。');
+  if (request.method === 'POST') {
+    const b = await readLogin(request);
+    const contact = b ? cleanContact(b.contact) : null;
+    if (contact === null) return fail(request, env, 'bad_request', CONTACT_MSG);
+    await setContact(env, t.staff.id, contact);
+  }
+  return ok(request, env, await getProfile(env, t.staff.id));
+}
+
 export async function handleAuth(request, env, path) {
   if (path === '/auth' && request.method === 'POST') return companyLogin(request, env);
+  if (path === '/staff/me' && (request.method === 'GET' || request.method === 'POST')) return staffMe(request, env);
   if (path === '/auth/status' && request.method === 'GET') {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');

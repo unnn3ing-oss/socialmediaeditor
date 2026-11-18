@@ -381,11 +381,18 @@ test('授權名單：切進分類才讀、顯示預設 3 組；新增、改權�
   assert.match(await page.textContent('#sfRows tr:nth-child(1)'), /\d{4}-\d\d-\d\d \d\d:\d\d/);
 
   // 新增
-  await page.fill('#sfId', 'B009'); await page.fill('#sfName', '新同仁'); await page.selectOption('#sfGroup', 'editor');
+  await page.fill('#sfId', 'B009'); await page.fill('#sfName', '新同仁'); await page.fill('#sfContact', '#12345'); await page.selectOption('#sfGroup', 'editor');
   await page.click('#sfAdd');
   await page.waitForFunction(() => document.querySelectorAll('#sfRows tr').length === 4);
-  assert.deepEqual(SF.bodies.pop(), { key: 'POST /admin/staff', body: { id: 'B009', name: '新同仁', group: 'editor' } });
+  assert.deepEqual(SF.bodies.pop(), { key: 'POST /admin/staff', body: { id: 'B009', name: '新同仁', group: 'editor', contact: '#12345' } });
   assert.equal(await page.inputValue('#sfId'), '');
+  assert.equal(await page.inputValue('#sfContact'), '');
+
+  // 分機／手機：改完離開欄位就存
+  await page.fill('#sfRows tr:nth-child(2) .sf-contact', ' 0912-345-678 ');
+  await page.press('#sfRows tr:nth-child(2) .sf-contact', 'Enter');
+  await page.waitForFunction(() => /分機／手機/.test(document.getElementById('sfMsg').textContent));
+  assert.deepEqual(SF.bodies.pop(), { key: 'POST /admin/staff/A002', body: { contact: '0912-345-678' } });
 
   // 改權限組
   await page.selectOption('#sfRows tr:nth-child(2) select', 'lead');

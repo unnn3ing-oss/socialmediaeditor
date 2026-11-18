@@ -168,3 +168,34 @@ test('操作紀錄：寫入、依編號篩選、管理憑證才能看、90 天�
   await cleanupAudit(env, Date.now());
   assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM fb_audit').get().n, 2);
 });
+
+test('分機：自己讀寫 /staff/me、格式驗證、只能改自己；公司密碼憑證不行；管理頁可改與新增時帶入', async (t) => {
+  const { env, adm } = await setup(t);
+  const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
+  const g = groupId(d, '檢視');
+  assert.equal((await post(env, adm, '/admin/staff', { id: 'C1', name: '甲', group: g, contact: 'abc' })).status, 400);
+  const add = await post(env, adm, '/admin/staff', { id: 'C1', name: '甲', group: g, contact: ' 0912-345-678 ' });
+  assert.equal(add.body.data.staff[0].contact, '0912-345-678');
+  await post(env, adm, '/admin/staff', { id: 'C2', name: '乙', group: g });
+  assert.equal((await call(env, '/staff/me')).status, 401);
+  const c = await call(env, '/auth', { method: 'POST', body: JSON.stringify({ password: 'company-pass-123' }) });
+  assert.equal((await call(env, '/staff/me', { headers: bearer(c.body.data.token) })).body.code, 'fb_need_staff');
+  const h = bearer((await login(env, 'C2')).body.data.token);
+  assert.deepEqual((await call(env, '/staff/me', { headers: h })).body.data, { id: 'C2', name: '乙', group: '檢視', contact: '' });
+  assert.equal((await post(env, h, '/staff/me', { contact: '1'.repeat(31) })).status, 400);
+  assert.equal((await post(env, h, '/staff/me', { contact: '<b>' })).status, 400);
+  const saved = await post(env, h, '/staff/me', { contact: '#12345', id: 'C1', name: '改名' });
+  assert.deepEqual(saved.body.data, { id: 'C2', name: '乙', group: '檢視', contact: '#12345' }, '只改自己的分機，不能改姓名或別人');
+  const list = (await call(env, '/admin/staff', { headers: adm })).body.data.staff;
+  assert.deepEqual(list.map((s) => [s.id, s.contact]), [['C1', '0912-345-678'], ['C2', '#12345']]);
+  assert.equal((await post(env, adm, '/admin/staff/C2', { contact: '' })).body.data.staff[1].contact, '');
+  assert.equal((await post(env, adm, '/admin/staff/C2', { contact: 'x' })).status, 400);
+});
+
+test('舊的 staff 表沒有 contact 欄：自動補上', async (t) => {
+  const { env, adm } = await setup(t);
+  env.DB.raw.exec('DROP TABLE staff; CREATE TABLE staff (id TEXT PRIMARY KEY, name TEXT NOT NULL, grp INTEGER NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, created INTEGER NOT NULL, updated INTEGER NOT NULL, last_login INTEGER)');
+  env.DB.raw.prepare("INSERT INTO staff (id, name, grp, enabled, created, updated) VALUES ('OLD', '舊', 1, 1, 1, 1)").run();
+  const r = await call(env, '/admin/staff', { headers: adm });
+  assert.equal(r.status, 200); assert.equal(r.body.data.staff[0].contact, '');
+});

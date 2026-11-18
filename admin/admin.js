@@ -406,6 +406,11 @@ if (window.top !== window.self) {
       var tg = document.createElement('td'), sel = sfGroupSelect(s.group, s.name + ' 的權限組');
       sel.onchange = function () { sel.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { group: sel.value }, $('sfMsg'), '已更新「' + s.name + '」的權限組。').then(function (ok) { if (!ok) sfRender(); }); };
       tg.appendChild(sel); tr.appendChild(tg);
+      // 分機／手機：改完按 Enter 或離開欄位就存（同事在直播需求單填的也會出現在這裡）
+      var tc = document.createElement('td'), ct = document.createElement('input');
+      ct.type = 'text'; ct.className = 'sf-contact'; ct.maxLength = 30; ct.value = s.contact || ''; ct.setAttribute('aria-label', s.name + ' 的分機／手機'); ct.placeholder = '未填';
+      ct.onchange = function () { ct.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { contact: ct.value.trim() }, $('sfMsg'), '已更新「' + s.name + '」的分機／手機。').then(function (ok) { if (!ok) { ct.disabled = false; ct.focus(); } }); };
+      tc.appendChild(ct); tr.appendChild(tc);
       var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
       tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
       var ac = sfEl('td', 'sf-ops');
@@ -467,10 +472,10 @@ if (window.top !== window.self) {
   }
   $('sfForm').onsubmit = function (e) {
     e.preventDefault();
-    var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value };
+    var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value, contact: $('sfContact').value.trim() };
     $('sfAdd').disabled = true; say($('sfMsg'), '新增中');
     sfCall('/admin/staff', 'POST', body, $('sfMsg'), '已新增「' + body.name + '」。').then(function (ok) {
-      if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfId').focus(); }
+      if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfContact').value = ''; $('sfId').focus(); }
       $('sfAdd').disabled = false;
     });
   };

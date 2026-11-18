@@ -13,6 +13,10 @@ export const DEFAULT_GROUPS = [
 ];
 export const STAFF_ID_RE = /^[A-Za-z0-9_-]{1,20}$/;
 export const MAX_NAME = 20;
+export const MAX_CONTACT = 30;
+// 分機／手機：數字、# - + 空白（含全形）括號，最多 30 字；空字串＝清除
+const CONTACT_RE = /^[0-9#+\-() \u3000（）]*$/;
+export const cleanContact = (v) => { if (typeof v !== 'string') return null; const s = v.trim(); return [...s].length <= MAX_CONTACT && CONTACT_RE.test(s) ? s : null; };
 export const MAX_STAFF = 500;
 export const MAX_GROUPS = 20;
 export const AUDIT_KEEP_DAYS = 90;
@@ -31,10 +35,12 @@ export async function ensureStaff(env) {
   if (!env.DB || ready.has(env.DB)) return;
   await env.DB.batch([
     env.DB.prepare('CREATE TABLE IF NOT EXISTS staff_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, perms TEXT NOT NULL, ord INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)'),
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS staff (id TEXT PRIMARY KEY, name TEXT NOT NULL, grp INTEGER NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, created INTEGER NOT NULL, updated INTEGER NOT NULL, last_login INTEGER)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS staff (id TEXT PRIMARY KEY, name TEXT NOT NULL, grp INTEGER NOT NULL, contact TEXT NOT NULL DEFAULT \'\', enabled INTEGER NOT NULL DEFAULT 1, created INTEGER NOT NULL, updated INTEGER NOT NULL, last_login INTEGER)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, uid TEXT NOT NULL, name TEXT NOT NULL, action TEXT NOT NULL, page TEXT NOT NULL DEFAULT \'\', post TEXT NOT NULL DEFAULT \'\', detail TEXT NOT NULL DEFAULT \'\')'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS fb_audit_at ON fb_audit(at)')
   ]);
+  // 舊表沒有 contact（分機／手機）就補欄位
+  try { await first(env, 'SELECT contact FROM staff LIMIT 1'); } catch { await run(env, "ALTER TABLE staff ADD COLUMN contact TEXT NOT NULL DEFAULT ''"); }
   const n = await first(env, 'SELECT COUNT(*) AS n FROM staff_groups');
   if (!n || !n.n) {
     const now = Date.now();
@@ -53,6 +59,17 @@ export async function findStaff(env, id) {
     if (!r || !r.enabled) return null;
     return { id: r.id, name: r.name, group: r.grp, groupName: r.gname || '', perms: r.gname ? parsePerms(r.perms) : [] };
   } catch { return null; }
+}
+
+// 自己的資料（直播需求單用）：{ id, name, group, contact }
+export async function getProfile(env, id) {
+  await ensureStaff(env);
+  const r = await first(env, 'SELECT s.id, s.name, s.contact, g.name AS gname FROM staff s LEFT JOIN staff_groups g ON g.id = s.grp WHERE s.id = ?', normId(id));
+  return r ? { id: r.id, name: r.name, group: r.gname || '', contact: r.contact || '' } : null;
+}
+export async function setContact(env, id, contact) {
+  await ensureStaff(env);
+  await run(env, 'UPDATE staff SET contact = ?, updated = ? WHERE id = ?', contact, Date.now(), normId(id));
 }
 
 export async function touchLogin(env, id) {
@@ -83,12 +100,13 @@ async function listGroups(env) {
   return rows.map((g) => ({ id: g.id, name: g.name, perms: parsePerms(g.perms), used: g.used }));
 }
 async function listStaff(env) {
-  const rows = await all(env, 'SELECT id, name, grp, enabled, created, last_login FROM staff ORDER BY id');
-  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null }));
+  const rows = await all(env, 'SELECT id, name, grp, contact, enabled, created, last_login FROM staff ORDER BY id');
+  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, contact: s.contact || '', enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null }));
 }
 const state = async (env) => ({ staff: await listStaff(env), groups: await listGroups(env), perms: PERMS.map((k) => ({ key: k, label: PERM_LABELS[k] })) });
 const groupExists = async (env, id) => Number.isInteger(id) && !!(await first(env, 'SELECT id FROM staff_groups WHERE id = ?', id));
 const bad = (request, env, msg) => fail(request, env, 'bad_request', msg);
+export const CONTACT_MSG = '分機／手機最多 ' + MAX_CONTACT + ' 字，只能有數字、#、-、+、空白和括號。';
 
 export async function adminStaff(request, env, path) {
   if (path !== '/admin/staff' && !path.startsWith('/admin/staff/') && path !== '/admin/staff-groups' && !path.startsWith('/admin/staff-groups/') && path !== '/admin/audit') return null;
@@ -97,10 +115,12 @@ export async function adminStaff(request, env, path) {
 
   if (path === '/admin/staff' && method === 'GET') return ok(request, env, await state(env));
 
-  // 新增：{ id, name, group }
+  // 新增：{ id, name, group, contact? }
   if (path === '/admin/staff' && method === 'POST') {
     const b = await readJson(request);
     const id = normId(b && b.id), name = cleanName(b && b.name), group = Number(b && b.group);
+    const contact = b && b.contact !== undefined ? cleanContact(b.contact) : '';
+    if (contact === null) return bad(request, env, CONTACT_MSG);
     if (!id) return bad(request, env, '員工編號只能是英數字、- 或 _，最多 20 字。');
     if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。');
     if (!(await groupExists(env, group))) return bad(request, env, '請選擇權限組。');
@@ -108,7 +128,7 @@ export async function adminStaff(request, env, path) {
     const n = await first(env, 'SELECT COUNT(*) AS n FROM staff');
     if (n && n.n >= MAX_STAFF) return bad(request, env, '名單最多 ' + MAX_STAFF + ' 人。');
     const now = Date.now();
-    await run(env, 'INSERT INTO staff (id, name, grp, enabled, created, updated) VALUES (?, ?, ?, 1, ?, ?)', id, name, group, now, now);
+    await run(env, 'INSERT INTO staff (id, name, grp, contact, enabled, created, updated) VALUES (?, ?, ?, ?, 1, ?, ?)', id, name, group, contact, now, now);
     return ok(request, env, await state(env));
   }
 
@@ -121,13 +141,14 @@ export async function adminStaff(request, env, path) {
       await run(env, 'DELETE FROM staff WHERE id = ?', id);
       return ok(request, env, await state(env));
     }
-    // 修改：{ name?, group?, enabled? }
+    // 修改：{ name?, group?, enabled?, contact? }
     if (method === 'POST') {
       const b = await readJson(request);
       if (!b || typeof b !== 'object') return bad(request, env);
       const sets = [], args = [];
       if (b.name !== undefined) { const name = cleanName(b.name); if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。'); sets.push('name = ?'); args.push(name); }
       if (b.group !== undefined) { const g = Number(b.group); if (!(await groupExists(env, g))) return bad(request, env, '請選擇權限組。'); sets.push('grp = ?'); args.push(g); }
+      if (b.contact !== undefined) { const c = cleanContact(b.contact); if (c === null) return bad(request, env, CONTACT_MSG); sets.push('contact = ?'); args.push(c); }
       if (b.enabled !== undefined) { if (typeof b.enabled !== 'boolean') return bad(request, env); sets.push('enabled = ?'); args.push(b.enabled ? 1 : 0); }
       if (!sets.length) return bad(request, env);
       sets.push('updated = ?'); args.push(Date.now());
