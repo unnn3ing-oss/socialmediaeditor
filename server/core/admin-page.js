@@ -60,6 +60,9 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.sk{animation:none}}
 .confirm{border:1px solid #f3c4c4;border-radius:18px;padding:16px;margin-top:16px;background:#fff6f6}
 [hidden]{display:none!important}
+.sf-add{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:8px 0 12px}.sf-f{margin:0;flex:1 1 150px;min-width:0;font-size:14px;color:var(--mute)}.sf-f input,.sf-f select{margin-top:4px;color:var(--ink);font-size:16px}
+.sf-table{min-width:640px}.sf-table th,.sf-table td,#auWrap th,#auWrap td{white-space:nowrap}.sf-table select{min-width:120px}.sf-ops{white-space:nowrap}.sf-ops button{margin-right:8px}
+.sg-row input[type=text]{max-width:320px}.sg-perms{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0}.sg-perm{display:flex;align-items:center;gap:6px;margin:0;font-weight:400;min-height:36px}.sg-perm input{width:20px;height:20px;min-height:0}.sg-used{color:var(--mute);font-size:14px}
 @media (max-width:600px){.top{padding:10px 16px}}
 </style>
 </head>
@@ -111,9 +114,61 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <p class="msg" id="listMsg" role="status"></p>
     </section>
 
+    <section class="card" id="sfCard">
+      <h2>授權名單</h2>
+      <p>只有名單內的人能用員工編號登入並使用排程發布。停用或移除後，對方下一次操作就會被擋。</p>
+      <form id="sfForm" class="sf-add">
+        <label class="sf-f">員工編號<input id="sfId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+        <label class="sf-f">姓名<input id="sfName" type="text" autocomplete="off" maxlength="20" required></label>
+        <label class="sf-f">權限組<select id="sfGroup"></select></label>
+        <button class="primary" type="submit" id="sfAdd">新增</button>
+      </form>
+      <div class="scroll" id="sfWrap" hidden>
+        <table class="sf-table">
+          <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead>
+          <tbody id="sfRows"></tbody>
+        </table>
+      </div>
+      <p id="sfEmpty" hidden>名單還是空的。</p>
+      <p class="msg" id="sfMsg" role="status"></p>
+      <section class="confirm" id="sfConfirm" hidden role="alertdialog" aria-labelledby="sfCfTitle">
+        <h2 id="sfCfTitle">確定要移除嗎？</h2>
+        <p id="sfCfText"></p>
+        <div class="row">
+          <button class="danger solid" id="sfCfYes" type="button">移除</button>
+          <button id="sfCfNo" type="button">先不要</button>
+        </div>
+      </section>
+    </section>
+
+    <section class="card" id="sgCard">
+      <h2>權限組</h2>
+      <p>每個人屬於一個權限組，權限組決定能做哪些事。改完按該組的「儲存」才會生效。</p>
+      <div id="sgRows"></div>
+      <div class="row"><button id="sgNew" type="button">＋ 新增權限組</button></div>
+      <p class="msg" id="sgMsg" role="status"></p>
+    </section>
+
+    <section class="card" id="auCard">
+      <h2>操作紀錄</h2>
+      <p>誰在什麼時候發布、排程、改時間或刪除了哪一則貼文，保存 90 天。</p>
+      <div class="sf-add">
+        <label class="sf-f">期間<select id="auDays"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select></label>
+        <label class="sf-f">員工編號（選填）<input id="auUid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <button id="auBtn" type="button">查詢</button>
+      </div>
+      <p class="msg" id="auMsg" role="status"></p>
+      <div class="scroll" id="auWrap" hidden>
+        <table>
+          <thead><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>動作</th><th>粉專 ID</th><th>貼文 ID</th></tr></thead>
+          <tbody id="auRows"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="card" id="acCard">
         <h2>排程發布</h2>
-        <p>關閉時只有用管理員密碼登入的人能用；公司帳號會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <p>開放時，授權名單內的人依權限組使用；關閉時，只有管理員密碼登入與權限組勾了「關閉時仍可使用」的人能用，其他人會看到「功能停用」和下面填的原因。用公司密碼登入的人一律不能用排程發布。切換後馬上生效，已排定的貼文與留言不受影響。</p>
         <p class="fb-state" id="acState">狀態：尚未讀取</p>
         <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
         <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>
@@ -203,7 +258,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   function expired() {
-    token = '';
+    token = ''; sfState = null;
     $('app').hidden = true; $('login').hidden = false;
     say($('loginMsg'), '登入已過期，請重新登入。', 'err');
   }
@@ -246,7 +301,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       if (res.ok) {
         token = res.data.token; $('pw').value = '';
         $('login').hidden = true; $('app').hidden = false; say($('loginMsg'), '');
-        load(); fbLoad(); rdLoad();
+        load(); fbLoad(); rdLoad(); sfLoad();
       } else say($('loginMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '登入失敗。'), 'err');
     }).catch(function () { say($('loginMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('loginBtn').disabled = false; });
@@ -538,6 +593,132 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       else say($('rdMsg'), res.error || '測試失敗。', 'err');
     }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('rdPing').disabled = false; });
+  };
+
+  // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
+  var sfState = null, sfPending = null;
+  var SF_ACT = { publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除' };
+  function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function sfCall(path, method, body, msgEl, done) {
+    var o = { method: method };
+    if (body) { o.headers = { 'Content-Type': 'application/json' }; o.body = JSON.stringify(body); }
+    return api(path, o).then(function (res) {
+      if (res.ok) { sfState = res.data; sfRender(); if (done) say(msgEl, done, 'good'); return true; }
+      if (res.code === 'unauthorized') { expired(); return false; }
+      say(msgEl, res.error || '操作失敗。', 'err'); return false;
+    }).catch(function () { say(msgEl, '連不上後端，請稍後再試。', 'err'); return false; });
+  }
+  function sfGroupSelect(cur, label) {
+    var s = document.createElement('select'); s.setAttribute('aria-label', label);
+    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; s.appendChild(o); });
+    s.value = cur; return s;
+  }
+  function sfRender() {
+    if (!sfState) return;
+    var keep = $('sfGroup').value;
+    $('sfGroup').textContent = '';
+    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('sfGroup').appendChild(o); });
+    if (keep) $('sfGroup').value = keep;
+    var tb = $('sfRows'); tb.textContent = '';
+    sfState.staff.forEach(function (s) {
+      var tr = document.createElement('tr');
+      tr.appendChild(sfEl('td', '', s.id)); tr.appendChild(sfEl('td', '', s.name));
+      var tg = document.createElement('td'), sel = sfGroupSelect(s.group, s.name + ' 的權限組');
+      sel.onchange = function () { sel.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { group: sel.value }, $('sfMsg'), '已更新「' + s.name + '」的權限組。').then(function (ok) { if (!ok) sfRender(); }); };
+      tg.appendChild(sel); tr.appendChild(tg);
+      var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
+      tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
+      var ac = sfEl('td', 'sf-ops');
+      var tgl = sfEl('button', '', s.enabled ? '停用' : '啟用'); tgl.type = 'button';
+      tgl.onclick = function () { tgl.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { enabled: !s.enabled }, $('sfMsg'), s.enabled ? '已停用「' + s.name + '」。' : '已啟用「' + s.name + '」。'); };
+      var del = sfEl('button', 'danger', '移除'); del.type = 'button';
+      del.onclick = function () { sfPending = s.id; $('sfCfText').textContent = s.name + '（' + s.id + '）會從名單移除，對方下一次操作就會被擋。'; $('sfConfirm').hidden = false; $('sfCfYes').focus(); };
+      ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
+      tb.appendChild(tr);
+    });
+    $('sfWrap').hidden = !sfState.staff.length; $('sfEmpty').hidden = !!sfState.staff.length;
+    sgRender();
+  }
+  function sgRow(g) {   // g：{ id, name, perms, used }；id 空白＝新增中的一組
+    var row = sfEl('div', 'pg-card sg-row');
+    var name = document.createElement('input'); name.type = 'text'; name.maxLength = 20; name.value = g.name; name.setAttribute('aria-label', '權限組名稱'); name.placeholder = '權限組名稱';
+    row.appendChild(name);
+    var boxes = sfEl('div', 'sg-perms');
+    sfState.perms.forEach(function (p) {
+      var l = sfEl('label', 'sg-perm'), c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key; c.checked = g.perms.indexOf(p.key) >= 0;
+      l.appendChild(c); l.appendChild(document.createTextNode(p.label)); boxes.appendChild(l);
+    });
+    row.appendChild(boxes);
+    var act = sfEl('div', 'row');
+    var save = sfEl('button', 'primary', '儲存'); save.type = 'button';
+    save.onclick = function () {
+      var nm = name.value.trim(); if (!nm) { name.focus(); return say($('sgMsg'), '請填權限組名稱。', 'err'); }
+      var perms = Array.prototype.filter.call(boxes.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+      var body = { name: nm, perms: perms }; if (g.id) body.id = g.id;
+      save.disabled = true; say($('sgMsg'), '儲存中');
+      sfCall('/admin/staff-groups', 'POST', body, $('sgMsg'), '已儲存「' + nm + '」。').then(function (ok) { if (!ok) save.disabled = false; });
+    };
+    var del = sfEl('button', 'danger', '刪除'); del.type = 'button';
+    if (!g.id) del.onclick = function () { row.remove(); };
+    else if (g.used > 0) { del.disabled = true; del.title = '還有 ' + g.used + ' 人使用'; }
+    else del.onclick = function () {
+      if (!window.confirm('刪除權限組「' + g.name + '」？')) return;
+      sfCall('/admin/staff-groups/' + encodeURIComponent(g.id), 'DELETE', null, $('sgMsg'), '已刪除「' + g.name + '」。');
+    };
+    act.appendChild(save); act.appendChild(del);
+    if (g.id) act.appendChild(sfEl('span', 'sg-used', g.used + ' 人使用'));
+    row.appendChild(act);
+    return row;
+  }
+  function sgRender() {
+    var box = $('sgRows'); box.textContent = '';
+    sfState.groups.forEach(function (g) { box.appendChild(sgRow(g)); });
+  }
+  $('sgNew').onclick = function () {
+    if (!sfState) return;
+    var r = sgRow({ id: '', name: '', perms: [], used: 0 }); $('sgRows').appendChild(r); r.querySelector('input').focus();
+  };
+  function sfLoad() {
+    say($('sfMsg'), '讀取中');
+    return api('/admin/staff').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      sfState = res.data; sfRender(); say($('sfMsg'), '');
+    }).catch(function (e) { say($('sfMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('sfForm').onsubmit = function (e) {
+    e.preventDefault();
+    var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value };
+    $('sfAdd').disabled = true; say($('sfMsg'), '新增中');
+    sfCall('/admin/staff', 'POST', body, $('sfMsg'), '已新增「' + body.name + '」。').then(function (ok) {
+      if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfId').focus(); }
+      $('sfAdd').disabled = false;
+    });
+  };
+  $('sfCfNo').onclick = function () { sfPending = null; $('sfConfirm').hidden = true; };
+  $('sfCfYes').onclick = function () {
+    var id = sfPending; if (!id) return;
+    $('sfCfYes').disabled = true;
+    sfCall('/admin/staff/' + encodeURIComponent(id), 'DELETE', null, $('sfMsg'), '已移除。').then(function () {
+      $('sfConfirm').hidden = true; sfPending = null; $('sfCfYes').disabled = false;
+    });
+  };
+  $('auBtn').onclick = function () {
+    var q = 'days=' + encodeURIComponent($('auDays').value), uid = $('auUid').value.trim();
+    if (uid) q += '&uid=' + encodeURIComponent(uid);
+    $('auBtn').disabled = true; say($('auMsg'), '查詢中');
+    api('/admin/audit?' + q).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('auMsg'), res.error || '查詢失敗。', 'err'); return; }
+      var tb = $('auRows'); tb.textContent = '';
+      res.data.forEach(function (r) {
+        var tr = document.createElement('tr');
+        tr.appendChild(sfEl('td', 'num', fmtTime(r.at))); tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
+        tr.appendChild(sfEl('td', '', SF_ACT[r.action] || r.action)); tr.appendChild(sfEl('td', 'num', r.page || '')); tr.appendChild(sfEl('td', 'num', r.post || ''));
+        tb.appendChild(tr);
+      });
+      $('auWrap').hidden = !res.data.length;
+      say($('auMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '這段期間沒有紀錄。');
+    }).catch(function () { say($('auMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('auBtn').disabled = false; });
   };
 
   $('logout').onclick = function () { token = ''; $('app').hidden = true; $('login').hidden = false; say($('loginMsg'), ''); };

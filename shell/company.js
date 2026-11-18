@@ -3,6 +3,7 @@ import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
 
+const TAB_KEY = 'tbx.loginTab';
 const isNetworkFailure = (e) => !e || !e.code || /^http_5/.test(e.code) || e.code === 'bad_response' || e.code === 'misconfigured';
 
 const mk = (tag, cls, text) => {
@@ -21,13 +22,49 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   const form = mk('form');
   form.method = 'dialog';
   const title = mk('h2', null, '登入公司帳號');
+  // 兩個分頁用 hidden 切換（不重建 DOM）：員工編號（預設）｜公司密碼
+  const tabs = mk('div', 'login-tabs');
+  tabs.setAttribute('role', 'tablist');
+  const tabStaff = mk('button', null, '員工編號');
+  const tabPw = mk('button', null, '公司密碼');
+  for (const [b, n] of [[tabStaff, 'staff'], [tabPw, 'password']]) { b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = n; }
+  tabs.append(tabStaff, tabPw);
+  const staffPane = mk('div');
+  const staffLabel = mk('label', 'field', '員工編號');
+  const staffInput = mk('input');
+  staffInput.type = 'text';
+  staffInput.name = 'staffId';
+  staffInput.autocomplete = 'username';
+  staffInput.autocapitalize = 'characters';
+  staffInput.setAttribute('inputmode', 'text');
+  staffInput.spellcheck = false;
+  staffLabel.appendChild(staffInput);
+  staffPane.append(staffLabel, mk('p', 'login-note', '有排程發布權限的同事用員工編號登入；其他工具也會一起解鎖。'));
+  const pwPane = mk('div');
   const label = mk('label', 'field', '公司密碼');
   const input = mk('input');
   input.type = 'password';
   input.name = 'password';
   input.autocomplete = 'off';
-  input.required = true;
   label.appendChild(input);
+  pwPane.appendChild(label);
+  let tab = 'staff';
+  try { if (storage.getItem(TAB_KEY) === 'password') tab = 'password'; } catch { /* 靜默 */ }
+  function setTab(n, focus = false) {
+    tab = n;
+    for (const b of [tabStaff, tabPw]) { const on = b.dataset.tab === n; b.classList.toggle('is-on', on); b.setAttribute('aria-selected', String(on)); }
+    staffPane.hidden = n !== 'staff';
+    pwPane.hidden = n !== 'password';
+    staffInput.required = n === 'staff';
+    input.required = n === 'password';
+    err.textContent = '';
+    if (focus) (n === 'staff' ? staffInput : input).focus();
+  }
+  tabs.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]'); if (!b) return;
+    setTab(b.dataset.tab, true);
+    try { storage.setItem(TAB_KEY, b.dataset.tab); } catch { /* 靜默 */ }
+  });
   const err = mk('p', null, '');
   err.setAttribute('role', 'alert');
   err.style.cssText = 'margin:8px 0 0;color:#b42318;font-size:14px;min-height:1.4em';
@@ -37,7 +74,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   const submit = mk('button', 'btn btn-primary', '解鎖');
   submit.type = 'submit';
   actions.append(cancel, submit);
-  form.append(title, label, err, actions);
+  form.append(title, tabs, staffPane, pwPane, err, actions);
+  setTab(tab);
   dlg.appendChild(form);
   document.body.appendChild(dlg);
 
@@ -45,8 +83,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     title.textContent = expired ? '公司密碼已過期' : '登入公司帳號';
     err.textContent = '';
     input.value = '';
+    staffInput.value = '';
+    setTab(tab);
     if (!dlg.open) dlg.showModal();
-    input.focus();
+    (tab === 'staff' ? staffInput : input).focus();
   }
   cancel.addEventListener('click', () => dlg.close());
   form.addEventListener('submit', async (e) => {
@@ -54,12 +94,14 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     err.textContent = '';
     submit.disabled = true;
     try {
-      const data = await api.call('/auth', { method: 'POST', body: { password: input.value } });
-      storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.admin ? { admin: true } : {}) }));
-      unlocked(data.exp, !!data.admin);
+      const body = tab === 'staff' ? { staffId: staffInput.value.trim() } : { password: input.value };
+      const data = await api.call('/auth', { method: 'POST', body });
+      storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.admin ? { admin: true } : {}), ...(data.staff ? { staff: data.staff } : {}) }));
+      unlocked(data.exp, !!data.admin, data.staff || null);
       dlg.close();
     } catch (ex) {
-      err.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試' : '密碼不對，請再試一次';
+      err.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試'
+        : (ex.code === 'bad_staff' ? '查不到這個員工編號，或已停用' : (tab === 'staff' ? '登入失敗，請再試一次' : '密碼不對，請再試一次'));
     } finally {
       submit.disabled = false;
     }
@@ -85,10 +127,11 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   // admin：前端用管理密碼登入（12 小時、不受暫停排程發布限制），剩餘時間改用小時
-  function unlocked(exp, admin = false) {
-    internal.setCompany({ unlocked: true, exp, admin: Boolean(admin) });
+  function unlocked(exp, admin = false, staff = null) {
+    internal.setCompany({ unlocked: true, exp, admin: Boolean(admin), staff: staff || null });
     const left = exp * 1000 - Date.now();
-    const text = admin ? `公司素材已解鎖（管理員），剩 ${Math.max(0, Math.ceil(left / 3600000))} 小時`
+    const text = staff && staff.name ? `${staff.name} 已登入，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`
+      : admin ? `公司素材已解鎖（管理員），剩 ${Math.max(0, Math.ceil(left / 3600000))} 小時`
       : `公司素材已解鎖，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`;
     shell.setStatus('company', { state: 'ok', text });
     button.hidden = true;
@@ -96,7 +139,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   function locked() {
-    internal.setCompany({ unlocked: false, exp: null, admin: false });
+    internal.setCompany({ unlocked: false, exp: null, admin: false, staff: null });
     shell.setStatus('company', { state: 'hidden', text: '' });
     button.hidden = false;
   }
@@ -129,7 +172,9 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     try {
       const data = await api.call('/auth/status');
       const now = readCompany(storage); // api.call 若收到 renew 會已更新
-      unlocked(now ? now.exp : data.exp, !!data.admin);
+      const staff = data.staff || null;
+      if (staff) { try { const c = readCompany(storage); if (c) storage.setItem(COMPANY_KEY, JSON.stringify({ ...c, staff })); } catch { /* 靜默 */ } }
+      unlocked(now ? now.exp : data.exp, !!data.admin, staff);
     } catch (e) {
       if (isNetworkFailure(e)) {
         if (!shell.company().unlocked) shell.setStatus('company', { state: 'warn', text: '無法確認公司密碼' });
@@ -140,7 +185,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   button.addEventListener('click', () => openLogin(false));
-  window.addEventListener('tbx:company-login', () => openLogin(true));
+  window.addEventListener('tbx:company-login', (e) => openLogin(!(e.detail && e.detail.fresh)));
   window.addEventListener('tbx:company-logout', () => { if (!out.open) out.showModal(); });
   shell.__checkCompany = check;
   setInterval(check, CHECK_INTERVAL);

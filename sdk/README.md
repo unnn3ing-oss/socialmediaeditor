@@ -29,6 +29,8 @@
 | `tb.assets.get(key)` | 取素材：公司模式先抓後端版，失敗退回通用版；回傳 `{ url }`、`{ upload: true }` 或 `null` | `const logo = await tb.assets.get('logo')` |
 | `tb.assets.getPublic(key)` | 一律取通用版（不打後端），回傳同 `get` | 管理員要同時列出通用版時用 |
 | `tb.assets.admin()` | 是否為網站管理密碼登入（`adm:1`）；是的話工具可把公司版與通用版都列出來（目前用在貼圖） | `if (tb.assets.admin()) …` |
+| `tb.company.staff()` | 員工編號登入時回 `{ id, name, group }`，其他登入方式或未登入回 `null` | `const me = tb.company.staff()` |
+| `tb.company.login()` | 請外殼跳出登入視窗（員工編號／公司密碼） | `tb.company.login()` |
 | `tb.status.get(id)` | 讀外殼狀態（`{ state, text }`）；單獨開啟工具頁時回「請從小編工具箱開啟」 | `tb.status.get('extension')` |
 | `tb.status.on(fn)` | 狀態改變時通知，回傳取消函式 | `const off = tb.status.on((id, v) => {})` |
 

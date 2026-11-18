@@ -20,7 +20,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 async function open() {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
   const page = await ctx.newPage();
-  const api = { statusCode: 200, authOk: true, authDown: false };
+  const api = { statusCode: 200, authOk: true, authDown: false, bodies: [] };
   await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
   await page.route('https://toolbox-api.19jpz-3.workers.dev/**', async (r) => {
     const req = r.request();
@@ -29,12 +29,19 @@ async function open() {
     const exp = Math.floor(Date.now() / 1000) + 30 * 86400;
     if (p === '/auth') {
       if (api.authDown) return r.abort();
+      const body = JSON.parse(req.postData());
+      api.bodies.push(body);
+      if (body.staffId !== undefined) {
+        if (body.staffId !== 'A123') return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'bad_staff', error: '查不到這個員工編號，或已停用。' } });
+        return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'stf', exp, staff: { id: 'A123', name: '王小明', group: '小編組' } } } });
+      }
       if (!api.authOk) return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'bad_password', error: 'x' } });
       if (JSON.parse(req.postData()).password === 'admin-pw') return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'adm', exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true } } });
       return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'tok', exp } } });
     }
     if (p === '/auth/status') {
       if (api.statusCode === 401) return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'unauthorized', error: 'x' } });
+      if (/stf/.test(req.headers().authorization || '')) return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp, staff: { id: 'A123', name: '王小明', group: '小編組' } } } });
       if (/adm/.test(req.headers().authorization || '')) return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true } } });
       return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp } } });
     }
@@ -47,7 +54,8 @@ async function open() {
 
 async function unlock(page, pw = 'good') {
   await page.click('#company-btn');
-  await page.fill('#company-dialog input', pw);
+  await page.click('#company-dialog [data-tab=password]');
+  await page.fill('#company-dialog input[name=password]', pw);
   await page.click('#company-dialog button[type=submit]');
 }
 
@@ -96,7 +104,7 @@ test('expiry pops login and keeps pane', async () => {
   assert.equal(await page.locator('.pane[data-tool=secret] .pane-lock').count(), 1);
 
   api.statusCode = 200;
-  await page.fill('#company-dialog input', 'good');
+  await page.fill('#company-dialog input[name=password]', 'good');
   await page.click('#company-dialog button[type=submit]');
   await page.waitForFunction(() => !document.querySelector('.pane-lock'));
   assert.equal(await page.frameLocator('.pane[data-tool=secret] iframe').locator('#t').inputValue(), '機密內容');
@@ -113,7 +121,7 @@ test('cancel keeps locked', async () => {
   api.statusCode = 401;
   await page.evaluate(() => window.tbxShell.__checkCompany());
   await page.waitForSelector('#company-dialog[open]');
-  await page.click('#company-dialog button[type=button]'); // 取消
+  await page.click('#company-dialog .actions button[type=button]'); // 取消
   assert.equal(await page.isVisible('#company-dialog'), false);
   assert.equal(await page.locator('.pane[data-tool=secret] .pane-lock').count(), 1);
   await page.click('.pane[data-tool=secret] .pane-lock button');
@@ -139,4 +147,41 @@ test('管理密碼登入：解鎖公司工具，膠囊顯示（管理員）剩 1
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tbx.company')).admin), true);
   await page.reload();
   await page.waitForFunction(() => /（管理員），剩 1[12] 小時/.test(document.querySelector('#status [data-status=company]')?.textContent || ''));
+});
+
+test('員工編號分頁：預設、送 staffId、成功顯示姓名、tb.company.staff 讀得到', async () => {
+  const { page, api } = await open();
+  await page.click('#company-btn');
+  assert.equal(await page.locator('#company-dialog [data-tab=staff]').getAttribute('aria-selected'), 'true');
+  assert.equal(await page.isVisible('#company-dialog input[name=staffId]'), true);
+  assert.equal(await page.isVisible('#company-dialog input[name=password]'), false);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/login-staff.png' });
+  await page.fill('#company-dialog input[name=staffId]', 'A123');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  assert.deepEqual(api.bodies, [{ staffId: 'A123' }]);
+  assert.match(await page.textContent('#status [data-status=company]'), /王小明 已登入，剩 30 天/);
+  assert.deepEqual(await page.evaluate(() => window.tbxShell.company().staff), { id: 'A123', name: '王小明', group: '小編組' });
+  await page.reload();
+  await page.waitForFunction(() => /王小明 已登入/.test(document.querySelector('#status [data-status=company]')?.textContent || ''));
+});
+
+test('員工編號查無：顯示 bad_staff 錯誤；切到公司密碼分頁仍送 password，重新整理記得分頁', async () => {
+  const { page, api } = await open();
+  await page.click('#company-btn');
+  await page.fill('#company-dialog input[name=staffId]', 'ZZZ');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForFunction(() => document.querySelector('#company-dialog [role=alert]').textContent.includes('查不到這個員工編號，或已停用'));
+  await page.click('#company-dialog [data-tab=password]');
+  assert.equal(await page.isVisible('#company-dialog input[name=staffId]'), false);
+  await page.fill('#company-dialog input[name=password]', 'good');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  assert.deepEqual(api.bodies, [{ staffId: 'ZZZ' }, { password: 'good' }]);
+  await page.evaluate(() => localStorage.removeItem('tbx.company'));
+  await page.reload();
+  await page.waitForSelector('#showcase .card');
+  await page.click('#company-btn');
+  assert.equal(await page.locator('#company-dialog [data-tab=password]').getAttribute('aria-selected'), 'true');
+  assert.equal(await page.isVisible('#company-dialog input[name=password]'), true);
 });

@@ -119,7 +119,7 @@ export function createManage({ tb }) {
           catch (e) { say('schedHint', errText(e), true); }
         });
         edit.append(dt, ok);
-        const bEdit = btn('改時間', 'btn-secondary', () => {
+        const bEdit = btn('改時間', 'btn-secondary act-time', () => {
           const { min, max } = bounds(); dt.min = min; dt.max = max; dt.value = toLocalInput(it.at * 1000); edit.hidden = !edit.hidden;
         });
         const bCancel = btn('刪除', 'btn-secondary btn-del', async () => {
