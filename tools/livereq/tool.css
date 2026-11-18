@@ -62,8 +62,8 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 /* 底列：左狀態鈕、右上一張＋複製並下一張 */
 .lr-bar { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
 .lr-bar[hidden], .lr-stage[hidden] { display: none; }
-/* 窄螢幕：底列黏在畫面最下方，內容再長也看得到複製鈕 */
-.lr-bar { position: sticky; bottom: 8px; z-index: 2; box-shadow: 0 -4px 16px rgba(16,24,40,.06); }
+/* 平板／窄視窗：底列黏在畫面最下方，內容再長也看得到複製鈕（手機 ≤560px 底列太高，維持原位） */
+@media (min-width: 561px) { .lr-bar { position: sticky; bottom: 8px; z-index: 2; box-shadow: 0 -4px 16px rgba(16,24,40,.06); } }
 .lr-st-group { flex: 1 1 420px; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .lr-acts { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .lr-acts .btn { height: 44px; white-space: nowrap; }

@@ -14,5 +14,12 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| tools/livereq/tool.css、tool.js、index.html | 兩欄、電腦版不縮合、改名 | ⬜ |
-| test/e2e/livereq.e2e.js | 1440 兩欄不捲、不縮合、<1024 維持、320 無溢位 | ⬜ |
+| tools/livereq/tool.css、tool.js、index.html | 兩欄（左 460px）、電腦版不縮合（`matchMedia` 切換會重算）、改名「成品」、右欄空白提示 `.lr-ph`、貼上後原稿捲回開頭 | ✅ |
+| test/e2e/livereq.e2e.js | 1440 兩欄、勾粉專不撐高、底列不動；900 縮合；窄螢幕底列黏底 | ✅ |
+
+## 使用者中途追加
+- 勾粉專後完整需求單變長會把頁面撐高 → 電腦版完整需求單框固定填滿右欄（`flex: 1 1 0`），超出在框內捲動，底列固定在畫面底部；561px～1023px 底列 `position: sticky` 黏底；手機 ≤560px 底列太高（審查提醒佔 40%），維持原位。
+
+## 結果
+- npm test 619、e2e 184、build --check 通過；獨立審查（sonnet）通過，無須修改。
+- 待使用者看圖後說「推」。
