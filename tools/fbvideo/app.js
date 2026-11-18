@@ -119,7 +119,7 @@ function addFiles(files) {
     v.ed.showEach(S.timeMode === 'each');
     $('editors').append(v.ed.el);
     S.videos.push(v);
-    readMeta(v);
+    v.metaP = readMeta(v);
     v.ed.kindInfo(); v.ed.renderUpload();
     select(v);
   }
@@ -129,8 +129,10 @@ function addFiles(files) {
   sync();
 }
 // 長寬與長度：讀到後重判類型（只在沒手動改過、還沒開始上傳時）
+// 回傳 Promise：讀到（或讀不到、逾時 4 秒）才 resolve；開始上傳前要等它，否則類型會在上傳開始後才被改判而和後端不一致
 function readMeta(v) {
   const pv = v.ed.el.querySelector('.pv');
+  const settled = new Promise((res) => { pv.addEventListener('loadedmetadata', res, { once: true }); pv.addEventListener('error', res, { once: true }); setTimeout(res, 4000); });
   pv.addEventListener('loadedmetadata', () => {
     v.width = pv.videoWidth; v.height = pv.videoHeight; v.duration = pv.duration;
     const k = autoKind(v.name, v.width, v.height);
@@ -138,6 +140,7 @@ function readMeta(v) {
     v.ed.setMeta(); v.ed.kindInfo(); renderQueue();
     if (!v.jobs.length) sync();
   }, { once: true });
+  return settled;
 }
 
 const edCtx = {
@@ -236,6 +239,7 @@ async function ensureStarted(v) {
   if (!pages.length || v.upload === 'stopped' || v.upload === 'error' || v.sent || v.starting) return;
   v.starting = true;
   try {
+    if (v.metaP) { await v.metaP; v.metaP = null; }
     const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: v.kind, pages } });
     apply(v, r);
     v.next = r.next;

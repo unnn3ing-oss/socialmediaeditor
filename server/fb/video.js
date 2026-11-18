@@ -43,6 +43,13 @@ async function rows(env, uploadId) {
   const { results } = await env.DB.prepare('SELECT * FROM fb_video_jobs WHERE upload_id = ? ORDER BY created, page').bind(uploadId).all();
   return results || [];
 }
+// 只有工作還在 from 狀態才寫入（避免慢回來的請求蓋掉剛按的「停止」等狀態）
+async function updateIf(env, r, fields, from) {
+  const keys = Object.keys(fields);
+  const c = await env.DB.prepare(`UPDATE fb_video_jobs SET ${keys.map((k) => k + ' = ?').join(', ')}, updated = ? WHERE upload_id = ? AND page = ? AND state = ?`)
+    .bind(...keys.map((k) => fields[k]), Date.now(), r.upload_id, r.page, from).run();
+  if (c && c.meta && c.meta.changes) Object.assign(r, fields);
+}
 async function update(env, r, fields) {
   const keys = Object.keys(fields);
   Object.assign(r, fields, { updated: Date.now() });
@@ -149,7 +156,7 @@ export async function receiveChunk(env, uploadId, start, bytes) {
     try {
       if (r.kind === 'video') {
         const want = r.next_end > start ? r.next_end : end;
-        if (want > end) continue;   // 這段不夠它要的長度：等下一次（理論上不會，next 依它算）
+        if (want > end) { await updateIf(env, r, { state: 'failed', error: '臉書要求的分段太大（超過 32MB），無法轉送' }, 'uploading'); continue; }   // 不失敗的話前端會一直收到同一段而無限重傳
         const fd = new FormData();
         fd.set('upload_phase', 'transfer');
         fd.set('upload_session_id', r.session_id);
@@ -158,16 +165,16 @@ export async function receiveChunk(env, uploadId, start, bytes) {
         const d = await graphVideo(env, 'POST', '/' + r.page + '/videos', fd, t.token);
         const ns = Number(d.start_offset), ne = Number(d.end_offset);
         if (!Number.isFinite(ns) || !Number.isFinite(ne)) throw new GraphError(-1, '臉書沒有回傳下一段位置', 200);
-        if (ns >= r.size || ns === ne) await update(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size });
-        else await update(env, r, { next_start: ns, next_end: ne });
+        if (ns >= r.size || ns === ne) await updateIf(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size }, 'uploading');
+        else await updateIf(env, r, { next_start: ns, next_end: ne }, 'uploading');
       } else {
         await ruploadPart(r, t.token, start, bytes);
-        if (end >= r.size) await update(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size });
-        else await update(env, r, { next_start: end, next_end: end });
+        if (end >= r.size) await updateIf(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size }, 'uploading');
+        else await updateIf(env, r, { next_start: end, next_end: end }, 'uploading');
       }
     } catch (e) {
       if (!(e instanceof GraphError)) throw e;
-      await update(env, r, { state: 'failed', error: errText(e) });
+      await updateIf(env, r, { state: 'failed', error: errText(e) }, 'uploading');
     }
   }
   await finishReady(env, uploadId);

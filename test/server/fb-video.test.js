@@ -216,3 +216,33 @@ test('RD：style 只收 video', async () => {
   assert.equal(rundownBody({ entries: [{ ...e }] }).entries[0].style, undefined);
   assert.equal(rundownBody({ entries: [{ ...e, style: 'red' }] }), null);
 });
+
+test('臉書要的分段超過 32MB：該粉專失敗，不讓前端無限重傳', async (t) => {
+  const { env, headers } = await setup(t, {
+    'POST video:/111/videos': () => ({ upload_session_id: 'S1', video_id: 'V1', start_offset: '0', end_offset: String(99 * 1024 * 1024) })
+  });
+  const size = 200 * 1024 * 1024;
+  let r = await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size, kind: 'video', pages: ['111'] });
+  const { MAX_CHUNK } = await vm();
+  assert.deepEqual(r.body.data.next, { start: 0, end: MAX_CHUNK });
+  r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(MAX_CHUNK));
+  assert.deepEqual(states(r), [['111', 'failed']]);
+  assert.equal(r.body.data.next, null);
+});
+
+test('慢回來的最後一段不會蓋掉「停止」：停止後不 finish', async (t) => {
+  let stopFn;
+  const { f, env, headers } = await setup(t, {
+    'POST video:/111/videos': async (c) => {
+      if (c.body.upload_phase === 'start') return { upload_session_id: 'S1', video_id: 'V1', start_offset: '0', end_offset: '4' };
+      if (c.body.upload_phase === 'transfer') { await stopFn(); return { start_offset: '4', end_offset: '4' }; }
+      return { success: true };
+    }
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 4, kind: 'video', pages: ['111'] });
+  await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', at: null, comments: [] });
+  stopFn = async () => { await call(env, headers, '/fb/video/stop', { uploadId: UID }); };
+  const r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
+  assert.deepEqual(states(r), [['111', 'stopped']]);
+  assert.ok(!f.calls.some((c) => c.body && c.body.upload_phase === 'finish'));
+});
