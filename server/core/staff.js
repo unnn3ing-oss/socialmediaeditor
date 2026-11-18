@@ -4,10 +4,10 @@
 import { ok, fail, readBody } from './http.js';
 import { all, first, run } from './db.js';
 
-export const PERMS = ['view', 'post', 'edit', 'delete'];   // 關閉排程發布時員工一律不能用（只剩管理員密碼），所以沒有「關閉時仍可使用」
-export const PERM_LABELS = { view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文' };
+export const PERMS = ['view', 'post', 'edit', 'delete', 'bypass'];
+export const PERM_LABELS = { view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文', bypass: '關閉時仍可使用' };
 export const DEFAULT_GROUPS = [
-  { name: '管理', perms: ['view', 'post', 'edit', 'delete'] },
+  { name: '管理', perms: ['view', 'post', 'edit', 'delete', 'bypass'] },
   { name: '發文', perms: ['view', 'post', 'edit', 'delete'] },
   { name: '檢視', perms: ['view'] }
 ];
