@@ -274,5 +274,8 @@ test('封面：存 KV → 發布成功後換到各粉專影片（is_preferred）
   const th = f.calls.find((c) => c.path === '/V1/thumbnails');
   assert.deepEqual([th.body.is_preferred, th.body.access_token, th.body.source && th.body.source.size], ['true', 'PT111', jpg.length]);
   r = await call(env, headers, '/fb/video/status?u=' + UID);
-  assert.deepEqual(r.body.data.jobs.map((j) => j.cover), ['done', 'done'], '查狀態時再試成功');
+  assert.deepEqual(r.body.data.jobs.map((j) => j.cover), ['done', 'pending'], '60 秒內不重試');
+  env.DB.raw.prepare('UPDATE fb_video_jobs SET cover_at = cover_at - 61000').run();
+  r = await call(env, headers, '/fb/video/status?u=' + UID);
+  assert.deepEqual(r.body.data.jobs.map((j) => j.cover), ['done', 'done'], '超過 60 秒查狀態時再試成功');
 });

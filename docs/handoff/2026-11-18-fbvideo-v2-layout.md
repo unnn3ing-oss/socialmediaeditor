@@ -34,4 +34,5 @@
 - [x] 讀 Meta thumbnails 文件：`POST /{video_id}/thumbnails` source＋is_preferred、≤10MB、Page token；Reels 文件也指向同一介面；**沒寫**處理中／排程中可否 → 發布後試、查狀態重試（最多 5 次）
 - [x] 前端：粉專置頂、狀態移工具列、封面視窗（cover.js）
 - [x] 後端：/fb/video/cover（KV `fbv:cover:<u>` 2 天）、發布後換封面＋重試；fb_video_jobs 加 cover／cover_tries／cover_error（舊表自動補）
-- [ ] 測試、審查、截圖
+- [x] 測試（npm test 658、fbvideo e2e 7）、審查（修正後通過：封面視窗關閉後非同步流程、取消監聽；另補移除影片釋放封面、封面重試間隔 ≥60 秒）、截圖已給使用者
+- [ ] 使用者說「推」才併入 main（同 commit 更新 CLAUDE.md「目前進度」，含 v1＋v2＋v2.1）

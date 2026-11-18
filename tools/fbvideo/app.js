@@ -271,6 +271,7 @@ async function removeVideo(v) {
   S.videos.splice(i, 1);
   v.ed.el.remove();
   URL.revokeObjectURL(v.url);
+  if (v.cover) URL.revokeObjectURL(v.cover.url);
   if (S.cur === v) S.cur = null;
   if (!S.cur && S.videos.length) select(S.videos[Math.min(i, S.videos.length - 1)]);
   if (!S.videos.length) clearStatus();

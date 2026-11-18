@@ -27,11 +27,11 @@ const ready = new WeakSet();
 async function ensure(env) {
   if (ready.has(env.DB)) return;
   await env.DB.batch([
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS fb_video_jobs (upload_id TEXT NOT NULL, page TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL, state TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', video_id TEXT NOT NULL DEFAULT '', upload_url TEXT NOT NULL DEFAULT '', next_start INTEGER NOT NULL DEFAULT 0, next_end INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', at INTEGER, comments TEXT NOT NULL DEFAULT '[]', error TEXT NOT NULL DEFAULT '', who TEXT NOT NULL DEFAULT '', cover TEXT NOT NULL DEFAULT '', cover_tries INTEGER NOT NULL DEFAULT 0, cover_error TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (upload_id, page))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS fb_video_jobs (upload_id TEXT NOT NULL, page TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL, state TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', video_id TEXT NOT NULL DEFAULT '', upload_url TEXT NOT NULL DEFAULT '', next_start INTEGER NOT NULL DEFAULT 0, next_end INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', at INTEGER, comments TEXT NOT NULL DEFAULT '[]', error TEXT NOT NULL DEFAULT '', who TEXT NOT NULL DEFAULT '', cover TEXT NOT NULL DEFAULT '', cover_tries INTEGER NOT NULL DEFAULT 0, cover_error TEXT NOT NULL DEFAULT '', cover_at INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (upload_id, page))"),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS fb_video_jobs_updated ON fb_video_jobs(updated)')
   ]);
   // 舊表（沒有封面欄位）補欄位；已有就略過
-  for (const col of ["cover TEXT NOT NULL DEFAULT ''", 'cover_tries INTEGER NOT NULL DEFAULT 0', "cover_error TEXT NOT NULL DEFAULT ''"]) {
+  for (const col of ["cover TEXT NOT NULL DEFAULT ''", 'cover_tries INTEGER NOT NULL DEFAULT 0', "cover_error TEXT NOT NULL DEFAULT ''", 'cover_at INTEGER NOT NULL DEFAULT 0']) {
     try { await env.DB.prepare('ALTER TABLE fb_video_jobs ADD COLUMN ' + col).run(); } catch { /* 已有 */ }
   }
   ready.add(env.DB);
@@ -290,7 +290,7 @@ export async function refreshStatus(env, uploadId) {
   if (!list.length) return { error: 'not_found' };
   const now = nowSec();
   const busy = list.filter((r) => r.video_id && (r.state === 'processing' || (r.state === 'scheduled' && r.at && r.at <= now)));
-  const covers = list.filter((r) => r.cover === 'pending' && COVER_OK.includes(r.state));
+  const covers = list.filter((r) => r.cover === 'pending' && COVER_OK.includes(r.state) && Date.now() - (r.cover_at || 0) >= COVER_GAP);
   if (covers.length) {
     const tokens = await pageTokens(env);
     for (const r of covers) { const t = tokens.get(r.page); if (t) await applyCover(env, r, t.token); }
@@ -315,6 +315,7 @@ export const MAX_COVER = 10 * 1024 * 1024;   // Meta：封面最大 10MB
 const COVER_TTL = 2 * 86400;
 const COVER_TRIES = 5;
 const COVER_OK = ['processing', 'scheduled', 'published'];
+export const COVER_GAP = 60 * 1000;   // 重試間隔至少 60 秒（臉書處理影片中可能還不能換）
 const coverKey = (u) => 'fbv:cover:' + u;
 export const coverType = (b) => (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? 'image/jpeg'
   : b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 ? 'image/png' : '');
@@ -352,7 +353,7 @@ async function applyCover(env, r, token) {
   } catch (e) {
     if (!(e instanceof GraphError)) throw e;
     const tries = (r.cover_tries || 0) + 1;
-    await update(env, r, { cover: tries >= COVER_TRIES ? 'failed' : 'pending', cover_tries: tries, cover_error: errText(e) });
+    await update(env, r, { cover: tries >= COVER_TRIES ? 'failed' : 'pending', cover_tries: tries, cover_error: errText(e), cover_at: Date.now() });
   }
 }
 
