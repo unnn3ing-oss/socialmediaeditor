@@ -13,11 +13,17 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| ui/compose/render.js | 新增只讀的標題排版函式（字型、縮後字級、每行 y） | ⬜ |
-| tools/fbpost/titleedit.js | 點一下進入、點擊位置→游標、排版用上面函式 | ⬜ |
-| tools/fbpost/compose.js、send.js | 開頭空行、字數、標題右側字數對齊 | ⬜ |
-| tools/fbpost/fbpost.css、index.html | 藍框、編輯框樣式、wrap=off | ⬜ |
-| test/e2e/fbpost*.js | 對應測試 | ⬜ |
+| ui/compose/render.js | 新增只讀的標題排版函式（字型、縮後字級、每行 y） | ✅ |
+| tools/fbpost/titleedit.js | 點一下進入、點擊位置→游標、排版用上面函式 | ✅ |
+| tools/fbpost/compose.js、send.js | 開頭空行、字數、標題右側字數對齊 | ✅ |
+| tools/fbpost/fbpost.css、index.html | 藍框、編輯框樣式、wrap=off | ✅ |
+| test/e2e/fbpost*.js | 對應測試 | ✅ |
 
 ## 測試
 npm test、node build.js --check、fbpost／fbpost-compose／pattern e2e，整合時全部 e2e。
+
+## 結果
+- commit `39732d4`。`render.js` 新增 `titleLayout`／`measureTitle`（只讀，圖片套版輸出不變）；`titleedit.js` 點一下（pointerdown capture 擋住拖曳、click 時進入）＋依點擊位置算游標；DOM 與 canvas 基線差用 measureText 的 em／font 高度算 shift。實測編輯框字與畫布白字外框差 1～2px（e2e 比對）。
+- 點兩下仍可進入（相容舊習慣）。
+- `stripLead` 放在 `util.js`（send.js 不載入做圖模組）。
+- npm test 619、全部 e2e 181 通過。
