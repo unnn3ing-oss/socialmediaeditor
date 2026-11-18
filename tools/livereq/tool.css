@@ -1,4 +1,6 @@
-/* 直播需求單 C 版：置中一欄；①貼上 ②逐張確認 ③底列 */
+/* 電腦版兩欄才顯示的右欄空白提示 */
+.lr-ph { display: none; }
+/* 直播需求單：窄螢幕 C 版置中一欄、電腦版（≥1024px）左右兩欄；①貼上 ②成品 ③底列 */
 body { margin: 0; background: var(--stage); color: var(--text); font-family: var(--font); }
 .lr .btn-sm { height: 44px; }
 .lr .field input, .lr .field textarea { font-size: 16px; }
@@ -60,6 +62,8 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 /* 底列：左狀態鈕、右上一張＋複製並下一張 */
 .lr-bar { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
 .lr-bar[hidden], .lr-stage[hidden] { display: none; }
+/* 窄螢幕：底列黏在畫面最下方，內容再長也看得到複製鈕 */
+.lr-bar { position: sticky; bottom: 8px; z-index: 2; box-shadow: 0 -4px 16px rgba(16,24,40,.06); }
 .lr-st-group { flex: 1 1 420px; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .lr-acts { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .lr-acts .btn { height: 44px; white-space: nowrap; }
@@ -89,3 +93,35 @@ body { margin: 0; background: var(--stage); color: var(--text); font-family: var
 /* 工具標題：全工具統一 16px（使用者 2026-11-18 指定） */
 .tool-h1 { margin: 0 0 12px; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--text); }
 .lr > .tool-h1 { margin: 0; }
+
+/* 電腦版（≥1024px）左右兩欄：左＝①貼上需求單（原稿一直看得到），右＝②成品＋③底列；一個畫面放得下 */
+@media (min-width: 1024px) {
+  .lr { max-width: 1440px; height: 100vh; min-height: 560px; box-sizing: border-box; padding: 20px 24px;
+    display: grid; grid-template-columns: 460px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 16px 20px; }
+  .lr > .tool-h1 { grid-column: 1 / -1; margin: 0; }
+  .lr-top { grid-column: 1; grid-row: 2 / 4; min-height: 0; display: grid; gap: 10px;
+    grid-template-columns: 160px minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "step step count clear" "name contact contact contact" "hint hint hint hint" "paste paste paste paste" "run run run run"; }
+  .lr-toprow, .lr-actions { display: contents; }
+  .lr-top .lr-step { grid-area: step; }
+  .lr-top .lr-count { grid-area: count; align-self: center; }
+  .lr-top #clear { grid-area: clear; justify-self: end; }
+  .lr-top #run { grid-area: run; justify-self: end; }
+  .lr-dutyname { grid-area: name; min-width: 0; }
+  .lr-dutycontact { grid-area: contact; min-width: 0; }
+  .lr-top .lr-hint { grid-area: hint; margin: 0; }
+  .lr-top .lr-hint:empty { display: none; }
+  .lr-pastebox { grid-area: paste; min-height: 0; }
+  .lr-srcwrap { display: flex; flex-direction: column; min-height: 0; }
+  .lr-srcwrap textarea { flex: 1; min-height: 0; height: 100%; resize: none; }
+  .lr-empty { grid-column: 2; grid-row: 2; align-self: start; }
+  .lr-stage { grid-column: 2; grid-row: 2; min-height: 0; overflow: auto; }
+  .lr-bar { grid-column: 2; grid-row: 3; position: static; box-shadow: none; }
+  .lr-ph { display: grid; place-items: center; grid-column: 2; grid-row: 2 / 4; border: 1px dashed var(--line-strong); border-radius: var(--radius-card); color: var(--muted); font-size: 14px; }
+  .lr:has(#stage:not([hidden])) .lr-ph, .lr:has(#empty:not([hidden])) .lr-ph { display: none; }
+  /* 勾粉專、內容變長也不撐高頁面：完整需求單框固定填滿右欄，超出在框內捲動 */
+  .lr-list, .lr-card:not([hidden]) { flex: 1 1 0; min-height: 0; }
+  .lr-card .field:has([data-out]) { flex: 1 1 0; min-height: 180px; }
+  .lr-card [data-out] { flex: 1 1 0; min-height: 0; height: auto; resize: none; overflow: auto; }
+}

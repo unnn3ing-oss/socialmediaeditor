@@ -244,9 +244,15 @@ function afterCopy(i) {
 $('prev').addEventListener('click', () => show(cur - 1));
 copyNext.addEventListener('click', () => { if (cards[cur]) cards[cur].doCopy(); });
 
+// 電腦版（≥1024px）左右兩欄：左邊貼上框一直看得到原稿，不縮合；窄螢幕貼上後縮成一行
+const wide = matchMedia('(min-width: 1024px)');
+let wantCollapsed = false;
 function setCollapsed(on) {
-  srcWrap.hidden = on; pasteBtn.hidden = !on; $('run').hidden = on;
+  wantCollapsed = on;
+  const c = on && !wide.matches;
+  srcWrap.hidden = c; pasteBtn.hidden = !c; $('run').hidden = c;
 }
+wide.addEventListener('change', () => setCollapsed(wantCollapsed));
 function run() {
   cards.length = 0;
   const all = parse(src.value);
@@ -264,6 +270,7 @@ function run() {
   count.textContent = all.length ? `共 ${all.length} 場` : '';
   pasteBtn.textContent = `已貼上 ${all.length} 場（點這裡重新貼上）`;
   setCollapsed(!!all.length);
+  src.scrollTop = 0;   // 電腦版左欄從原稿開頭看起
 }
 pasteBtn.addEventListener('click', () => { setCollapsed(false); src.focus(); src.select(); });
 
