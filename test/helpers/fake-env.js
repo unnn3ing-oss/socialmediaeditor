@@ -47,7 +47,14 @@ function fakeKV() {
       return type === 'json' ? JSON.parse(e.value) : e.value;
     },
     async put(key, value, opts = {}) {
-      store.set(key, { value, ttl: opts.expirationTtl, expires: opts.expirationTtl ? Date.now() + opts.expirationTtl * 1000 : 0 });
+      store.set(key, { value, ttl: opts.expirationTtl, expires: opts.expirationTtl ? Date.now() + opts.expirationTtl * 1000 : 0, metadata: opts.metadata || null });
+    },
+    async getWithMetadata(key, type) {
+      const e = store.get(key);
+      if (!e || (e.expires && e.expires <= Date.now())) return { value: null, metadata: null };
+      const v = e.value;
+      const value = type === 'arrayBuffer' ? (v instanceof Uint8Array ? v.slice().buffer : v) : type === 'json' ? JSON.parse(v) : v;
+      return { value, metadata: e.metadata };
     },
     async delete(key) { store.delete(key); }
   };

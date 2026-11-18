@@ -65,7 +65,12 @@
 
   <footer class="fv-foot" id="foot">
     <div class="foot-row">
-      <p class="hint" id="footMsg" role="status"></p>
+      <div class="st" id="st">
+        <div class="st-track"><div class="st-fill" id="stFill"></div></div>
+        <p class="st-text" id="stText" role="status"></p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" id="restartBtn" hidden>重新上傳</button>
+      <p class="hint" id="footMsg"></p>
       <span class="grow"></span>
       <label class="switch-wrap rd-wrap"><input type="checkbox" class="switch" id="rdOn"> 排入 RD</label>
       <button type="button" class="btn btn-secondary" id="stopBtn" hidden>停止上傳</button>
@@ -77,15 +82,17 @@
 <!-- 每支影片的內容（隱藏切換，內容保留） -->
 <template id="edTpl">
   <section class="ed card">
-    <div class="up">
-      <p class="meta hint"></p>
-      <div class="bar-track"><div class="bar-fill"></div></div>
-      <p class="up-text hint" role="status"></p>
-      <ul class="jobs"></ul>
-      <button type="button" class="btn btn-secondary btn-sm restart" hidden>重新上傳</button>
-    </div>
     <fieldset class="ed-body">
       <legend class="sr">影片內容</legend>
+      <div class="pg-head">
+        <span class="lbl">發布粉專</span>
+        <span class="grow"></span>
+        <button type="button" class="btn btn-secondary btn-sm apply-all">套用到全部影片</button>
+      </div>
+      <details class="pg-dd">
+        <summary><span class="pg-sum">尚未選粉專</span><span class="caret" aria-hidden="true"></span></summary>
+        <ul class="pg-list"></ul>
+      </details>
       <span class="lbl">類型</span>
       <div class="row">
         <div class="seg seg-sm kind" role="group" aria-label="影片類型">
@@ -93,6 +100,12 @@
           <button type="button" data-kind="reel" aria-pressed="false">Reels</button>
         </div>
         <span class="kind-why hint"></span>
+        <span class="grow"></span>
+        <span class="cover">
+          <span class="cover-lbl">封面</span>
+          <span class="cover-img" aria-hidden="true"><span>臉書自動</span></span>
+          <button type="button" class="btn btn-secondary btn-sm cover-btn">從影片選封面</button>
+        </span>
       </div>
       <p class="kind-warn warn" hidden></p>
       <label class="lbl">影片標題<span class="sub">（臉書標題欄位）</span><input type="text" class="title" maxlength="255"></label>
@@ -105,15 +118,6 @@
         <button type="button" class="btn btn-secondary btn-sm tag-add-btn">＋ 加入</button>
       </div>
       <label class="lbl">授權<input type="text" class="lic" placeholder="照原樣放在 hashtag 下一行，空白＝不放"></label>
-      <div class="pg-head">
-        <span class="lbl">發布粉專</span>
-        <span class="grow"></span>
-        <button type="button" class="btn btn-secondary btn-sm apply-all">套用到全部影片</button>
-      </div>
-      <details class="pg-dd">
-        <summary><span class="pg-sum">尚未選粉專</span><span class="caret" aria-hidden="true"></span></summary>
-        <ul class="pg-list"></ul>
-      </details>
       <span class="lbl">留言（選填）</span>
       <div class="cm-list"></div>
       <button type="button" class="btn btn-secondary btn-sm cm-add">＋ 新增留言</button>
@@ -121,6 +125,26 @@
     </fieldset>
   </section>
 </template>
+
+<dialog class="dlg cover-dlg" id="coverDlg" aria-labelledby="coverTitle">
+  <h2 id="coverTitle">選擇封面（從影片取一格）</h2>
+  <video id="coverVid" muted playsinline preload="auto"></video>
+  <div class="scrub">
+    <span class="hint" id="coverCur">0:00</span>
+    <input type="range" id="coverRange" min="0" max="1000" value="0" step="1" aria-label="影片時間">
+    <span class="hint" id="coverDur">0:00</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="coverPrev">‹ 前一格</button>
+    <button type="button" class="btn btn-secondary btn-sm" id="coverNext">下一格 ›</button>
+  </div>
+  <p class="hint">快速挑選（平均取 8 格）</p>
+  <div class="strip" id="coverStrip"></div>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="coverAuto">恢復臉書自動封面</button>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-secondary" id="coverCancel">取消</button>
+    <button type="button" class="btn btn-primary" id="coverUse">使用這一格</button>
+  </div>
+</dialog>
 
 <div class="toast" id="toast" role="alert" hidden></div>
 

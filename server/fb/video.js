@@ -27,9 +27,13 @@ const ready = new WeakSet();
 async function ensure(env) {
   if (ready.has(env.DB)) return;
   await env.DB.batch([
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS fb_video_jobs (upload_id TEXT NOT NULL, page TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL, state TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', video_id TEXT NOT NULL DEFAULT '', upload_url TEXT NOT NULL DEFAULT '', next_start INTEGER NOT NULL DEFAULT 0, next_end INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', at INTEGER, comments TEXT NOT NULL DEFAULT '[]', error TEXT NOT NULL DEFAULT '', who TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (upload_id, page))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS fb_video_jobs (upload_id TEXT NOT NULL, page TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL, state TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', video_id TEXT NOT NULL DEFAULT '', upload_url TEXT NOT NULL DEFAULT '', next_start INTEGER NOT NULL DEFAULT 0, next_end INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', at INTEGER, comments TEXT NOT NULL DEFAULT '[]', error TEXT NOT NULL DEFAULT '', who TEXT NOT NULL DEFAULT '', cover TEXT NOT NULL DEFAULT '', cover_tries INTEGER NOT NULL DEFAULT 0, cover_error TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (upload_id, page))"),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS fb_video_jobs_updated ON fb_video_jobs(updated)')
   ]);
+  // 舊表（沒有封面欄位）補欄位；已有就略過
+  for (const col of ["cover TEXT NOT NULL DEFAULT ''", 'cover_tries INTEGER NOT NULL DEFAULT 0', "cover_error TEXT NOT NULL DEFAULT ''"]) {
+    try { await env.DB.prepare('ALTER TABLE fb_video_jobs ADD COLUMN ' + col).run(); } catch { /* 已有 */ }
+  }
   ready.add(env.DB);
 }
 
@@ -63,7 +67,8 @@ export const view = (r) => ({
   uploadId: r.upload_id, page: r.page, kind: r.kind, name: r.name, size: r.size,
   state: r.state === 'finishing' && Date.now() - r.updated > STALE_MS ? 'unknown' : r.state,
   uploaded: r.state === 'uploading' ? r.next_start : r.size, videoId: r.video_id || '', sent: !!r.sent,
-  at: r.at ?? null, title: r.title, error: r.error || '', created: r.created
+  at: r.at ?? null, title: r.title, error: r.error || '', created: r.created,
+  cover: r.cover || '', coverError: r.cover_error || ''
 });
 
 // 下一段要的範圍：上傳中的粉專裡最小的 start；end＝和它同 start 的粉專要的最大 end（上限 32MB、檔案大小）
@@ -256,6 +261,7 @@ async function finishReady(env, uploadId, who) {
       continue;
     }
     await update(env, r, { state: at !== null ? 'scheduled' : 'processing', error: '' });
+    await applyCover(env, r, t.token);
     let comments = [];
     try { comments = JSON.parse(r.comments || '[]'); } catch { comments = []; }
     if (comments.length && r.video_id) {
@@ -284,6 +290,11 @@ export async function refreshStatus(env, uploadId) {
   if (!list.length) return { error: 'not_found' };
   const now = nowSec();
   const busy = list.filter((r) => r.video_id && (r.state === 'processing' || (r.state === 'scheduled' && r.at && r.at <= now)));
+  const covers = list.filter((r) => r.cover === 'pending' && COVER_OK.includes(r.state));
+  if (covers.length) {
+    const tokens = await pageTokens(env);
+    for (const r of covers) { const t = tokens.get(r.page); if (t) await applyCover(env, r, t.token); }
+  }
   if (busy.length) {
     const tokens = await pageTokens(env);
     for (const r of busy) {
@@ -297,6 +308,52 @@ export async function refreshStatus(env, uploadId) {
     }
   }
   return result(env, uploadId);
+}
+
+// ===== 封面：瀏覽器送 JPG／PNG → KV 暫存 2 天 → 各粉專發布成功後 POST /{video_id}/thumbnails（is_preferred）=====
+export const MAX_COVER = 10 * 1024 * 1024;   // Meta：封面最大 10MB
+const COVER_TTL = 2 * 86400;
+const COVER_TRIES = 5;
+const COVER_OK = ['processing', 'scheduled', 'published'];
+const coverKey = (u) => 'fbv:cover:' + u;
+export const coverType = (b) => (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? 'image/jpeg'
+  : b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 ? 'image/png' : '');
+
+export async function saveCover(env, uploadId, bytes) {
+  const type = coverType(bytes);
+  if (!type) return { error: 'bad_request' };
+  if (!env.CACHE) return { error: 'misconfigured' };
+  const list = await rows(env, uploadId);
+  if (!list.length) return { error: 'not_found' };
+  await env.CACHE.put(coverKey(uploadId), bytes, { expirationTtl: COVER_TTL, metadata: { type } });
+  for (const r of list) {
+    if (['failed', 'unknown', 'stopped', 'canceled'].includes(r.state)) continue;
+    await update(env, r, { cover: 'pending', cover_tries: 0, cover_error: '' });
+  }
+  // 已發布的（例：封面晚到）馬上換
+  const tokens = await pageTokens(env);
+  for (const r of list) { if (r.cover === 'pending' && COVER_OK.includes(r.state)) { const t = tokens.get(r.page); if (t) await applyCover(env, r, t.token); } }
+  return result(env, uploadId);
+}
+
+// 換封面：失敗不影響發布；最多試 5 次（發布後馬上一次，之後查狀態時再試）
+async function applyCover(env, r, token) {
+  if (r.cover !== 'pending' || !r.video_id) return;
+  let got = null;
+  try { got = env.CACHE ? await env.CACHE.getWithMetadata(coverKey(r.upload_id), 'arrayBuffer') : null; } catch { got = null; }
+  if (!got || !got.value) { await update(env, r, { cover: 'failed', cover_error: '封面暫存已過期' }); return; }
+  try {
+    const fd = new FormData();
+    const type = (got.metadata && got.metadata.type) || 'image/jpeg';
+    fd.set('source', new Blob([got.value], { type }), type === 'image/png' ? 'cover.png' : 'cover.jpg');
+    fd.set('is_preferred', 'true');
+    await graph(env, 'POST', '/' + r.video_id + '/thumbnails', fd, token);
+    await update(env, r, { cover: 'done', cover_error: '' });
+  } catch (e) {
+    if (!(e instanceof GraphError)) throw e;
+    const tries = (r.cover_tries || 0) + 1;
+    await update(env, r, { cover: tries >= COVER_TRIES ? 'failed' : 'pending', cover_tries: tries, cover_error: errText(e) });
+  }
 }
 
 // 停止上傳：還沒 finish 的全部停（橫式送 cancel，Reels 不 finish 就好）

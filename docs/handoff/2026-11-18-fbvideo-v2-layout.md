@@ -31,7 +31,7 @@
 | 封面 | 類型右側「封面 [小圖] [從影片選封面]」，同高；視窗：預覽＋時間軸＋前一格／下一格＋平均 8 格＋恢復臉書自動封面／取消／使用這一格；左欄縮圖跟著換；送出後鎖定 |
 | 封面送臉書 | 瀏覽器輸出 JPG（長邊 1280）→ `POST /fb/video/cover?u=`（KV 暫存 2 天）→ 各粉專發布成功後 `POST /{video_id}/thumbnails`（is_preferred）；失敗不影響發布，狀態多「封面未套用」，查狀態時重試 |
 
-- [ ] 讀 Meta thumbnails 文件確認（處理中／排程／Reels 可否）
-- [ ] 前端：粉專置頂、狀態移工具列、封面視窗
-- [ ] 後端：/fb/video/cover、發布後換封面＋重試
+- [x] 讀 Meta thumbnails 文件：`POST /{video_id}/thumbnails` source＋is_preferred、≤10MB、Page token；Reels 文件也指向同一介面；**沒寫**處理中／排程中可否 → 發布後試、查狀態重試（最多 5 次）
+- [x] 前端：粉專置頂、狀態移工具列、封面視窗（cover.js）
+- [x] 後端：/fb/video/cover（KV `fbv:cover:<u>` 2 天）、發布後換封面＋重試；fb_video_jobs 加 cover／cover_tries／cover_error（舊表自動補）
 - [ ] 測試、審查、截圖

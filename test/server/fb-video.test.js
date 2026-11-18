@@ -251,3 +251,28 @@ test('慢回來的最後一段不會蓋掉「停止」：停止後不 finish', a
   assert.deepEqual(states(r), [['111', 'stopped']]);
   assert.ok(!f.calls.some((c) => c.body && c.body.upload_phase === 'finish'));
 });
+
+test('封面：存 KV → 發布成功後換到各粉專影片（is_preferred）；失敗不影響發布、查狀態再試；格式檢查', async (t) => {
+  let fail222 = 1;
+  const { f, env, headers } = await setup(t, {
+    'POST video:/111/videos': (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S1', video_id: 'V1', start_offset: '0', end_offset: '2' } : c.body.upload_phase === 'transfer' ? { start_offset: '2', end_offset: '2' } : { success: true },
+    'POST video:/222/videos': (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S2', video_id: 'V2', start_offset: '0', end_offset: '2' } : c.body.upload_phase === 'transfer' ? { start_offset: '2', end_offset: '2' } : { success: true },
+    'POST /V1/thumbnails': () => ({ success: true }),
+    'POST /V2/thumbnails': () => (fail222-- > 0 ? gErr(100) : { success: true }),
+    'GET /V1': () => ({ status: { video_status: 'processing' } }),
+    'GET /V2': () => ({ status: { video_status: 'processing' } })
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 2, kind: 'video', pages: ['111', '222'] });
+  assert.equal((await call(env, headers, '/fb/video/cover?u=' + UID, undefined, new Uint8Array([1, 2, 3, 4, 5]))).status, 400, '不是圖片');
+  const jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  let r = await call(env, headers, '/fb/video/cover?u=' + UID, undefined, jpg);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.data.jobs.map((j) => j.cover), ['pending', 'pending']);
+  await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(2));
+  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null }, { page: '222', at: null }] });
+  assert.deepEqual(r.body.data.jobs.map((j) => [j.state, j.cover]), [['processing', 'done'], ['processing', 'pending']], '失敗不影響發布');
+  const th = f.calls.find((c) => c.path === '/V1/thumbnails');
+  assert.deepEqual([th.body.is_preferred, th.body.access_token, th.body.source && th.body.source.size], ['true', 'PT111', jpg.length]);
+  r = await call(env, headers, '/fb/video/status?u=' + UID);
+  assert.deepEqual(r.body.data.jobs.map((j) => j.cover), ['done', 'done'], '查狀態時再試成功');
+});

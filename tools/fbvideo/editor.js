@@ -185,10 +185,10 @@ export function createEditor(v, ctx) {
   });
   renumber();
 
-  // ===== 上傳進度與各粉專狀態 =====
-  const fill = q('.bar-fill'), upText = q('.up-text'), jobsEl = q('.jobs'), restart = q('.restart');
-  restart.addEventListener('click', () => ctx.restart(v));
+  // ===== 上傳進度與各粉專狀態：畫在底部工具列（只畫目前選中的影片） =====
   function renderUpload() {
+    if (!ctx.isCurrent(v)) return;
+    const fill = document.getElementById('stFill'), upText = document.getElementById('stText'), restart = document.getElementById('restartBtn');
     const jobs = v.jobs.filter((j) => j.state !== 'canceled');
     const up = jobs.filter((j) => j.state === 'uploading');
     const done = jobs.length ? Math.min(...jobs.map((j) => (j.state === 'uploading' ? j.uploaded : j.size))) : 0;
@@ -200,24 +200,31 @@ export function createEditor(v, ctx) {
     else if (!jobs.length) text = v.checked ? '勾選發布粉專後開始上傳' : '沒有勾選，不會上傳';
     else if (up.length) text = `上傳中 ${pct}%（${sizeText(done)}／${sizeText(v.size)}）`;
     else text = '上傳完成';
-    upText.textContent = text;
+    const name = v.ed ? (title.value.trim() || v.name) : v.name;
+    const pages = v.jobs.filter((j) => j.state !== 'canceled').map((j) => ctx.pageName(j.page) + ' ' + jobText(j) + (j.cover === 'failed' ? '（封面未套用' + (j.coverError ? '：' + j.coverError : '') + '）' : ''));
+    const full = `第 ${ctx.indexOf(v) + 1} 支「${name}」${text}` + (pages.length ? '．' + pages.join('．') : '');
+    upText.textContent = full;
+    upText.title = full;
+    upText.classList.toggle('bad', v.upload === 'error' || v.jobs.some((j) => ['failed', 'unknown'].includes(j.state)));
     restart.hidden = !(v.upload === 'stopped' || v.upload === 'error');
-    jobsEl.textContent = '';
-    for (const j of v.jobs) {
-      if (j.state === 'canceled') continue;
-      const li = document.createElement('li');
-      li.className = 'job s-' + j.state;
-      li.textContent = ctx.pageName(j.page) + '：' + jobText(j);
-      jobsEl.append(li);
-    }
   }
-  const metaEl = q('.meta');
-  function setMeta() { metaEl.textContent = [v.name, sizeText(v.size), v.width ? `${v.width}×${v.height}` : '', durText(v.duration)].filter(Boolean).join('．'); }
-  setMeta();
+
+  // ===== 封面：類型右側小圖＋從影片選封面 =====
+  const coverImg = q('.cover-img'), coverBtn = q('.cover-btn');
+  function renderCover() {
+    coverImg.textContent = '';
+    coverImg.classList.toggle('tall', v.height > v.width);
+    if (v.cover) { const img = document.createElement('img'); img.src = v.cover.url; img.alt = ''; coverImg.append(img); }
+    else { const t = document.createElement('span'); t.textContent = '臉書自動'; coverImg.append(t); }
+    coverBtn.textContent = v.cover ? '更換封面' : '從影片選封面';
+  }
+  coverBtn.addEventListener('click', () => ctx.pickCover(v));
+  renderCover();
 
   return {
     el,
-    kindInfo, setMeta, renderTags, renderUpload, renderPages,
+    kindInfo, renderTags, renderUpload, renderPages, renderCover,
+    setMeta() { renderCover(); },
     refreshPresets() { cmList.querySelectorAll('select.preset').forEach(presetOptions); },
     titleText: () => title.value.trim(),
     slugText: () => slugOf(slug.value, title.value),

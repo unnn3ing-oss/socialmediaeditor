@@ -9,7 +9,7 @@ import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
-import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK } from './video.js';
+import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
@@ -106,6 +106,14 @@ route('POST', /^\/fb\/video\/chunk$/, async (request, env) => {
   if (!buf) return fail(request, env, 'too_large');
   if (!buf.length) return fail(request, env, 'bad_request');
   return vout(request, env, await receiveChunk(env, u, start, buf));
+}, 'post');
+route('POST', /^\/fb\/video\/cover$/, async (request, env) => {
+  const u = new URL(request.url).searchParams.get('u') || '';
+  if (!validUploadId(u)) return fail(request, env, 'bad_request');
+  const buf = await readBody(request, MAX_COVER);
+  if (!buf) return fail(request, env, 'too_large');
+  if (buf.length < 4) return fail(request, env, 'bad_request');
+  return vout(request, env, await saveCover(env, u, buf));
 }, 'post');
 route('POST', /^\/fb\/video\/publish$/, async (request, env, ctx, m, me) => {
   const form = parsePublish(await readJsonBody(request, 300000));

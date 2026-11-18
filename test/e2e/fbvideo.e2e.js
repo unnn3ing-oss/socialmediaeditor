@@ -21,7 +21,7 @@ const file = (name, src = 'wide') => ({ name, mimeType: 'video/mp4', buffer: fs.
 
 async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, opts = {}) {
   const page = await browser.newPage({ viewport });
-  const errors = [], api = { start: [], chunk: [], publish: [], stop: [], drop: [], rundown: [] };
+  const errors = [], api = { start: [], chunk: [], publish: [], stop: [], drop: [], rundown: [], cover: [] };
   const ups = new Map();
   let hold = null;   // 設成 Promise 時，分段請求等它（測試上傳中）
   let failNext = false;   // true：下一個分段回 500（測試送出後上傳失敗）
@@ -63,6 +63,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
       finish(u);
       return json(view(id));
     }
+    if (p === '/fb/video/cover') { const b = req.postDataBuffer(); api.cover.push([url.searchParams.get('u'), b.length, b[0] === 0xff && b[1] === 0xd8]); return json(view(url.searchParams.get('u'))); }
     if (p === '/fb/video/publish') {
       const b = JSON.parse(req.postData()); api.publish.push(b);
       const u = ups.get(b.uploadId); u.at = b.pages.find((x) => x.at)?.at ?? null; u.title = b.title;
@@ -111,9 +112,10 @@ test('Reels_ 檔名：去前後綴當標題、自動 hashtag、按鈕與自訂�
   await page.waitForSelector('#app:not([hidden])');
   await page.setInputFiles('#fileIn', file('Reels_1118_立法院三讀_v2.mp4'));
   await page.waitForSelector(ED);
-  // 右欄順序：類型 → 影片標題 → 影片內文 → 標籤 → 授權 → 發布粉專
+  // 右欄順序：發布粉專 → 類型 → 影片標題 → 影片內文 → 標籤 → 授權
   const order = await page.$$eval(ED + ' .ed-body .lbl', (l) => l.map((x) => x.firstChild.textContent.trim()));
-  assert.deepEqual(order.slice(0, 6), ['類型', '影片標題', '影片內文', '標籤（hashtag）', '授權', '發布粉專']);
+  assert.deepEqual(order.slice(0, 6), ['發布粉專', '類型', '影片標題', '影片內文', '標籤（hashtag）', '授權']);
+  assert.equal(await page.locator(ED + ' .up').count(), 0, '上傳狀態不在右欄');
   assert.equal(await page.inputValue(ED + ' .title'), '立法院三讀');
   assert.equal(await msg(page), '\n【立法院三讀】\n#焦點新聞影音都在TVBS');
   assert.equal(await page.getAttribute(ED + ' .kind [data-kind=reel]', 'aria-pressed'), 'true');
@@ -139,7 +141,7 @@ test('Reels_ 檔名：去前後綴當標題、自動 hashtag、按鈕與自訂�
   await until(() => new Set(api.start.flatMap((x) => x.pages)).size === 2);
   setHold(null); release();
   assert.match(await page.textContent(ED + ' .pg-sum'), /已選 2 個粉專：新聞（立即）、娛樂（立即）/);
-  await page.waitForSelector(ED + ' .up-text:has-text("上傳完成")');
+  await page.waitForSelector('#stText:has-text("上傳完成")');
   assert.deepEqual([...new Set(api.start.flatMap((s) => s.pages))].sort(), ['111', '222']);
   assert.equal(api.start[0].kind, 'reel');
   const seen = api.chunk.map((c) => c[1] + ':' + c[2]);
@@ -219,12 +221,12 @@ test('上傳中：擋取消粉專、移除影片、切類型；關分頁要確�
   await page.click('#stopBtn');
   await page.click('#cfYes');
   release();
-  await page.waitForSelector(ED + ' .up-text:has-text("已停止上傳")');
+  await page.waitForSelector('#stText:has-text("已停止上傳")');
   assert.equal(api.stop.length, 1);
   assert.equal(await page.isVisible('#stopBtn'), false);
   assert.equal(await unloadBlocked(), false, '停止後不再攔');
-  await page.click(ED + ' .restart');
-  await page.waitForSelector(ED + ' .up-text:has-text("上傳完成")');
+  await page.click('#restartBtn');
+  await page.waitForSelector('#stText:has-text("上傳完成")');
   assert.notEqual(api.start[0].uploadId, api.start[api.start.length - 1].uploadId);
   await page.click(`${ED} .pg input[data-page="111"]`);
   await until(() => api.drop.length === 1);
@@ -242,14 +244,53 @@ test('送出後上傳失敗：重新上傳後自動用已送出的內容發布',
   await page.click('#sendBtn');
   await until(() => api.publish.length === 1);
   failChunk(); setHold(null); release();
-  await page.waitForSelector(ED + ' .restart:not([hidden])');
-  assert.match(await page.textContent(ED + ' .up-text'), /上傳失敗/);
-  await page.click(ED + ' .restart');
+  await page.waitForSelector('#restartBtn:not([hidden])');
+  assert.match(await page.textContent('#stText'), /上傳失敗/);
+  await page.click('#restartBtn');
   await until(() => api.publish.length === 2);
   assert.notEqual(api.publish[1].uploadId, api.publish[0].uploadId);
   assert.deepEqual({ ...api.publish[1], uploadId: '' }, { ...api.publish[0], uploadId: '' });
-  await page.waitForSelector(ED + ' .up-text:has-text("上傳完成")');
+  await page.waitForSelector('#stText:has-text("上傳完成")');
   assert.ok(api.stop.some((s) => s.uploadId === api.publish[0].uploadId), '舊的上傳停掉');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('封面：從影片選一格 → 類型右側與左欄縮圖換成封面；送出前先送封面；恢復臉書自動', async () => {
+  const { page, errors, api } = await newPage();
+  await page.waitForSelector('#app:not([hidden])');
+  await page.setInputFiles('#fileIn', file('橫式.mp4', 'wide'));
+  await page.waitForSelector('.vq-thumb img');
+  assert.match(await page.textContent(ED + ' .cover-img'), /臉書自動/);
+  const kindBox = await page.locator(ED + ' .kind').boundingBox(), coverBox = await page.locator(ED + ' .cover').boundingBox();
+  assert.ok(Math.abs(kindBox.y + kindBox.height / 2 - (coverBox.y + coverBox.height / 2)) < 4, '封面和類型同一列');
+  await page.click(ED + ' .cover-btn');
+  await page.waitForSelector('#coverDlg[open]');
+  await until(async () => (await page.locator('#coverStrip .strip-btn').count()) === 8);
+  await page.click('#coverStrip .strip-btn >> nth=5');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbvideo-cover-dlg.png') });
+  await page.click('#coverNext');
+  await page.click('#coverUse');
+  await page.waitForFunction(() => !document.getElementById('coverDlg').open);
+  await page.waitForSelector(ED + ' .cover-img img');
+  assert.equal(await page.textContent(ED + ' .cover-btn'), '更換封面');
+  assert.equal(await page.getAttribute('.vq-item.is-cur .vq-thumb img', 'src'), await page.getAttribute(ED + ' .cover-img img', 'src'), '左欄縮圖跟著換');
+  // 恢復臉書自動 → 再選一次
+  await page.click(ED + ' .cover-btn');
+  await page.click('#coverAuto');
+  await page.waitForSelector(ED + ' .cover-img span:has-text("臉書自動")');
+  await page.click(ED + ' .cover-btn');
+  await page.click('#coverUse');
+  await page.waitForSelector(ED + ' .cover-img img');
+  await pickPage(page, '111');
+  await page.waitForSelector('#stText:has-text("上傳完成")');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbvideo-cover-row.png') });
+  await page.click('#sendBtn');
+  await until(() => api.publish.length === 1);
+  assert.equal(api.cover.length, 1);
+  assert.equal(api.cover[0][0], api.publish[0].uploadId);
+  assert.equal(api.cover[0][2], true, 'JPG');
+  assert.equal(await page.isDisabled(ED + ' .cover-btn'), true, '送出後鎖住');
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -259,7 +300,7 @@ test('手機寬度：上方橫向縮圖列，不超出畫面', async () => {
   await page.waitForSelector('#app:not([hidden])');
   await page.setInputFiles('#fileIn', [file('Reels_手機.mp4', 'tall'), file('第二支.mp4', 'wide'), file('第三支.mp4', 'wide')]);
   await pickPage(page, '111');
-  await page.waitForSelector(ED + ' .up-text:has-text("上傳完成")');
+  await page.waitForSelector('#stText:has-text("上傳完成")');
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(over <= 0, 'overflow ' + over);
   assert.equal(await page.$eval('#vqList', (u) => getComputedStyle(u).flexDirection), 'row');

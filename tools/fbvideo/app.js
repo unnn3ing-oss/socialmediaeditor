@@ -7,6 +7,7 @@
 import { tb } from '../../sdk/toolbox.js';
 import { autoKind, rdText } from './rules.js';
 import { createEditor, STATE_TEXT } from './editor.js';
+import { pickCover } from './cover.js';
 import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
 
 tb.init('fbvideo');
@@ -128,7 +129,17 @@ const edCtx = {
   presets: () => S.presets,
   pages: () => S.pages,
   pageName,
-  changed: () => renderQueue(),
+  changed: () => { renderQueue(); if (S.cur) S.cur.ed.renderUpload(); },
+  isCurrent: (v) => S.cur === v,
+  indexOf: (v) => S.videos.indexOf(v),
+  async pickCover(v) {
+    if (v.sent) return;
+    const r = await pickCover(v);
+    if (r === null) return;
+    if (v.cover) URL.revokeObjectURL(v.cover.url);
+    v.cover = r === 'auto' ? null : r;
+    v.ed.renderCover(); renderQueue();
+  },
   // 切換類型：上傳中擋；已開始上傳（還沒送出）就停掉舊的、用新類型重傳
   setKind(v, k) {
     if (v.sent) return false;
@@ -179,6 +190,7 @@ async function restartUpload(v, quiet) {
     const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: v.kind, pages: body.pages.map((x) => x.page) } });
     v.next = r.next;
     apply(v, r);
+    await sendCover(v);
     apply(v, await tb.api.call('/fb/video/publish', { method: 'POST', body }));
     v.sentBody = body; v.rdDone = false;
     pump(); poll();
@@ -190,6 +202,15 @@ function select(v) {
   S.cur = v;
   for (const x of S.videos) x.ed.el.hidden = x !== v;
   renderQueue();
+  if (v) v.ed.renderUpload(); else clearStatus();
+}
+function clearStatus() { $('stFill').style.width = '0'; $('stText').textContent = ''; $('stText').title = ''; $('restartBtn').hidden = true; }
+$('restartBtn').addEventListener('click', () => { if (S.cur) restartUpload(S.cur, false); });
+// 封面：先傳到後端暫存（發布成功後由後端換到各粉專的影片）；失敗不擋送出
+async function sendCover(v) {
+  if (!v.cover) return;
+  try { await tb.api.call('/fb/video/cover?u=' + v.uploadId, { method: 'POST', body: v.cover.blob, binary: true }); }
+  catch (e) { toast(`「${v.ed.titleText()}」封面沒有送出（${errText(e)}），會用臉書自動封面`); }
 }
 function renderQueue() {
   const list = $('vqList'); list.textContent = '';
@@ -199,14 +220,17 @@ function renderQueue() {
     const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'vq-pick';
     pick.setAttribute('aria-current', String(v === S.cur));
     const th = document.createElement('span'); th.className = 'vq-thumb' + (v.height > v.width ? ' tall' : '');
-    if (v.thumb) { const img = document.createElement('img'); img.src = v.thumb; img.alt = ''; th.append(img); }
+    const src = v.cover ? v.cover.url : v.thumb;
+    if (src) { const img = document.createElement('img'); img.src = src; img.alt = ''; th.append(img); }
     if (Number.isFinite(v.duration)) { const d = document.createElement('span'); d.className = 'vq-dur'; d.textContent = durText(v.duration); th.append(d); }
     const tx = document.createElement('span'); tx.className = 'vq-text';
     const nm = document.createElement('span'); nm.className = 'vq-name'; nm.textContent = v.ed.titleText() || v.name;
     const meta = document.createElement('span'); meta.className = 'vq-meta';
     const badge = document.createElement('span'); badge.className = 'badge' + (v.kind === 'reel' ? ' reel' : ''); badge.textContent = v.kind === 'reel' ? 'Reels' : '橫式';
     meta.append(badge, document.createTextNode(queueState(v)));
-    tx.append(nm, meta);
+    const file = document.createElement('span'); file.className = 'vq-file';
+    file.textContent = [v.name, sizeText(v.size), v.width ? `${v.width}×${v.height}` : ''].filter(Boolean).join('．');
+    tx.append(nm, file, meta);
     const pct = uploadPct(v);
     if (pct !== null) { const bar = document.createElement('span'); bar.className = 'vq-bar'; const f = document.createElement('i'); f.style.width = pct + '%'; bar.append(f); tx.append(bar); }
     pick.append(th, tx);
@@ -249,6 +273,7 @@ async function removeVideo(v) {
   URL.revokeObjectURL(v.url);
   if (S.cur === v) S.cur = null;
   if (!S.cur && S.videos.length) select(S.videos[Math.min(i, S.videos.length - 1)]);
+  if (!S.videos.length) clearStatus();
   renderQueue();
   updateBusy();
 }
@@ -360,6 +385,7 @@ $('sendBtn').addEventListener('click', async () => {
   for (const { v, body } of forms) {
     if (!v.jobs.length) { toast(`「${v.name}」還沒開始上傳，沒有送出`); continue; }
     body.uploadId = v.uploadId;
+    await sendCover(v);
     try {
       const r = await tb.api.call('/fb/video/publish', { method: 'POST', body });
       v.sent = true; v.sentAt = Date.now(); v.sentBody = body;
@@ -379,7 +405,7 @@ async function poll() {
   const until = Date.now() + 15 * 60000;
   try {
     while (Date.now() < until) {
-      const list = S.videos.filter((v) => v.sent && v.jobs.some((j) => j.sent && ['processing', 'finishing'].includes(j.state)));
+      const list = S.videos.filter((v) => v.sent && v.jobs.some((j) => j.sent && (['processing', 'finishing'].includes(j.state) || j.cover === 'pending')));
       if (!list.length && !S.videos.some((v) => v.sent && isUploading(v))) break;
       await new Promise((r) => setTimeout(r, 6000));
       for (const v of list) { try { apply(v, await tb.api.call('/fb/video/status?u=' + v.uploadId)); } catch { /* 下次再問 */ } }
