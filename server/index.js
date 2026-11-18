@@ -7,8 +7,9 @@ import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb } from './fb/index.js';
+import { adminStaff, cleanupAudit } from './core/staff.js';
 
-adminExtras.push(adminLogs, adminFb);
+adminExtras.push(adminLogs, adminFb, adminStaff);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -46,8 +47,8 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每天 03:17（UTC 19:17）清理日誌
-    ctx.waitUntil(cleanup(env, Date.now()));
+    // 每天 03:17（UTC 19:17）清理日誌與排程發布操作紀錄（90 天）
+    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now())]));
   }
 };
 export { FbCommentTimer } from './fb/timer.js';

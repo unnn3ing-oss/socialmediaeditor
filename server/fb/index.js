@@ -1,6 +1,7 @@
 // 排程發布後端：/fb/*（權限見 access.js：管理頁切換只開放管理員／開放公司帳號）與管理路由 /admin/fb/*、/admin/rundown*
 import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
+import { audit } from '../core/staff.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, checkNewToken, FbSetupError } from './pages.js';
 import { saveToken, clearToken } from './tokenstore.js';
 import { GraphError } from './graph.js';
@@ -22,8 +23,14 @@ export async function readJsonBody(request, max = 65536) {
   try { return JSON.parse(new TextDecoder().decode(buf)); } catch { return null; }
 }
 
-const routes = [];   // [method, RegExp, handler(request, env, ctx, match)]
-export function route(method, re, handler) { routes.push([method, re, handler]); }
+// [method, RegExp, handler(request, env, ctx, match, me), need]；need＝需要的權限（null＝名單內即可），me＝fbAccess 的結果
+const routes = [];
+export function route(method, re, handler, need = null) { routes.push([method, re, handler, need]); }
+
+// 自己是誰、能做什麼（前端依此隱藏按鈕）
+route('GET', /^\/fb\/me$/, async (request, env, ctx, m, me) => ok(request, env, {
+  admin: me.admin, id: me.staff ? me.staff.id : '', name: me.who.name, group: me.staff ? me.staff.groupName : '', perms: me.perms, mode: me.mode
+}));
 
 route('GET', /^\/fb\/pages$/, async (request, env) => {
   const pages = await listPages(env);
@@ -33,7 +40,7 @@ route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: 
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
-route('POST', /^\/fb\/post$/, async (request, env) => {
+route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   const ct = request.headers.get('content-type') || '';
   if (!ct.includes('multipart/form-data')) return fail(request, env, 'bad_request');
   const buf = await readBody(request, MAX_IMAGE + 512 * 1024);
@@ -42,15 +49,19 @@ route('POST', /^\/fb\/post$/, async (request, env) => {
   try { fd = await new Response(buf, { headers: { 'content-type': ct } }).formData(); } catch { return fail(request, env, 'bad_request'); }
   const form = parsePostForm(fd);
   if (!form) return fail(request, env, 'bad_request');
-  return ok(request, env, { results: await createPosts(env, form) });
-});
+  const results = await createPosts(env, form);
+  for (const r of results) {
+    if (r.ok) await audit(env, me.who, r.scheduled ? 'schedule' : 'publish', r.page, r.postId || '', r.scheduled && r.at ? 'at=' + r.at : '');
+  }
+  return ok(request, env, { results });
+}, 'post');
 
 route('GET', /^\/fb\/scheduled$/, async (request, env) => {
   const page = new URL(request.url).searchParams.get('page') || '';
   const token = await pageToken(env, page);
   if (!token) return fail(request, env, 'bad_request');
   return ok(request, env, await listScheduled(env, page, token));
-});
+}, 'view');
 route('GET', /^\/fb\/published$/, async (request, env) => {
   const q = new URL(request.url).searchParams;
   const page = q.get('page') || '';
@@ -58,32 +69,36 @@ route('GET', /^\/fb\/published$/, async (request, env) => {
   const token = await pageToken(env, page);
   if (!token || after.length > 500) return fail(request, env, 'bad_request');
   return ok(request, env, await listPublished(env, page, token, after));
-});
-route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete)$/, async (request, env, ctx, m) => {
+}, 'view');
+route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete)$/, async (request, env, ctx, m, me) => {
   const body = await readJsonBody(request, 4096);
+  const need = m[2] === 'reschedule' ? 'edit' : 'delete';
+  if (!me.perms.includes(need)) return fail(request, env, 'fb_no_perm');
   if (!body) return fail(request, env, 'bad_request');
   if (m[2] === 'reschedule' && !timeOk(body.at)) return fail(request, env, 'fb_bad_time');   // 先檢查時間，不碰臉書
   const token = await pageToken(env, body.page);
   if (!token) return fail(request, env, 'bad_request');
   if (m[2] === 'reschedule') {
     await reschedule(env, m[1], token, body.at);
+    await audit(env, me.who, 'reschedule', body.page, m[1], 'at=' + body.at);
   } else {
     await removePost(env, m[1], token);
+    await audit(env, me.who, 'delete', body.page, m[1]);
   }
   return ok(request, env, { ok: true });
-});
+}, 'view');
 
-route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)));
+route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)), 'post');
 
 export async function handleFb(request, env, ctx, path) {
   if (!path.startsWith('/fb/') && path !== '/rundown') return null;
-  for (const [method, re, handler] of routes) {
+  for (const [method, re, handler, need] of routes) {
     const m = re.exec(path);
     if (!m) continue;
     if (request.method !== method) continue;
-    const denied = await fbAccess(request, env);
-    if (denied) return denied;
-    try { return await handler(request, env, ctx, m); } catch (e) { return fbFail(request, env, e); }
+    const me = await fbAccess(request, env, need);
+    if (me.denied) return me.denied;
+    try { return await handler(request, env, ctx, m, me); } catch (e) { return fbFail(request, env, e); }
   }
   return fail(request, env, 'not_found');
 }

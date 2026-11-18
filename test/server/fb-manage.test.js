@@ -64,6 +64,8 @@ test('改時間：範圍外 400 不呼叫臉書；成功後計時器跟著改', 
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(f.calls.find((c) => c.path === '/111_1' && c.method === 'POST').body.scheduled_publish_time, String(at2));
   assert.equal((await timerStatus(env, '111_1')).at, at2);
+  const log = env.DB.raw.prepare('SELECT uid, name, action, page, post FROM fb_audit').all().map((r) => ({ ...r }));
+  assert.deepEqual(log, [{ uid: 'ADMIN', name: '管理員', action: 'reschedule', page: '111', post: '111_1' }], '操作紀錄只記成功的改時間');
 });
 
 test('取消、刪除：DELETE 且計時器取消；沒有計時器也能刪', async (t) => {
@@ -74,6 +76,7 @@ test('取消、刪除：DELETE 且計時器取消；沒有計時器也能刪', a
   assert.equal((await call('/fb/posts/111_9/delete', { method: 'POST', body: JSON.stringify({ page: '111' }) })).status, 200);
   assert.equal(f.calls.filter((c) => c.method === 'DELETE').length, 2);
   assert.equal(f.calls.find((c) => c.method === 'DELETE').query.access_token, 'PT111');
+  assert.deepEqual(env.DB.raw.prepare('SELECT action, post FROM fb_audit ORDER BY id').all().map((r) => [r.action, r.post]), [['delete', '111_1'], ['delete', '111_9']]);
 });
 
 test('粉專不在清單 400；貼文 ID 格式不對 404', async (t) => {

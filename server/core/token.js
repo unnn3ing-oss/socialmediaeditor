@@ -1,4 +1,4 @@
-// 憑證：HMAC-SHA256 簽章，內容 { kind, exp }；前端用管理密碼登入的公司憑證另帶 adm: 1（不受「暫停排程發布」限制）（比照 -schedulenewnet 的 signSession／sessionExp）
+// 憑證：HMAC-SHA256 簽章，內容 { kind, exp }；前端用管理密碼登入的公司憑證另帶 adm: 1（不受「暫停排程發布」限制）；員工編號登入另帶 uid（比照 -schedulenewnet 的 signSession／sessionExp）
 const enc = new TextEncoder();
 
 export function b64urlEncode(bytes) {
@@ -20,13 +20,17 @@ function hmacKey(secret, usages) {
 
 export const KINDS = ['company', 'admin'];
 
-export async function signToken(secret, kind, exp, adm = false) {
-  const payload = enc.encode(JSON.stringify(adm ? { kind, exp, adm: 1 } : { kind, exp }));
+const UID_RE = /^[A-Z0-9_-]{1,20}$/;
+export async function signToken(secret, kind, exp, adm = false, uid = '') {
+  const body = { kind, exp };
+  if (adm) body.adm = 1;
+  if (uid && UID_RE.test(uid)) body.uid = uid;
+  const payload = enc.encode(JSON.stringify(body));
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret, ['sign']), payload);
   return b64urlEncode(payload) + '.' + b64urlEncode(new Uint8Array(sig));
 }
 
-// 有效回 { kind, exp, adm }，無效或過期回 null
+// 有效回 { kind, exp, adm, uid }（uid 沒有＝''），無效或過期回 null
 export async function readToken(secret, token, nowSec) {
   if (typeof token !== 'string' || typeof secret !== 'string') return null;
   const parts = token.split('.');
@@ -40,7 +44,7 @@ export async function readToken(secret, token, nowSec) {
   try { data = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return null; }
   if (!data || !KINDS.includes(data.kind)) return null;
   if (typeof data.exp !== 'number' || !Number.isFinite(data.exp) || data.exp <= nowSec) return null;
-  return { kind: data.kind, exp: data.exp, adm: data.adm === 1 };
+  return { kind: data.kind, exp: data.exp, adm: data.adm === 1, uid: typeof data.uid === 'string' && UID_RE.test(data.uid) ? data.uid : '' };
 }
 
 /* 定時比對密碼：以隨機金鑰對輸入做 HMAC，再用 verify（定時比較）檢查，長度不同也不洩漏 */

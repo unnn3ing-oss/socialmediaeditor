@@ -19,14 +19,22 @@ async function auth(env, kind, adm = false) {
 }
 const ACCOUNTS = { data: [{ id: '111', name: 'TVBS 新聞', access_token: 'PT111' }, { id: '222', name: '少康戰情室', access_token: 'PT222' }, { id: '333', name: '氣象站', access_token: 'PT333' }] };
 const fbEnv = () => mkEnv({ FB_USER_TOKEN: 'USERTOKEN' });
+// 授權名單裡加一個人（預設權限組 2＝發文，沒有 bypass），回帶 uid 的公司憑證標頭
+async function staffAuth(env, id = 'A001', group = 2) {
+  const adm = await auth(env, 'admin');
+  const r = await call(env, '/admin/staff', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ id, name: '測試', group }) });
+  assert.equal(r.status, 200);
+  const { signToken } = await tok();
+  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, id)) };
+}
 
-test('/fb/pages：無憑證 401、公司憑證 403、管理員 200', async (t) => {
+test('/fb/pages：無憑證 401、公司密碼憑證 403（要員工編號）、管理員 200', async (t) => {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
   const env = fbEnv();
   assert.equal((await call(env, '/fb/pages')).status, 401);
   const r403 = await call(env, '/fb/pages', { headers: await auth(env, 'company') });
   assert.equal(r403.status, 403);
-  assert.equal((await r403.json()).code, 'fb_forbidden');
+  assert.equal((await r403.json()).code, 'fb_need_staff');
   const r = await call(env, '/fb/pages', { headers: await auth(env, 'company', true) });
   assert.equal(r.status, 200);
   const { data } = await r.json();
@@ -249,17 +257,18 @@ test('舊資料表沒有 utm_text 欄位：自動補上', async (t) => {
   assert.deepEqual(s, { utm: '?&a=1', utmText: '', rd: 'news' });
 });
 
-test('開放／關閉：預設關閉；開放後公司憑證可用；關閉原因隨 403 回給前端、開放後保留；舊值與壞值', async (t) => {
+test('開放／關閉：預設關閉；開放後名單內的人可用；關閉原因隨 403 回給前端、開放後保留；舊值與壞值', async (t) => {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
   const env = fbEnv();
   const adm = await auth(env, 'admin');
-  const company = await auth(env, 'company');
+  const company = await staffAuth(env);
+  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company') })).status, 403, '公司密碼憑證不論開放關閉都不行');
   const set = (body, h = adm) => call(env, '/admin/fb/access', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.deepEqual((await (await call(env, '/admin/fb/access', { headers: adm })).json()).data, { mode: 'admin', reason: '' });
   const r0 = await call(env, '/fb/pages', { headers: company });
   assert.equal(r0.status, 403);
   assert.deepEqual((await r0.json()).detail, { reason: '' });
-  assert.equal((await set({ mode: 'company' }, company)).status, 401, '公司憑證不能切換');
+  assert.equal((await set({ mode: 'company' }, company)).status, 401, '員工憑證不能切換');
   assert.equal((await set({ mode: 'everyone' })).status, 400);
   assert.equal((await set({ mode: 'admin', reason: '字'.repeat(101) })).status, 400);
   assert.equal((await set({ mode: 'admin', reason: 5 })).status, 400);
