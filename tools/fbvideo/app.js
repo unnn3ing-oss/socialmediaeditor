@@ -1,12 +1,13 @@
-// 影片發布（測試版，只給管理員）：多支影片 × 多個粉專。
-//   選好粉專與影片就在背景上傳（每支影片只傳一次，後端轉給各粉專，見 server/fb/video.js）；上傳時可以繼續填文案。
+// 影片發布（測試版，只給管理員）：多支影片，每支各自選粉專與立即／排程。
+//   左 1/3 影片列表（縮圖左、標題右），右 2/3 選中影片的內容（editor.js）。
+//   影片勾了粉專就在背景上傳（每支只傳一次，後端轉給各粉專，見 server/fb/video.js）；上傳時可以繼續填文案。
 //   按「全部送出」把文案交給後端：已傳完的馬上發布，還沒傳完的等最後一段傳完由後端發布。
 //   上傳中：取消勾粉專、移除／取消勾影片、切換類型都擋下；關分頁先確認（tb.busy）；可手動「停止上傳」。
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
 import { autoKind, rdText } from './rules.js';
 import { createEditor, STATE_TEXT } from './editor.js';
-import { $, errText, toast, confirmBox, segmented, createWhen, newId, sizeText, dateStr, timeStr, fmt } from './util.js';
+import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
 
 tb.init('fbvideo');
 
@@ -15,10 +16,10 @@ const MAX_SIZE = 10 * 1024 * 1024 * 1024;
 const BUSY_MSG = '影片上傳中，離開會中斷上傳。';
 const S = {
   pages: [], settings: { prefixes: [], suffixes: [], reelsTag: '#焦點新聞影音都在TVBS', tags: [] }, presets: [],
-  videos: [], cur: null, pageSel: new Set(), timeMode: 'all', canPost: true
+  videos: [], cur: null, canPost: true
 };
 const pageName = (id) => (S.pages.find((p) => p.id === id) || {}).short || id;
-const wantPages = (v) => (v.checked ? [...S.pageSel] : []);
+const wantPages = (v) => (v.checked ? v.ed.selected() : []);
 const isUploading = (v) => v.jobs.some((j) => j.state === 'uploading') && v.upload !== 'stopped' && v.upload !== 'error';
 const anyUploading = () => S.videos.some(isUploading);
 
@@ -49,7 +50,7 @@ $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t
   $('app').hidden = false;
   S.pages = [...pages].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
   $('pagesState').textContent = `已連線 ${S.pages.length} 個粉專`;
-  renderChips();
+  S.videos.forEach((v) => v.ed.renderPages());
   tb.api.call('/fb/access').then((a) => { if (a && a.mode === 'company') for (const el of document.querySelectorAll('.test-pill')) el.hidden = true; }).catch(() => {});
   tb.api.call('/fb/me').then((me) => {
     if (!me) return;
@@ -63,39 +64,7 @@ $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t
   tb.api.call('/fb/presets').then((l) => { S.presets = Array.isArray(l) ? l : []; S.videos.forEach((v) => v.ed.refreshPresets()); }).catch(() => {});
 })();
 
-// ===== 粉專晶片 =====
-function renderChips() {
-  const box = $('pageChips'); box.textContent = '';
-  for (const p of S.pages) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.page = p.id; b.textContent = p.short;
-    b.setAttribute('aria-pressed', String(S.pageSel.has(p.id)));
-    box.append(b);
-  }
-  if (!S.pages.length) box.textContent = '沒有可用的粉專';
-}
-$('pageChips').addEventListener('click', async (e) => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  const id = b.dataset.page;
-  if (S.pageSel.has(id)) {
-    if (anyUploading()) { toast('影片上傳中，等上傳完成才能取消粉專（或先按「停止上傳」）'); return; }
-    S.pageSel.delete(id);
-    // 已上傳但還沒送出的：取消那個粉專的工作階段
-    for (const v of S.videos) {
-      if (v.sent || !v.jobs.some((j) => j.page === id && ['uploaded', 'uploading'].includes(j.state))) continue;
-      try { apply(v, await tb.api.call('/fb/video/drop', { method: 'POST', body: { uploadId: v.uploadId, page: id } })); } catch { /* 沒送出就不會發布 */ }
-    }
-  } else S.pageSel.add(id);
-  b.setAttribute('aria-pressed', String(S.pageSel.has(id)));
-  sync();
-});
-
-// ===== 時間（全部統一／每支各自）＋RD =====
-const allWhen = createWhen($('allWhen'), '全部影片的發布時間');
-segmented($('timeModeSeg'), 'tm', (m) => {
-  S.timeMode = m;
-  $('allWhen').hidden = m !== 'all';
-  S.videos.forEach((v) => v.ed.showEach(m === 'each'));
-});
+// ===== RD 開關 =====
 try { $('rdOn').checked = localStorage.getItem(RD_KEY) === '1'; } catch { /* 無痕等 */ }
 $('rdOn').addEventListener('change', () => { try { localStorage.setItem(RD_KEY, $('rdOn').checked ? '1' : '0'); } catch { /* 忽略 */ } syncRd(); });
 function syncRd() { for (const v of S.videos) v.ed.el.querySelector('.rd-slug-l').hidden = !$('rdOn').checked; }
@@ -113,10 +82,10 @@ function addFiles(files) {
   for (const f of files) {
     if (!/\.(mp4|mov)$/i.test(f.name) && !/^video\/(mp4|quicktime)$/.test(f.type)) { bad.push(f.name + '（只收 mp4／mov）'); continue; }
     if (f.size > MAX_SIZE) { bad.push(f.name + '（超過 10GB）'); continue; }
-    const v = { id: newId(), file: f, url: URL.createObjectURL(f), name: f.name, size: f.size, width: 0, height: 0, duration: NaN,
+    const v = { id: newId(), file: f, url: URL.createObjectURL(f), name: f.name, size: f.size, width: 0, height: 0, duration: NaN, thumb: '',
       kind: autoKind(f.name, 0, 0), kindManual: false, checked: true, uploadId: newId(), upload: 'idle', jobs: [], sent: false, rdDone: false, err: '' };
     v.ed = createEditor(v, edCtx);
-    v.ed.showEach(S.timeMode === 'each');
+    v.ed.renderPages();
     $('editors').append(v.ed.el);
     S.videos.push(v);
     v.metaP = readMeta(v);
@@ -126,19 +95,30 @@ function addFiles(files) {
   if (bad.length) toast('沒有加入：' + bad.join('、'));
   syncRd();
   renderQueue();
-  sync();
 }
-// 長寬與長度：讀到後重判類型（只在沒手動改過、還沒開始上傳時）
-// 回傳 Promise：讀到（或讀不到、逾時 4 秒）才 resolve；開始上傳前要等它，否則類型會在上傳開始後才被改判而和後端不一致
+
+// 長寬、長度、縮圖：用不放進畫面的 <video> 讀；讀到後重判類型（沒手動改過、還沒開始上傳時）
+// 回傳 Promise：讀到（或讀不到、逾時 4 秒）才 resolve；開始上傳前要等它，類型才不會在上傳後才被改判
 function readMeta(v) {
-  const pv = v.ed.el.querySelector('.pv');
+  const pv = document.createElement('video');
+  pv.muted = true; pv.preload = 'metadata'; pv.playsInline = true; pv.src = v.url;
   const settled = new Promise((res) => { pv.addEventListener('loadedmetadata', res, { once: true }); pv.addEventListener('error', res, { once: true }); setTimeout(res, 4000); });
   pv.addEventListener('loadedmetadata', () => {
     v.width = pv.videoWidth; v.height = pv.videoHeight; v.duration = pv.duration;
     const k = autoKind(v.name, v.width, v.height);
     if (!v.kindManual && k !== v.kind && !v.jobs.length) v.kind = k;
     v.ed.setMeta(); v.ed.kindInfo(); renderQueue();
-    if (!v.jobs.length) sync();
+    try { pv.currentTime = Math.min(1, (pv.duration || 0) / 3); } catch { /* 不能跳就用第一格 */ }
+  }, { once: true });
+  pv.addEventListener('seeked', () => {
+    try {
+      const w = 224, h = Math.max(1, Math.round((w * (pv.videoHeight || 9)) / (pv.videoWidth || 16)));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(pv, 0, 0, w, h);
+      v.thumb = c.toDataURL('image/jpeg', 0.7);
+    } catch { v.thumb = ''; }
+    pv.removeAttribute('src'); pv.load();
+    renderQueue();
   }, { once: true });
   return settled;
 }
@@ -146,6 +126,7 @@ function readMeta(v) {
 const edCtx = {
   settings: () => S.settings,
   presets: () => S.presets,
+  pages: () => S.pages,
   pageName,
   changed: () => renderQueue(),
   // 切換類型：上傳中擋；已開始上傳（還沒送出）就停掉舊的、用新類型重傳
@@ -157,17 +138,54 @@ const edCtx = {
     v.ed.kindInfo(); renderQueue();
     return true;
   },
+  canUncheck(v) {
+    if (isUploading(v)) { toast('影片上傳中，等上傳完成才能取消粉專（或先按「停止上傳」）'); return false; }
+    return true;
+  },
+  async pagesChanged(v, page, on) {
+    if (!on) await dropPage(v, page);
+    sync();
+  },
+  applyAll(v) {
+    const list = v.ed.getPages();
+    const want = new Set(list.map((x) => x.page));
+    const skipped = [];
+    for (const o of S.videos) {
+      if (o === v || o.sent) continue;
+      const removing = o.ed.selected().filter((p) => !want.has(p));
+      if (removing.length && isUploading(o)) { skipped.push(o.ed.titleText() || o.name); continue; }
+      o.ed.setPages(list);
+      for (const p of removing) dropPage(o, p);
+    }
+    toast(skipped.length ? `已套用；上傳中沒套用：${skipped.join('、')}` : '已套用到全部影片');
+    sync();
+  },
   restart: (v) => restartUpload(v, false)
 };
+// 已上傳但還沒送出的粉專：取消它的工作階段
+async function dropPage(v, page) {
+  if (v.sent || !v.jobs.some((j) => j.page === page && ['uploaded', 'uploading'].includes(j.state))) return;
+  try { apply(v, await tb.api.call('/fb/video/drop', { method: 'POST', body: { uploadId: v.uploadId, page } })); } catch { /* 沒送出就不會發布 */ }
+}
+// 重新上傳：停掉舊的、換新的 uploadId；已送出的，開好工作階段後自動用已送出的內容發布
 async function restartUpload(v, quiet) {
-  if (v.jobs.length && !v.sent) { try { await tb.api.call('/fb/video/stop', { method: 'POST', body: { uploadId: v.uploadId } }); } catch { /* 沒 finish 就不會發布 */ } }
-  v.uploadId = newId(); v.jobs = []; v.upload = 'idle'; v.err = ''; v.stopReq = false;
+  if (v.jobs.length) { try { await tb.api.call('/fb/video/stop', { method: 'POST', body: { uploadId: v.uploadId } }); } catch { /* 沒 finish 就不會發布 */ } }
+  v.uploadId = newId(); v.jobs = []; v.upload = 'idle'; v.err = ''; v.stopReq = false; v.next = null;
   v.ed.renderUpload(); renderQueue();
-  if (!quiet) toast('重新上傳：' + v.name);
-  sync();
+  if (!quiet) toast('重新上傳：' + (v.ed.titleText() || v.name));
+  if (!v.sent) { sync(); return; }
+  try {
+    const body = { ...v.sentBody, uploadId: v.uploadId };
+    const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: v.kind, pages: body.pages.map((x) => x.page) } });
+    v.next = r.next;
+    apply(v, r);
+    apply(v, await tb.api.call('/fb/video/publish', { method: 'POST', body }));
+    v.sentBody = body; v.rdDone = false;
+    pump(); poll();
+  } catch (e) { v.upload = 'error'; v.err = errText(e); v.next = null; v.ed.renderUpload(); renderQueue(); }
 }
 
-// ===== 影片列表（下拉） =====
+// ===== 左欄影片列表 =====
 function select(v) {
   S.cur = v;
   for (const x of S.videos) x.ed.el.hidden = x !== v;
@@ -175,40 +193,52 @@ function select(v) {
 }
 function renderQueue() {
   const list = $('vqList'); list.textContent = '';
-  $('vq').hidden = !S.videos.length;
   $('emptyHint').hidden = !!S.videos.length;
   S.videos.forEach((v, i) => {
     const li = document.createElement('li'); li.className = 'vq-item' + (v === S.cur ? ' is-cur' : '');
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = v.checked; cb.disabled = v.sent; cb.setAttribute('aria-label', '送出這支：' + v.name);
+    const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'vq-pick';
+    pick.setAttribute('aria-current', String(v === S.cur));
+    const th = document.createElement('span'); th.className = 'vq-thumb' + (v.height > v.width ? ' tall' : '');
+    if (v.thumb) { const img = document.createElement('img'); img.src = v.thumb; img.alt = ''; th.append(img); }
+    if (Number.isFinite(v.duration)) { const d = document.createElement('span'); d.className = 'vq-dur'; d.textContent = durText(v.duration); th.append(d); }
+    const tx = document.createElement('span'); tx.className = 'vq-text';
+    const nm = document.createElement('span'); nm.className = 'vq-name'; nm.textContent = v.ed.titleText() || v.name;
+    const meta = document.createElement('span'); meta.className = 'vq-meta';
+    const badge = document.createElement('span'); badge.className = 'badge' + (v.kind === 'reel' ? ' reel' : ''); badge.textContent = v.kind === 'reel' ? 'Reels' : '橫式';
+    meta.append(badge, document.createTextNode(queueState(v)));
+    tx.append(nm, meta);
+    const pct = uploadPct(v);
+    if (pct !== null) { const bar = document.createElement('span'); bar.className = 'vq-bar'; const f = document.createElement('i'); f.style.width = pct + '%'; bar.append(f); tx.append(bar); }
+    pick.append(th, tx);
+    pick.addEventListener('click', () => select(v));
+    const side = document.createElement('span'); side.className = 'vq-side';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = v.checked; cb.disabled = v.sent; cb.setAttribute('aria-label', `送出第 ${i + 1} 支：${v.name}`);
     cb.addEventListener('change', () => {
       if (!cb.checked && isUploading(v)) { cb.checked = true; toast('影片上傳中，等上傳完成才能取消勾選（或先按「停止上傳」）'); return; }
       v.checked = cb.checked; v.ed.renderUpload(); renderQueue(); sync();
     });
-    const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'vq-pick';
-    const nm = document.createElement('span'); nm.className = 'vq-name'; nm.textContent = `${i + 1}. ${v.ed.titleText() || v.name}`;
-    const meta = document.createElement('span'); meta.className = 'vq-meta';
-    meta.textContent = [v.kind === 'reel' ? 'Reels' : '橫式', sizeText(v.size), queueState(v)].filter(Boolean).join('．');
-    pick.append(nm, meta);
-    pick.addEventListener('click', () => { select(v); $('vq').open = false; });
     const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'vq-rm'; rm.textContent = '移除'; rm.setAttribute('aria-label', '移除 ' + v.name);
     rm.addEventListener('click', () => removeVideo(v));
-    li.append(cb, pick, rm);
+    side.append(cb, rm);
+    li.append(pick, side);
     list.append(li);
   });
-  const cur = S.cur ? S.videos.indexOf(S.cur) + 1 : 0;
-  $('vqSum').textContent = S.videos.length ? `影片 ${S.videos.length} 支（勾選 ${S.videos.filter((v) => v.checked).length}）・目前第 ${cur} 支：${S.cur ? (S.cur.ed.titleText() || S.cur.name) : ''}` : '影片';
+  $('vqSum').textContent = `影片 ${S.videos.length} 支` + (S.videos.length ? `（勾選 ${S.videos.filter((v) => v.checked).length}）` : '');
   updateFoot();
 }
+function uploadPct(v) {
+  const jobs = v.jobs.filter((j) => j.state !== 'canceled');
+  if (!jobs.length) return null;
+  return Math.floor((Math.min(...jobs.map((j) => (j.state === 'uploading' ? j.uploaded : j.size))) / Math.max(1, v.size)) * 100);
+}
 function queueState(v) {
-  if (v.sent) {
-    const st = [...new Set(v.jobs.filter((j) => j.sent).map((j) => STATE_TEXT[j.state] || j.state))];
-    return st.join('／');
-  }
+  if (!v.checked && !v.sent) return '未勾選';
   if (v.upload === 'stopped') return '已停止';
   if (v.upload === 'error') return '上傳失敗';
-  if (isUploading(v)) { const j = v.jobs.find((x) => x.state === 'uploading'); return `上傳中 ${Math.floor((j.uploaded / v.size) * 100)}%`; }
+  if (v.sent) return [...new Set(v.jobs.filter((j) => j.sent).map((j) => STATE_TEXT[j.state] || j.state))].join('／') || '已送出';
+  if (isUploading(v)) return `上傳中 ${uploadPct(v)}%`;
   if (v.jobs.some((j) => j.state === 'uploaded')) return '已上傳';
-  return '';
+  return v.ed.selected().length ? '' : '未選粉專';
 }
 async function removeVideo(v) {
   if (isUploading(v)) { toast('影片上傳中，等上傳完成才能移除（或先按「停止上傳」）'); return; }
@@ -258,8 +288,10 @@ async function pump() {
       v.upload = 'uploading';
       while (v.next && !v.stopReq) {
         const { start, end } = v.next;
+        const id = v.uploadId;
         try {
-          const r = await tb.api.call(`/fb/video/chunk?u=${v.uploadId}&start=${start}`, { method: 'POST', body: v.file.slice(start, end), binary: true });
+          const r = await tb.api.call(`/fb/video/chunk?u=${id}&start=${start}`, { method: 'POST', body: v.file.slice(start, end), binary: true });
+          if (id !== v.uploadId) break;   // 途中重新上傳了
           v.next = r.next;
           apply(v, r);
         } catch (e) {
@@ -299,31 +331,37 @@ function updateBusy() {
 
 // ===== 送出 =====
 function updateFoot() {
-  const n = S.videos.filter((v) => v.checked && !v.sent).length;
-  $('sendBtn').disabled = !n || !S.pageSel.size;
+  const ready = S.videos.filter((v) => v.checked && !v.sent);
+  const n = ready.length;
+  $('sendBtn').disabled = !n;
   $('sendBtn').textContent = n > 1 ? `全部送出（${n} 支）` : '全部送出';
-  $('footMsg').textContent = !S.pageSel.size ? '請選粉專' : !n ? '' : `${n} 支影片 × ${S.pageSel.size} 個粉專`;
+  const up = S.videos.filter(isUploading);
+  const parts = [];
+  if (n) parts.push(`${n} 支影片待送出`);
+  if (up.length) parts.push(`上傳中 ${up.length} 支`);
+  $('footMsg').textContent = parts.join('・');
 }
 $('sendBtn').addEventListener('click', async () => {
   const list = S.videos.filter((v) => v.checked && !v.sent);
-  if (!list.length || !S.pageSel.size) return;
+  if (!list.length) return;
   const forms = [];
   for (const v of list) {
-    const c = v.ed.collect();
     const label = `第 ${S.videos.indexOf(v) + 1} 支（${v.ed.titleText() || v.name}）`;
+    const c = v.ed.collect();
     if (c.error) { select(v); toast(label + '：' + c.error); return; }
-    const w = (S.timeMode === 'all' ? allWhen : v.ed.time).get(v.kind);
-    if (w.error) { select(v); toast(label + '：' + w.error); return; }
+    const p = v.ed.pagesForSend();
+    if (p.error) { select(v); v.ed.el.querySelector('.pg-dd').open = true; toast(label + '：' + p.error); return; }
     if (v.upload === 'stopped' || v.upload === 'error') { select(v); toast(label + '：上傳已停止或失敗，請按「重新上傳」'); return; }
-    forms.push({ v, body: { uploadId: v.uploadId, title: c.title, description: c.description, at: w.at, comments: c.comments } });
+    forms.push({ v, body: { uploadId: v.uploadId, title: c.title, description: c.description, comments: c.comments, pages: p.pages } });
   }
   $('sendBtn').disabled = true;
   await sync();   // 確保每支都開好工作階段
   for (const { v, body } of forms) {
     if (!v.jobs.length) { toast(`「${v.name}」還沒開始上傳，沒有送出`); continue; }
+    body.uploadId = v.uploadId;
     try {
       const r = await tb.api.call('/fb/video/publish', { method: 'POST', body });
-      v.sent = true; v.sentAt = Date.now(); v.at = body.at;
+      v.sent = true; v.sentAt = Date.now(); v.sentBody = body;
       v.ed.lock();
       apply(v, r);
     } catch (e) { select(v); toast(`「${v.ed.titleText()}」送出失敗：${errText(e)}`); }
@@ -348,7 +386,8 @@ async function poll() {
   } finally { polling = false; }
 }
 
-// RD：每支影片等所有已送出的粉專都有結果才寫一次；成功（處理中／已排程／已發布）的粉專有 RD 區段才寫
+// RD：每支影片等所有已送出的粉專都有結果才寫一次；成功的粉專有 RD 區段才寫
+// 時間：排程的粉專＝排程時間；立即＝按送出當下
 const OK_STATES = ['processing', 'scheduled', 'published'];
 async function maybeRd(v) {
   if (v.rdDone || !$('rdOn').checked) return;
@@ -357,13 +396,14 @@ async function maybeRd(v) {
   v.rdDone = true;
   const slug = v.ed.slugText();
   if (!slug) { toast(`「${v.ed.titleText()}」沒有 SLUG，RD 未寫入`); return; }
-  const ms = v.at ? v.at * 1000 : v.sentAt;
   const entries = [];
   for (const j of sent) {
     const p = S.pages.find((x) => x.id === j.page);
     if (!OK_STATES.includes(j.state) || !p || !p.rd) continue;
+    const at = ((v.sentBody && v.sentBody.pages) || []).find((x) => x.page === j.page);
+    const ms = at && at.at ? at.at * 1000 : v.sentAt;
     const e = { page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(v.kind, slug), style: 'video' };
-    if (!entries.some((x) => x.page === e.page)) entries.push(e);
+    if (!entries.some((x) => x.page === e.page && x.time === e.time && x.date === e.date)) entries.push(e);
   }
   if (!entries.length) return;
   try {
@@ -389,9 +429,13 @@ async function loadLog() {
       const li = document.createElement('li');
       const h = document.createElement('div'); h.className = 'log-title'; h.textContent = j0.title || j0.name;
       const m = document.createElement('div'); m.className = 'hint';
-      m.textContent = [j0.kind === 'reel' ? 'Reels' : '橫式影片', '送出 ' + fmt(j0.created), j0.at ? '排程 ' + fmt(j0.at * 1000) : '立即'].join('．');
+      m.textContent = [j0.kind === 'reel' ? 'Reels' : '橫式影片', '送出 ' + fmt(j0.created), sizeText(j0.size)].join('．');
       const st = document.createElement('div'); st.className = 'log-pages';
-      for (const j of list) { const s = document.createElement('span'); s.className = 'job s-' + j.state; s.textContent = `${pageName(j.page)}：${STATE_TEXT[j.state] || j.state}${j.error ? '（' + j.error + '）' : ''}`; st.append(s); }
+      for (const j of list) {
+        const s = document.createElement('span'); s.className = 'job s-' + j.state;
+        s.textContent = `${pageName(j.page)}：${STATE_TEXT[j.state] || j.state}${j.at ? ' ' + fmt(j.at * 1000) : ''}${j.error ? '（' + j.error + '）' : ''}`;
+        st.append(s);
+      }
       li.append(h, m, st);
       ul.append(li);
     }

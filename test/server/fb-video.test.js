@@ -68,22 +68,23 @@ test('橫式兩個粉專：一次上傳、後端轉給兩個粉專 → 先送出
   r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
   assert.deepEqual(r.body.data.next, { start: 4, end: 8 });
   // 中途就按送出：存文案，還不 finish
-  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: '標題', description: '\n【標題】\n#tag', at: null, comments: [{ message: '第一則', delay: 0 }, { message: '第二則', delay: 5 }] });
+  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: '標題', description: '\n【標題】\n#tag', pages: [{ page: '111', at: null }, { page: '222', at: nowSec() + 7200 }], comments: [{ message: '第一則', delay: 0 }, { message: '第二則', delay: 5 }] });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.ok(!f.calls.some((c) => c.body && c.body.upload_phase === 'finish'));
   assert.deepEqual(states(r), [['111', 'uploading'], ['222', 'uploading']]);
   r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=4', undefined, bytes(4));
   assert.deepEqual(offs, { 111: [0, 4], 222: [0, 4] });
   assert.equal(r.body.data.next, null);
-  assert.deepEqual(states(r), [['111', 'processing'], ['222', 'processing']]);
+  assert.deepEqual(states(r), [['111', 'processing'], ['222', 'scheduled']], '每個粉專各自時間：新聞立即、娛樂排程');
   const fin = f.calls.filter((c) => c.body && c.body.upload_phase === 'finish');
   assert.equal(fin.length, 2);
   assert.deepEqual([fin[0].body.title, fin[0].body.description, fin[0].body.published], ['標題', '\n【標題】\n#tag', undefined]);
+  assert.deepEqual([fin[1].body.published, fin[1].body.unpublished_content_type], ['false', 'SCHEDULED']);
   // 留言交給計時器（影片物件）
   const arms = RecTimer.log.filter((x) => x[0] === '/arm').map((x) => x[1]);
   assert.deepEqual(arms.map((a) => [a.pageId, a.postId, a.kind, a.items.map((i) => i.offset)]), [['111', 'V111', 'video', [0, 5]], ['222', 'V222', 'video', [0, 5]]]);
   // 再送一次不會重複 finish
-  await call(env, headers, '/fb/video/publish', { uploadId: UID, title: '標題', description: 'x', at: null });
+  await call(env, headers, '/fb/video/publish', { uploadId: UID, title: '標題', description: 'x', pages: [{ page: '111', at: null }, { page: '222', at: null }] });
   assert.equal(f.calls.filter((c) => c.body && c.body.upload_phase === 'finish').length, 2);
   // 狀態：查臉書，好了就是 published
   f.calls.length = 0;
@@ -91,7 +92,7 @@ test('橫式兩個粉專：一次上傳、後端轉給兩個粉專 → 先送出
   const g = installFetch({ 'GET /me/accounts': () => ACCOUNTS, 'GET /V111': () => ({ status: { video_status: 'ready', publishing_phase: { status: 'complete', publish_status: 'published' } } }), 'GET /V222': () => ({ status: { video_status: 'processing', processing_phase: { status: 'in_progress' } } }) });
   t.after(g.restore);
   r = await call(env, headers, '/fb/video/status?u=' + UID);
-  assert.deepEqual(states(r), [['111', 'published'], ['222', 'processing']]);
+  assert.deepEqual(states(r), [['111', 'published'], ['222', 'scheduled']]);
   // 列表
   r = await call(env, headers, '/fb/video/jobs');
   assert.deepEqual(r.body.data.map((j) => [j.page, j.title, j.kind]), [['111', '標題', 'video'], ['222', '標題', 'video']]);
@@ -125,10 +126,10 @@ test('Reels：start → rupload（offset、file_size、OAuth）→ 排程 finish
   assert.deepEqual([up.headers.authorization, up.headers.offset, up.headers.file_size], ['OAuth PT111', '0', '5']);
   assert.deepEqual(states(r), [['111', 'uploaded']]);
   // 時間太遠（Reels 29 天內）
-  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 'x', description: 'y', at: nowSec() + 40 * 86400 });
+  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 'x', description: 'y', pages: [{ page: '111', at: nowSec() + 40 * 86400 }] });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /29 天/);
-  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 'x', description: 'y', at });
+  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 'x', description: 'y', pages: [{ page: '111', at }] });
   assert.deepEqual(states(r), [['111', 'scheduled']]);
   const fin = f.calls.find((c) => c.path === '/111/video_reels' && c.body.upload_phase === 'finish');
   assert.deepEqual([fin.body.video_id, fin.body.video_state, fin.body.scheduled_publish_time], ['R1', 'SCHEDULED', String(at)]);
@@ -141,9 +142,9 @@ test('finish 結果不明 → 待確認，不重送；其他粉專照常', async
   });
   await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 2, kind: 'video', pages: ['111', '222'] });
   await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(2));
-  let r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', at: null });
+  let r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null }, { page: '222', at: null }] });
   assert.deepEqual(states(r), [['111', 'unknown'], ['222', 'processing']]);
-  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', at: null });
+  r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null }, { page: '222', at: null }] });
   assert.equal(f.calls.filter((c) => c.path === 'video:/111/videos' && c.body.upload_phase === 'finish').length, 1);
 });
 
@@ -173,9 +174,13 @@ test('驗證：start／publish 表單', async () => {
   assert.equal(parseStart({ ...ok, kind: 'photo' }), null);
   assert.equal(parseStart({ ...ok, size: 0 }), null);
   assert.equal(parseStart({ ...ok, pages: ['111', '111'] }), null);
-  const p = { uploadId: UID, title: 't', description: 'd', at: null };
+  const p = { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null }, { page: '222', at: null }] };
   assert.ok(parsePublish(p));
   assert.equal(parsePublish({ ...p, title: '' }), null);
+  assert.equal(parsePublish({ ...p, pages: [] }), null);
+  assert.equal(parsePublish({ ...p, pages: undefined }), null);
+  assert.equal(parsePublish({ ...p, pages: [{ page: '111', at: null }, { page: '111', at: null }] }), null);
+  assert.equal(parsePublish({ ...p, pages: [{ page: '111', at: 1.5 }] }), null);
   assert.equal(parsePublish({ ...p, title: 'a\nb' }), null);
   assert.equal(parsePublish({ ...p, description: '  ' }), null);
   assert.deepEqual(parsePublish({ ...p, comments: [{ message: 'a', delay: 3 }, { message: 'b', delay: 10 }] }).comments.map((c) => c.offset), [3, 13]);
@@ -240,7 +245,7 @@ test('慢回來的最後一段不會蓋掉「停止」：停止後不 finish', a
     }
   });
   await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 4, kind: 'video', pages: ['111'] });
-  await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', at: null, comments: [] });
+  await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null }, { page: '222', at: null }], comments: [] });
   stopFn = async () => { await call(env, headers, '/fb/video/stop', { uploadId: UID }); };
   const r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
   assert.deepEqual(states(r), [['111', 'stopped']]);

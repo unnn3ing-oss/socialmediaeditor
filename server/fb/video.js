@@ -187,7 +187,13 @@ export function parsePublish(b) {
   const title = typeof b.title === 'string' ? b.title.trim() : '';
   const description = typeof b.description === 'string' ? b.description : '';
   if (!title || [...title].length > MAX_TITLE || /[\r\n]/.test(title) || description.length > MAX_DESC || !description.trim()) return null;
-  if (b.at !== null && !Number.isInteger(b.at)) return null;
+  // 每個粉專各自的時間：[{ page, at（null＝立即） }]
+  if (!Array.isArray(b.pages) || b.pages.length < 1 || b.pages.length > 20) return null;
+  const pages = [];
+  for (const x of b.pages) {
+    if (!x || !validPage(x.page) || pages.some((y) => y.page === x.page) || (x.at !== null && !Number.isInteger(x.at))) return null;
+    pages.push({ page: x.page, at: x.at });
+  }
   const list = b.comments === undefined ? [] : b.comments;
   if (!Array.isArray(list) || list.length > MAX_COMMENTS) return null;
   let offset = 0;
@@ -200,17 +206,18 @@ export function parsePublish(b) {
     offset += d;
     comments.push({ message, offset });
   }
-  return { uploadId: b.uploadId, title, description, at: b.at, comments };
+  return { uploadId: b.uploadId, title, description, pages, comments };
 }
 export const timeOkFor = (kind, at, now = nowSec()) => at === null || (Number.isInteger(at) && at >= now + MIN_LEAD && at <= now + MAX_LEAD[kind]);
 
 export async function publish(env, form, who) {
   const list = await rows(env, form.uploadId);
   if (!list.length) return { error: 'not_found' };
-  if (!timeOkFor(list[0].kind, form.at)) return { error: 'fb_bad_time', message: list[0].kind === 'reel' ? 'Reels 排程時間必須在 10 分鐘到 29 天之間。' : '影片排程時間必須在 10 分鐘到 6 個月之間。' };
+  const when = new Map(form.pages.map((x) => [x.page, x.at]));
+  if (form.pages.some((x) => !timeOkFor(list[0].kind, x.at))) return { error: 'fb_bad_time', message: list[0].kind === 'reel' ? 'Reels 排程時間必須在 10 分鐘到 29 天之間。' : '影片排程時間必須在 10 分鐘到 6 個月之間。' };
   for (const r of list) {
-    if (r.sent || !['uploading', 'uploaded'].includes(r.state)) continue;
-    await update(env, r, { sent: 1, title: form.title, description: form.description, at: form.at, comments: JSON.stringify(form.comments), who: String(who && who.uid || r.who) });
+    if (r.sent || !when.has(r.page) || !['uploading', 'uploaded'].includes(r.state)) continue;
+    await update(env, r, { sent: 1, title: form.title, description: form.description, at: when.get(r.page), comments: JSON.stringify(form.comments), who: String(who && who.uid || r.who) });
   }
   await finishReady(env, form.uploadId, who);
   return result(env, form.uploadId);

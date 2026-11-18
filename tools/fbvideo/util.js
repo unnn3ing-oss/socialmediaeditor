@@ -1,4 +1,4 @@
-// 影片發布：共用小工具（確認視窗、提示、時間格式、時間選擇）
+// 影片發布：共用小工具（確認視窗、提示、時間格式）
 export const $ = (id) => document.getElementById(id);
 export const errText = (e) => (e && e.message) || '失敗';
 const pad = (n) => String(n).padStart(2, '0');
@@ -47,29 +47,4 @@ export function segmented(root, key, onPick) {
     if (onPick(b.dataset[key]) !== false) set(b.dataset[key]);
   });
   return set;
-}
-
-// 時間：［立即｜排程］＋日期時間；get(kind) → { at:null } | { at:秒 } | { error }
-export function createWhen(box, label) {
-  box.innerHTML = '';
-  const seg = document.createElement('div'); seg.className = 'seg seg-sm'; seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', label);
-  seg.innerHTML = '<button type="button" data-w="now" class="is-on" aria-pressed="true">立即</button><button type="button" data-w="sched" aria-pressed="false">排程</button>';
-  const dt = document.createElement('input'); dt.type = 'datetime-local'; dt.hidden = true; dt.setAttribute('aria-label', label + '：排程日期時間');
-  box.append(seg, dt);
-  let mode = 'now';
-  segmented(seg, 'w', (v) => {
-    mode = v; dt.hidden = v !== 'sched';
-    if (v === 'sched' && !dt.value) dt.value = toLocalInput(Math.ceil((Date.now() + 30 * 60000) / 600000) * 600000);
-  });
-  return {
-    get(kind) {
-      if (mode === 'now') return { at: null };
-      const ms = Date.parse(dt.value);
-      if (!Number.isFinite(ms)) return { error: '請選排程時間' };
-      const at = Math.floor(ms / 1000), now = Math.floor(Date.now() / 1000);
-      if (at < now + MIN_S || at > now + MAX_S[kind]) return { error: rangeText(kind) };
-      return { at };
-    },
-    disable(on) { for (const el of box.querySelectorAll('button,input')) el.disabled = on; }
-  };
 }

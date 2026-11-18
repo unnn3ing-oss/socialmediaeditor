@@ -17,6 +17,6 @@
 | 後端 | `/fb/video/publish` 改收 `pages:[{page, at}]`，每個粉專各自檢查排程範圍 |
 
 ## 下一步
-- [ ] 後端 parsePublish／publish 改 per-page at＋測試
-- [ ] 前端 index.html／fbvideo.css／app.js／editor.js 改版
+- [x] 後端 parsePublish／publish 改 per-page at＋測試
+- [x] 前端 index.html／fbvideo.css／app.js／editor.js 改版（e2e 6 項通過）
 - [ ] e2e 更新、獨立審查、截圖

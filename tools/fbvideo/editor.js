@@ -1,6 +1,7 @@
-// 每支影片一個編輯區（從 <template> 複製；切換影片只隱藏，內容保留）
+// 每支影片一個內容區（從 <template> 複製；切換影片只隱藏，內容保留）
+// 由上而下：上傳狀態、類型、影片標題、影片內文、標籤（按鈕＋自訂）、授權、發布粉專（各自立即／排程）、留言、RD SLUG
 import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, REEL_MAX_SEC } from './rules.js';
-import { createWhen, segmented, sizeText, durText, fmt } from './util.js';
+import { segmented, sizeText, durText, fmt, toLocalInput, MIN_S, MAX_S, rangeText } from './util.js';
 
 const MAX_COMMENTS = 3;
 const FIRST_DELAYS = [0, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 360, 720, 1440];
@@ -19,13 +20,13 @@ export const jobText = (j) => {
   if (j.error) t += '：' + j.error;
   return t;
 };
+// 自訂 hashtag：去空白、補 #
+export const normTag = (s) => { const t = String(s || '').replace(/\s+/g, '').replace(/^#+/, ''); return t ? '#' + t : ''; };
 
 export function createEditor(v, ctx) {
   const el = document.getElementById('edTpl').content.firstElementChild.cloneNode(true);
   const q = (s) => el.querySelector(s);
-  const pv = q('.pv'), title = q('.title'), msg = q('.msg'), lic = q('.lic'), slug = q('.slug');
-  pv.src = v.url;
-  pv.setAttribute('aria-label', '影片預覽：' + v.name);
+  const title = q('.title'), msg = q('.msg'), lic = q('.lic'), slug = q('.slug');
 
   const st = ctx.settings();
   const t0 = titleFromName(v.name, st);
@@ -45,13 +46,13 @@ export function createEditor(v, ctx) {
     ctx.changed(v);
   });
 
-  // hashtag 按鈕：Reels 自動那個＋管理頁設定的
-  const tagBox = q('.tags');
+  // ===== 標籤：Reels 自動那個＋管理頁設定的＋這支影片自訂的 =====
+  const tagBox = q('.tags'), tagIn = q('.tag-in');
+  const custom = [];
   function renderTags() {
     const s = ctx.settings();
-    const list = [...new Set([s.reelsTag, ...s.tags].filter(Boolean))];
+    const list = [...new Set([s.reelsTag, ...s.tags, ...custom].filter(Boolean))];
     tagBox.textContent = '';
-    tagBox.hidden = !list.length;
     for (const tg of list) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tag'; b.textContent = tg; b.dataset.tag = tg;
       tagBox.append(b);
@@ -62,11 +63,18 @@ export function createEditor(v, ctx) {
     const on = new Set(tagsIn(msg.value));
     for (const b of tagBox.querySelectorAll('.tag')) b.setAttribute('aria-pressed', String(on.has(b.dataset.tag)));
   }
-  tagBox.addEventListener('click', (e) => {
-    const b = e.target.closest('.tag'); if (!b || b.disabled) return;
-    const r = toggleTag(msg.value, b.dataset.tag);
-    msg.value = r.text; fallback(r.fallback); syncTags();
-  });
+  function flip(tag) { const r = toggleTag(msg.value, tag); msg.value = r.text; fallback(r.fallback); syncTags(); }
+  tagBox.addEventListener('click', (e) => { const b = e.target.closest('.tag'); if (b && !b.disabled) flip(b.dataset.tag); });
+  function addCustom() {
+    const tag = normTag(tagIn.value);
+    if (!tag) return;
+    if (![...tagBox.querySelectorAll('.tag')].some((b) => b.dataset.tag === tag)) { custom.push(tag); renderTags(); }
+    if (!tagsIn(msg.value).includes(tag)) flip(tag);
+    tagIn.value = '';
+    tagIn.focus();
+  }
+  q('.tag-add-btn').addEventListener('click', addCustom);
+  tagIn.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); addCustom(); } });
   msg.addEventListener('input', () => { syncTags(); fallback(false); });
   lic.addEventListener('input', () => {
     const r = setLicense(msg.value, lic.value, prevLic);
@@ -74,22 +82,65 @@ export function createEditor(v, ctx) {
   });
   renderTags();
 
-  // 類型
+  // ===== 類型 =====
   const why = q('.kind-why'), kwarn = q('.kind-warn');
   const setKindBtn = segmented(q('.kind'), 'kind', (k) => (k === v.kind ? false : ctx.setKind(v, k)));
   function kindInfo() {
     setKindBtn(v.kind);
-    why.textContent = v.kindManual ? '手動選擇' : /^(reels|shorts)_/i.test(v.name) ? '依檔名判斷' : v.width ? `依長寬判斷（${v.height > v.width ? '直式' : '橫式'}）` : '';
+    why.textContent = v.kindManual ? '手動選擇' : /^(reels|shorts)_/i.test(v.name) ? '自動判斷：檔名' : v.width ? `自動判斷：${v.height > v.width ? '直式' : '橫式'}畫面` : '';
     const d = v.duration;
     const bad = v.kind === 'reel' && Number.isFinite(d) && (d > REEL_MAX_SEC || d < 3);
     kwarn.hidden = !bad;
     kwarn.textContent = bad ? `Reels 只能 3～90 秒（這支 ${durText(d)}），請改成橫式影片` : '';
   }
 
-  // 每支各自的時間
-  const whenEach = createWhen(q('.when-each .when'), '這支影片的發布時間');
+  // ===== 發布粉專：條列、勾選＋立即／排程（排程才出時間） =====
+  const pgList = q('.pg-list'), pgSum = q('.pg-sum');
+  const rows = new Map();   // page id -> { li, cb, mode, dt }
+  function renderPages() {
+    pgList.textContent = '';
+    rows.clear();
+    for (const p of ctx.pages()) {
+      const li = document.createElement('li'); li.className = 'pg';
+      const lab = document.createElement('label'); lab.className = 'pg-nm';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.dataset.page = p.id;
+      lab.append(cb, document.createTextNode(p.short));
+      const mode = document.createElement('select'); mode.className = 'pg-mode'; mode.hidden = true; mode.setAttribute('aria-label', p.short + ' 發布方式');
+      mode.innerHTML = '<option value="now">立即</option><option value="sched">排程</option>';
+      const dt = document.createElement('input'); dt.type = 'datetime-local'; dt.className = 'pg-dt'; dt.hidden = true; dt.setAttribute('aria-label', p.short + ' 排程時間');
+      cb.addEventListener('change', () => {
+        if (!cb.checked && !ctx.canUncheck(v, p.id)) { cb.checked = true; return; }
+        sync1(p.id); ctx.pagesChanged(v, p.id, cb.checked);
+      });
+      mode.addEventListener('change', () => {
+        if (mode.value === 'sched' && !dt.value) dt.value = toLocalInput(Math.ceil((Date.now() + 30 * 60000) / 600000) * 600000);
+        sync1(p.id);
+      });
+      dt.addEventListener('input', summary);
+      li.append(lab, mode, dt);
+      pgList.append(li);
+      rows.set(p.id, { li, cb, mode, dt });
+    }
+    summary();
+  }
+  function sync1(id) {
+    const r = rows.get(id);
+    r.mode.hidden = !r.cb.checked;
+    r.dt.hidden = !r.cb.checked || r.mode.value !== 'sched';
+    r.li.classList.toggle('on', r.cb.checked);
+    summary();
+  }
+  function summary() {
+    const on = [...rows.entries()].filter(([, r]) => r.cb.checked);
+    const name = (id) => (ctx.pages().find((p) => p.id === id) || {}).short || id;
+    pgSum.textContent = on.length
+      ? `已選 ${on.length} 個粉專：` + on.map(([id, r]) => `${name(id)}（${r.mode.value === 'sched' && r.dt.value ? '排程 ' + fmt(Date.parse(r.dt.value)) : '立即'}）`).join('、')
+      : '尚未選粉專（點這裡選）';
+    ctx.changed(v);
+  }
+  q('.apply-all').addEventListener('click', () => ctx.applyAll(v));
 
-  // 留言
+  // ===== 留言 =====
   const cmList = q('.cm-list'), cmAdd = q('.cm-add');
   function presetOptions(sel) {
     const cur = sel.value;
@@ -134,52 +185,75 @@ export function createEditor(v, ctx) {
   });
   renumber();
 
-  // 上傳進度與各粉專狀態
+  // ===== 上傳進度與各粉專狀態 =====
   const fill = q('.bar-fill'), upText = q('.up-text'), jobsEl = q('.jobs'), restart = q('.restart');
   restart.addEventListener('click', () => ctx.restart(v));
   function renderUpload() {
     const jobs = v.jobs.filter((j) => j.state !== 'canceled');
     const up = jobs.filter((j) => j.state === 'uploading');
-    const done = v.size ? Math.min(...(jobs.length ? jobs.map((j) => (j.state === 'uploading' ? j.uploaded : j.size)) : [0])) : 0;
-    const pct = jobs.length ? Math.floor((done / v.size) * 100) : 0;
+    const done = jobs.length ? Math.min(...jobs.map((j) => (j.state === 'uploading' ? j.uploaded : j.size))) : 0;
+    const pct = jobs.length ? Math.floor((done / Math.max(1, v.size)) * 100) : 0;
     fill.style.width = pct + '%';
     let text;
-    if (v.upload === 'stopped') text = '已停止上傳';
-    else if (v.upload === 'error') text = '上傳失敗：' + (v.err || '');
-    else if (!jobs.length) text = v.checked ? '勾選粉專後開始上傳' : '沒有勾選，不會上傳';
+    if (v.upload === 'stopped') text = '已停止上傳' + (v.sent ? '（已送出的不會發布，可按「重新上傳」）' : '');
+    else if (v.upload === 'error') text = '上傳失敗：' + (v.err || '') + (v.sent ? '（按「重新上傳」，傳完會用已送出的內容自動發布）' : '');
+    else if (!jobs.length) text = v.checked ? '勾選發布粉專後開始上傳' : '沒有勾選，不會上傳';
     else if (up.length) text = `上傳中 ${pct}%（${sizeText(done)}／${sizeText(v.size)}）`;
     else text = '上傳完成';
     upText.textContent = text;
-    restart.hidden = !(v.upload === 'stopped' || v.upload === 'error') || v.sent;
+    restart.hidden = !(v.upload === 'stopped' || v.upload === 'error');
     jobsEl.textContent = '';
     for (const j of v.jobs) {
+      if (j.state === 'canceled') continue;
       const li = document.createElement('li');
       li.className = 'job s-' + j.state;
       li.textContent = ctx.pageName(j.page) + '：' + jobText(j);
       jobsEl.append(li);
     }
   }
-
-  q('.meta').textContent = [v.name, sizeText(v.size)].join('．');
-  function setMeta() { q('.meta').textContent = [v.name, sizeText(v.size), v.width ? `${v.width}×${v.height}` : '', durText(v.duration)].filter(Boolean).join('．'); }
+  const metaEl = q('.meta');
+  function setMeta() { metaEl.textContent = [v.name, sizeText(v.size), v.width ? `${v.width}×${v.height}` : '', durText(v.duration)].filter(Boolean).join('．'); }
+  setMeta();
 
   return {
     el,
-    kindInfo,
-    setMeta,
-    renderTags,
-    renderUpload,
+    kindInfo, setMeta, renderTags, renderUpload, renderPages,
     refreshPresets() { cmList.querySelectorAll('select.preset').forEach(presetOptions); },
-    showEach(on) { q('.when-each').hidden = !on; },
-    time: whenEach,
     titleText: () => title.value.trim(),
     slugText: () => slugOf(slug.value, title.value),
+    selected: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([id]) => id),
+    // 套用到全部影片用：[{ page, mode, dt }]
+    getPages: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([page, r]) => ({ page, mode: r.mode.value, dt: r.dt.value })),
+    setPages(list) {
+      for (const [id, r] of rows) {
+        const x = list.find((y) => y.page === id);
+        r.cb.checked = !!x;
+        if (x) { r.mode.value = x.mode; r.dt.value = x.dt; }
+        sync1(id);
+      }
+    },
+    // 送出用：[{ page, at }] 或 { error }
+    pagesForSend() {
+      const out = [];
+      const now = Math.floor(Date.now() / 1000);
+      for (const [page, r] of rows) {
+        if (!r.cb.checked) continue;
+        if (r.mode.value !== 'sched') { out.push({ page, at: null }); continue; }
+        const ms = Date.parse(r.dt.value);
+        if (!Number.isFinite(ms)) return { error: `${ctx.pageName(page)} 請選排程時間` };
+        const at = Math.floor(ms / 1000);
+        if (at < now + MIN_S || at > now + MAX_S[v.kind]) return { error: `${ctx.pageName(page)}：${rangeText(v.kind)}` };
+        out.push({ page, at });
+      }
+      if (!out.length) return { error: '請勾選發布粉專' };
+      return { pages: out };
+    },
     // 送出前收集；不合法回 { error }
     collect() {
       const t = title.value.trim();
-      if (!t) return { error: '沒有臉書標題' };
+      if (!t) return { error: '沒有影片標題' };
       const description = stripLead(msg.value).replace(/\s+$/, '');
-      if (!description) return { error: '沒有貼文內容' };
+      if (!description) return { error: '沒有影片內文' };
       if (!kwarn.hidden) return { error: kwarn.textContent };
       const comments = [];
       for (const [i, row] of [...cmList.children].entries()) {
@@ -191,8 +265,7 @@ export function createEditor(v, ctx) {
     },
     lock() {
       el.classList.add('locked');
-      q('.ed-right').disabled = true;
-      whenEach.disable(true);
+      q('.ed-body').disabled = true;
     }
   };
 }

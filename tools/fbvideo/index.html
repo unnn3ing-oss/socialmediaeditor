@@ -36,21 +36,22 @@
     </div>
   </header>
 
-  <!-- 新增影片 -->
-  <section id="tab-new" class="fv-new">
-    <div class="drop" id="drop">
-      <input type="file" id="fileIn" accept="video/mp4,video/quicktime,.mp4,.mov" multiple hidden>
-      <button type="button" class="btn btn-secondary" id="pickBtn">選擇影片</button>
-      <span class="hint">或把影片拖到這裡（mp4／mov，可一次多支）</span>
-    </div>
-
-    <details class="vq" id="vq" hidden>
-      <summary><span id="vqSum">影片</span><span class="vq-caret" aria-hidden="true"></span></summary>
-      <ul class="vq-list" id="vqList" aria-label="影片列表"></ul>
-    </details>
-
-    <div id="editors"></div>
-    <p class="empty hint" id="emptyHint">還沒有影片。選好粉專與影片後會在背景開始上傳，上傳時可以繼續填文案。</p>
+  <!-- 新增影片：左 1/3 列表、右 2/3 內容 -->
+  <section id="tab-new" class="fv-grid">
+    <aside class="side" id="drop" aria-label="影片列表">
+      <div class="side-head">
+        <b id="vqSum">影片 0 支</b>
+        <span class="grow"></span>
+        <input type="file" id="fileIn" accept="video/mp4,video/quicktime,.mp4,.mov" multiple hidden>
+        <button type="button" class="btn btn-secondary btn-sm" id="pickBtn">＋ 加影片</button>
+      </div>
+      <p class="drop-hint">拖曳影片到這裡（mp4／mov，可多支）</p>
+      <ul class="vq-list" id="vqList"></ul>
+    </aside>
+    <section class="main" aria-label="影片內容">
+      <div id="editors"></div>
+      <p class="empty hint" id="emptyHint">還沒有影片。加影片並勾選粉專後會在背景開始上傳，上傳時可以繼續填文案。</p>
+    </section>
   </section>
 
   <!-- 送出紀錄 -->
@@ -64,69 +65,60 @@
 
   <footer class="fv-foot" id="foot">
     <div class="foot-row">
-      <span class="foot-lbl">粉專</span>
-      <div class="chips" id="pageChips" role="group" aria-label="發布到哪些粉專"></div>
-    </div>
-    <div class="foot-row">
-      <span class="foot-lbl">時間</span>
-      <div class="seg seg-sm" id="timeModeSeg" role="group" aria-label="時間設定方式">
-        <button type="button" data-tm="all" class="is-on" aria-pressed="true">全部統一</button>
-        <button type="button" data-tm="each" aria-pressed="false">每支各自</button>
-      </div>
-      <div class="when" id="allWhen"></div>
-      <span class="grow"></span>
-      <label class="switch-wrap rd-wrap"><input type="checkbox" class="switch" id="rdOn"> 排入 RD</label>
-    </div>
-    <div class="foot-row foot-act">
       <p class="hint" id="footMsg" role="status"></p>
       <span class="grow"></span>
+      <label class="switch-wrap rd-wrap"><input type="checkbox" class="switch" id="rdOn"> 排入 RD</label>
       <button type="button" class="btn btn-secondary" id="stopBtn" hidden>停止上傳</button>
       <button type="button" class="btn btn-primary" id="sendBtn">全部送出</button>
     </div>
   </footer>
 </main>
 
-<!-- 每支影片的編輯區（隱藏切換，內容保留） -->
+<!-- 每支影片的內容（隱藏切換，內容保留） -->
 <template id="edTpl">
   <section class="ed card">
-    <div class="ed-grid">
-      <div class="ed-left">
-        <video class="pv" controls preload="metadata" playsinline></video>
-        <p class="meta hint"></p>
-        <div class="up">
-          <div class="bar-track"><div class="bar-fill"></div></div>
-          <p class="up-text hint" role="status"></p>
-          <ul class="jobs"></ul>
-          <button type="button" class="btn btn-secondary btn-sm restart" hidden>重新上傳</button>
-        </div>
-      </div>
-      <fieldset class="ed-right">
-        <legend class="sr">影片內容</legend>
-        <div class="row">
-          <span class="lbl">類型</span>
-          <div class="seg seg-sm kind" role="group" aria-label="影片類型">
-            <button type="button" data-kind="video" aria-pressed="false">橫式影片</button>
-            <button type="button" data-kind="reel" aria-pressed="false">Reels</button>
-          </div>
-          <span class="kind-why hint"></span>
-        </div>
-        <p class="kind-warn warn" hidden></p>
-        <label class="lbl">臉書標題<input type="text" class="title" maxlength="255"></label>
-        <label class="lbl">貼文內容<textarea class="msg" rows="7"></textarea></label>
-        <p class="msg-warn warn" hidden></p>
-        <div class="tags" role="group" aria-label="hashtag"></div>
-        <label class="lbl">影片授權<input type="text" class="lic" placeholder="照原樣放在 hashtag 下一行，空白＝不放"></label>
-        <div class="when-each" hidden>
-          <span class="lbl">時間</span>
-          <div class="when"></div>
-        </div>
-        <div class="cm">
-          <div class="cm-list"></div>
-          <button type="button" class="btn btn-secondary btn-sm cm-add">＋ 新增留言</button>
-        </div>
-        <label class="lbl rd-slug-l">RD SLUG<input type="text" class="slug" maxlength="20"></label>
-      </fieldset>
+    <div class="up">
+      <p class="meta hint"></p>
+      <div class="bar-track"><div class="bar-fill"></div></div>
+      <p class="up-text hint" role="status"></p>
+      <ul class="jobs"></ul>
+      <button type="button" class="btn btn-secondary btn-sm restart" hidden>重新上傳</button>
     </div>
+    <fieldset class="ed-body">
+      <legend class="sr">影片內容</legend>
+      <span class="lbl">類型</span>
+      <div class="row">
+        <div class="seg seg-sm kind" role="group" aria-label="影片類型">
+          <button type="button" data-kind="video" aria-pressed="false">橫式影片</button>
+          <button type="button" data-kind="reel" aria-pressed="false">Reels</button>
+        </div>
+        <span class="kind-why hint"></span>
+      </div>
+      <p class="kind-warn warn" hidden></p>
+      <label class="lbl">影片標題<span class="sub">（臉書標題欄位）</span><input type="text" class="title" maxlength="255"></label>
+      <label class="lbl">影片內文<textarea class="msg" rows="7"></textarea></label>
+      <p class="msg-warn warn" hidden></p>
+      <span class="lbl">標籤（hashtag）</span>
+      <div class="tags" role="group" aria-label="hashtag"></div>
+      <div class="tag-add">
+        <input type="text" class="tag-in" maxlength="50" placeholder="自訂 hashtag，例：颱風" aria-label="自訂 hashtag">
+        <button type="button" class="btn btn-secondary btn-sm tag-add-btn">＋ 加入</button>
+      </div>
+      <label class="lbl">授權<input type="text" class="lic" placeholder="照原樣放在 hashtag 下一行，空白＝不放"></label>
+      <div class="pg-head">
+        <span class="lbl">發布粉專</span>
+        <span class="grow"></span>
+        <button type="button" class="btn btn-secondary btn-sm apply-all">套用到全部影片</button>
+      </div>
+      <details class="pg-dd">
+        <summary><span class="pg-sum">尚未選粉專</span><span class="caret" aria-hidden="true"></span></summary>
+        <ul class="pg-list"></ul>
+      </details>
+      <span class="lbl">留言（選填）</span>
+      <div class="cm-list"></div>
+      <button type="button" class="btn btn-secondary btn-sm cm-add">＋ 新增留言</button>
+      <label class="lbl rd-slug-l">RD SLUG<input type="text" class="slug" maxlength="20"></label>
+    </fieldset>
   </section>
 </template>
 
