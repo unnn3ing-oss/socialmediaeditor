@@ -41,6 +41,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
       const body = req.postData() || '';
       api.posts.push(body);
       const targets = JSON.parse(/name="targets"\r\n\r\n([^\r]*)\r\n/.exec(body)[1]);
+      if (opts.post) return json(opts.post(targets, body));
       return json({ results: targets.map((t) => (t.page === '222'   // 替身後端：娛樂一定失敗
         ? { page: t.page, ok: false, scheduled: false, comment: 'none', error: '臉書拒絕' }
         : { page: t.page, ok: true, postId: t.page + '_9', scheduled: t.at != null, at: t.at ?? undefined, comment: t.at != null ? 'armed' : 'done' })) });
@@ -809,4 +810,51 @@ test('沒有 view 權限：列表區隱藏並提示；讀不到 /fb/me 視為全
   assert.equal(await b.page.isVisible('#newBtn'), true);
   assert.equal(await b.page.isVisible('#listCard'), true);
   await b.page.close();
+});
+
+test('防重複：同一則再送沿用 sendId；結果不明先確認，確定才帶 retry；換網址換新 sendId', async () => {
+  const field = (body, k) => { const m = new RegExp('name="' + k + '"\\r\\n\\r\\n([^\\r]*)\\r\\n').exec(body); return m ? m[1] : null; };
+  let n = 0;
+  const { page, api } = await newPage('admin', undefined, { post: (targets) => {
+    n++;
+    return { results: targets.map((t) => (t.page === '111'
+      ? (n === 1 ? { page: '111', ok: true, postId: '111_9', scheduled: false, comment: 'done' } : { page: '111', ok: true, dup: true, postId: '111_9', scheduled: false, comment: 'none' })
+      : (n < 3 ? { page: t.page, ok: false, unknown: true, scheduled: false, comment: 'none', error: '連不上臉書' } : { page: t.page, ok: true, postId: t.page + '_1', scheduled: false, comment: 'done' }))) };
+  } });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await pasteImage(page, fakeAsset());
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+  await page.fill('#msg', 'm');
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.click(chip(111) + ' .chip-l');
+  await page.click(chip(333) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => /待確認/.test(document.getElementById('results').textContent));
+  assert.match(await page.textContent('#results'), /國際：待確認（連不上臉書）：可能已經發出/);
+  const sid = field(api.posts[0], 'sendId');
+  assert.match(sid, /^[A-Za-z0-9-]{8,64}$/);
+  assert.equal(field(api.posts[0], 'retry'), null);
+  // 再送：先問；返回＝不送
+  await page.click('#sendBtn');
+  await page.waitForSelector('#cfDlg[open]');
+  assert.match(await page.textContent('#cfBody'), /^國際 上次送出時沒有收到臉書的結果/);
+  await page.click('#cfNo');
+  await page.waitForTimeout(200);
+  assert.equal(api.posts.length, 1);
+  // 確定＝同 sendId＋retry
+  await page.click('#sendBtn');
+  await page.waitForSelector('#cfDlg[open]');
+  await page.click('#cfYes');
+  await page.waitForFunction(() => /先前已發布，這次未重送/.test(document.getElementById('results').textContent));
+  assert.equal(field(api.posts[1], 'sendId'), sid);
+  assert.equal(field(api.posts[1], 'retry'), '["333"]');
+  // 換網址＝新的一則：換 sendId、不再問待確認
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/2');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(api.posts.length, 3);
+  assert.notEqual(field(api.posts[2], 'sendId'), sid);
+  assert.equal(field(api.posts[2], 'retry'), null);
+  await page.close();
 });

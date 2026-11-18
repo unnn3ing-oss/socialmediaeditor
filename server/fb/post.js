@@ -3,6 +3,7 @@ import { graph, GraphError } from './graph.js';
 import { pageTokens, pageUtm } from './pages.js';
 import { commentText, postComment, MAX_LEAD as MAX_COMMENT_LEAD } from './comment.js';
 import { armTimer } from './timer.js';
+import { claimSend, finishSend } from './sends.js';
 
 export { commentLink, commentText } from './comment.js';
 
@@ -59,7 +60,16 @@ export function parsePostForm(fd) {
   }
   const extras = parseExtras(fd.get('comments'));
   if (!extras) return null;
-  return { message, link, lead, file, extras, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  // sendId：前端每則發文一組（防重複發文）；沒帶＝不記錄（舊頁面）
+  const sendId = fd.has('sendId') ? String(fd.get('sendId')) : '';
+  if (sendId && !/^[A-Za-z0-9-]{8,64}$/.test(sendId)) return null;
+  // retry：使用者確認過要重送的「待確認」粉專
+  let retry = [];
+  if (fd.has('retry')) {
+    try { retry = JSON.parse(String(fd.get('retry'))); } catch { return null; }
+    if (!Array.isArray(retry) || !retry.every((id) => seen.has(id))) return null;
+  }
+  return { message, link, lead, file, extras, sendId, retry, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
 async function publishOne(env, page, token, { message, file, at }) {
@@ -76,7 +86,9 @@ async function publishOne(env, page, token, { message, file, at }) {
     fd.set('source', file, file.name || 'image.jpg');
     fd.set('published', 'false');
     fd.set('temporary', 'true');
-    const photo = await graph(env, 'POST', '/' + page + '/photos', fd, token);
+    let photo;
+    // 暫存照片不會發布：這步結果不明也能安全重送，當一般失敗
+    try { photo = await graph(env, 'POST', '/' + page + '/photos', fd, token); } catch (e) { if (e instanceof GraphError) e.uncertain = false; throw e; }
     const d = await graph(env, 'POST', '/' + page + '/feed', {
       message,
       'attached_media[0]': { media_fbid: String(photo.id) },
@@ -102,12 +114,28 @@ export async function createPosts(env, form) {
     const p = tokens.get(t.page);
     if (!p) { r.error = '找不到這個粉專（token 沒有管理權限）'; continue; }
     if (scheduled && !timeOk(t.at, now)) { r.error = 'fb_bad_time'; continue; }
+    const sid = form.sendId;
+    if (sid) {
+      let c;
+      try { c = await claimSend(env, sid, t.page, { retry: (form.retry || []).includes(t.page), scheduled, at: scheduled ? t.at : null }); }
+      catch { r.error = '無法記錄送出狀態，這個粉專未送出'; continue; }
+      if (!c.claimed) {
+        if (c.status === 'ok') {   // 這則先前已成功：不重送、不留言
+          Object.assign(r, { ok: true, dup: true, postId: c.postId, scheduled: c.scheduled, comment: 'none' });
+          if (c.scheduled && c.at) r.at = c.at; else delete r.at;
+        } else { r.unknown = true; r.error = c.status === 'pending' ? '上一次送出還沒有結果' : '上一次送出結果不明'; }
+        continue;
+      }
+    }
     try {
       r.postId = await publishOne(env, t.page, p.token, { message: form.message, file: form.file, at: t.at });
       r.ok = true;
+      if (sid) await finishSend(env, sid, t.page, 'ok', r.postId);
     } catch (e) {
       if (!(e instanceof GraphError)) throw e;
       r.error = String(e.message).slice(0, 200);
+      if (e.uncertain) r.unknown = true;   // 臉書可能已發出：待確認，不能直接重送
+      if (sid) await finishSend(env, sid, t.page, e.uncertain ? 'unknown' : 'failed');
       continue;
     }
     const extras = form.extras || [];

@@ -25,11 +25,11 @@ export function createRd({ tb }) {
     const entries = [];
     for (const r of results) {
       const p = pageOf(r.page);
-      if (!r.ok || !p || !p.rd) continue;
+      if (!r.ok || r.dup || !p || !p.rd) continue;   // dup＝先前已送出（RD 當時已寫過）
       const ms = r.scheduled && r.at ? r.at * 1000 : sentAt;
       entries.push({ page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(id, slug) });
     }
-    if (!entries.length) return out(['RD：成功的粉專都沒有設定 RD 區段，未寫入']);
+    if (!entries.length) return out([results.some((r) => r.ok && r.dup) && !results.some((r) => r.ok && !r.dup) ? 'RD：先前已送出，這次未重寫' : 'RD：成功的粉專都沒有設定 RD 區段，未寫入']);
     const lines = [], where = [];
     const at = (e) => `${LABEL[e.page] || e.page} ${e.time || ''}`.trim();
     for (const batch of rdBatches(entries)) {   // 去重；一次最多 10 筆，超過分批

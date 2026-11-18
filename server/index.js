@@ -7,6 +7,7 @@ import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb } from './fb/index.js';
+import { cleanupSends } from './fb/sends.js';
 import { adminStaff, cleanupAudit } from './core/staff.js';
 
 adminExtras.push(adminLogs, adminFb, adminStaff);
@@ -47,8 +48,8 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每天 03:17（UTC 19:17）清理日誌與排程發布操作紀錄（90 天）
-    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now())]));
+    // 每天 03:17（UTC 19:17）清理日誌與排程發布操作紀錄（90 天）、防重複發文紀錄（7 天）
+    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now()), cleanupSends(env, Date.now())]));
   }
 };
 export { FbCommentTimer } from './fb/timer.js';

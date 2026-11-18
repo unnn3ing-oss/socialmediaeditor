@@ -2,7 +2,12 @@
 // 全部粉專成功＝清空頁面、跳「送出完成」（再發一則／返回列表）；有任一失敗＝結果留在頁面、不清空
 import { $, fmt, errText, COMMENT, confirmBox, copyText, stripLead } from './util.js';
 
+const newSendId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+
 export function createSender({ tb, composer, targets, rd, comments, onBack }) {
+  // 防重複發文：同一則（同一個文章網址、還沒清空）沿用同一組 sendId，後端會跳過已成功的粉專
+  let sendId = newSendId(), sentLink = null;
+  const unknown = new Set();   // 上次結果不明（可能已發出）的粉專
   function updateButton() {
     const n = targets.count();
     $('sendBtn').textContent = `全部送出（${n} 個粉專）`;
@@ -15,12 +20,18 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
     for (const r of rs) {
       const li = document.createElement('li'); li.className = r.ok ? 'ok' : 'err';
       let t = targets.shortOf(r.page) + '：';
-      if (r.ok) {
+      if (r.ok && r.dup) {
+        t += (r.scheduled ? '先前已排程' : '先前已發布') + '，這次未重送';
+        if (r.scheduled && r.at) t += '（' + fmt(r.at * 1000) + '）';
+      } else if (r.ok) {
         t += r.scheduled ? '排程成功' : '發布成功';
         if (r.scheduled && r.at) t += '（' + fmt(r.at * 1000) + '）';
         t += '；' + (COMMENT[r.comment] || '') + ((r.comment === 'failed' || r.comment === 'retry') && r.commentError ? '（' + r.commentError + '）' : '');
         if (r.extra) t += `；另排 ${r.extra} 則留言`;
         if (r.extraError) t += `；第 2、3 則留言排定失敗（${r.extraError}）`;
+      } else if (r.unknown) {
+        li.className = 'err';
+        t += '待確認（' + (r.error || '結果不明') + '）：可能已經發出，請先到「已排程／已發佈」確認';
       } else t += '失敗（' + (r.error === 'fb_bad_time' ? '排程時間必須在 10 分鐘到 30 天之間' : (r.error || '未知原因')) + '）';
       li.textContent = t; ul.append(li);
     }
@@ -56,9 +67,14 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
         const miss = c.targets.map((t) => targets.page(t.page)).filter((p) => p && p.noTextUtm).map((p) => p.short);
         if (miss.length && !(await confirmBox('沒有設定文字 UTM', `${miss.join('、')} 沒有設定純文字貼文的 UTM，第 1 則留言的文章連結不會加 UTM。仍要送出嗎？（可到管理頁「粉專設定」填寫）`))) return;
       }
+      const link = $('link').value.trim();
+      if (link !== sentLink) { sendId = newSendId(); sentLink = link; unknown.clear(); }   // 換了文章＝新的一則
+      const unsure = c.targets.map((t) => t.page).filter((id) => unknown.has(id));
+      if (unsure.length && !(await confirmBox('上次送出結果不明', `${unsure.map((id) => targets.shortOf(id)).join('、')} 上次送出時沒有收到臉書的結果，可能已經發出。請先到「已排程／已發佈」確認；確定沒有發出才按「確定」重送，否則按「返回」並取消勾選這些粉專。`))) return;
       const fd = new FormData();
       fd.append('message', msg);
-      const link = $('link').value.trim();
+      fd.append('sendId', sendId);
+      if (unsure.length) fd.append('retry', JSON.stringify(unsure));
       if (link) {
         fd.append('link', link);
         const lead = $('lead').value.trim();
@@ -70,11 +86,13 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
       const sentAt = Date.now();
       const data = await tb.api.call('/fb/post', { method: 'POST', body: fd });
       const results = data.results || [];
+      for (const r of results) { if (r.unknown) unknown.add(r.page); else unknown.delete(r.page); }
       const rdOut = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
       if (results.length && results.every((r) => r.ok)) { clearAll(); showDone(results, rdOut); return; }
       renderResults($('results'), results, rdOut.lines);
       $('results').scrollIntoView({ block: 'nearest' });
     } catch (e) {
+      // 整個請求沒有回應：各粉專可能已發出，再送時後端會依 sendId 跳過已成功的、把結果不明的標成待確認
       err.textContent = errText(e);
     } finally {
       updateButton();
@@ -82,6 +100,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
   });
 
   function clearAll() {
+    sendId = newSendId(); sentLink = null; unknown.clear();
     composer.reset(); targets.reset(); rd.reset(); comments.reset();
     $('results').textContent = ''; $('sendErr').textContent = '';
   }

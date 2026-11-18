@@ -228,3 +228,93 @@ test('純文字（沒附圖）第 1 則留言用「文字」UTM，沒設定就�
   assert.equal(f.calls.find((c) => c.path === '/111_5/comments').body.message, '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticletext');
   assert.equal(f.calls.find((c) => c.path === '/222_5/comments').body.message, '看更多新聞內容\n' + LINK, '少康沒設文字 UTM：不加');
 });
+
+// ── 防重複發文（sendId）──
+const SID = 'abcd1234-ef56-7890-abcd-1234567890ab';
+const rowOf = (env, page) => env.DB.raw.prepare('SELECT status, post_id FROM fb_sends WHERE send_id = ? AND page = ?').get(SID, page);
+
+test('防重複：部分失敗後同一 sendId 再送，只重送失敗的粉專；成功的回 dup、不留言、不記操作紀錄', async (t) => {
+  let fail111 = true;
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => (fail111 ? gErr(200, 403, 'no permission') : { id: 'P1', post_id: '111_1' }),
+    'POST /222/photos': () => ({ id: 'P2', post_id: '222_1' }),
+    'POST /111_1/comments': () => ({ id: 'C1' }),
+    'POST /222_1/comments': () => ({ id: 'C2' })
+  });
+  const targets = JSON.stringify([{ page: '111', at: null }, { page: '222', at: null }]);
+  const r1 = await send(env, headers, { message: 'm', image: img(), targets, sendId: SID });
+  assert.deepEqual(r1.body.data.results.map((x) => x.ok), [false, true]);
+  assert.equal(rowOf(env, '111').status, 'failed');
+  assert.deepEqual({ ...rowOf(env, '222') }, { status: 'ok', post_id: '222_1' });
+  fail111 = false;
+  const n = f.calls.length;
+  const r2 = await send(env, headers, { message: 'm', image: img(), targets, sendId: SID });
+  const [a, b] = r2.body.data.results;
+  assert.equal(a.ok, true); assert.ok(!a.dup);
+  assert.equal(b.ok, true); assert.equal(b.dup, true); assert.equal(b.postId, '222_1'); assert.equal(b.comment, 'none');
+  const later = f.calls.slice(n).map((c) => c.path);
+  assert.ok(!later.includes('/222/photos'), '222 不重送'); assert.ok(!later.includes('/222_1/comments'), '222 不重留言');
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM fb_audit WHERE page = '222'").get().n, 1, '222 操作紀錄只有一筆');
+});
+
+test('防重複：發布請求連不上臉書＝待確認；同 sendId 再送不重送，帶 retry 才重送', async (t) => {
+  let down = true;
+  const { f, env, headers } = await setup(t, {
+    'POST /111/feed': () => { if (down) throw new TypeError('network'); return { id: '111_5' }; },
+    'POST /111_5/comments': () => ({ id: 'C' })
+  });
+  const targets = JSON.stringify([{ page: '111', at: null }]);
+  const r1 = (await send(env, headers, { message: 'm', targets, sendId: SID })).body.data.results[0];
+  assert.equal(r1.ok, false); assert.equal(r1.unknown, true);
+  assert.equal(rowOf(env, '111').status, 'unknown');
+  down = false;
+  const n = f.calls.filter((c) => c.path === '/111/feed').length;
+  const r2 = (await send(env, headers, { message: 'm', targets, sendId: SID })).body.data.results[0];
+  assert.equal(r2.ok, false); assert.equal(r2.unknown, true);
+  assert.equal(f.calls.filter((c) => c.path === '/111/feed').length, n, '沒帶 retry 不重送');
+  const r3 = (await send(env, headers, { message: 'm', targets, sendId: SID, retry: JSON.stringify(['111']) })).body.data.results[0];
+  assert.equal(r3.ok, true); assert.equal(r3.postId, '111_5');
+  assert.equal(rowOf(env, '111').status, 'ok');
+});
+
+test('防重複：有圖排程暫存照片那步連不上＝一般失敗（可直接重送）；/feed 那步連不上＝待確認', async (t) => {
+  let step = 'photo';
+  const { env, headers } = await setup(t, {
+    'POST /111/photos': () => { if (step === 'photo') throw new TypeError('network'); return { id: 'TMP' }; },
+    'POST /111/feed': () => { throw new TypeError('network'); }
+  });
+  const targets = JSON.stringify([{ page: '111', at: nowSec() + 3600 }]);
+  const r1 = (await send(env, headers, { message: 'm', image: img(), targets, sendId: SID })).body.data.results[0];
+  assert.equal(r1.ok, false); assert.ok(!r1.unknown); assert.equal(rowOf(env, '111').status, 'failed');
+  step = 'feed';
+  const r2 = (await send(env, headers, { message: 'm', image: img(), targets, sendId: SID })).body.data.results[0];
+  assert.equal(r2.unknown, true); assert.equal(rowOf(env, '111').status, 'unknown');
+});
+
+test('防重複：處理中（pending）不重送；retry 也要等超過 2 分鐘才重送', async (t) => {
+  const { f, env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_6' }), 'POST /111_6/comments': () => ({ id: 'C' }) });
+  const sends = await import('../../server/fb/sends.js');
+  assert.equal((await sends.claimSend(env, SID, '111')).claimed, true);
+  const targets = JSON.stringify([{ page: '111', at: null }]);
+  const r1 = (await send(env, headers, { message: 'm', targets, sendId: SID, retry: JSON.stringify(['111']) })).body.data.results[0];
+  assert.equal(r1.unknown, true); assert.match(r1.error, /還沒有結果/);
+  assert.ok(!f.calls.some((c) => c.path === '/111/feed'));
+  env.DB.raw.prepare('UPDATE fb_sends SET updated = ?').run(Date.now() - 3 * 60 * 1000);
+  const r2 = (await send(env, headers, { message: 'm', targets, sendId: SID, retry: JSON.stringify(['111']) })).body.data.results[0];
+  assert.equal(r2.ok, true);
+});
+
+test('防重複：sendId／retry 格式驗證、沒帶 sendId 照舊、清理 7 天前紀錄', async (t) => {
+  const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_7' }), 'POST /111_7/comments': () => ({ id: 'C' }) });
+  const targets = JSON.stringify([{ page: '111', at: null }]);
+  assert.equal((await send(env, headers, { message: 'm', targets, sendId: 'x' })).status, 400);
+  assert.equal((await send(env, headers, { message: 'm', targets, sendId: SID, retry: JSON.stringify(['222']) })).status, 400, 'retry 只能是這次的粉專');
+  assert.equal((await send(env, headers, { message: 'm', targets, sendId: SID, retry: 'x' })).status, 400);
+  assert.equal((await send(env, headers, { message: 'm', targets })).body.data.results[0].ok, true);
+  const sends = await import('../../server/fb/sends.js');
+  assert.equal((await send(env, headers, { message: 'm', targets, sendId: SID })).body.data.results[0].ok, true);
+  await sends.claimSend(env, 'fresh-0001', '111');
+  env.DB.raw.prepare("UPDATE fb_sends SET updated = ? WHERE send_id = ?").run(Date.now() - 8 * 86400000, SID);
+  await sends.cleanupSends(env, Date.now());
+  assert.deepEqual(env.DB.raw.prepare('SELECT send_id FROM fb_sends').all().map((x) => x.send_id), ['fresh-0001'], '只刪 7 天前的');
+});

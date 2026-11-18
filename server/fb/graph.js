@@ -2,9 +2,10 @@
 export const GRAPH = 'https://graph.facebook.com/v27.0';
 
 export class GraphError extends Error {
-  constructor(code, message, status, subcode) {
+  // uncertain：連不上臉書或讀不到回應，臉書可能已經處理（發文類請求要當「待確認」，不能直接重送）
+  constructor(code, message, status, subcode, uncertain = false) {
     super(message || '臉書回應錯誤');
-    this.code = code; this.status = status; this.subcode = subcode;
+    this.code = code; this.status = status; this.subcode = subcode; this.uncertain = uncertain;
   }
 }
 
@@ -34,8 +35,9 @@ export async function graph(env, method, path, params, token) {
     res = await fetch(url.toString(), init);
     data = await res.json().catch(() => null);
   } catch (e) {
-    throw new GraphError(-1, '連不上臉書', 0);
+    throw new GraphError(-1, '連不上臉書', 0, undefined, true);
   }
+  if (res.ok && !data) throw new GraphError(-1, '讀不到臉書的回應', res.status, undefined, true);
   if (!res.ok || !data || data.error) {
     const err = (data && data.error) || {};
     throw new GraphError(Number(err.code) || -1, err.message || '臉書回應錯誤（HTTP ' + res.status + '）', res.status, err.error_subcode);
