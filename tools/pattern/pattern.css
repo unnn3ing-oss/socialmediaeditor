@@ -147,29 +147,12 @@ textarea { min-height: 88px; resize: vertical; }
   padding: 0 0 16px;
   margin: 0 0 12px;
   border-bottom: 1px solid var(--line);
-  cursor: pointer;
 }
-.batch-item-block > *:not(.batch-item-head) { cursor: auto; }
-.batch-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-bottom: 8px; cursor: pointer; }
+.batch-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-bottom: 8px; }
 .batch-item-head .label { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 700; }
 .head-btns { display: flex; gap: 8px; align-items: center; flex: none; }
-.collapse-chevron { display: inline-flex; width: 24px; height: 24px; border-radius: 6px; align-items: center; justify-content: center; background: var(--fill); }
-.collapse-chevron svg { width: 12px; height: 12px; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-.batch-item-head:hover .collapse-chevron { background: var(--accent-soft); }
-
-.batch-item-row {
-  display: flex; align-items: center; gap: 10px;
-  min-height: 56px; padding: 8px 8px;
-  margin: 0 -8px;
-  border-bottom: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-}
-.batch-item-row:hover { background: var(--fill); }
-.row-thumb { width: 40px; height: 40px; border-radius: 6px; flex: none; background: var(--surface); overflow: hidden; border: 1px solid var(--line); }
-.row-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.row-thumb.row-thumb-empty { background: #ddd repeating-conic-gradient(#ccc 0% 25%, #ddd 0% 50%) 50% / 12px 12px; }
-.row-title { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 手機切換列：‹ 第 N／總數 張 ›（桌面不顯示） */
+.m-pager { display: none; }
 
 /* 紅色 × 移除：必要的圓形操作鈕；視覺 32px，可按範圍 44px */
 .remove-btn {
@@ -434,7 +417,11 @@ canvas.pannable.panning { cursor: grabbing; }
   .bg-toggle button { min-height: 44px; font-size: 15px; }
   .color-swatches { gap: 16px; padding: 12px; }
   .color-swatch::after { inset: -8px; }
-  .batch-item-row { min-height: 64px; }
+  .m-pager:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); }
+  .m-pager button { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .m-pager button svg { width: 14px; height: 14px; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  .m-pager button:disabled { opacity: .35; }
+  .m-pager span { font-size: 15px; font-weight: 600; }
   .batch-item-head { min-height: 48px; }
   .remove-btn::after { inset: -6px; }
   .thumb-item, .thumb-add { width: 72px; height: 72px; }

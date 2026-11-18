@@ -21,6 +21,12 @@
   </div>
   <div class="layout" id="layoutApp">
     <section class="settings" id="panelEdit" aria-label="設定">
+      <!-- 手機才顯示：左側只有選中的那一組，用這條切換上一張／下一張 -->
+      <div class="m-pager" id="mPager" hidden>
+        <button type="button" id="mPagerPrev" aria-label="上一張"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
+        <span id="mPagerText" aria-live="polite"></span>
+        <button type="button" id="mPagerNext" aria-label="下一張"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
+      </div>
       <div class="quickfill" id="quickfill">
         <label for="qfUrl">文章網址（貼上自動帶入標題與主圖）</label>
         <div class="qf-row">

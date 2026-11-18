@@ -120,15 +120,15 @@ test('工具內切換不清空內容：背景類型、各組收合展開、框',
   assert.equal(await frame.inputValue('.batch-item-block textarea'), '第一組標題');
   await frame.click('.batch-item-block .bg-toggle button:has-text("圖片背景")');
   await waitPx(frame, 40, 100, (p) => near(p, hex('#2f6b4f'), 2), '回到圖片背景後框還在');
-  // 新增第二組，第一組收合成一列；再點回第一組
+  // 新增第二組，左側換成第二組；點縮圖切回第一組
   await frame.click('#thumbAddBtn');
-  await frame.waitForFunction(() => document.querySelectorAll('.batch-item-row').length === 1);
+  await frame.waitForFunction(() => document.querySelectorAll('.thumb-item').length === 2);
   await frame.fill('.batch-item-block textarea', '第二組標題');
-  await frame.click('.batch-item-row');
+  await frame.click('.thumb-item >> nth=0');
   assert.equal(await frame.inputValue('.batch-item-block textarea'), '第一組標題');
   assert.equal(await frame.inputValue('.gen-tag'), '特報');
   await waitPx(frame, 40, 100, (p) => near(p, hex('#2f6b4f'), 2), '展開後預覽');
-  await frame.click('.batch-item-row');
+  await frame.click('.thumb-item >> nth=1');
   assert.equal(await frame.inputValue('.batch-item-block textarea'), '第二組標題');
 });
 
@@ -506,11 +506,11 @@ test('縮圖列：即時小圖、沒背景是空框、最後一格＋新增一�
   await frame.waitForFunction(() => !document.querySelector('.thumb-item').classList.contains('thumb-empty'));
   // 小圖有畫：中心像素不透明
   await frame.waitForFunction(() => { const c = document.querySelector('.thumb-item canvas'); return c.getContext('2d').getImageData(88, 88, 1, 1).data[3] === 255; });
-  // ＋ 新增一組並切過去；原組收成一列
+  // ＋ 新增一組並切過去；左側只顯示選中的那一組
   await frame.click('#thumbAddBtn');
   await frame.waitForFunction(() => document.querySelectorAll('.thumb-item').length === 2);
   assert.equal(await frame.locator('.batch-item-block').count(), 1);
-  assert.equal(await frame.locator('.batch-item-row').count(), 1);
+  assert.equal(await frame.locator('#batchItemsList > *').count(), 1, '左側只有一組');
   assert.equal(await frame.locator('.thumb-item.active-thumb').count(), 1);
   assert.equal(await frame.locator('.thumb-item.thumb-empty').count(), 1);
   // 點第一個縮圖切回去，標題還在
@@ -584,5 +584,35 @@ test('全部下載：部分缺標題或背景會問；確認後只下載可下�
   await frame.waitForSelector('#confirmOverlay.open');
   assert.match(await frame.textContent('#confirmMessage'), /1 組缺標題或背景/);
   await frame.click('#confirmCancelBtn');
+  await page.close();
+});
+
+test('左側只顯示選中的那一組；刪除選前一張；手機切換列', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern', { viewport: { width: 1280, height: 800 } });
+  await setupItem(page, frame, '第一組');
+  await frame.click('#thumbAddBtn');
+  await frame.fill('.batch-item-block textarea', '第二組');
+  await frame.click('#thumbAddBtn');
+  await frame.fill('.batch-item-block textarea', '第三組');
+  assert.equal(await frame.locator('#batchItemsList > *').count(), 1);
+  assert.equal(await frame.isVisible('#mPager'), false, '桌面不顯示切換列');
+  await frame.click('.thumb-item >> nth=1');
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '第二組');
+  assert.match(await frame.textContent('.batch-item-head .label'), /#2/);
+  // 刪掉第二組 → 選前一張（第一組）
+  await frame.click('.batch-item-head .remove-btn');
+  await frame.click('#confirmOkBtn');
+  await frame.waitForFunction(() => document.querySelectorAll('.thumb-item').length === 2);
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '第一組');
+  // 手機：切換列 ‹ 第 1／2 張 ›
+  await page.setViewportSize({ width: 390, height: 844 });
+  await frame.waitForFunction(() => matchMedia('(max-width: 820px)').matches);
+  assert.ok(await frame.isVisible('#mPager'));
+  assert.equal(await frame.textContent('#mPagerText'), '第 1／2 張');
+  assert.equal(await frame.isDisabled('#mPagerPrev'), true);
+  await frame.click('#mPagerNext');
+  assert.equal(await frame.textContent('#mPagerText'), '第 2／2 張');
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '第三組');
+  assert.equal(await frame.isDisabled('#mPagerNext'), true);
   await page.close();
 });

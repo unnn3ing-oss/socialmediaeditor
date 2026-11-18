@@ -492,7 +492,7 @@ let lastActiveItemId = null;
 
 function scrollToBatchItem(id) {
   const node = batchItemsList.querySelector(`[data-item-id="${id}"]`);
-  if (node) node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // The caption under the big preview always mirrors the title as one line
@@ -557,7 +557,8 @@ async function removeBatchItem(id) {
     renderBatchThumbs();
     return;
   }
-  const fallback = batchItems[batchItems.length - 1];
+  // 刪掉選中的那組：選前一張，沒有前一張就選下一張
+  const fallback = batchItems[index - 1] || batchItems[index];
   if (fallback) {
     expandBatchItem(fallback);
   } else {
@@ -724,16 +725,6 @@ async function renderItemBlob(item) {
   };
 }
 
-// 點展開中那一組的標題列／外框，把它收回成一列（預覽維持原樣）；再點縮圖或那一列才重新展開。
-function collapseBatchItems() {
-  expandedBatchItemId = null;
-  renderBatchItemsList();
-  renderBatchThumbs();
-  batchPreviewTitleInput.hidden = true;
-  batchCanvas.classList.remove('pannable');
-  syncBatchFx();
-}
-
 // Round red "×" used for 移除 on both the collapsed row and the open block.
 // The glyph is an SVG so it looks the same whatever UI font is in effect.
 function createRemoveButton(onClick) {
@@ -747,43 +738,7 @@ function createRemoveButton(onClick) {
   return btn;
 }
 
-function buildBatchItemRow(item, index) {
-  const row = document.createElement('div');
-  row.className = 'batch-item-row';
-  row.dataset.itemId = item.id;
-
-  const thumb = document.createElement('div');
-  thumb.className = 'row-thumb';
-  if (item.bg.type === 'image' && item.bg.image) {
-    const img = document.createElement('img');
-    img.alt = '';
-    img.src = item.bg.image.src;
-    thumb.appendChild(img);
-  } else if (item.bg.type === 'color' && item.bg.color) {
-    thumb.style.background = item.bg.color;
-  } else {
-    thumb.classList.add('row-thumb-empty');
-  }
-
-  const title = document.createElement('div');
-  title.className = 'row-title';
-  const firstLine = item.title.split('\n').find(l => l.trim()) || '（尚未輸入標題）';
-  title.textContent = `#${index + 1} ${firstLine}`;
-
-  const removeBtn = createRemoveButton(e => { e.stopPropagation(); removeBatchItem(item.id); });
-
-  row.appendChild(thumb);
-  row.appendChild(title);
-  row.appendChild(removeBtn);
-  row.addEventListener('click', () => expandBatchItem(item));
-  return row;
-}
-
 function buildBatchItemBlock(item, index) {
-  if (item.id !== expandedBatchItemId) {
-    return buildBatchItemRow(item, index);
-  }
-
   const block = document.createElement('div');
   block.className = 'batch-item-block';
   block.dataset.itemId = item.id;
@@ -800,24 +755,6 @@ function buildBatchItemBlock(item, index) {
   head.appendChild(label);
   head.appendChild(headBtns);
 
-  // Clicking the open block's header, or its frame (the padding around the
-  // fields), folds it back into its row — same as 完成 but without finishing.
-  const chevron = document.createElement('span');
-  chevron.className = 'collapse-chevron';
-  chevron.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 7.5l3-3 3 3"/></svg>';
-  label.prepend(chevron);
-  head.title = '點一下收合';
-  // Only a press that *started* on the header/frame counts: a drag that
-  // begins inside a field (e.g. scrubbing the font size) and is released
-  // elsewhere also produces a click on their common ancestor, the block.
-  let pressedOnFrame = false;
-  block.addEventListener('pointerdown', e => {
-    pressedOnFrame = e.target === block || (head.contains(e.target) && !e.target.closest('button'));
-  });
-  block.addEventListener('click', e => {
-    const onFrame = e.target === block || (head.contains(e.target) && !e.target.closest('button'));
-    if (pressedOnFrame && onFrame) collapseBatchItems();
-  });
 
   // 框：公司模式有「新聞（藍框）／娛樂（粉框）／通用框」；沒密碼只有通用框（不顯示切換，只有通用框的設定）
   const frameToggle = document.createElement('div');
@@ -1007,12 +944,27 @@ function buildBatchItemBlock(item, index) {
   return block;
 }
 
+// 左側只顯示縮圖列裡選中的那一組（其他組不列）；手機另有「‹ 第 N／總數 張 ›」切換列
+const mPager = document.getElementById('mPager');
+const mPagerText = document.getElementById('mPagerText');
+const mPagerPrev = document.getElementById('mPagerPrev');
+const mPagerNext = document.getElementById('mPagerNext');
 function renderBatchItemsList() {
   batchItemsList.innerHTML = '';
-  batchItems.forEach((item, index) => {
-    batchItemsList.appendChild(buildBatchItemBlock(item, index));
-  });
+  const index = batchItems.findIndex(it => it.id === expandedBatchItemId);
+  if (index >= 0) batchItemsList.appendChild(buildBatchItemBlock(batchItems[index], index));
+  mPager.hidden = index < 0;
+  mPagerText.textContent = index < 0 ? '' : `第 ${index + 1}／${batchItems.length} 張`;
+  mPagerPrev.disabled = index <= 0;
+  mPagerNext.disabled = index < 0 || index >= batchItems.length - 1;
 }
+function stepBatchItem(delta) {
+  const index = batchItems.findIndex(it => it.id === expandedBatchItemId);
+  const next = batchItems[index + delta];
+  if (next) expandBatchItem(next);
+}
+mPagerPrev.addEventListener('click', () => stepBatchItem(-1));
+mPagerNext.addEventListener('click', () => stepBatchItem(1));
 
 // Routes a file dropped or pasted anywhere outside a specific batch item's
 // own dropzone (e.g. onto the shared preview canvas) to whichever item is
@@ -1242,9 +1194,7 @@ batchResetBtn.addEventListener('click', async () => {
   batchPreviewTitle.textContent = '';
   batchPreviewTitleInput.value = '';
   batchPreviewTitleInput.hidden = true;
-  renderBatchItemsList();
-  renderBatchThumbs();
-  syncBatchFx();
+  addBatchItem();   // 清除後留一組空白，左側永遠有一組可以編輯
 });
 
 // ---- 貼圖與馬賽克：預覽右下角的圓形按鈕，彈出小視窗（內容是 stickers.js 填的 #batchFxSlot，不重建）----
