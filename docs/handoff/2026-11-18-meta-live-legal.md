@@ -17,21 +17,24 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `privacy/index.html` | 隱私權政策（中英） | ⬜ |
-| `data-deletion/index.html` | 資料刪除說明（中英） | ⬜ |
-| `legal.css` | 兩頁共用樣式 | ⬜ |
-| `index.html` | 頁尾加兩個連結 | ⬜ |
-| `server/fb/timer.js` | 沒有待留言時排 14 天後清除鬧鐘，`alarm()` 到期 `deleteAll` | ⬜ |
-| `test/server/fb-timer.test.js`、`test/helpers/fake-fb.js` | 清除測試；fakeStorage 加 `deleteAll` | ⬜ |
-| `test/e2e/legal.e2e.js` | 兩頁可開、互連、320px 不超出 | ⬜ |
-| `docs/meta/app-icon-1024.png` | 應用程式圖示 | ⬜ |
-| `README.md` | 兩個網址＋Meta 後台填哪裡 | ⬜ |
+| `privacy/index.html` | 隱私權政策（中英） | ✅ |
+| `data-deletion/index.html` | 資料刪除說明（中英） | ✅ |
+| `legal.css` | 兩頁共用樣式 | ✅ |
+| `index.html` | 頁尾加兩個連結 | ✅ |
+| `server/fb/timer.js` | 沒有待留言時排 14 天後清除鬧鐘，`alarm()` 到期 `deleteAll` | ✅ |
+| `test/server/fb-timer.test.js`、`test/helpers/fake-fb.js` | 清除測試；fakeStorage 加 `deleteAll` | ✅ |
+| `test/e2e/legal.e2e.js` | 兩頁可開、互連、320px 不超出 | ✅ |
+| `docs/meta/app-icon-1024.png` | 應用程式圖示 | ✅ |
+| `README.md` | 兩個網址＋Meta 後台填哪裡 | ✅ |
 
 ## 下一步
-- [ ] 依上表實作
-- [ ] npm test、相關 e2e、build --check
-- [ ] 獨立審查
-- [ ] 截圖給使用者確認
+- [x] 依上表實作（瀏覽器只存 RD 開關與登入憑證，重寫後的排程發布沒有本地送出紀錄，政策已照實寫）
+- [x] npm test 622、全部 e2e 190、build --check 通過
+- [x] 獨立審查：修正後通過（補 Rundown→Google 試算表一列與第三方服務；舊紀錄查 status 時補排清除）
+- [x] npm test 623、legal e2e 6、timer 26
+- [ ] 使用者確認後說「推」併入 main、更新 CLAUDE.md 目前進度
+- [ ] 使用者：部署 Worker → Meta 後台填網址、圖示 → 切上線模式
+- [ ] 下一版（未定案）：管理頁「排程發布授權名單」，做法待使用者確認
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/legal.e2e.js`、`node build.js --check`

@@ -20,6 +20,7 @@ const FIRST_DELAY = 60;                    // 排定時間後 60 秒第一次檢
 const RETRY = [30, 60, 120, 240];          // 一般錯誤的重試間隔（秒）；第 5 次失敗就停
 const MAX_ATTEMPTS = 5;
 const MAX_RETIMES = 20;                    // 到點還沒發布的追蹤次數上限
+export const PURGE_AFTER = 14 * 86400 * 1000;   // 留言全部結束（完成／取消／失敗）後 14 天刪除整筆紀錄（隱私權政策）
 const nowSec = () => Math.floor(Date.now() / 1000);
 const toSec = (v) => (typeof v === 'number' ? v : Number.isFinite(Date.parse(v)) ? Math.floor(Date.parse(v) / 1000) : null);
 const reply = (o) => Response.json(o);
@@ -83,12 +84,13 @@ export class FbCommentTimer {
       return reply({ ok: true });
     }
     if (action === 'cancel') {
-      if (rec) { rec.items.forEach((x) => { if (open(x)) x.status = 'canceled'; }); await s.put('rec', rec); }
-      await s.deleteAlarm();
+      if (rec) { rec.items.forEach((x) => { if (open(x)) x.status = 'canceled'; }); await s.put('rec', rec); await this.schedule(rec); }
+      else await s.deleteAlarm();
       return reply({ ok: true });
     }
     if (action === 'status') {
       if (!rec) return reply({ ok: true, status: 'none' });
+      if (!rec.purgeAt && !rec.items.some(open)) await this.schedule(rec);   // 舊紀錄（沒排清除）被查到時補排 14 天清除
       const first = rec.items[0] || {};
       // 頂層欄位沿用第 1 則（列表顯示用），items 是每則的狀態
       return reply({ ok: true, pageId: rec.pageId, postId: rec.postId, at: rec.at, retimes: rec.retimes, status: summary(rec), commentId: first.commentId, attempts: first.attempts, error: first.error, items: rec.items });
@@ -96,17 +98,26 @@ export class FbCommentTimer {
     return reply({ ok: false, error: '不支援的動作' });
   }
 
-  // 排下一個鬧鐘：還沒留的裡最早到點的；都留完就清掉
+  // 排下一個鬧鐘：還沒留的裡最早到點的；都結束了就排 14 天後清除整筆紀錄
   async schedule(rec, earliest = 0) {
     const next = rec.items.filter(open).map((x) => dueOf(rec, x));
-    if (!next.length) { await this.state.storage.deleteAlarm(); return; }
+    if (!next.length) {
+      if (!rec.purgeAt) { rec.purgeAt = Date.now() + PURGE_AFTER; await this.state.storage.put('rec', rec); }
+      await this.state.storage.setAlarm(rec.purgeAt);
+      return;
+    }
+    if (rec.purgeAt) { delete rec.purgeAt; await this.state.storage.put('rec', rec); }
     await this.state.storage.setAlarm(Math.max(Math.min(...next), earliest));
   }
 
   async alarm() {
     const s = this.state.storage;
     const rec = await s.get('rec');
-    if (!rec || !rec.items.some(open)) return;
+    if (!rec) return;
+    if (!rec.items.some(open)) {   // 都結束了：到清除時間就刪整筆，還沒到（例：舊紀錄沒有 purgeAt）就排清除
+      if (rec.purgeAt && rec.purgeAt <= Date.now()) { await s.deleteAlarm(); await s.deleteAll(); return; }
+      return this.schedule(rec);
+    }
     let page;
     try { page = (await pageTokens(this.env)).get(rec.pageId); } catch (e) { return this.retry(rec, rec.items.find(open), e); }
     if (!page) { rec.items.forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '找不到粉專 token'; } }); await s.put('rec', rec); return this.schedule(rec); }
@@ -119,7 +130,7 @@ export class FbCommentTimer {
       } catch (e) {
         if (e instanceof GraphError && (e.status === 404 || (e.code === 100 && e.subcode === 33))) {
           rec.items.forEach((x) => { if (open(x)) x.status = 'canceled'; });
-          await s.put('rec', rec); return s.deleteAlarm();
+          await s.put('rec', rec); return this.schedule(rec);
         }
         return this.retry(rec, rec.items.find(open), e);
       }
@@ -127,7 +138,7 @@ export class FbCommentTimer {
         rec.retimes = (rec.retimes || 0) + 1;
         if (rec.retimes > MAX_RETIMES) {
           rec.items.forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '貼文遲遲未發布'; } });
-          await s.put('rec', rec); return s.deleteAlarm();
+          await s.put('rec', rec); return this.schedule(rec);
         }
         const fbAt = toSec(post.scheduled_publish_time);
         if (fbAt && fbAt !== rec.at) rec.at = fbAt;

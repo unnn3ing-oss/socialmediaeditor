@@ -28,7 +28,7 @@ function installFetch(handlers) {
 
 const gErr = (code, status = 400, message = 'err') => Response.json({ error: { code, message } }, { status });
 
-// 假 Durable Object namespace：每個名稱一個實例，storage 支援 get/put/delete/setAlarm/getAlarm/deleteAlarm
+// 假 Durable Object namespace：每個名稱一個實例，storage 支援 get/put/delete/deleteAll/setAlarm/getAlarm/deleteAlarm
 function fakeStorage() {
   const map = new Map();
   let alarm = null;
@@ -39,7 +39,8 @@ function fakeStorage() {
     async delete(k) { return map.delete(k); },
     async setAlarm(t) { alarm = Number(t); },
     async getAlarm() { return alarm; },
-    async deleteAlarm() { alarm = null; }
+    async deleteAlarm() { alarm = null; },
+    async deleteAll() { map.clear(); }
   };
 }
 function fakeNamespace(Cls, envRef) {

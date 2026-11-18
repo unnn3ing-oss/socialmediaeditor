@@ -78,6 +78,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .showcase-inner { width: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
 .showcase-head h1 { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.35; }
 .showcase-head .lead { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
+.site-foot { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; }
+.site-foot a { color: var(--muted); }
+.site-foot a:hover { color: var(--accent); }
 .group { display: flex; flex-direction: column; gap: 12px; }
 .group h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }

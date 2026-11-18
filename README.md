@@ -7,7 +7,22 @@
 - 管理後台：https://unnn3ing-oss.github.io/socialmediaeditor/admin/
 - （分類排版；後端版 https://toolbox-api.19jpz-3.workers.dev/admin 也能用，兩個功能相同。輸入管理密碼 `ADMIN_PASSWORD`；上傳公司素材、錯誤紀錄）
 
-## 目錄
+- 隱私權政策：https://unnn3ing-oss.github.io/socialmediaeditor/privacy/
+- 資料刪除說明：https://unnn3ing-oss.github.io/socialmediaeditor/data-deletion/
+
+### 臉書應用程式切「上線模式」（不送審）
+
+排程發布只給應用程式上有角色的人（管理員／開發者）的權杖使用，不需要 App Review；但開發模式發的貼文只有角色使用者看得到，要切上線模式。到 Meta 開發者後台 → 該應用程式：
+
+1. 「應用程式設定 → 基本資料」：
+   - 隱私政策網址：填上方「隱私權政策」網址
+   - 用戶資料刪除：選「資料刪除說明網址」，填上方「資料刪除說明」網址
+   - 應用程式圖示：上傳 `docs/meta/app-icon-1024.png`（1024×1024）
+   - 類別：選「商業和網頁」（Business and Pages）或最接近的類別
+   - 聯絡電子郵件：與隱私權政策相同
+2. 儲存後，頂端「應用程式模式」切到「上線」。
+3. 確認權杖持有人在「應用程式角色」裡仍是管理員或開發者。
+
 
 | 路徑 | 內容 |
 |---|---|
