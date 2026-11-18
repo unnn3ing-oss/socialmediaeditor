@@ -61,7 +61,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .confirm{border:1px solid #f3c4c4;border-radius:18px;padding:16px;margin-top:16px;background:#fff6f6}
 [hidden]{display:none!important}
 .sf-add{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:8px 0 12px}.sf-f{margin:0;flex:1 1 150px;min-width:0;font-size:14px;color:var(--mute)}.sf-f input,.sf-f select{margin-top:4px;color:var(--ink);font-size:16px}
-.sf-table{min-width:640px}.sf-table th,.sf-table td,#auWrap th,#auWrap td{white-space:nowrap}.sf-table select{min-width:120px}.sf-ops{white-space:nowrap}.sf-ops button{margin-right:8px}
+.sf-table{min-width:780px}.sf-table th,.sf-table td,#auWrap th,#auWrap td{white-space:nowrap}.sf-table select{min-width:120px}.sf-contact{width:150px;min-width:120px}.sf-ops{white-space:nowrap}.sf-ops button{margin-right:8px}
 .sg-row input[type=text]{max-width:320px}.sg-perms{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0}.sg-perm{display:flex;align-items:center;gap:6px;margin:0;font-weight:400;min-height:36px}.sg-perm input{width:20px;height:20px;min-height:0}.sg-used{color:var(--mute);font-size:14px}
 @media (max-width:600px){.top{padding:10px 16px}}
 </style>
@@ -120,12 +120,13 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <form id="sfForm" class="sf-add">
         <label class="sf-f">員工編號<input id="sfId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
         <label class="sf-f">姓名<input id="sfName" type="text" autocomplete="off" maxlength="20" required></label>
+          <label class="sf-f">分機／手機（選填）<input id="sfContact" type="text" autocomplete="off" maxlength="30" inputmode="tel"></label>
         <label class="sf-f">權限組<select id="sfGroup"></select></label>
         <button class="primary" type="submit" id="sfAdd">新增</button>
       </form>
       <div class="scroll" id="sfWrap" hidden>
         <table class="sf-table">
-          <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead>
+          <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>分機／手機</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead>
           <tbody id="sfRows"></tbody>
         </table>
       </div>
@@ -626,6 +627,11 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       var tg = document.createElement('td'), sel = sfGroupSelect(s.group, s.name + ' 的權限組');
       sel.onchange = function () { sel.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { group: sel.value }, $('sfMsg'), '已更新「' + s.name + '」的權限組。').then(function (ok) { if (!ok) sfRender(); }); };
       tg.appendChild(sel); tr.appendChild(tg);
+      // 分機／手機：改完按 Enter 或離開欄位就存（同事在直播需求單填的也會出現在這裡）
+      var tc = document.createElement('td'), ct = document.createElement('input');
+      ct.type = 'text'; ct.className = 'sf-contact'; ct.maxLength = 30; ct.value = s.contact || ''; ct.setAttribute('aria-label', s.name + ' 的分機／手機'); ct.placeholder = '未填';
+      ct.onchange = function () { ct.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { contact: ct.value.trim() }, $('sfMsg'), '已更新「' + s.name + '」的分機／手機。').then(function (ok) { if (!ok) { ct.disabled = false; ct.focus(); } }); };
+      tc.appendChild(ct); tr.appendChild(tc);
       var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
       tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
       var ac = sfEl('td', 'sf-ops');
@@ -687,10 +693,10 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   }
   $('sfForm').onsubmit = function (e) {
     e.preventDefault();
-    var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value };
+    var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value, contact: $('sfContact').value.trim() };
     $('sfAdd').disabled = true; say($('sfMsg'), '新增中');
     sfCall('/admin/staff', 'POST', body, $('sfMsg'), '已新增「' + body.name + '」。').then(function (ok) {
-      if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfId').focus(); }
+      if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfContact').value = ''; $('sfId').focus(); }
       $('sfAdd').disabled = false;
     });
   };

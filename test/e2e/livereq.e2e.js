@@ -338,3 +338,47 @@ test('窄螢幕：底列黏在畫面最下方', async () => {
   assert.ok(bar.y + bar.height <= 700 && bar.y + bar.height >= 680, `底列底部 ${bar.y + bar.height}`);
   await page.close();
 });
+
+test('員工編號登入：帶入名單姓名與分機；分機改了自動存回帳號，姓名改了不存；不用班別清空', async () => {
+  const posts = [];
+  let contact = '12345';
+  const api = (route) => {
+    const req = route.request();
+    if (!/\/staff\/me$/.test(req.url())) return false;
+    if (req.method() === 'OPTIONS') { route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } }); return true; }
+    if (req.method() === 'POST') { const b = JSON.parse(req.postData()); posts.push(b); contact = b.contact; }
+    route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify({ ok: true, data: { id: 'A001', name: '王小明', group: '發文', contact } }) });
+    return true;
+  };
+  const { frame, page, errors } = await open({ company: true, staff: 'A001', api });
+  await frame.waitForFunction(() => document.getElementById('dutyName').value === '王小明');
+  assert.equal(await frame.inputValue('#dutyContact'), '#12345', '5 位數字照樣補 #');
+  assert.match(await frame.textContent('#dutyHint'), /已用員工編號 A001 登入/);
+  // 改分機：停止輸入後自動存
+  await frame.fill('#dutyContact', '0912-345-678');
+  await frame.waitForFunction(() => /已儲存/.test(document.getElementById('dutyHint').textContent));
+  assert.deepEqual(posts, [{ contact: '0912-345-678' }]);
+  // 改姓名：不存回、也不存瀏覽器；輸出用改過的
+  await frame.fill('#dutyName', '代班小華');
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  const first = frame.locator('.lr-card').first();
+  await first.locator('.lr-pages label.lr-box', { hasText: '國際' }).click();
+  assert.match(await first.locator('[data-out]').inputValue(), /代班小華 0912-345-678/);
+  assert.equal(posts.length, 1);
+  assert.equal(await frame.evaluate(() => localStorage.getItem('tbx.livereq.duty')), null);
+  // 重新整理：從帳號帶回新分機與名單姓名
+  await page.reload();
+  const f2 = await (await page.waitForSelector('iframe[name=tool]')).contentFrame();
+  await f2.waitForFunction(() => document.getElementById('dutyName').value === '王小明');
+  assert.equal(await f2.inputValue('#dutyContact'), '0912-345-678');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('員工編號登入但讀不到帳號資料：照舊用瀏覽器保存', async () => {
+  const api = (route) => { if (!/\/staff\/me$/.test(route.request().url())) return false; route.fulfill({ status: 500, headers: { 'access-control-allow-origin': '*' }, body: '{}' }); return true; };
+  const { frame, page } = await open({ company: true, staff: 'A001', api });
+  await frame.fill('#dutyName', '王小明');
+  await frame.waitForFunction(() => /本班保留到/.test(document.getElementById('dutyHint').textContent));
+  await page.close();
+});

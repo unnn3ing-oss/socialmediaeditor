@@ -100,12 +100,13 @@
         <form id="sfForm" class="sf-add">
           <label class="sf-f">員工編號<input id="sfId" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
           <label class="sf-f">姓名<input id="sfName" type="text" autocomplete="off" maxlength="20" required></label>
+          <label class="sf-f">分機／手機（選填）<input id="sfContact" type="text" autocomplete="off" maxlength="30" inputmode="tel"></label>
           <label class="sf-f">權限組<select id="sfGroup"></select></label>
           <button class="primary" type="submit" id="sfAdd">新增</button>
         </form>
         <div class="scroll" id="sfWrap" hidden>
           <table class="sf-table">
-            <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead>
+            <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>分機／手機</th><th>狀態</th><th>最後登入</th><th>操作</th></tr></thead>
             <tbody id="sfRows"></tbody>
           </table>
         </div>

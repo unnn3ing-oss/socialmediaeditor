@@ -40,7 +40,44 @@ function loadDuty() {
   } catch { /* 瀏覽器不給存就只放記憶體 */ }
   showDutyHint();
 }
+// ---- 員工編號登入：姓名帶入名單（可臨時改、不存回），分機存在自己的帳號（/staff/me），不用班別清空 ----
+let staff = null, staffTimer = 0, staffSaved = '', staffSeq = 0;   // staffSeq：只採用最後一次儲存的回應
+function showStaffHint(state) {
+  markDuty();
+  const head = `已用員工編號 ${staff.id} 登入：分機存在你的帳號，下次自動帶入`;
+  dutyHint.textContent = state ? head + '。' + state : head;
+}
+async function saveStaffContact() {
+  clearTimeout(staffTimer);
+  const contact = fmtContact(dutyContact.value);
+  if (contact === staffSaved) return;
+  showStaffHint('儲存中…');
+  const seq = ++staffSeq;
+  try {
+    const me = await tb.api.call('/staff/me', { method: 'POST', body: { contact } });
+    if (seq !== staffSeq) return;
+    staffSaved = me.contact || '';
+    if (fmtContact(dutyContact.value) === staffSaved) showStaffHint('已儲存');
+  } catch (e) {
+    if (seq !== staffSeq) return;
+    showStaffHint('儲存失敗：' + ((e && e.message) || '請稍後再試'));
+  }
+}
+async function loadStaff() {
+  const who = tb.company && tb.company.staff ? tb.company.staff() : null;
+  if (!who) return false;
+  let me;
+  try { me = await tb.api.call('/staff/me'); } catch { return false; }   // 讀不到就照舊用瀏覽器保存
+  staff = me; staffSaved = me.contact || '';
+  dutyName.value = me.name || ''; dutyContact.value = fmtContact(me.contact);
+  dutyExp = 0;
+  showStaffHint('');
+  cards.forEach((c) => c.refresh());
+  return true;
+}
+
 function saveDuty() {
+  if (staff) { markDuty(); cards.forEach((c) => c.refresh()); return; }
   const name = dutyName.value.trim(), contact = dutyContact.value.trim();
   if (!dutyExp || dutyExp <= Date.now()) dutyExp = dutyExpiry(new Date());
   try {
@@ -59,10 +96,17 @@ function expireDuty() {
   }
 }
 dutyName.addEventListener('input', saveDuty);
-dutyContact.addEventListener('input', saveDuty);
-dutyContact.addEventListener('blur', () => { const v = fmtContact(dutyContact.value); if (v !== dutyContact.value) { dutyContact.value = v; saveDuty(); } });
-setInterval(expireDuty, 30000);
+dutyContact.addEventListener('input', () => {
+  saveDuty();
+  if (staff) { clearTimeout(staffTimer); staffTimer = setTimeout(saveStaffContact, 600); }
+});
+dutyContact.addEventListener('blur', () => {
+  const v = fmtContact(dutyContact.value); if (v !== dutyContact.value) { dutyContact.value = v; saveDuty(); }
+  if (staff) saveStaffContact();
+});
+setInterval(() => { if (!staff) expireDuty(); }, 30000);
 loadDuty();
+loadStaff();
 
 const duty = () => ({ name: dutyName.value, contact: fmtContact(dutyContact.value) });
 

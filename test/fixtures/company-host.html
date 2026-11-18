@@ -4,9 +4,10 @@
 <body>
 <script>
 // 測試用：假裝外殼已解鎖公司素材，再用 iframe 開工具頁（?tool=<id>）。
-// ?admin=1：假裝是網站管理密碼登入（公司版＋通用版貼圖都列）
+// ?admin=1：假裝是網站管理密碼登入（公司版＋通用版貼圖都列）；?staff=編號：假裝是員工編號登入
 const q = new URLSearchParams(location.search);
-window.tbxShell = { company: () => ({ unlocked: true, admin: q.get('admin') === '1' }) };
+const staff = q.get('staff') ? { id: q.get('staff'), name: '名單姓名', group: '發文' } : null;
+window.tbxShell = { company: () => ({ unlocked: true, admin: q.get('admin') === '1', staff }) };
 const id = q.get('tool');
 const f = document.createElement('iframe');
 f.src = '../../tools/' + id + '/index.html';
