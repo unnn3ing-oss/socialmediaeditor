@@ -9,6 +9,8 @@ import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
+import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK } from './video.js';
+import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
 export function fbFail(request, env, e) {
@@ -88,6 +90,40 @@ route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete
   return ok(request, env, { ok: true });
 }, 'view');
 
+// 影片發布（tools/fbvideo，見 video.js）
+const vout = (request, env, r) => (r.error ? fail(request, env, r.error, r.message) : ok(request, env, r));
+route('GET', /^\/fb\/video\/settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)), 'view');
+route('POST', /^\/fb\/video\/start$/, async (request, env, ctx, m, me) => {
+  const form = parseStart(await readJsonBody(request, 8192));
+  if (!form) return fail(request, env, 'bad_request');
+  return vout(request, env, await startUpload(env, form, me.who));
+}, 'post');
+route('POST', /^\/fb\/video\/chunk$/, async (request, env) => {
+  const q = new URL(request.url).searchParams;
+  const u = q.get('u') || '', start = Number(q.get('start'));
+  if (!validUploadId(u) || !Number.isInteger(start) || start < 0) return fail(request, env, 'bad_request');
+  const buf = await readBody(request, MAX_CHUNK);
+  if (!buf) return fail(request, env, 'too_large');
+  if (!buf.length) return fail(request, env, 'bad_request');
+  return vout(request, env, await receiveChunk(env, u, start, buf));
+}, 'post');
+route('POST', /^\/fb\/video\/publish$/, async (request, env, ctx, m, me) => {
+  const form = parsePublish(await readJsonBody(request, 300000));
+  if (!form) return fail(request, env, 'bad_request');
+  return vout(request, env, await publish(env, form, me.who));
+}, 'post');
+route('POST', /^\/fb\/video\/(stop|drop)$/, async (request, env, ctx, m) => {
+  const b = await readJsonBody(request, 4096);
+  if (!b || !validUploadId(b.uploadId) || (m[1] === 'drop' && !/^\d{1,30}$/.test(String(b.page || '')))) return fail(request, env, 'bad_request');
+  return vout(request, env, await stopUpload(env, b.uploadId, m[1] === 'drop' ? String(b.page) : null));
+}, 'post');
+route('GET', /^\/fb\/video\/status$/, async (request, env) => {
+  const u = new URL(request.url).searchParams.get('u') || '';
+  if (!validUploadId(u)) return fail(request, env, 'bad_request');
+  return vout(request, env, await refreshStatus(env, u));
+}, 'view');
+route('GET', /^\/fb\/video\/jobs$/, async (request, env) => ok(request, env, await listJobs(env)), 'view');
+
 route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)), 'post');
 
 export async function handleFb(request, env, ctx, path) {
@@ -136,6 +172,13 @@ adminRoute('DELETE', /^\/admin\/fb\/token$/, async (request, env) => {
   await clearToken(env);
   await clearPageCache(env);
   return ok(request, env, await tokenStatus(env));
+});
+adminRoute('GET', /^\/admin\/fb\/video-settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)));
+adminRoute('POST', /^\/admin\/fb\/video-settings$/, async (request, env) => {
+  const v = validVideoSettings(await readJsonBody(request, 16384));
+  if (!v) return fail(request, env, 'bad_request', '前後綴每項最多 30 字、hashtag 按鈕每個最多 50 字，各最多 20 個，不能換行。');
+  await saveVideoSettings(env, v);
+  return ok(request, env, await getVideoSettings(env));
 });
 adminRoute('GET', /^\/admin\/fb\/access$/, async (request, env) => ok(request, env, await accessState(env)));
 // 開放／關閉＋關閉原因；沒帶 reason＝保留原本的原因

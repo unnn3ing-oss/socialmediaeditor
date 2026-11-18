@@ -25,7 +25,9 @@ export function rundownBody(body) {
   for (const e of list) {
     if (!e || !PAGES.includes(e.page) || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || !/^\d{2}:\d{2}$/.test(e.time)) return null;
     if (typeof e.text !== 'string' || !e.text.trim() || e.text.length > 100 || /[\r\n]/.test(e.text)) return null;
-    entries.push({ page: e.page, date: e.date, time: e.time, text: e.text });
+    if (e.style !== undefined && e.style !== 'video') return null;
+    // style 'video'：影片發布（純影／Reels）→ Apps Script 套綠色 #38761d、粗體、置中（見 docs/rundown-gs-video-style.md）
+    entries.push({ page: e.page, date: e.date, time: e.time, text: e.text, ...(e.style ? { style: e.style } : {}) });
   }
   return { action: 'add', entries };
 }

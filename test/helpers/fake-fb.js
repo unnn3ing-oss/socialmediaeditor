@@ -15,8 +15,10 @@ function installFetch(handlers) {
       else if (ct.includes('application/x-www-form-urlencoded')) body = Object.fromEntries(new URLSearchParams(await req.text()));
       else { const t = await req.text(); try { body = JSON.parse(t); } catch { body = t; } }
     }
-    const pathKey = url.origin === new URL(GRAPH).origin ? url.pathname.replace(/^\/v[\d.]+/, '') : url.origin + url.pathname;
-    const call = { method, path: pathKey, query: Object.fromEntries(url.searchParams), body };
+    // graph.facebook.com → '/路徑'；graph-video.facebook.com → 'video:/路徑'；其他 → 完整網址
+    const pathKey = url.origin === new URL(GRAPH).origin ? url.pathname.replace(/^\/v[\d.]+/, '')
+      : url.origin === 'https://graph-video.facebook.com' ? 'video:' + url.pathname.replace(/^\/v[\d.]+/, '') : url.origin + url.pathname;
+    const call = { method, path: pathKey, query: Object.fromEntries(url.searchParams), body, headers: Object.fromEntries(req.headers) };
     calls.push(call);
     const h = handlers[`${method} ${pathKey}`] || handlers[pathKey] || handlers['*'];
     if (!h) return Response.json({ error: { code: 803, message: 'no handler ' + method + ' ' + pathKey } }, { status: 404 });

@@ -1,5 +1,6 @@
 // 臉書 Graph API 呼叫（集中一處）。版本以 Meta 官方文件最新版為準。
 export const GRAPH = 'https://graph.facebook.com/v27.0';
+export const GRAPH_VIDEO = 'https://graph-video.facebook.com/v27.0';   // 影片分段上傳（start／transfer／finish）
 
 export class GraphError extends Error {
   // uncertain：連不上臉書或讀不到回應，臉書可能已經處理（發文類請求要當「待確認」，不能直接重送）
@@ -15,8 +16,8 @@ export const isRateLimit = (e) => !!e && [4, 17, 32, 613, 80001].includes(e.code
 export const isTokenError = (e) => !!e && [190, 102].includes(e.code);
 
 // method：GET／POST／DELETE；params：物件或 FormData；GET／DELETE 的參數放 query
-export async function graph(env, method, path, params, token) {
-  const url = new URL(GRAPH + path);
+export async function graph(env, method, path, params, token, base = GRAPH) {
+  const url = new URL(base + path);
   const init = { method };
   if (method === 'GET' || method === 'DELETE') {
     for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -47,3 +48,6 @@ export async function graph(env, method, path, params, token) {
   }
   return data;
 }
+
+// 影片上傳主機（graph-video）；params 有 Blob 時請自己包成 FormData
+export const graphVideo = (env, method, path, params, token) => graph(env, method, path, params, token, GRAPH_VIDEO);

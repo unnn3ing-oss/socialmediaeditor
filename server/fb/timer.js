@@ -27,7 +27,7 @@ const reply = (o) => Response.json(o);
 
 export const MAX_ITEMS = 3;                 // 一則貼文最多 3 則留言（第 1 則＋第 2、3 則）
 
-// rec：{ pageId, postId, at（貼文發布時間，秒）, published, retimes,
+// rec：{ pageId, postId, at（貼文發布時間，秒）, published, retimes, kind?（'video'＝影片物件）,
 //        items: [{ message, offset（距發布幾分鐘）, status: pending|posting|done|failed|canceled, attempts, commentId?, error? }] }
 // 每則的到點時間＝at＋60 秒＋offset 分鐘；到點的依序留，沒到的排下一個鬧鐘。
 const dueOf = (rec, it) => (rec.at + FIRST_DELAY + it.offset * 60) * 1000;
@@ -69,7 +69,7 @@ export class FbCommentTimer {
       const at = Number(body.at);
       const items = normItems(body);
       if (!body.pageId || !body.postId || !items || !Number.isInteger(at)) return reply({ ok: false, error: '資料不完整' });
-      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items };
+      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items, ...(body.kind === 'video' ? { kind: 'video' } : {}) };
       await s.put('rec', r);
       await this.schedule(r);
       return reply({ ok: true });
@@ -126,7 +126,9 @@ export class FbCommentTimer {
     if (!rec.published) {
       let post;
       try {
-        post = await graph(this.env, 'GET', '/' + rec.postId, { fields: 'is_published,scheduled_publish_time' }, page.token);
+        // 影片（tools/fbvideo）是影片物件：欄位叫 published
+        post = await graph(this.env, 'GET', '/' + rec.postId, { fields: rec.kind === 'video' ? 'published,scheduled_publish_time' : 'is_published,scheduled_publish_time' }, page.token);
+        if (rec.kind === 'video') post.is_published = !!post.published;
       } catch (e) {
         if (e instanceof GraphError && (e.status === 404 || (e.code === 100 && e.subcode === 33))) {
           rec.items.forEach((x) => { if (open(x)) x.status = 'canceled'; });
