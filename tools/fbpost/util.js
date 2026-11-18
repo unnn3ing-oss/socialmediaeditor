@@ -57,3 +57,6 @@ export async function copyText(text) {
   t.remove();
   return ok;
 }
+
+// 貼文開頭的空白行（帶入時留給小編文，沒填就不送）
+export const stripLead = (t) => String(t).replace(/^(?:[ \t\u3000]*\n)+/, '');

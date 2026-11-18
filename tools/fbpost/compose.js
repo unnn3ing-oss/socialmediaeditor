@@ -1,6 +1,6 @@
 // 做圖＋帶入：貼上文章網址就自動帶入標題、主圖、貼文內容、框；[選套版｜純文字圖｜純文字]。
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：選套版 66px、純文字圖 76px。框的判斷用 rules.js。
-import { $, errText, say, confirmBox, segmented } from './util.js';
+import { $, errText, say, confirmBox, segmented, stripLead } from './util.js';
 import { frameForUrl } from './rules.js';
 import { titleCheck, LINE_MAX } from './title.js';
 import { createTitleEditor } from './titleedit.js';
@@ -58,11 +58,12 @@ export function createComposer({ tb, assets }) {
   $('fxHint').textContent = kit.hintText;
   // 「T寶／馬賽克」按鈕：點了才展開貼圖列（隱藏切換）
   $('fxBtn').addEventListener('click', () => { const open = $('fxBar').hidden; $('fxBar').hidden = !open; $('fxBtn').setAttribute('aria-expanded', String(open)); if (open) editor.sync(); });
-  const msgCount = () => { $('msgCount').textContent = `${[...$('msg').value].length} 字`; };
+  // 字數只算實際送出的內容（開頭留給小編文的空行沒填，送出時會拿掉）
+  const msgCount = () => { $('msgCount').textContent = `${[...stripLead($('msg').value)].length} 字`; };
   $('msg').addEventListener('input', msgCount); msgCount();
   const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); };
 
-  titleEd = createTitleEditor({ canvas, input: $('title'), mode: () => st.mode, px, ready, redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
+  titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready, redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
   // ---- 照片拖曳移動、滾輪縮放 ----
   let drag = null;
@@ -149,9 +150,21 @@ export function createComposer({ tb, assets }) {
     $('titleCount').classList.toggle('bad', !c.ok);
     const box = $('titleLines'); box.textContent = '';   // 每行右側字數（和圖上的行一致）
     c.widths.forEach((w) => { const d = document.createElement('div'); d.textContent = `${w}/${LINE_MAX}`; d.classList.toggle('bad', w > LINE_MAX); box.append(d); });
+    alignTitleLines();
     draw(); loadTitleGlyphs($('title').value).then(draw);
   }
   $('title').addEventListener('input', titleChanged);
+  // 右側字數和輸入框的行對齊：用輸入框實際的行高、上邊距，捲動也跟著走
+  function alignTitleLines() {
+    const ta = $('title'), box = $('titleLines'), cs = getComputedStyle(ta);
+    const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+    box.style.paddingTop = `${parseFloat(cs.paddingTop) + parseFloat(cs.borderTopWidth)}px`;
+    box.style.height = `${ta.offsetHeight}px`;
+    box.style.setProperty('--lh', `${lh}px`);
+    box.scrollTop = ta.scrollTop;
+  }
+  $('title').addEventListener('scroll', () => { $('titleLines').scrollTop = $('title').scrollTop; });
+  new ResizeObserver(alignTitleLines).observe($('title'));
 
   // ---- 照片：帶入的主圖，或在新增發文視窗裡按 Ctrl+V 貼上 ----
   function loadPhoto(blob) {
@@ -215,7 +228,7 @@ export function createComposer({ tb, assets }) {
       const done = [];
       if (assets.company) { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
-      $('msg').value = formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags }); msgCount();
+      $('msg').value = '\n' + formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags }); msgCount();
       done.push('貼文內容');
       let imgFail = false;
       skel(true);

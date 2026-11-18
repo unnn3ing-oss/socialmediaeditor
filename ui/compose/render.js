@@ -304,10 +304,40 @@ export function createRenderer({ ribbonEnt = null, ribbonNews = null, logo = nul
     if (fx && fx.stickers) fx.stickers(targetCtx);
   }
 
+  // 只讀：標題實際排版（和 drawTitle／drawTitleBottom 同一套算法），給預覽上的編輯框對位用，不畫任何東西
+  // anchor：'bottom'＝排程發布套版（最後一行固定在 BOTTOM_TITLE.lastY）、'center'＝純色背景置中
+  let measureCtx = null;
+  function titleLayout(titleText, baseSize, anchor = 'center') {
+    if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+    const c = measureCtx;
+    const { lines, lead, total } = titleRows(titleText);
+    const shown = lines.slice(0, MAX_TITLE_LINES);
+    const bottom = anchor === 'bottom';
+    const maxWidth = bottom ? SIZE - BOTTOM_TITLE.padX * 2 : SIZE - 120;
+    const fontSize = shown.length ? fitFontSize(c, shown, maxWidth, baseSize) : baseSize;
+    const lineHeight = bottom ? bottomLineHeight(fontSize) : fontSize * LINE_HEIGHT_RATIO;
+    const n = Math.max(1, shown.length);
+    const firstY = bottom ? BOTTOM_TITLE.lastY - (n - 1) * lineHeight : SIZE / 2 - (n - 1) * lineHeight / 2;
+    c.font = titleFont(fontSize);
+    c.textBaseline = 'alphabetic';
+    const widths = shown.map((l) => c.measureText(l).width);
+    // canvas 的 middle 以字身框中線對齊；DOM 以字型上下緣置中。算出兩者基線差，讓編輯框的字和畫布同一位置
+    const m = c.measureText('國');
+    const shift = (m.emHeightAscent != null && m.fontBoundingBoxAscent != null)
+      ? ((m.emHeightAscent - m.emHeightDescent) - (m.fontBoundingBoxAscent - m.fontBoundingBoxDescent)) / 2 : 0;
+    return { font: titleFont(fontSize), fontSize, lineHeight, firstY, lead, total, lines: shown, widths, shift, maxWidth };
+  }
+  // 量一行文字前 i 個字的寬度（游標落點用）
+  function measureTitle(text, fontSize) {
+    if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+    measureCtx.font = titleFont(fontSize);
+    return measureCtx.measureText(text).width;
+  }
+
   // 字型晚一步載好時（loadComposeAssets 的 waitFont:false）用它切換成公司字型
   function setFontLoaded(v) { fontLoaded = Boolean(v); }
 
-  return { ready, fontLoaded, setFontLoaded, titleFont, fitFontSize, drawImageCover, renderComposite };
+  return { ready, fontLoaded, setFontLoaded, titleFont, fitFontSize, drawImageCover, renderComposite, titleLayout, measureTitle };
 }
 
 // Google 把 Noto Sans TC 切成很多段，canvas 畫字不會自動載入沒用過的那段，缺字會退回系統字型。
