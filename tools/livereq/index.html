@@ -23,11 +23,11 @@
         </label>
         <button type="button" class="lr-pastebtn" id="pasteBtn" hidden></button>
       </div>
-      <label class="field lr-dutyf">
+      <label class="field lr-dutyf lr-dutyname">
         <span class="lr-sr">值班小編姓名</span>
         <input id="dutyName" type="text" autocomplete="off" required aria-required="true" placeholder="值班姓名（必填）">
       </label>
-      <label class="field lr-dutyf">
+      <label class="field lr-dutyf lr-dutycontact">
         <span class="lr-sr">分機或手機</span>
         <input id="dutyContact" type="text" autocomplete="off" required aria-required="true" placeholder="分機或手機（必填）#85001">
       </label>
@@ -39,10 +39,11 @@
       <button type="button" class="btn btn-secondary btn-sm" id="run">解析</button>
     </div>
   </section>
+  <p class="lr-ph" aria-hidden="true">貼上需求單後，成品會出現在這裡</p>
   <p class="lr-empty" id="empty" hidden>找不到需求單欄位（●／◎ 開頭的「新聞事件」「直播平台」「YT標」等），請確認貼上的內容。</p>
   <section class="lr-stage" id="stage" hidden>
     <div class="lr-stagehead">
-      <span class="lr-step"><span class="lr-badge">2</span>逐張確認</span>
+      <span class="lr-step"><span class="lr-badge">2</span>成品</span>
       <span class="lr-dots" id="dots" role="group" aria-label="場次"></span>
       <span class="lr-pos" id="pos"></span>
     </div>

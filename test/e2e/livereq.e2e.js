@@ -12,9 +12,9 @@ let srv, browser;
 test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
 
-async function open() {
+async function open(opts = {}) {
   const errors = [];
-  const t = await openTool(browser, srv.url, 'livereq');
+  const t = await openTool(browser, srv.url, 'livereq', opts);
   t.page.on('pageerror', (e) => errors.push(String(e)));
   await t.page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: srv.url.replace(/\/$/, '') });
   await t.frame.evaluate(() => localStorage.clear());
@@ -208,8 +208,8 @@ test('畫面來源在狀態鈕列，待補標黃不擋；三種狀態有 class �
   await page.close();
 });
 
-test('貼上後縮成一行按鈕，點了展開可重貼（隱藏切換，內容不重建）', async () => {
-  const { frame, page } = await open();
+test('窄螢幕：貼上後縮成一行按鈕，點了展開可重貼（隱藏切換，內容不重建）', async () => {
+  const { frame, page } = await open({ viewport: { width: 900, height: 800 } });
   assert.equal(await frame.locator('#pasteBtn').isHidden(), true);
   await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
   assert.equal(await frame.locator('#src').isHidden(), true);
@@ -225,10 +225,14 @@ test('貼上後縮成一行按鈕，點了展開可重貼（隱藏切換，內�
 });
 
 test('進入工具：貼上框自動聚焦（值班小編欄位仍在上方）；解析是次要按鈕、複製是主按鈕', async () => {
-  const { frame, page } = await open();
+  const { frame, page } = await open({ viewport: { width: 900, height: 800 } });
   assert.equal(await frame.evaluate(() => document.activeElement && document.activeElement.id), 'src');
   const x = async (id) => (await frame.locator(id).boundingBox()).x;
   assert.ok((await x('#dutyName')) > (await x('#src')));
+  // 電腦版兩欄：值班欄位在貼上框上方
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const y = async (id) => (await frame.locator(id).boundingBox()).y;
+  assert.ok((await y('#dutyName')) < (await y('#src')));
   assert.match(await frame.getAttribute('#run', 'class'), /btn-secondary/);
   assert.doesNotMatch(await frame.getAttribute('#run', 'class'), /btn-primary/);
   await page.close();
@@ -297,5 +301,40 @@ test('分機：剛好 5 位數字自動加 #，其他不動；複製出去用補
   await frame.fill('#dutyName', '王小明');
   await frame.fill('#dutyContact', '85001');   // 還沒離開欄位：需求單也已經用 #85001
   assert.match(await frame.locator('.lr-card:visible [data-out]').inputValue(), /王小明 #85001/);
+  await page.close();
+});
+
+test('電腦版兩欄：左貼上（不縮合）右成品，勾粉專也不撐高頁面，底列在最下方', async () => {
+  const { frame, page, errors } = await open({ viewport: { width: 1440, height: 900 } });
+  assert.equal(await frame.locator('.lr-ph').isVisible(), true);
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  await frame.fill('#dutyName', '王小明'); await frame.fill('#dutyContact', '#85001');
+  assert.equal(await frame.locator('#src').isVisible(), true);
+  assert.equal(await frame.locator('#pasteBtn').isHidden(), true);
+  assert.equal(await frame.locator('.lr-ph').isHidden(), true);
+  const box = async (sel) => frame.locator(sel).boundingBox();
+  const top = await box('#top'), stage = await box('#stage'), bar = await box('#bar');
+  assert.ok(stage.x > top.x + top.width, '成品在貼上框右邊');
+  assert.equal(await frame.textContent('#stage .lr-stagehead .lr-step'), '2成品');
+  const before = await box('.lr-card:not([hidden]) [data-out]');
+  for (const n of ['新聞', '少康', '娛樂', '國際']) await frame.locator('.lr-card:not([hidden]) label.lr-box', { hasText: n }).click();
+  const after = await box('.lr-card:not([hidden]) [data-out]');
+  assert.equal(Math.round(after.height), Math.round(before.height));
+  const m = await frame.evaluate(() => ({ sh: document.documentElement.scrollHeight, ih: innerHeight }));
+  assert.ok(m.sh <= m.ih, `頁面不捲動 ${m.sh} > ${m.ih}`);
+  const bar2 = await box('#bar');
+  assert.equal(Math.round(bar2.y), Math.round(bar.y));
+  assert.ok(bar2.y + bar2.height <= 900);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('窄螢幕：底列黏在畫面最下方', async () => {
+  const { frame, page } = await open({ viewport: { width: 900, height: 700 } });
+  await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
+  for (const n of ['新聞', '少康', '娛樂', '國際']) await frame.locator('.lr-card:not([hidden]) label.lr-box', { hasText: n }).click();
+  await frame.evaluate(() => scrollTo(0, 0));
+  const bar = await frame.locator('#bar').boundingBox();
+  assert.ok(bar.y + bar.height <= 700 && bar.y + bar.height >= 680, `底列底部 ${bar.y + bar.height}`);
   await page.close();
 });
