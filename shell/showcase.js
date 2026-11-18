@@ -86,5 +86,13 @@ export function renderShowcase(root, tools, { onOpen }) {
     sec.appendChild(grid);
     inner.appendChild(sec);
   }
+  // 頁尾：隱私權政策／資料刪除說明（臉書應用程式上線模式要求公開可讀）
+  const foot = el('footer', 'site-foot');
+  for (const [href, text] of [['privacy/', '隱私權政策'], ['data-deletion/', '資料刪除說明']]) {
+    const a = el('a', null, text);
+    a.href = href;
+    foot.appendChild(a);
+  }
+  inner.appendChild(foot);
   root.removeAttribute('aria-busy');
 }

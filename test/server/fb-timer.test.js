@@ -19,6 +19,12 @@ async function mk(t, handlers) {
 }
 const REC = (at) => ({ pageId: '111', postId: '111_5', message: '看更多新聞內容\nhttps://x', at });
 const comments = (f) => f.calls.filter((c) => c.method === 'POST' && /\/comments$/.test(c.path));
+// 留言都結束後：鬧鐘改排 14 天後清除
+const DAY = 86400 * 1000;
+async function assertPurge(state) {
+  const a = await state.storage.getAlarm();
+  assert.ok(a > Date.now() + 14 * DAY - 60000 && a <= Date.now() + 14 * DAY, '應排 14 天後清除，實際 ' + a);
+}
 
 test('arm：鬧鐘＝排定時間＋60 秒', async (t) => {
   const { state, post } = await mk(t, {});
@@ -118,7 +124,7 @@ test('cancel 後觸發不呼叫臉書；retime 只在 pending 有效', async (t)
   assert.equal((await post('retime', { at: at2 })).ok, true);
   assert.equal(await state.storage.getAlarm(), (at2 + 60) * 1000);
   await post('cancel');
-  assert.equal(await state.storage.getAlarm(), null);
+  await assertPurge(state);
   const n = f.calls.length;
   await obj.alarm();
   assert.equal(f.calls.length, n);
@@ -140,7 +146,7 @@ test('遲遲未發布：超過 20 次 → failed', async (t) => {
   for (let i = 0; i < 21; i++) await obj.alarm();
   const s = await post('status');
   assert.equal(s.status, 'failed'); assert.match(s.error, /未發布/);
-  assert.equal(await state.storage.getAlarm(), null);
+  await assertPurge(state);
 });
 
 test('留言送出後回應遺失：重試前先查，臉書上已有就不再留', async (t) => {
@@ -200,7 +206,7 @@ test('多則留言：到點的依序留，沒到的排下一個鬧鐘；全部�
   assert.deepEqual(s.items.map((x) => x.status), ['done', 'done', 'done']);
   assert.equal(s.status, 'done');
   assert.deepEqual(comments(f).map((c) => c.body.message), ['看更多\nhttps://x', '第二則', '第三則'], '依序留');
-  assert.equal(await state.storage.getAlarm(), null);
+  await assertPurge(state);
   assert.equal(f.calls.filter((c) => c.method === 'GET' && c.path === '/111_5').length, 1, '確認發布後不再重複查');
 });
 
@@ -227,7 +233,7 @@ test('多則留言：中間一則失敗重試，不影響已留的；取消後�
   await st2.post('cancel');
   const s2 = await st2.post('status');
   assert.deepEqual(s2.items.map((x) => x.status), ['done', 'canceled', 'canceled']);
-  assert.equal(await st2.state.storage.getAlarm(), null);
+  await assertPurge(st2.state);
 });
 
 test('多則留言：改時間後全部跟著平移', async (t) => {
@@ -295,4 +301,57 @@ test('armTimer：計時器拒收（資料不完整）會丟錯，不能當成排
   const { armTimer } = await lm();
   const env = { FB_TIMER: { idFromName: (n) => ({ name: n }), get: () => ({ fetch: async () => Response.json({ ok: false, error: '資料不完整' }) }) } };
   await assert.rejects(() => armTimer(env, { postId: '1_2', items: [] }), /資料不完整/);
+});
+
+test('留言都結束 14 天後：整筆紀錄刪除，status 回 none；還沒到不刪', async (t) => {
+  const { f, state, obj, post } = await mk(t, {
+    'GET /111_5': () => ({ id: '111_5', is_published: true }),
+    'POST /111_5/comments': () => ({ id: 'C9' })
+  });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  await assertPurge(state);
+  await obj.alarm();   // 清除時間還沒到：不刪、不呼叫臉書
+  assert.equal((await post('status')).status, 'done');
+  const calls = f.calls.length;
+  const rec = await state.storage.get('rec');
+  rec.purgeAt = Date.now() - 1;
+  await state.storage.put('rec', rec);
+  await obj.alarm();
+  assert.equal((await post('status')).status, 'none');
+  assert.equal(state.storage.map.size, 0);
+  assert.equal(await state.storage.getAlarm(), null);
+  assert.equal(f.calls.length, calls, '清除不呼叫臉書');
+});
+
+test('取消後也排 14 天清除；之前已結束但沒有 purgeAt 的舊紀錄，觸發時補排', async (t) => {
+  const { state, obj, post } = await mk(t, {});
+  await post('arm', REC(nowSec() + 3600));
+  await post('cancel');
+  await assertPurge(state);
+  const rec = await state.storage.get('rec');
+  delete rec.purgeAt;
+  await state.storage.put('rec', rec);
+  await state.storage.deleteAlarm();
+  await obj.alarm();
+  await assertPurge(state);
+  assert.equal((await post('status')).status, 'canceled');
+});
+
+test('同一貼文重新 arm：清除排程取消，回到等待留言', async (t) => {
+  const { state, post } = await mk(t, {});
+  await post('arm', REC(nowSec() + 3600));
+  await post('cancel');
+  const at = nowSec() + 7200;
+  await post('arm', REC(at));
+  assert.equal(await state.storage.getAlarm(), (at + 60) * 1000);
+  assert.equal((await state.storage.get('rec')).purgeAt, undefined);
+});
+
+test('舊紀錄已結束、沒有鬧鐘也沒有 purgeAt：查 status 時補排 14 天清除', async (t) => {
+  const { state, post } = await mk(t, {});
+  await state.storage.put('rec', { pageId: '111', postId: '111_5', at: nowSec() - 9999, published: true, retimes: 0, items: [{ message: 'x', offset: 0, status: 'done', attempts: 0, commentId: 'C1' }] });
+  assert.equal(await state.storage.getAlarm(), null);
+  assert.equal((await post('status')).status, 'done');
+  await assertPurge(state);
 });
