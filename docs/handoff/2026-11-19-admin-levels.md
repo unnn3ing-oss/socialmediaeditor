@@ -18,14 +18,15 @@
 |---|---|---|
 | `server/core/adminperm.js`（新）、`admin.js`、`staff.js`、`auth.js`、`http.js`、`fb/index.js` | 後端權限 | ✅ |
 | `shell/`、`admin/` | 首頁按鈕（狀態列「管理頁」膠囊）、管理頁權限 | ✅ |
-| `admin/admin.css` | 改版（已做、截圖已給使用者，等確認） | 🚧 |
-| README、`docs/deploy.md` | 網址 | ⬜ |
+| `admin/admin.css` | 改版（使用者已確認） | ✅ |
+| README、`docs/deploy.md` | 網址 | ✅ |
 
 ## 下一步
 - [x] Task 1 後端（`adminperm.js`、`levels.js`、名單 level、`/admin/me`、`/admin/levels`）
 - [x] Task 2 前端
-- [ ] Task 3 改版：已套用並 commit，截圖給使用者，等確認或修改（截圖測試 `SHOT_DIR=… node --test --test-name-pattern=截圖： test/e2e/admin.e2e.js`）
-- [ ] Task 4 文件、審查
+- [x] Task 3 改版（使用者確認）（截圖測試 `SHOT_DIR=… node --test --test-name-pattern=截圖： test/e2e/admin.e2e.js`）
+- [x] Task 4 文件、獨立審查（通過；順手修：解鎖憑證過期時退回首頁憑證，不整個登出）
+- [ ] 使用者說「推」→ 併入 main，同 commit 更新 CLAUDE.md「目前進度」
 
 ## 測試
 `npm test`、`npm run e2e`、`node build.js --check`。
@@ -36,3 +37,5 @@
 
 ## 進度備註
 - npm test 693 通過；admin e2e 30 通過。「臉書連線：貼上權杖」e2e 偶發失敗 1 次（單獨跑 3 次都過，未改相關程式，推論既有時間競爭）。
+- 全部 e2e：230 過、2 失敗（collage「兩張照片放進等分格子」、fbpost「管理員：進入是已排程」），各自單獨重跑皆通過，屬全套負載下的偶發，與本次無關。
+- 審查未修的低風險項：勾「普通」時管理者那格自動勾不再跳敏感確認（普通那格已確認過）。

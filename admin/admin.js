@@ -39,6 +39,8 @@ if (window.top !== window.self) {
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   function expired() {
+    // 解鎖用的管理員憑證過期：退回首頁憑證（重新鎖住），不用整個登出
+    if (frontToken && token !== frontToken) { token = frontToken; enter($('loginMsg')).then(function (ok) { if (ok) say($('unlockMsg'), '解鎖已過期，需要時請再輸入一次管理員密碼。', 'err'); else expired(); }); return; }
     var front = token && token === frontToken;
     signOut();
     say($('loginMsg'), front ? '首頁的登入已過期或已停用，請回工具箱首頁重新登入，或在這裡輸入管理員密碼。' : '登入已過期，請重新登入。', 'err');
