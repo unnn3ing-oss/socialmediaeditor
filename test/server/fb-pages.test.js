@@ -292,3 +292,147 @@ test('開放／關閉：預設關閉；開放後名單內的人可用；關閉�
   env.DB.raw.prepare("UPDATE fb_settings SET v = 'bogus' WHERE k = 'access'").run();
   assert.equal((await call(env, '/fb/pages', { headers: company })).status, 403);
 });
+
+// ---- 自動延長＋存粉專權杖 ----
+const DAY = 86400;
+// debug_token 替身：依 input_token 回不同結果；PT* 是粉專權杖
+function debugBy(map) {
+  return (c) => {
+    const k = c.query.input_token;
+    const v = map[k] !== undefined ? map[k] : map['*'];
+    return typeof v === 'function' ? v(c) : v;
+  };
+}
+const appEnv = (extra = {}) => mkEnv({ FB_USER_TOKEN: 'USERTOKEN', FB_APP_ID: '999', FB_APP_SECRET: 'SECRET', ...extra });
+
+test('有 App 密鑰：短效權杖自動延長、換好粉專權杖加密存 D1；之後不再打 /me/accounts，使用者權杖過期也照用', async (t) => {
+  let userDead = false;
+  const f = installFetch({
+    'GET /oauth/access_token': (c) => (c.query.client_secret === 'SECRET' && c.query.fb_exchange_token === 'SHORT' ? { access_token: 'LONG', token_type: 'bearer', expires_in: 5184000 } : gErr(100)),
+    'GET /debug_token': debugBy({
+      SHORT: { data: { type: 'USER', is_valid: true, app_id: '999', application: 'DEV-TOOL', expires_at: nowSec() + 3600, scopes: ['pages_manage_posts'] } },
+      LONG: { data: { type: 'USER', is_valid: true, app_id: '999', application: 'DEV-TOOL', expires_at: nowSec() + 60 * DAY, scopes: ['pages_manage_posts'] } },
+      '*': { data: { type: 'PAGE', is_valid: true, app_id: '999', application: 'DEV-TOOL', expires_at: 0, data_access_expires_at: nowSec() + 90 * DAY } }
+    }),
+    'GET /me/accounts': (c) => (userDead ? gErr(190, 400, 'expired') : c.query.access_token === 'LONG' ? ACCOUNTS : gErr(190, 400, 'short')),
+    'GET /me/permissions': () => (userDead ? gErr(190, 400, 'expired') : { data: [] })
+  }); t.after(f.restore);
+  const env = appEnv();
+  const adm = await auth(env, 'admin');
+  const r = await call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'SHORT' }) });
+  const txt = await r.text();
+  assert.equal(r.status, 200, txt);
+  for (const s of ['SHORT', 'LONG', 'PT111', 'SECRET']) assert.ok(!txt.includes(s), '回應不含權杖／密鑰：' + s);
+  const d = JSON.parse(txt).data;
+  assert.equal(d.extended, true); assert.equal(d.autoExtend, true);
+  assert.equal(d.stored.pages, 3); assert.equal(d.stored.expires, 0);
+  assert.ok(d.stored.dataExpires > nowSec() + 89 * DAY);
+  assert.equal(d.warn, null);
+  const rows = (await env.DB.prepare("SELECT k, v FROM fb_settings").all()).results;
+  const pt = rows.find((x) => x.k === 'page_tokens');
+  assert.ok(pt && pt.v.startsWith('v1.') && !pt.v.includes('PT111'), '粉專權杖加密存');
+  const { storedToken } = await import('../../server/fb/tokenstore.js');
+  assert.equal(await storedToken(env), 'LONG', '存的是延長後的權杖');
+  // 之後：使用者權杖過期也能讀粉專，不打 /me/accounts
+  userDead = true;
+  const before = f.calls.filter((c) => c.path === '/me/accounts').length;
+  const pr = await call(env, '/fb/pages', { headers: await auth(env, 'company', true) });
+  assert.equal(pr.status, 200);
+  assert.equal((await pr.json()).data.length, 3);
+  assert.equal(f.calls.filter((c) => c.path === '/me/accounts').length, before);
+  const st = (await (await call(env, '/admin/fb/status', { headers: adm })).json()).data;
+  assert.equal(st.valid, true, '粉專權杖有效＝可發文'); assert.equal(st.userValid, false);
+  assert.deepEqual(st.missing, []);
+  // 重新整理粉專：使用者權杖過期 → 保留舊的
+  const rf = (await (await call(env, '/admin/fb/refresh', { method: 'POST', headers: adm })).json()).data;
+  assert.equal(rf.renewed, false); assert.equal(rf.reason, 'user_expired');
+  assert.equal((await (await call(env, '/admin/fb/status', { headers: adm })).json()).data.stored.pages, 3);
+  // 改回 Secret：粉專權杖一起刪
+  await call(env, '/admin/fb/token', { method: 'DELETE', headers: adm });
+  assert.ok(!(await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'page_tokens'").first()));
+});
+
+test('自動延長：權杖屬於別的 App、延長失敗都不存', async (t) => {
+  let other = true;
+  const f = installFetch({
+    'GET /oauth/access_token': () => gErr(101, 400, 'bad secret'),
+    'GET /debug_token': () => ({ data: { type: 'USER', is_valid: true, app_id: other ? '123' : '999', application: other ? 'OTHER' : 'DEV-TOOL', expires_at: nowSec() + 3600, scopes: ['pages_manage_posts'] } }),
+    'GET /me/accounts': () => ACCOUNTS
+  }); t.after(f.restore);
+  const env = appEnv();
+  const post = async () => (await call(env, '/admin/fb/token', { method: 'POST', headers: { ...(await auth(env, 'admin')), 'content-type': 'application/json' }, body: JSON.stringify({ token: 'SHORT' }) })).json();
+  let b = await post(); assert.equal(b.code, 'fb_token'); assert.match(b.error, /另一個 App（OTHER）/);
+  other = false; b = await post(); assert.match(b.error, /自動延長失敗/);
+  assert.ok(!(await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'user_token'").first().catch(() => null)));
+});
+
+test('沒有 App 密鑰：粉專權杖會過期（貼了短效權杖）→ 拒存並提示先延長；已延長的照樣存', async (t) => {
+  let pageExp = nowSec() + 3600;
+  const f = installFetch({
+    'GET /debug_token': debugBy({ X: { data: { type: 'USER', is_valid: true, expires_at: nowSec() + 3600, scopes: ['pages_manage_posts'] } }, '*': () => ({ data: { type: 'PAGE', is_valid: true, expires_at: pageExp } }) }),
+    'GET /me/accounts': () => ACCOUNTS,
+    'GET /me/permissions': () => ({ data: [] })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  const post = async () => (await call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'X' }) })).json();
+  const b = await post();
+  assert.equal(b.code, 'fb_token'); assert.match(b.error, /Extend/);
+  assert.ok(!f.calls.some((c) => c.path === '/oauth/access_token'), '沒密鑰不呼叫延長');
+  assert.ok(!(await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'page_tokens'").first().catch(() => null)));
+  pageExp = 0;
+  const ok2 = await post();
+  assert.equal(ok2.data.extended, false); assert.equal(ok2.data.autoExtend, false); assert.equal(ok2.data.stored.pages, 3);
+});
+
+test('重新整理粉專：使用者權杖有效就重新換（新粉專加進來）', async (t) => {
+  let accounts = { data: [ACCOUNTS.data[0]] };
+  const f = installFetch({
+    'GET /debug_token': () => ({ data: { type: 'USER', is_valid: true, expires_at: 0, scopes: ['pages_manage_posts'] } }),
+    'GET /me/accounts': () => accounts,
+    'GET /me/permissions': () => ({ data: [] })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  await call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'X' }) });
+  accounts = ACCOUNTS;
+  const rf = (await (await call(env, '/admin/fb/refresh', { method: 'POST', headers: adm })).json()).data;
+  assert.equal(rf.renewed, true); assert.equal(rf.pages, 3);
+  assert.equal((await (await call(env, '/admin/fb/pages', { headers: adm })).json()).data.length, 3);
+});
+
+test('粉專權杖失效（190）→ 記旗標：狀態與 /fb/me（管理員）顯示提醒；換新權杖後清掉', async (t) => {
+  let dead = false;
+  const f = installFetch({
+    'GET /debug_token': (c) => (dead && c.query.access_token === 'PT111' ? gErr(190, 400, 'session invalidated') : { data: { type: 'USER', is_valid: true, expires_at: 0, scopes: ['pages_manage_posts'] } }),
+    'GET /me/accounts': () => ACCOUNTS,
+    'GET /me/permissions': () => ({ data: [] })
+  }); t.after(f.restore);
+  const env = fbEnv();
+  const adm = await auth(env, 'admin');
+  const save = () => call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'X' }) });
+  await save();
+  const me0 = (await (await call(env, '/fb/me', { headers: await auth(env, 'company', true) })).json()).data;
+  assert.equal(me0.tokenWarn, null);
+  dead = true;
+  const st = (await (await call(env, '/admin/fb/status', { headers: adm })).json()).data;
+  assert.equal(st.valid, false); assert.ok(st.broken); assert.equal(st.warn.level, 'bad');
+  const me = (await (await call(env, '/fb/me', { headers: await auth(env, 'company', true) })).json()).data;
+  assert.equal(me.tokenWarn.level, 'bad'); assert.match(me.tokenWarn.text, /失效/);
+  dead = false;
+  await save();
+  const me2 = (await (await call(env, '/fb/me', { headers: await auth(env, 'company', true) })).json()).data;
+  assert.equal(me2.tokenWarn, null, '換新權杖清掉旗標');
+});
+
+test('tokenWarn：14 天內提醒、過期為 bad；有存粉專權杖看資料存取期限', async () => {
+  const { tokenWarn } = await import('../../server/fb/pages.js');
+  const now = 1_000_000_000_000, s = now / 1000;
+  assert.equal(tokenWarn({ stored: null, userExpires: 0, now }), null, '永不過期');
+  assert.equal(tokenWarn({ stored: null, userExpires: s + 30 * DAY, now }), null);
+  assert.deepEqual(tokenWarn({ stored: null, userExpires: s + 10 * DAY, now }).days, 10);
+  assert.equal(tokenWarn({ stored: null, userExpires: s - 10, now }).level, 'bad');
+  assert.equal(tokenWarn({ stored: { dataExpires: s + 5 * DAY }, userExpires: s - 10, now }).days, 5, '使用者權杖過期不影響，看資料存取期限');
+  assert.equal(tokenWarn({ stored: { dataExpires: 0 }, userExpires: s - 10, now }), null);
+  assert.equal(tokenWarn({ stored: null, userExpires: 0, broken: now, now }).level, 'bad');
+});

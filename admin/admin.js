@@ -138,9 +138,22 @@ if (window.top !== window.self) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
       $('fbTokClear').hidden = d.source !== 'admin';
+      var dl = $('fbDetail'); dl.textContent = ''; dl.hidden = true;
+      var w = $('fbWarn'); w.hidden = !d.warn; w.textContent = d.warn ? d.warn.text : ''; w.className = 'fb-warn' + (d.warn && d.warn.level === 'bad' ? ' bad' : '');
+      $('fbTokHint').textContent = d.autoExtend ? '後端已設定 App 密鑰：貼 Graph API Explorer 剛產生的權杖即可，會自動延長。' : '後端沒有設定 FB_APP_ID／FB_APP_SECRET，無法自動延長：請先到「存取權杖偵錯工具」按 Extend，再貼延長後的權杖。';
       if (!d.configured) { $('fbState').textContent = '狀態：尚未設定權杖（在下方貼上，或設定 Secret FB_USER_TOKEN）'; $('fbState').className = 'fb-state off'; return; }
-      $('fbState').textContent = '狀態：' + (d.valid ? '連線正常' : 'token 無效，請重新授權') + '；來源：' + (d.source === 'admin' ? '管理頁' : 'Secret') + (d.app ? '；App：' + d.app : '') + '；' + fmtExp(d.expires) + '；粉專 ' + (d.pages || 0) + ' 個' + (d.valid && !d.pages ? '（token 讀不到可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts）' : '');
+      $('fbState').textContent = '狀態：' + (d.valid ? '可以發文' : '權杖失效，無法發文，請換新權杖') + '；來源：' + (d.source === 'admin' ? '管理頁' : 'Secret') + (d.app ? '；App：' + d.app : '') + '；粉專 ' + (d.pages || 0) + ' 個' + (d.valid && !d.pages ? '（token 讀不到可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts）' : '');
       $('fbState').className = 'fb-state ' + (d.valid ? 'on' : 'off');
+      var lines = [];
+      if (d.stored) {
+        lines.push('粉專權杖：' + d.stored.pages + ' 個，' + fmtExp(d.stored.expires) + (d.stored.savedAt ? '（' + fmtTime(d.stored.savedAt) + ' 換好）' : ''));
+        if (d.stored.dataExpires) lines.push('資料存取期限：' + fmtTime(d.stored.dataExpires * 1000) + '（到期前請主管重新產生權杖再換一次）');
+        lines.push('使用者權杖：' + (d.userValid ? fmtExp(d.expires) : '已過期（不影響發文；要加新粉專時再換新權杖）'));
+      } else {
+        lines.push('使用者權杖：' + fmtExp(d.expires) + '（粉專權杖每次現場換；在下方「驗證並儲存」後會改存不過期的粉專權杖）');
+      }
+      lines.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; dl.appendChild(li); });
+      dl.hidden = !lines.length;
       (d.missing || []).forEach(function (m) { var li = document.createElement('li'); li.textContent = '缺少權限：' + m; ul.appendChild(li); });
       ul.hidden = !(d.missing && d.missing.length);
     });
@@ -249,7 +262,7 @@ if (window.top !== window.self) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('fbTok').value = '';
       var d = res.data;
-      say($('fbTokMsg'), '已換成新權杖' + (d.app ? '（App：' + d.app + '）' : '') + '，粉專 ' + (d.pages || 0) + ' 個。', 'good');
+      say($('fbTokMsg'), (d.extended ? '已自動延長權杖，' : '已換成新權杖，') + '並換好 ' + (d.pages || 0) + ' 個粉專權杖（永不過期）' + (d.app ? '；App：' + d.app : '') + '。', 'good');
       return fbLoad();
     }).catch(function (e) { say($('fbTokMsg'), '沒有換：' + (e && e.message || '失敗'), 'err'); })
       .then(function () { $('fbTokSave').disabled = false; });
@@ -268,7 +281,9 @@ if (window.top !== window.self) {
     $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
     api('/admin/fb/refresh', { method: 'POST' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      return fbLoad().then(function () { say($('fbMsg'), '已重新讀取。', 'good'); });
+      var r = res.data || {};
+      var m = r.renewed ? '已重新換好粉專權杖：' + r.pages + ' 個。' : r.reason === 'user_expired' ? '使用者權杖已過期，保留原本的粉專權杖（照常發文）；要加新粉專請換新權杖。' : r.reason === 'failed' ? '沒有更新：' + (r.error || '') + ' 保留原本的粉專權杖。' : '已重新讀取。';
+      return fbLoad().then(function () { say($('fbMsg'), m, r.reason ? 'err' : 'good'); });
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbRefresh').disabled = false; });
   };

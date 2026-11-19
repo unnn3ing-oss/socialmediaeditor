@@ -170,6 +170,17 @@ npx wrangler deploy
    - token 需要的權限：`pages_show_list`、`pages_manage_posts`、`pages_read_engagement`、`pages_manage_engagement`、`pages_read_user_content`（管理頁「臉書連線」會列出缺少的）。
    - `RUNDOWN_URL`＝FB RUNDOWN 試算表 Apps Script 的 `/exec` 網址；`RUNDOWN_TOKEN`＝同一支 Apps Script 指令碼屬性 `TOKEN`（前後空白會自動去掉）。
 
+   **建議改用管理頁換權杖＋自動延長**（2026-11-19 起）：再加兩個 Secret，主管在 Graph API Explorer 產生的短效權杖直接貼到管理頁「臉書連線」→「驗證並儲存」，後端會自動延長成長效、換好各粉專權杖（永不過期）加密存進 D1，之後 60 天到期也不影響發文：
+
+   ```bash
+   npx wrangler secret put FB_APP_ID
+   npx wrangler secret put FB_APP_SECRET
+   ```
+
+   - 兩個值在 Meta 開發者後台該 App 的「應用程式設定 → 基本資料」（App ID／應用程式密鑰）；權杖必須是**同一個 App** 產生的，否則管理頁會拒存。
+   - 不設也能用：貼權杖前先到「存取權杖偵錯工具」按 Extend，再貼延長後的權杖（短效權杖會被拒存）。
+   - 管理頁會顯示「資料存取期限」（約 90 天），14 天內或發文遇到權杖失效時，管理頁與排程發布／影片發布（管理員）會出現提醒；主管改密碼、失去粉專角色、移除 App 授權時都要重新換一次。
+
 3. **本機 `server/wrangler.toml` 加留言計時器**（repo 版已有，照抄到本機那份）。公司電腦已有的 `v1`、`v2` 兩段 `[[migrations]]` **保留**，`v3` 接在後面：
 
    ```toml

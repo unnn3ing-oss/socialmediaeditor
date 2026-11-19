@@ -1,6 +1,9 @@
-// 粉專清單：使用者權杖（管理頁存的優先，否則 Secret FB_USER_TOKEN）→ /me/accounts（不足時用精細範圍逐一查）取各粉專 token（KV 快取 1 小時）＋ D1 fb_pages 的顯示設定
-import { graph, isTokenError } from './graph.js';
-import { userToken } from './tokenstore.js';
+// 粉專清單：
+//   管理頁「驗證並儲存」時已換好、存進 D1 的粉專權杖（不會過期）優先；
+//   沒有時（例：只設 Secret FB_USER_TOKEN）用使用者權杖 → /me/accounts（不足時用精細範圍逐一查）取各粉專 token（KV 快取 1 小時）
+//   ＋ D1 fb_pages 的顯示設定
+import { graph, isTokenError, canExtend, exchangeToken } from './graph.js';
+import { userToken, storedPageTokens, savePageTokens, notePageTokens, brokenAt } from './tokenstore.js';
 
 const CACHE_KEY = 'fb:accounts';
 const CACHE_TTL = 3600;
@@ -27,9 +30,11 @@ async function granularPageIds(env, ut) {
 // 先走 /me/accounts，再查一次 debug_token；精細範圍裡 /me/accounts 沒列到的（例：從企業管理平台指派的粉專，/me/accounts 回空），
 // 改用精細範圍的粉專 ID 逐一查 /{id}?fields=name,access_token 換粉專 token
 export async function pageTokens(env) {
+  const st = await storedPageTokens(env);
+  if (st) { notePageTokens(env, st.pages); return new Map(st.pages.map((p) => [p.id, p])); }
   let list = null;
   try { list = env.CACHE ? await env.CACHE.get(CACHE_KEY, 'json') : null; } catch { list = null; }
-  if (Array.isArray(list)) return new Map(list.map((p) => [p.id, p]));
+  if (Array.isArray(list)) { notePageTokens(env, list); return new Map(list.map((p) => [p.id, p])); }
   const { token: ut } = await userToken(env);
   if (!ut) throw new FbSetupError('fb_off');
   let none = null;
@@ -41,6 +46,7 @@ export async function pageTokens(env) {
     throw new FbSetupError('fb_no_pages');
   }
   if (env.CACHE) await env.CACHE.put(CACHE_KEY, JSON.stringify(list), { expirationTtl: CACHE_TTL });
+  notePageTokens(env, list);
   return new Map(list.map((p) => [p.id, p]));
 }
 
@@ -143,44 +149,119 @@ export async function savePages(env, pages) {
   if (stmts.length) await env.DB.batch(stmts);
 }
 
-// 權杖本身的資訊（debug_token）：{ type, valid, expires(0＝永不), app, scopes }；讀不到回 null
-async function tokenInfo(env, ut) {
-  const d = await graph(env, 'GET', '/debug_token', { input_token: ut }, ut);
+// 權杖本身的資訊（debug_token）：{ type, valid, expires(0＝永不), dataExpires(資料存取期限，0／null＝沒有), app, appId, scopes }
+// input＝要查的權杖，access＝拿來呼叫的權杖（預設同一個）
+const secOrNull = (raw) => { const n = Number(raw); return raw === undefined || raw === null || !Number.isFinite(n) ? null : n; };
+async function tokenInfo(env, input, access = input) {
+  const d = await graph(env, 'GET', '/debug_token', { input_token: input }, access);
   const x = (d && d.data) || {};
-  const raw = x.expires_at, exp = Number(raw);
   return {
-    type: String(x.type || ''), valid: !!x.is_valid, app: String(x.application || ''),
-    expires: raw === undefined || raw === null || !Number.isFinite(exp) ? null : exp,
+    type: String(x.type || ''), valid: !!x.is_valid, app: String(x.application || ''), appId: x.app_id ? String(x.app_id) : '',
+    expires: secOrNull(x.expires_at), dataExpires: secOrNull(x.data_access_expires_at),
     scopes: Array.isArray(x.scopes) ? x.scopes.map(String) : []
   };
 }
+const errText = (e) => String((e && e.message) || e).slice(0, 120);
 
-// 管理頁換權杖前的驗證：通過回 { ok:true, info, pages }，不通過回 { ok:false, error }
-export async function checkNewToken(env, ut) {
+// 用（已延長的）使用者權杖換粉專權杖，並確認粉專權杖不會過期：通過回 { ok:true, pages, dataExpires }，否則 { ok:false, error }
+async function derivePages(env, ut, extended) {
+  let pages;
+  try { pages = await fetchPages(env, ut); } catch (e) { return { ok: false, error: e.code === 'fb_token' ? '權杖無效或已過期。' : '讀取粉專失敗：' + errText(e) }; }
+  if (!pages.length) return { ok: false, error: '這個權杖換不到任何粉專：授權時要勾選粉專。' };
+  let pinfo;
+  try { pinfo = await tokenInfo(env, pages[0].token, ut); } catch (e) { return { ok: false, error: '讀不到粉專權杖的期限：' + errText(e) }; }
+  if (pinfo.expires !== 0) {
+    return { ok: false, error: extended
+      ? '延長後換到的粉專權杖仍會過期，請重新產生權杖再試。'
+      : '這是短效權杖，換到的粉專權杖約 1 小時就會失效。後端沒有設定 FB_APP_ID／FB_APP_SECRET，無法自動延長：請先到「存取權杖偵錯工具」按 Extend，再貼延長後的權杖。' };
+  }
+  return { ok: true, pages, dataExpires: pinfo.dataExpires };
+}
+
+// 管理頁「驗證並儲存」：驗證 → 自動延長（有 App 密鑰時）→ 換粉專權杖並確認不過期 → 存使用者權杖與粉專權杖
+// 通過回 { ok:true, ut(長效), extended, pages }，不通過回 { ok:false, error }（什麼都不存）
+export async function connectToken(env, raw, save) {
   let info;
-  try { info = await tokenInfo(env, ut); } catch (e) { return { ok: false, error: isTokenError(e) ? '權杖無效或已過期。' : '臉書驗證失敗：' + String(e.message || e).slice(0, 120) }; }
+  try { info = await tokenInfo(env, raw); } catch (e) { return { ok: false, error: isTokenError(e) ? '權杖無效或已過期。' : '臉書驗證失敗：' + errText(e) }; }
   if (!info.valid) return { ok: false, error: '權杖無效或已過期。' };
   if (info.type && info.type !== 'USER') return { ok: false, error: `這是 ${info.type} 權杖，請貼「使用者權杖」（User）。` };
   if (info.scopes.length && !info.scopes.includes('pages_manage_posts')) return { ok: false, error: '權杖缺少 pages_manage_posts 權限。' };
-  let pages;
-  try { pages = await fetchPages(env, ut); } catch (e) { return { ok: false, error: e.code === 'fb_token' ? '權杖無效或已過期。' : '讀取粉專失敗：' + String(e.message || e).slice(0, 120) }; }
-  if (!pages.length) return { ok: false, error: '這個權杖換不到任何粉專：授權時要勾選粉專。' };
-  return { ok: true, info, pages: pages.length };
+  let ut = raw, extended = false;
+  if (canExtend(env)) {
+    if (info.appId && info.appId !== env.FB_APP_ID.trim()) {
+      return { ok: false, error: `這個權杖屬於另一個 App（${info.app || info.appId}），請在 Graph API Explorer 選後端設定的 App 再產生。` };
+    }
+    try { ut = await exchangeToken(env, raw); extended = true; } catch (e) {
+      return { ok: false, error: '自動延長失敗：' + errText(e) + '。請確認 FB_APP_ID／FB_APP_SECRET 和權杖是同一個 App。' };
+    }
+  }
+  const d = await derivePages(env, ut, extended);
+  if (!d.ok) return d;
+  let userExpires = info.expires;
+  if (extended) { try { userExpires = (await tokenInfo(env, ut)).expires; } catch { userExpires = null; } }
+  await save(ut, { pages: d.pages, expires: 0, dataExpires: d.dataExpires, userExpires });
+  return { ok: true, ut, extended, pages: d.pages.length };
+}
+
+// 管理頁「重新整理粉專」：有存好的粉專權杖時，使用者權杖還有效就重新換（新粉專會加進來）；過期就保留舊的
+export async function refreshPages(env) {
+  await clearPageCache(env);
+  const st = await storedPageTokens(env);
+  if (!st) return { cleared: true, renewed: false };
+  const { token: ut } = await userToken(env);
+  if (!ut) return { cleared: true, renewed: false, reason: 'no_user' };
+  let d;
+  try { d = await derivePages(env, ut, false); } catch (e) { if (isTokenError(e)) return { cleared: true, renewed: false, reason: 'user_expired' }; throw e; }
+  if (!d.ok) return { cleared: true, renewed: false, reason: /無效或已過期/.test(d.error) ? 'user_expired' : 'failed', error: d.error };
+  await savePageTokens(env, { pages: d.pages, expires: 0, dataExpires: d.dataExpires, userExpires: st.userExpires });
+  return { cleared: true, renewed: true, pages: d.pages.length };
+}
+
+// 到期／失效提醒（14 天內）：{ level:'warn'|'bad', days?, text } 或 null
+//   有存粉專權杖：看資料存取期限（粉專權杖本身不過期）；沒有：看使用者權杖到期日
+export const WARN_DAYS = 14;
+export function tokenWarn({ stored, userExpires, valid = true, broken = null, now = Date.now() }) {
+  if (!valid) return { level: 'bad', text: '臉書權杖已失效，請主管重新產生權杖，再到管理頁「臉書連線」換新。' };
+  if (broken) return { level: 'bad', text: '發文時遇到臉書權杖失效，請到管理頁「臉書連線」檢查並換新權杖。' };
+  const deadline = stored ? (stored.dataExpires || 0) : (userExpires || 0);
+  if (!deadline) return null;
+  const days = Math.ceil((deadline * 1000 - now) / 86400000);
+  if (days > WARN_DAYS) return null;
+  if (days <= 0) return { level: 'bad', days, text: '臉書權杖已到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。' };
+  return { level: 'warn', days, text: `臉書權杖 ${days} 天後到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。` };
+}
+
+// 工具頁（管理員）用的提醒：不呼叫臉書，只看存好的期限與失效旗標
+export async function quickWarn(env) {
+  const [stored, broken] = await Promise.all([storedPageTokens(env), brokenAt(env)]);
+  return tokenWarn({ stored, userExpires: null, broken });
 }
 
 // 管理頁「臉書連線」
+//   valid＝能不能發文（有存粉專權杖時看粉專權杖，否則看使用者權杖）；userValid＝使用者權杖本身
+//   stored＝存好的粉專權杖 { pages, expires, dataExpires, savedAt }（不含權杖）；autoExtend＝後端有沒有 App 密鑰
 export async function tokenStatus(env) {
   const { token: ut, source } = await userToken(env);
-  if (!ut) return { configured: false, valid: false, expires: null, missing: NEEDED_PERMS.slice(), pages: 0, source: null, app: '' };
-  let valid = true, missing = NEEDED_PERMS.slice(), expires = null, pages = 0, app = '';
+  const autoExtend = canExtend(env);
+  if (!ut) return { configured: false, valid: false, userValid: false, expires: null, missing: NEEDED_PERMS.slice(), pages: 0, source: null, app: '', autoExtend, stored: null, broken: null, warn: null };
+  const st = await storedPageTokens(env);
+  let userValid = true, missing = NEEDED_PERMS.slice(), expires = null, pages = 0, app = '';
   try {
     const d = await graph(env, 'GET', '/me/permissions', {}, ut);
     const granted = new Set((d.data || []).filter((x) => x.status === 'granted').map((x) => x.permission));
     missing = NEEDED_PERMS.filter((p) => !granted.has(p));
-  } catch (e) { if (isTokenError(e)) valid = false; }
-  if (valid) {
-    try { const i = await tokenInfo(env, ut); expires = i.expires; app = i.app; } catch { expires = null; }
+  } catch (e) { if (isTokenError(e)) userValid = false; }
+  if (userValid) { try { const i = await tokenInfo(env, ut); expires = i.expires; app = i.app; } catch { expires = null; } }
+  let valid = userValid;
+  if (st) {
+    pages = st.pages.length;
+    if (!userValid) missing = [];   // 使用者權杖過期查不到權限，不代表粉專權杖缺權限
+    notePageTokens(env, st.pages);
+    try { const pi = await tokenInfo(env, st.pages[0].token); valid = pi.valid; if (!app) app = pi.app; } catch (e) { if (isTokenError(e)) valid = false; }
+  } else if (userValid) {
     try { pages = (await pageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; else if (e.code !== 'fb_no_pages') throw e; }
   }
-  return { configured: true, valid, expires, missing, pages, source, app };
+  const broken = await brokenAt(env);
+  const stored = st ? { pages: st.pages.length, expires: st.expires, dataExpires: st.dataExpires, savedAt: st.savedAt } : null;
+  return { configured: true, valid, userValid, expires, missing, pages, source, app, autoExtend, stored, broken, warn: tokenWarn({ stored, userExpires: expires, valid, broken }) };
 }

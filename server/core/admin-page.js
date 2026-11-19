@@ -40,6 +40,8 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 td.err{color:var(--danger);font-weight:600}
 .fb-state{font-weight:600}.fb-state.on{color:#166534}.fb-state.off{color:var(--danger)}
 .fb-missing{margin:8px 0 0;padding-left:20px;color:var(--danger);font-weight:600}
+.fb-warn{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;font-weight:600}.fb-warn.bad{background:#fef3f2;border-color:#fecdca;color:#b42318}
+.fb-detail{margin:8px 0 0;padding-left:20px;color:var(--ink,#1f2328)}.fb-detail li{margin:2px 0}.fb-hint{margin:6px 0 0;font-size:13px;color:#5b6472}
 .pg-card{border:1px solid #e6ecf6;border-radius:14px;padding:12px 14px;margin:10px 0}.pg-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pg-no{font-variant-numeric:tabular-nums;color:var(--mute);font-weight:700;min-width:1.5em}.pg-name{font-weight:700;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}.pg-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px 12px;align-items:end;margin-top:8px}.pg-grid label{margin:0;font-size:14px;color:var(--mute)}.pg-grid label input[type=text],.pg-grid label select{margin-top:4px;color:var(--ink);font-size:16px}.pg-grid .pg-wide{grid-column:1/-1}.pg-grid .pg-showlbl{display:flex;align-items:center;gap:6px;min-height:44px;white-space:nowrap}@media (max-width:560px){.pg-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pg-grid .pg-showlbl{grid-column:1/-1}}.ac-row button[aria-pressed=true]{background:var(--soft);border-color:var(--brand);color:var(--brand);font-weight:700}
 .fb-tok{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.fb-tok label{display:block;margin-bottom:6px;font-size:13px;color:var(--muted,#5b6472)}.fb-tok .row{margin-top:8px}
 #pgRows input[type=checkbox]{width:22px;height:22px;min-height:0}
@@ -180,13 +182,16 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 
       <section class="card" id="fbCard">
       <h2>臉書連線</h2>
-      <p>後端用「使用者權杖」取得各粉專的發文權限：管理頁換過的優先，沒有就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、App、到期日與缺少的權限（不會顯示權杖本身）。</p>
+      <p>後端用主管的「使用者權杖」換好各粉專權杖並存起來，之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
       <p class="fb-state" id="fbState">狀態：尚未讀取</p>
+      <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
+      <ul class="fb-detail" id="fbDetail" hidden></ul>
       <ul class="fb-missing" id="fbMissing" hidden></ul>
       <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
       <p class="msg" id="fbMsg" role="status"></p>
         <div class="fb-tok">
-          <label for="fbTok">換權杖：貼上新的「使用者權杖」，先向臉書驗證，通過才換（存在資料庫前會加密，不會再顯示）</label>
+          <label for="fbTok">換權杖：貼上主管的「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
+          <p class="fb-hint" id="fbTokHint"></p>
           <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
           <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
           <p class="msg" id="fbTokMsg" role="status"></p>
@@ -383,9 +388,22 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
       $('fbTokClear').hidden = d.source !== 'admin';
+      var dl = $('fbDetail'); dl.textContent = ''; dl.hidden = true;
+      var w = $('fbWarn'); w.hidden = !d.warn; w.textContent = d.warn ? d.warn.text : ''; w.className = 'fb-warn' + (d.warn && d.warn.level === 'bad' ? ' bad' : '');
+      $('fbTokHint').textContent = d.autoExtend ? '後端已設定 App 密鑰：貼 Graph API Explorer 剛產生的權杖即可，會自動延長。' : '後端沒有設定 FB_APP_ID／FB_APP_SECRET，無法自動延長：請先到「存取權杖偵錯工具」按 Extend，再貼延長後的權杖。';
       if (!d.configured) { $('fbState').textContent = '狀態：尚未設定權杖（在下方貼上，或設定 Secret FB_USER_TOKEN）'; $('fbState').className = 'fb-state off'; return; }
-      $('fbState').textContent = '狀態：' + (d.valid ? '連線正常' : 'token 無效，請重新授權') + '；來源：' + (d.source === 'admin' ? '管理頁' : 'Secret') + (d.app ? '；App：' + d.app : '') + '；' + fmtExp(d.expires) + '；粉專 ' + (d.pages || 0) + ' 個' + (d.valid && !d.pages ? '（token 讀不到可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts）' : '');
+      $('fbState').textContent = '狀態：' + (d.valid ? '可以發文' : '權杖失效，無法發文，請換新權杖') + '；來源：' + (d.source === 'admin' ? '管理頁' : 'Secret') + (d.app ? '；App：' + d.app : '') + '；粉專 ' + (d.pages || 0) + ' 個' + (d.valid && !d.pages ? '（token 讀不到可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts）' : '');
       $('fbState').className = 'fb-state ' + (d.valid ? 'on' : 'off');
+      var lines = [];
+      if (d.stored) {
+        lines.push('粉專權杖：' + d.stored.pages + ' 個，' + fmtExp(d.stored.expires) + (d.stored.savedAt ? '（' + fmtTime(d.stored.savedAt) + ' 換好）' : ''));
+        if (d.stored.dataExpires) lines.push('資料存取期限：' + fmtTime(d.stored.dataExpires * 1000) + '（到期前請主管重新產生權杖再換一次）');
+        lines.push('使用者權杖：' + (d.userValid ? fmtExp(d.expires) : '已過期（不影響發文；要加新粉專時再換新權杖）'));
+      } else {
+        lines.push('使用者權杖：' + fmtExp(d.expires) + '（粉專權杖每次現場換；在下方「驗證並儲存」後會改存不過期的粉專權杖）');
+      }
+      lines.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; dl.appendChild(li); });
+      dl.hidden = !lines.length;
       (d.missing || []).forEach(function (m) { var li = document.createElement('li'); li.textContent = '缺少權限：' + m; ul.appendChild(li); });
       ul.hidden = !(d.missing && d.missing.length);
     });
@@ -493,7 +511,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('fbTok').value = '';
       var d = res.data;
-      say($('fbTokMsg'), '已換成新權杖' + (d.app ? '（App：' + d.app + '）' : '') + '，粉專 ' + (d.pages || 0) + ' 個。', 'good');
+      say($('fbTokMsg'), (d.extended ? '已自動延長權杖，' : '已換成新權杖，') + '並換好 ' + (d.pages || 0) + ' 個粉專權杖（永不過期）' + (d.app ? '；App：' + d.app : '') + '。', 'good');
       return fbLoad();
     }).catch(function (e) { say($('fbTokMsg'), '沒有換：' + (e && e.message || '失敗'), 'err'); })
       .then(function () { $('fbTokSave').disabled = false; });
@@ -512,7 +530,9 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
     api('/admin/fb/refresh', { method: 'POST' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      return fbLoad().then(function () { say($('fbMsg'), '已重新讀取。', 'good'); });
+      var r = res.data || {};
+      var m = r.renewed ? '已重新換好粉專權杖：' + r.pages + ' 個。' : r.reason === 'user_expired' ? '使用者權杖已過期，保留原本的粉專權杖（照常發文）；要加新粉專請換新權杖。' : r.reason === 'failed' ? '沒有更新：' + (r.error || '') + ' 保留原本的粉專權杖。' : '已重新讀取。';
+      return fbLoad().then(function () { say($('fbMsg'), m, r.reason ? 'err' : 'good'); });
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('fbRefresh').disabled = false; });
   };

@@ -17,20 +17,22 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/graph.js` | `exchangeToken(env, ut)` | ⬜ |
-| `server/fb/tokenstore.js` | 通用加密存取；`savePageTokens`／`storedPageTokens`／`clearPageTokens`；失效旗標 `markBroken`／`brokenAt` | ⬜ |
-| `server/fb/pages.js` | `pageTokens` 先讀存好的；`connectToken`（延長→換粉專→檢查期限→存）；`refreshPages`；`tokenStatus` 多回 `stored`、`warn`、`autoExtend` | ⬜ |
-| `server/fb/index.js` | `POST /admin/fb/token` 走 `connectToken`；DELETE 清粉專權杖；`/admin/fb/refresh` 走 `refreshPages`；`fbFail` 遇 190 記失效；`/fb/me` 管理員多回 `tokenWarn` | ⬜ |
-| `admin/admin.js`、`server/core/admin-page.js` | 狀態列顯示粉專權杖期限、資料存取期限、提醒 | ⬜ |
-| `tools/fbpost`、`tools/fbvideo` | 管理員看到黃色提醒 | ⬜ |
-| `docs/deploy.md`、README | Secrets `FB_APP_ID`／`FB_APP_SECRET` | ⬜ |
-| 測試 | `test/` 相關單元測試；admin、fbpost、fbvideo e2e | ⬜ |
+| `server/fb/graph.js` | `exchangeToken(env, ut)` | ✅ |
+| `server/fb/tokenstore.js` | 通用加密存取；`savePageTokens`／`storedPageTokens`／`clearPageTokens`；失效旗標 `markBroken`／`brokenAt` | ✅ |
+| `server/fb/pages.js` | `pageTokens` 先讀存好的；`connectToken`（延長→換粉專→檢查期限→存）；`refreshPages`；`tokenStatus` 多回 `stored`、`warn`、`autoExtend` | ✅ |
+| `server/fb/index.js` | `POST /admin/fb/token` 走 `connectToken`；DELETE 清粉專權杖；`/admin/fb/refresh` 走 `refreshPages`；`fbFail` 遇 190 記失效；`/fb/me` 管理員多回 `tokenWarn` | ✅ |
+| `admin/admin.js`、`server/core/admin-page.js` | 狀態列顯示粉專權杖期限、資料存取期限、提醒 | ✅ |
+| `tools/fbpost`、`tools/fbvideo` | 管理員看到黃色提醒 | ✅ |
+| `docs/deploy.md`、README | Secrets `FB_APP_ID`／`FB_APP_SECRET` | ✅ |
+| 測試 | `test/` 相關單元測試；admin、fbpost、fbvideo e2e | ✅ |
 
 ## 下一步
-- [ ] 後端實作＋單元測試
-- [ ] 管理頁兩份＋工具提醒
-- [ ] 文件
-- [ ] 獨立審查 → 給使用者看
+- [x] 後端實作＋單元測試（`test/server/fb-pages.test.js` 新增 6 項）
+- [x] 管理頁兩份＋工具提醒（`#fbWarn`、`#fbDetail`、`#fbTokHint`；工具 `#tokWarn`）
+- [x] 文件（`docs/deploy.md` 6-2）
+- [ ] 獨立審查 → 給使用者看 → 使用者說「推」才併 main，同 commit 更新 CLAUDE.md 目前進度
+
+實作重點：`graph.js` 遇 190／102 且權杖是 `notePageTokens` 登記過的粉專權杖才 `markBroken`（使用者權杖驗證失敗不記）。
 
 ## 測試
 `npm test`、`node build.js --check`、`npx playwright test test/e2e/admin* test/e2e/fbpost* test/e2e/fbvideo*`（沙盒用 `/opt/pw-browsers/chromium`）。

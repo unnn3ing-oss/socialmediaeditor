@@ -24,7 +24,9 @@ const PAGES = [
 const DATA = {
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
-  'GET /admin/fb/status': { configured: true, valid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3 },
+  'GET /admin/fb/status': { configured: true, valid: true, userValid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3, autoExtend: true,
+    stored: { pages: 3, expires: 0, dataExpires: Math.floor(Date.UTC(2027, 1, 10, 4, 0) / 1000), savedAt: Date.UTC(2026, 10, 19, 4, 0) },
+    warn: { level: 'warn', days: 10, text: '臉書權杖 10 天後到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。' } },
   'GET /admin/fb/pages': PAGES,
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
@@ -34,7 +36,7 @@ const DATA = {
   'POST /admin/fb/refresh': {},
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
-  'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP' }; },
+  'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP', extended: true }; },
   'DELETE /admin/fb/token': { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'secret', app: 'DEV-TOOL' },
   'GET /admin/rundown': { configured: true },
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN(2026)', sheets: ['2026/11'] },
@@ -179,9 +181,16 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   await login(page);
   await page.waitForSelector('#pgWrap:not([hidden])');
   const st = await page.textContent('#fbState');
-  assert.match(st, /連線正常/);
-  assert.match(st, /到期日 2027-01-05/);
+  assert.match(st, /可以發文/);
   assert.match(st, /粉專 3 個/);
+  const det = await page.textContent('#fbDetail');
+  assert.match(det, /粉專權杖：3 個，永不過期/);
+  assert.match(det, /資料存取期限：2027-02-10/);
+  assert.match(det, /使用者權杖：到期日 2027-01-05/);
+  assert.equal(await page.isVisible('#fbWarn'), true);
+  assert.match(await page.textContent('#fbWarn'), /10 天後到期/);
+  assert.match(await page.textContent('#fbTokHint'), /會自動延長/);
+  if (SHOT) await page.locator('#fbState').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'admin-fb-token.png') });
   assert.match(await page.textContent('#fbMissing'), /缺少權限：pages_manage_posts/);
   assert.equal(await page.locator('#pgRows .pg-card').count(), 3);
   assert.deepEqual(await page.$$eval('#pgRows .pg-card', (rs) => rs.map((r) => r.querySelector('.pg-no').textContent + r.querySelector('.pg-name').textContent)), ['1TVBS 新聞', '2TVBS 娛樂', '3TVBS 少康戰情室']);
@@ -321,9 +330,9 @@ test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後
   assert.match(await page.textContent('#fbTokMsg'), /請先貼上權杖/);
   await page.fill('#fbTok', '  EAAnew123  ');
   await page.click('#fbTokSave');
-  await page.waitForFunction(() => /已換成新權杖/.test(document.getElementById('fbTokMsg').textContent));
+  await page.waitForFunction(() => /已自動延長權杖/.test(document.getElementById('fbTokMsg').textContent));
   assert.deepEqual(TOK_SAVED, { token: 'EAAnew123' });
-  assert.match(await page.textContent('#fbTokMsg'), /（App：NEW-APP），粉專 6 個/);
+  assert.match(await page.textContent('#fbTokMsg'), /並換好 6 個粉專權杖（永不過期）；App：NEW-APP/);
   assert.equal(await page.inputValue('#fbTok'), '', '成功後清空');
   assert.equal(await page.getAttribute('#fbTok', 'type'), 'password');
   page.once('dialog', (d) => d.accept());
