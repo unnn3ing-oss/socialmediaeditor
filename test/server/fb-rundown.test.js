@@ -14,7 +14,7 @@ async function setup(t, gas, extra = {}) {
   const f = installFetch({ [GAS]: gas }); t.after(f.restore);
   const env = mkEnv({ RUNDOWN_URL: GAS, RUNDOWN_TOKEN: 'rd-token-123456', ...extra });
   const { signToken } = await tok();
-  const h = async (kind, adm) => ({ origin: ORIGIN, 'content-type': 'application/json', authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) });
+  const h = async (kind, adm) => (adm && (env.SYS_STAFF_ID = 'SYS1'), { origin: ORIGIN, 'content-type': 'application/json', authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) });
   const w = await load();
   const call = async (path, headers, body) => {
     const r = await w.fetch(new Request('https://api.test' + path, { method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body) }), env, { waitUntil() {} });

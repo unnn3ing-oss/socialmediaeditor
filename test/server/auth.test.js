@@ -189,15 +189,43 @@ test('fakeD1 可以 insert 與 select', async () => {
   assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM logs').first()).n, 1);
 });
 
-// ---- 舊版首頁管理員憑證（adm:1，已不再發出）：到期前仍可讀 ----
-test('舊版 adm 憑證：/auth/status 回 admin、manage 且不續期；管理頁可用日常卡片、敏感卡片要解鎖', async () => {
+// ---- 舊版首頁管理員憑證（adm:1）已不再接受 ----
+test('舊版 adm 憑證：全部 401（/auth/status、/admin/*）', async () => {
   const env = mkEnv();
   const { signToken } = await loadToken();
-  const auth2 = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 3600, true)) };
-  const st = await (await call('/auth/status', { headers: auth2 }, env)).json();
-  assert.equal(st.data.admin, true);
-  assert.equal(st.data.renew, undefined);
-  assert.equal(st.data.manage, true);
-  assert.equal((await call('/admin/assets', { headers: auth2 }, env)).status, 200);
-  assert.equal((await call('/admin/levels', { headers: auth2 }, env)).status, 403);
+  const old = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 3600, true)) };
+  assert.equal((await call('/auth/status', { headers: old }, env)).status, 401);
+  assert.equal((await call('/admin/assets', { headers: old }, env)).status, 401);
+});
+
+test('設定碼並行亂猜：連錯計數原子遞增，第 5 次就鎖並作廢設定碼；之後正確碼也不能用', async () => {
+  const env = mkEnv({ FAIL_DELAY_MS: '0' });
+  const { code } = await addStaff(env);
+  const wrong = code === '000000' ? '111111' : '000000';
+  const rs = await Promise.all(Array.from({ length: 12 }, () => j(auth({ staffId: 'T1', code: wrong, newPassword: 'password-1' }, env))));
+  assert.ok(rs.some((r) => r.code === 'locked'), '並行也要鎖得住');
+  const row = env.DB.raw.prepare("SELECT setup_hash, fails FROM staff WHERE id = 'T1'").get();
+  assert.equal(row.setup_hash, null, '連錯達上限就作廢設定碼');
+  env.DB.raw.prepare("UPDATE staff SET lock_until = NULL WHERE id = 'T1'").run();
+  assert.equal((await j(auth({ staffId: 'T1', code, newPassword: 'password-1' }, env))).code, 'setup_expired');
+});
+
+test('設定碼只能用一次：條件式消耗，並行兩個正確請求只有一個成功', async () => {
+  const env = mkEnv({ FAIL_DELAY_MS: '0' });
+  const { code } = await addStaff(env);
+  const rs = await Promise.all([auth({ staffId: 'T1', code, newPassword: 'password-1' }, env), auth({ staffId: 'T1', code, newPassword: 'password-2' }, env)].map(j));
+  assert.equal(rs.filter((r) => r.ok).length, 1);
+});
+
+test('新增員工：不能用系統管理者編號；新增與重置寫操作紀錄（不含設定碼）', async () => {
+  const env = mkEnv({ SYS_STAFF_ID: 'SYS1', FAIL_DELAY_MS: '0' });
+  const { h } = await addStaff(env, 'T1');
+  const d = await j(call('/admin/staff', { headers: h }, env));
+  const g = d.data.groups[0].id;
+  const r = await call('/admin/staff', { method: 'POST', headers: h, body: JSON.stringify({ id: 'sys1', name: 'x', group: g }) }, env);
+  assert.equal(r.status, 400);
+  const rr = await j(call('/admin/staff/T1/reset', { method: 'POST', headers: h }, env));
+  const log = env.DB.raw.prepare('SELECT action, detail FROM fb_audit ORDER BY id').all().map((x) => ({ ...x }));
+  assert.deepEqual(log, [{ action: 'add', detail: 'T1' }, { action: 'reset', detail: 'T1' }]);
+  assert.ok(!JSON.stringify(log).includes(rr.data.setup.code));
 });

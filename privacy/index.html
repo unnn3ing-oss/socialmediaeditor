@@ -21,7 +21,7 @@
     <p class="updated">最後更新：2026 年 11 月 18 日</p>
 
     <h2>1. 營運者與用途</h2>
-    <p>「小編工具箱」（以下稱本工具）是社群編輯團隊的內部工作工具，用來在團隊自己管理的臉書粉絲專頁上發布、排程貼文與留言，並提供製圖等輔助功能。本工具<strong>不提供一般大眾以臉書帳號登入</strong>，臉書相關功能只由管理員授權名單內的團隊人員以員工編號登入使用。</p>
+    <p>「小編工具箱」（以下稱本工具）是社群編輯團隊的內部工作工具，用來在團隊自己管理的臉書粉絲專頁上發布、排程貼文與留言，並提供製圖等輔助功能。本工具<strong>不提供一般大眾以臉書帳號登入</strong>，臉書相關功能只由管理員授權名單內的團隊人員以員工編號與自己設定的密碼登入使用。</p>
 
     <h2>2. 使用的臉書權限與用途</h2>
     <div class="tbl"><table>
@@ -45,7 +45,7 @@
         <tr><td>粉專顯示設定（簡稱、追蹤參數、排序）</td><td>Cloudflare D1</td><td>直到管理員修改或刪除</td></tr>
         <tr><td>留言範本（管理員設定的固定文字）</td><td>Cloudflare D1</td><td>直到管理員修改或刪除</td></tr>
         <tr><td>待發留言（貼文 ID、留言文字、發送狀態）</td><td>Cloudflare Durable Objects</td><td>該貼文的留言全部完成、取消或失敗後 14 天自動刪除</td></tr>
-        <tr><td>授權名單（員工編號、姓名、權限組、分機或手機、最後登入時間）</td><td>Cloudflare D1</td><td>直到管理員將該員工移除</td></tr>
+        <tr><td>授權名單（員工編號、姓名、權限組、分機或手機、最後登入時間；登入密碼只存加鹽雜湊（PBKDF2），不存原本的密碼；連續輸入錯誤次數）</td><td>Cloudflare D1</td><td>直到管理員將該員工移除</td></tr>
         <tr><td>排程發布操作紀錄（員工編號、姓名、動作、粉專 ID、貼文 ID、時間）</td><td>Cloudflare D1</td><td>90 天後自動刪除</td></tr>
         <tr><td>錯誤紀錄（工具名稱、錯誤代碼、版本、瀏覽器版本字串；不含貼文內容）</td><td>Cloudflare D1</td><td>30 天後自動刪除</td></tr>
         <tr><td>Meta Webhook 通知（如有設定）</td><td>只記錄最後一次收到的時間與事件種類（例如 page／feed），不保存通知內容</td><td>每次收到新通知即覆蓋；管理員可要求刪除</td></tr>
@@ -87,7 +87,7 @@
     <p class="updated">Last updated: November 18, 2026</p>
 
     <h2>1. Operator and Purpose</h2>
-    <p>"Social Media Editor Toolbox" (the "Tool") is an internal tool used by a social media editing team to publish and schedule posts and comments on Facebook Pages managed by the team, along with image-making utilities. The Tool <strong>does not offer Facebook Login to the general public</strong>; its Facebook features are used only by team members on an administrator-managed allowlist, who sign in with their employee ID.</p>
+    <p>"Social Media Editor Toolbox" (the "Tool") is an internal tool used by a social media editing team to publish and schedule posts and comments on Facebook Pages managed by the team, along with image-making utilities. The Tool <strong>does not offer Facebook Login to the general public</strong>; its Facebook features are used only by team members on an administrator-managed allowlist, who sign in with their employee ID and a password they set themselves.</p>
 
     <h2>2. Facebook Permissions and How They Are Used</h2>
     <div class="tbl"><table>
@@ -111,7 +111,7 @@
         <tr><td>Page display settings (short name, tracking parameters, order)</td><td>Cloudflare D1</td><td>Until changed or removed by an administrator</td></tr>
         <tr><td>Comment templates (fixed text set by an administrator)</td><td>Cloudflare D1</td><td>Until changed or removed by an administrator</td></tr>
         <tr><td>Pending comments (post ID, comment text, status)</td><td>Cloudflare Durable Objects</td><td>Deleted automatically 14 days after all comments for that post are completed, canceled, or failed</td></tr>
-        <tr><td>Staff allowlist (employee ID, name, permission group, extension or mobile number, last sign-in time)</td><td>Cloudflare D1</td><td>Until an administrator removes that employee</td></tr>
+        <tr><td>Staff allowlist (employee ID, name, permission group, extension or mobile number, last sign-in time; sign-in passwords are stored only as salted PBKDF2 hashes, never in plain text; failed sign-in count)</td><td>Cloudflare D1</td><td>Until an administrator removes that employee</td></tr>
         <tr><td>Scheduling activity log (employee ID, name, action, Page ID, post ID, time)</td><td>Cloudflare D1</td><td>Deleted automatically after 90 days</td></tr>
         <tr><td>Error logs (tool name, error code, version, browser user-agent; no post content)</td><td>Cloudflare D1</td><td>Deleted automatically after 30 days</td></tr>
         <tr><td>Meta Webhook notifications (if configured)</td><td>Only the time and event type of the most recent notification (e.g., page / feed) are recorded; notification content is not stored</td><td>Overwritten by each new notification; deleted on request by an administrator</td></tr>

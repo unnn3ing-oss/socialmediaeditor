@@ -36,7 +36,6 @@ export async function adminWho(request, env) {
   if (await bearer(request, env, 'admin')) return { role: 'sys', unlocked: true, cards: new Set(CARD_KEYS), name: LEVEL_NAMES.sys };
   const t = await bearer(request, env, 'company');
   if (!t) return null;
-  if (t.adm) return { role: 'sys', unlocked: false, cards: new Set(CARD_KEYS.filter((k) => !SENSITIVE.includes(k))), name: LEVEL_NAMES.sys };
   if (!t.staff) return null;
   // 系統管理者（SYS_STAFF_ID 員工登入）＝未解鎖的系統管理者，敏感卡片要在管理頁再輸入管理員密碼
   if (t.staff.level === 'sys') return { role: 'sys', unlocked: false, cards: new Set(CARD_KEYS.filter((k) => !SENSITIVE.includes(k))), name: t.staff.name, staff: t.staff, uid: t.staff.id };

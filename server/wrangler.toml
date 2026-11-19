@@ -34,7 +34,7 @@ new_sqlite_classes = ["FbCommentTimer"]
 crons = ["17 19 * * *"]
 
 # Secrets 不寫在這裡，用 wrangler secret put 設定：
-#   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET、FB_USER_TOKEN、RUNDOWN_URL、RUNDOWN_TOKEN
+#   SYS_STAFF_ID、ADMIN_PASSWORD、SESSION_SECRET、FB_USER_TOKEN、RUNDOWN_URL、RUNDOWN_TOKEN
 
 # ---- 測試後端（toolbox-api-dev）：npx wrangler deploy --env dev ----
 # 網站只有在正式後端用管理員密碼登入後，才能從登出視窗「切到測試後端」（shell/config.js 的 DEV_API_BASE）。

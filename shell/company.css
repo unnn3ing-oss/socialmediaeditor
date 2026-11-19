@@ -1,0 +1,55 @@
+/* 登入視窗（員工編號 → 密碼／設定密碼）、變更密碼、帳號按鈕與帳號彈窗；首頁與外掛側邊欄共用 */
+.login-field + .login-field, .login-who + .login-field, .login-field + .login-who { margin-top: 12px; }
+.login-field[hidden], .login-who[hidden] { display: none; }
+.login-note { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.login-err { margin: 10px 0 0; min-height: 1.4em; font-size: 14px; color: #b42318; }
+.login-who { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: var(--radius-control); background: var(--fill); }
+.login-link { border: 0; background: none; padding: 4px 0; min-height: 32px; font: 500 14px var(--font); color: var(--accent); cursor: pointer; }
+.login-link:hover { text-decoration: underline; }
+.login-hidden-user { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* 右上角：● 公司模式 名字 */
+.acct-pill {
+  display: inline-flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; height: 40px; padding: 0 12px 0 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface);
+  font: 500 14px var(--font); color: var(--text); cursor: pointer;
+}
+.acct-pill:hover { border-color: var(--line-strong); }
+.acct-pill[aria-expanded=true] { border-color: var(--accent); box-shadow: 0 0 0 3px #d1e0ff; }
+.acct-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.acct-dot { width: 8px; height: 8px; border-radius: 50%; background: #17b26a; }
+.acct-mode { color: var(--muted); }
+.acct-nm { font-weight: 700; max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
+
+/* 帳號彈窗 */
+.acct-pop {
+  position: fixed; z-index: 120; width: 320px; max-height: calc(100dvh - 80px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-menu); box-shadow: var(--shadow-menu);
+  font-size: 14px; color: var(--text);
+}
+.acct-pop[hidden] { display: none; }
+.acct-head { display: flex; gap: 12px; align-items: center; padding: 16px 16px 12px; }
+.acct-av { width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 700 18px var(--font); display: flex; align-items: center; justify-content: center; }
+.acct-name { display: block; font-size: 16px; line-height: 1.4; }
+.acct-lv { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+.acct-lv[hidden] { display: none; }
+.acct-dl { margin: 0; padding: 4px 16px 12px; display: grid; grid-template-columns: 84px 1fr; row-gap: 8px; }
+.acct-dl dt { color: var(--muted); }
+.acct-dl dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+.acct-dl small { color: var(--muted); font-weight: 400; }
+.acct-sec { border-top: 1px solid var(--line); padding: 12px 16px; }
+.acct-sec h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.acct-empty { padding: 14px; border: 1px dashed var(--line); border-radius: var(--radius-control); color: var(--muted); text-align: center; font-size: 13px; }
+.acct-act { border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+.acct-act .btn { flex: 1 1 0; height: 40px; font-size: 14px; }
+.acct-act .btn[hidden] { display: none; }
+.acct-manage { flex-basis: 100% !important; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.acct-dev { display: block; margin: -4px 16px 12px; padding: 4px 0; border: 0; background: none; font: 500 13px var(--font); color: var(--accent); cursor: pointer; }
+.acct-dev[hidden] { display: none; }
+.acct-toast { position: fixed; z-index: 130; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: #1f2328; color: #fff; font-size: 14px; }
+
+@media (max-width: 820px) {
+  .acct-pill { height: 44px; padding: 0 10px; font-size: 13px; gap: 6px; }
+  .acct-pop { left: 16px; right: 16px !important; width: auto; }
+  .acct-act .btn { height: 44px; }
+}

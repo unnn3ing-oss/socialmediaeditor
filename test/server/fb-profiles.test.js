@@ -17,7 +17,8 @@ async function call(env, path, init = {}) {
 }
 async function auth(env, kind, adm = false) {
   const { signToken } = await tok();
-  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) };
+  if (adm) env.SYS_STAFF_ID = 'SYS1';
+  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) };
 }
 const json = (b) => ({ 'content-type': 'application/json', body: JSON.stringify(b) });
 async function api(env, adm, method, path, body) {

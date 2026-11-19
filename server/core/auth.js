@@ -2,7 +2,7 @@ import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
 import { cardsFor } from './levels.js';
 import { findStaff, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
-import { pwProblem, hashPassword, verifyPassword, codeHash, MAX_FAILS, LOCK_MS } from './password.js';
+import { pwProblem, hashPassword, verifyPassword, codeHash, safeEqual, MAX_FAILS, LOCK_MS } from './password.js';
 
 export const MIN_SECRET = 32;
 const num = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
@@ -20,8 +20,8 @@ export async function bearer(request, env, kind) {
   if (!m) return null;
   const t = await readToken(env.SESSION_SECRET, m[1], nowSec());
   if (!t || t.kind !== kind) return null;
-  // 公司密碼已拿掉：沒有員工編號（也不是舊版管理員）的舊公司憑證一律無效
-  if (kind === 'company' && !t.uid && !t.adm) return null;
+  // 公司密碼與首頁管理員密碼都已拿掉：沒有員工編號的舊公司憑證（含 adm:1）一律無效
+  if (kind === 'company' && !t.uid) return null;
   if (t.uid) {
     const staff = await findStaff(env, t.uid);
     if (!staff || staff.pwVer !== t.pv) return null;
@@ -74,8 +74,8 @@ async function issue(request, env, id, ver) {
   return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, false, staff.id, ver), exp, staff: staffInfo(staff), manage });
 }
 const lockedRes = (request, env, row) => fail(request, env, 'locked', '連續輸入錯誤太多次，請 ' + Math.max(1, Math.ceil((row.lockUntil - Date.now()) / 60000)) + ' 分鐘後再試，或請管理者重置密碼。', { until: row.lockUntil });
-async function wrong(request, env, row, msg) {
-  const r = await recordFail(env, row, MAX_FAILS, LOCK_MS);
+async function wrong(request, env, row, msg, clearSetup = false) {
+  const r = await recordFail(env, row, MAX_FAILS, LOCK_MS, clearSetup);
   await sleep(failDelay(env));
   if (r.locked) return lockedRes(request, env, { lockUntil: r.until });
   return fail(request, env, 'bad_password', msg + '還可以再試 ' + r.left + ' 次。', { left: r.left });
@@ -97,14 +97,16 @@ async function companyLogin(request, env) {
     const problem = pwProblem(body.newPassword);
     if (problem) return fail(request, env, 'bad_request', problem);
     const code = typeof body.code === 'string' ? body.code.trim() : '';
-    let good = !!row.setupHash && row.setupExp > Date.now() && /^\d{6}$/.test(code) && (await codeHash(env.SESSION_SECRET, row.id, code)) === row.setupHash;
+    let good = !!row.setupHash && row.setupExp > Date.now() && /^\d{6}$/.test(code) && safeEqual(await codeHash(env.SESSION_SECRET, row.id, code), row.setupHash);
+    let guard = 'setup';
     // 系統管理者本人：可以用管理員密碼代替設定碼（部署後第一次設定用）
-    if (!good && row.sys && typeof env.ADMIN_PASSWORD === 'string' && env.ADMIN_PASSWORD) good = await passwordMatches(code, env.ADMIN_PASSWORD);
+    if (!good && row.sys && typeof env.ADMIN_PASSWORD === 'string' && env.ADMIN_PASSWORD) { good = await passwordMatches(code, env.ADMIN_PASSWORD); if (good) guard = 'nopw'; }
     if (!good) {
       if (!row.sys && (!row.setupHash || row.setupExp <= Date.now())) { await sleep(failDelay(env)); return fail(request, env, 'setup_expired'); }
-      return wrong(request, env, row, '設定碼不對，');
+      return wrong(request, env, row, '設定碼不對，', true);
     }
-    const ver = await storePassword(env, row, await hashPassword(body.newPassword));
+    const ver = await storePassword(env, row, await hashPassword(body.newPassword), guard);
+    if (!ver) return wrong(request, env, row, '設定碼不對，', true);
     return issue(request, env, row.id, ver);
   }
 
@@ -159,11 +161,11 @@ export async function handleAuth(request, env, path) {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');
     if (!t) return fail(request, env, 'unauthorized');
-    const data = { company: true, exp: t.exp, ...(t.adm ? { admin: true } : {}), ...(t.staff ? { staff: staffInfo(t.staff) } : {}) };
+    const data = { company: true, exp: t.exp, ...(t.staff ? { staff: staffInfo(t.staff) } : {}) };
     // manage：首頁要不要顯示「管理頁」按鈕（管理員密碼登入，或員工層級至少有一張卡片）
-    data.manage = !!t.adm || (!!t.staff && (await cardsFor(env, t.staff.level)).length > 0);
+    data.manage = (!!t.staff && (await cardsFor(env, t.staff.level)).length > 0);
     // 剩不到一半效期就續一張；舊的到期前仍有效。管理員憑證不續（續了會變成普通憑證，到期請重新輸入）
-    if (!t.adm && t.exp - nowSec() < sessionTtl(env) / 2) {
+    if (t.exp - nowSec() < sessionTtl(env) / 2) {
       const exp = nowSec() + sessionTtl(env);
       data.renew = { token: await signToken(env.SESSION_SECRET, 'company', exp, false, t.uid, t.pv), exp };
     }

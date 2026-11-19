@@ -1,4 +1,4 @@
-// 管理頁權限分層：系統管理者（admin 憑證＝已解鎖、adm:1＝未解鎖）／管理者／普通；路由對應卡片；名單部分權限；層級權限表
+// 管理頁權限分層：系統管理者（admin 憑證＝已解鎖、系統管理者員工登入＝未解鎖）／管理者／普通；路由對應卡片；名單部分權限；層級權限表
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { mkEnv } = require('../helpers/fake-env.js');
@@ -26,14 +26,14 @@ const gid = (d, name) => d.groups.find((g) => g.name === name).id;
 // 名單：M1 管理者（發文組）、M2 管理者、U1 普通（發文組）、U2 普通（檢視組）
 async function setup(t) {
   const f = installFetch({ 'GET /me/accounts': () => ({ data: [] }) }); t.after(f.restore);
-  const env = mkEnv({ FB_USER_TOKEN: 'U' });
+  const env = mkEnv({ FB_USER_TOKEN: 'U', SYS_STAFF_ID: 'SYS1' });
   const sys = await sign(env, 'admin');
   const d = (await call(env, '/admin/staff', { headers: sys })).body.data;
   const g = { 管理: gid(d, '管理'), 發文: gid(d, '發文'), 檢視: gid(d, '檢視') };
   for (const [id, level, grp] of [['M1', 'mgr', '發文'], ['M2', 'mgr', '發文'], ['U1', 'user', '發文'], ['U2', 'user', '檢視']]) {
     assert.equal((await post(env, sys, '/admin/staff', { id, name: id, group: g[grp], level })).status, 200);
   }
-  return { env, sys, g, adm: await sign(env, 'company', true), co: await sign(env, 'company'), m1: await sign(env, 'company', false, 'M1'), u1: await sign(env, 'company', false, 'U1') };
+  return { env, sys, g, adm: await sign(env, 'company', false, 'SYS1'), old: await sign(env, 'company', true), co: await sign(env, 'company'), m1: await sign(env, 'company', false, 'M1'), u1: await sign(env, 'company', false, 'U1') };
 }
 
 test('每條已知 /admin/* 路由都有對應卡片；staff-groups 不會被當成 staff', async () => {
@@ -48,7 +48,8 @@ test('每條已知 /admin/* 路由都有對應卡片；staff-groups 不會被當
 });
 
 test('身分：admin 憑證全開；adm:1 擋敏感卡片；公司密碼憑證 401；普通沒有卡片 /admin/me 403', async (t) => {
-  const { env, sys, adm, co, m1, u1 } = await setup(t);
+  const { env, sys, adm, old, co, m1, u1 } = await setup(t);
+  assert.equal((await call(env, '/admin/me', { headers: old })).status, 401, '舊版 adm:1 憑證已失效');
   const me = (await call(env, '/admin/me', { headers: sys })).body.data;
   assert.equal(me.role, 'sys'); assert.equal(me.unlocked, true); assert.ok(me.cards.includes('levels'));
   const am = (await call(env, '/admin/me', { headers: adm })).body.data;
@@ -87,7 +88,7 @@ test('停用、移除、降層級立即生效', async (t) => {
 test('名單：管理者只能動普通、不能動自己與其他管理者、不能設層級、不能指派超出自己權限組的組', async (t) => {
   const { env, sys, adm, g, m1 } = await setup(t);
   const st = (await call(env, '/admin/staff', { headers: m1 })).body.data;
-  assert.deepEqual(st.staff.map((s) => [s.id, s.canEdit]), [['M1', false], ['M2', false], ['U1', true], ['U2', true]]);
+  assert.deepEqual(st.staff.map((s) => [s.id, s.canEdit]), [['M1', false], ['M2', false], ['SYS1', false], ['U1', true], ['U2', true]]);
   assert.deepEqual(st.groups.map((x) => [x.name, x.assignable]), [['管理', false], ['發文', true], ['檢視', true]]);
   assert.equal(st.me.canLevel, false); assert.equal(st.me.canAdd, true);
   assert.equal((await post(env, m1, '/admin/staff/M1', { name: '自己' })).status, 403);
@@ -146,4 +147,15 @@ test('?p=<組別> 只有系統管理者能指定', async (t) => {
   await post(env, sys, '/admin/levels', { mgr: ['fbconn'], user: [] });
   assert.equal((await call(env, '/admin/fb/status?p=pzz', { headers: sys })).status, 400, '系統管理者指定不存在的組別會被檢查');
   assert.equal((await call(env, '/admin/fb/status?p=pzz', { headers: m1 })).status, 200, '其他人的 ?p 被忽略');
+});
+
+test('重置／停用／刪除：對方權限組比自己多（含 bypass）就 403；系統管理者不受限', async (t) => {
+  const { env, sys, g, m1 } = await setup(t);
+  assert.equal((await post(env, sys, '/admin/staff', { id: 'U3', name: 'U3', group: g.管理 })).status, 200);
+  assert.equal((await post(env, m1, '/admin/staff/U3/reset', null)).status, 403);
+  assert.equal((await post(env, m1, '/admin/staff/U3', { enabled: false })).status, 403);
+  assert.equal((await del(env, m1, '/admin/staff/U3')).status, 403);
+  assert.equal((await post(env, m1, '/admin/staff/U1/reset', null)).status, 200);
+  assert.equal((await post(env, sys, '/admin/staff/U3/reset', null)).status, 200);
+  assert.equal((await post(env, m1, '/admin/staff', { id: 'sys1', name: 'x', group: g.檢視 })).status, 400, '系統管理者編號不能被新增');
 });

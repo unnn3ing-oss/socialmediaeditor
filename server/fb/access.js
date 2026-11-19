@@ -44,7 +44,6 @@ export async function fbAccess(request, env, need = null) {
   const t = await bearer(request, env, 'company');
   if (!t) return { denied: fail(request, env, 'unauthorized') };
   const st = await accessState(env);
-  if (t.adm) return { who: ADMIN_WHO, admin: true, staff: null, perms: ALL_PERMS, mode: st.mode, reason: st.reason };
   if (!t.staff) return { denied: fail(request, env, 'fb_need_staff') };
   const perms = t.staff.perms;
   // 系統管理者（SYS_STAFF_ID）：等同舊版首頁管理員，全部權限、關閉時也能用，操作紀錄記本人

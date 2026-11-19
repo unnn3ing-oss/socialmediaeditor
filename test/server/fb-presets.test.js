@@ -12,7 +12,7 @@ async function call(env, path, headers, body) {
   const r = await w.fetch(new Request('https://api.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) }), env, { waitUntil() {} });
   return { status: r.status, body: await r.json() };
 }
-const auth = async (env, kind, adm) => { const { signToken } = await tok(); return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) }; };
+const auth = async (env, kind, adm) => { const { signToken } = await tok(); if (adm) env.SYS_STAFF_ID = 'SYS1'; return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) }; };
 
 test('活動留言：管理頁整份存、讀；排程發布讀得到；驗證', async () => {
   const env = mkEnv();

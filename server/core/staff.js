@@ -116,22 +116,28 @@ export async function authRow(env, id) {
   return { id: r.id, sys: r.id === sysId(env), hasPw: !!r.pw_hash, hash: r.pw_hash || '', salt: r.pw_salt || '', ver: Number(r.pw_ver) || 1,
     setupHash: r.setup_hash || '', setupExp: Number(r.setup_exp) || 0, fails: Number(r.fails) || 0, lockUntil: Number(r.lock_until) || 0 };
 }
-// 連錯一次：到上限就鎖並歸零；回 { locked, left, until }
-export async function recordFail(env, row, max, lockMs) {
-  const n = row.fails + 1;
+// 連錯一次（原子遞增，並行請求不會漏算）：到上限就鎖並歸零；回 { locked, left, until }
+//   clearSetup：設定碼連錯達上限時一併作廢設定碼
+export async function recordFail(env, row, max, lockMs, clearSetup = false) {
+  const r = await first(env, 'UPDATE staff SET fails = fails + 1 WHERE id = ? RETURNING fails', row.id);
+  const n = r ? Number(r.fails) : max;
   if (n >= max) {
     const until = Date.now() + lockMs;
-    await run(env, 'UPDATE staff SET fails = 0, lock_until = ? WHERE id = ?', until, row.id);
+    await run(env, 'UPDATE staff SET fails = 0, lock_until = ?' + (clearSetup ? ', setup_hash = NULL, setup_exp = NULL' : '') + ' WHERE id = ?', until, row.id);
     return { locked: true, left: 0, until };
   }
-  await run(env, 'UPDATE staff SET fails = ? WHERE id = ?', n, row.id);
   return { locked: false, left: max - n, until: 0 };
 }
 export async function clearFails(env, id) { await run(env, 'UPDATE staff SET fails = 0, lock_until = NULL WHERE id = ?', id); }
 // 設定新密碼：清掉設定碼與連錯，密碼版本 +1（其他裝置的舊憑證失效）；回新版本
-export async function storePassword(env, row, { hash, salt }) {
+//   guard：'setup'＝只有設定碼還是 setupHash 時才成功（用掉就失效）；'nopw'＝只有還沒有密碼時才成功；回 0＝已被別人用掉（失敗）
+export async function storePassword(env, row, { hash, salt }, guard = '') {
   const ver = row.ver + 1;
-  await run(env, 'UPDATE staff SET pw_hash = ?, pw_salt = ?, pw_ver = ?, setup_hash = NULL, setup_exp = NULL, fails = 0, lock_until = NULL, updated = ? WHERE id = ?', hash, salt, ver, Date.now(), row.id);
+  let where = '', extra = [];
+  if (guard === 'setup') { where = ' AND setup_hash = ? AND pw_hash IS NULL'; extra = [row.setupHash]; }
+  else if (guard === 'nopw') where = ' AND pw_hash IS NULL';
+  const r = await run(env, 'UPDATE staff SET pw_hash = ?, pw_salt = ?, pw_ver = ?, setup_hash = NULL, setup_exp = NULL, fails = 0, lock_until = NULL, updated = ? WHERE id = ?' + where, hash, salt, ver, Date.now(), row.id, ...extra);
+  if (guard && r && r.meta && r.meta.changes === 0) return 0;
   return ver;
 }
 // 重置：清密碼、發新設定碼（24 小時）、密碼版本 +1、解鎖；回 { code, exp }
@@ -217,6 +223,7 @@ const bad = (request, env, msg) => fail(request, env, 'bad_request', msg);
 export const CONTACT_MSG = '分機／手機最多 ' + MAX_CONTACT + ' 字，只能有數字、#、-、+、空白和括號。';
 
 const forbid = (request, env, msg) => fail(request, env, 'forbidden', msg);
+const auditWho = (who) => (who && who.uid ? { uid: who.uid, name: who.name } : { uid: 'ADMIN', name: '管理員' });
 const groupById = async (env, id) => (await listGroups(env)).find((g) => g.id === id) || null;
 
 export async function adminStaff(request, env, path, who) {
@@ -236,6 +243,8 @@ export async function adminStaff(request, env, path, who) {
     if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。');
     if (!(await groupExists(env, group))) return bad(request, env, '請選擇權限組。');
     if (!isSys(who) && who.role !== 'mgr') return forbid(request, env, '你的層級不能新增人員。');
+    await ensureSys(env);
+    if (id === sysId(env)) return bad(request, env, '員工編號 ' + id + ' 是系統管理者，已在名單內。');
     let level = 'user';
     if (b.level !== undefined) {
       if (!canLevel(who)) return forbid(request, env, '只有系統管理者（輸入管理員密碼解鎖）能設定層級。');
@@ -250,6 +259,7 @@ export async function adminStaff(request, env, path, who) {
     await run(env, 'INSERT INTO staff (id, name, grp, contact, level, enabled, created, updated) VALUES (?, ?, ?, ?, ?, 1, ?, ?)', id, name, group, contact, level, now, now);
     // 新增就發設定碼（只回這一次），本人第一次登入時用它設密碼
     const setup = await resetPassword(env, id, false);
+    await audit(env, auditWho(who), 'add', '', '', id);
     return ok(request, env, { ...(await state(env, who)), setup });
   }
 
@@ -264,11 +274,14 @@ export async function adminStaff(request, env, path, who) {
     // 重置密碼：回新的設定碼（只回這一次）
     if (sm[2]) {
       if (method !== 'POST') return fail(request, env, 'not_found');
+      if (!canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能重置權限比你多的人。');
       const setup = await resetPassword(env, id);
+      await audit(env, auditWho(who), 'reset', '', '', id);
       return ok(request, env, { ...(await state(env, who)), setup });
     }
     if (sysRow && (method === 'DELETE' || (method === 'POST' && await isProtectedEdit(request)))) return forbid(request, env, '系統管理者不能刪除、停用或改層級。');
     if (method === 'DELETE') {
+      if (!canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能刪除權限比你多的人。');
       await run(env, 'DELETE FROM staff WHERE id = ?', id);
       return ok(request, env, await state(env, who));
     }
@@ -276,6 +289,7 @@ export async function adminStaff(request, env, path, who) {
     if (method === 'POST') {
       const b = await readJson(request);
       if (!b || typeof b !== 'object') return bad(request, env);
+      if (b.enabled !== undefined && !canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能停用權限比你多的人。');
       const sets = [], args = [];
       if (b.name !== undefined) { const name = cleanName(b.name); if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。'); sets.push('name = ?'); args.push(name); }
       if (b.group !== undefined) {

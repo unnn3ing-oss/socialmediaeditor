@@ -15,7 +15,8 @@ async function call(env, path, init = {}) {
 }
 async function auth(env, kind, adm = false) {
   const { signToken } = await tok();
-  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) };
+  if (adm) env.SYS_STAFF_ID = 'SYS1';
+  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) };
 }
 const ACCOUNTS = { data: [{ id: '111', name: 'TVBS 新聞', access_token: 'PT111' }, { id: '222', name: '少康戰情室', access_token: 'PT222' }, { id: '333', name: '氣象站', access_token: 'PT333' }] };
 const fbEnv = () => mkEnv({ FB_USER_TOKEN: 'USERTOKEN' });

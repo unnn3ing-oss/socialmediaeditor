@@ -24,7 +24,8 @@ async function setup(t, handlers) {
   env.DB.raw.prepare("INSERT INTO fb_pages (id, short, utm, rd, ord, show, updated) VALUES ('111','新聞','?&utm_source=facebook&utm_medium=fbarticlepic','news',0,1,0), ('222','少康','?&utm_source=facebook&utm_medium=2100roompic','shaokang',1,1,0)").run();
   env.DB.raw.prepare("UPDATE fb_pages SET utm_text = '?&utm_source=facebook&utm_medium=fbarticletext' WHERE id = '111'").run();
   const { signToken } = await tok();
-  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true)) };
+  env.SYS_STAFF_ID = 'SYS1';
+  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1)) };
   return { f, env, headers };
 }
 async function send(env, headers, fields) {
@@ -131,7 +132,7 @@ test('第一個粉專失敗不影響第二個；時間超出範圍不呼叫臉�
   assert.equal(a.ok, false); assert.match(a.error, /no permission/);
   assert.equal(b.ok, true); assert.equal(b.comment, 'retry', '第 1 則失敗交給計時器重試'); assert.match(b.commentError, /boom/);
   assert.deepEqual(env.DB.raw.prepare('SELECT uid, action, page, post FROM fb_audit').all().map((x) => ({ ...x })),
-    [{ uid: 'ADMIN', action: 'publish', page: '222', post: '222_1' }], '操作紀錄只記成功的粉專');
+    [{ uid: 'SYS1', action: 'publish', page: '222', post: '222_1' }], '操作紀錄只記成功的粉專');
   const n = f.calls.length;
   const r2 = await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: nowSec() + 300 }, { page: '222', at: nowSec() + 31 * 86400 }]) });
   assert.deepEqual(r2.body.data.results.map((x) => [x.ok, x.error]), [[false, 'fb_bad_time'], [false, 'fb_bad_time']]);
@@ -155,7 +156,8 @@ test('排程成功後真的計時器有紀錄（整合）', async (t) => {
   let env;
   env = mkEnv({ FB_USER_TOKEN: 'U', FB_TIMER: fakeNamespace(FbCommentTimer, () => env) });
   const { signToken } = await tok();
-  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true)) };
+  env.SYS_STAFF_ID = 'SYS1';
+  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1)) };
   const at = nowSec() + 3600;
   const r = await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]) });
   assert.equal(r.body.data.results[0].comment, 'armed');

@@ -22,8 +22,9 @@ async function call(path, init = {}, env) {
 }
 async function tok(env, kind) {
   const { signToken } = await loadToken();
-  // 公司憑證要有員工編號或是（舊版）管理員憑證；這裡用後者，不用建名單
-  return signToken(env.SESSION_SECRET, kind, nowSec() + 600, kind === 'company');
+  // 公司憑證要有員工編號（pv 1）；用 SYS_STAFF_ID 的系統管理者，名單自動建立
+  if (kind === 'company') env.SYS_STAFF_ID = 'SYS1';
+  return kind === 'company' ? signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, 'SYS1', 1) : signToken(env.SESSION_SECRET, kind, nowSec() + 600);
 }
 const bearer = (t) => ({ authorization: 'Bearer ' + t });
 async function put(env, key, bytes, tier, token) {

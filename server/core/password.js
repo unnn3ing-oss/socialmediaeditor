@@ -51,3 +51,11 @@ export async function codeHash(secret, id, code) {
   const k = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return b64urlEncode(new Uint8Array(await crypto.subtle.sign('HMAC', k, enc.encode('setup:' + id + ':' + code))));
 }
+
+// 定時比較兩個字串（長度不同直接 false；雜湊長度固定）
+export function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}

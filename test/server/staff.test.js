@@ -144,9 +144,10 @@ test('關閉時：管理組（bypass）可用、發文組被擋並看到原因�
   const r = await call(env, '/fb/pages', { headers: p });
   assert.equal(r.status, 403); assert.equal(r.body.code, 'fb_forbidden'); assert.deepEqual(r.body.detail, { reason: '維護中' });
   const { signToken } = await tok();
-  const a = bearer(await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true));
+  env.SYS_STAFF_ID = 'SYS1';
+  const a = bearer(await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1));
   const me = await call(env, '/fb/me', { headers: a });
-  assert.equal(me.body.data.admin, true); assert.equal(me.body.data.name, '管理員');
+  assert.equal(me.body.data.admin, true); assert.equal(me.body.data.name, '系統管理者');
 });
 
 test('權限組管理：名稱不能重複、使用中不能刪、沒人用可刪', async (t) => {

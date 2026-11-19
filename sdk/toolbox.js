@@ -25,7 +25,7 @@ function isAdmin() {
   try { const c = window.parent !== window && window.parent.tbxShell?.company(); return Boolean(c && c.unlocked && c.admin); } catch { return false; }
 }
 
-// 員工編號登入的資料 { id, name, group }；公司密碼／管理密碼／沒登入回 null
+// 員工登入的資料 { id, name, group }；沒登入（或舊版管理員憑證）回 null
 function staffInfo() {
   try { const c = window.parent !== window && window.parent.tbxShell?.company(); const s = c && c.unlocked && c.staff; return s ? { id: s.id, name: s.name, group: s.group } : null; } catch { return null; }
 }
