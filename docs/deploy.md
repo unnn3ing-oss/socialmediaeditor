@@ -195,6 +195,63 @@ npx wrangler deploy
 
 ---
 
+## 步驟 6-3：測試後端（toolbox-api-dev，用自己的粉專開發測試）
+
+和正式後端完全分開（自己的 D1／KV／R2、自己的密碼與臉書權杖），同事不會連到。網站要先在正式後端用**管理員密碼**登入，才看得到切換入口。以下都在 `server` 資料夾執行，指令都多一個 `--env dev`。
+
+1. **建立測試用資料庫、檔案空間、快取**：
+
+   ```bash
+   npx wrangler d1 create toolbox-dev
+   ```
+
+   ```bash
+   npx wrangler r2 bucket create toolbox-files-dev
+   ```
+
+   ```bash
+   npx wrangler kv namespace create toolbox-cache-dev
+   ```
+
+   把印出的 `database_id` 與 KV 的 `id` 填進 `wrangler.toml` 最下面 `[env.dev]` 那段的兩個「填入測試用…」（**不要**填正式的 ID）。
+
+2. **建立資料表**：
+
+   ```bash
+   npx wrangler d1 execute toolbox-dev --remote --file schema.sql
+   ```
+
+3. **Secrets**（第一次會問要不要建立 `toolbox-api-dev`，輸入 `y`）。三組都要和正式**不同**：
+
+   ```bash
+   npx wrangler secret put COMPANY_PASSWORD --env dev
+   ```
+
+   ```bash
+   npx wrangler secret put ADMIN_PASSWORD --env dev
+   ```
+
+   ```bash
+   npx wrangler secret put SESSION_SECRET --env dev
+   ```
+
+   要測 Rundown 再加 `RUNDOWN_URL`、`RUNDOWN_TOKEN`（同樣帶 `--env dev`，建議接一份測試用試算表）。臉書權杖與 App 密鑰不用設 Secret，等一下在管理頁輸入。
+
+4. **部署**：
+
+   ```bash
+   npx wrangler deploy --env dev
+   ```
+
+   **成功的樣子：** 印出 `https://toolbox-api-dev.19jpz-3.workers.dev`。`[[migrations]]` 會沿用上面那幾段，不用另外寫。網址不同（例如換了 Cloudflare 帳號）就要改 `shell/config.js` 的 `DEV_API_BASE`。
+
+5. **切過去使用**：網站用正式管理員密碼登入 → 點頂列「公司素材已解鎖（管理員）」→ 登出視窗左邊「切到測試後端」→ 頁面重新載入，頂列出現橘色「測試後端」→ 用**測試後端的**管理員密碼登入。管理頁（`admin/`）頁首也會標「測試後端」，在那裡輸入自己 App 的 App 密鑰、貼權杖、設定粉專。
+6. **切回正式**：點頂列「測試後端」→「切回正式後端」。兩邊的登入狀態各自保留。
+
+> 外掛側邊欄一律連正式後端，不受切換影響。之後正式後端更新程式時，測試後端要另外 `npx wrangler deploy --env dev` 才會更新（通常先部署測試、確認沒問題再部署正式）。
+
+---
+
 ## 步驟 7：開啟網站（併入 main 之後才做）
 
 這一步等程式併入 `main` 之後再做：

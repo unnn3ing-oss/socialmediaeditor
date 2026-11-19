@@ -7,6 +7,8 @@ body{margin:0;background:radial-gradient(900px 500px at 8% -10%,#dce8ff,transpar
 .top .word{font-size:18px;font-weight:700}
 .top .word b{color:var(--brand);font-weight:700}
 .top .sub{font-size:14px;font-weight:700;color:var(--mute);margin-left:4px}
+.top .env-dev{font-size:13px;font-weight:700;color:#93370d;background:#fef0c7;border-radius:99px;padding:3px 10px;margin-left:8px;white-space:nowrap}
+.top .env-dev[hidden]{display:none}
 h1{font-size:22px;font-weight:700;margin:0 0 4px}
 h2{font-size:18px;font-weight:700;margin:0 0 12px}
 p{margin:0 0 12px;color:var(--sub)}

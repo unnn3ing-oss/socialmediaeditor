@@ -1,5 +1,7 @@
 // 公司模式：輸入密碼解鎖公司工具；憑證過期時自動跳登入彈窗，已開著的公司窗格保留內容。
 import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
+import { API_ENV } from './config.js';
+import { switchApiEnv } from './apienv.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
 
@@ -115,11 +117,17 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   outCancel.type = 'button';
   const outOk = mk('button', 'btn btn-primary', '登出公司模式');
   outOk.type = 'button';
-  outForm.append(mk('h2', null, '登出公司模式'), mk('p', null, '登出後，公司專屬工具會從櫥窗和工具列隱藏。'), (() => { const a = mk('div', 'actions'); a.append(outCancel, outOk); return a; })());
+  // 只有正式後端＋管理員密碼登入才看得到（同事看不到入口）
+  const toDev = mk('button', 'btn btn-secondary', '切到測試後端');
+  toDev.type = 'button';
+  toDev.id = 'to-dev-backend';
+  toDev.hidden = true;
+  outForm.append(mk('h2', null, '登出公司模式'), mk('p', null, '登出後，公司專屬工具會從櫥窗和工具列隱藏。'), (() => { const a = mk('div', 'actions'); a.append(toDev, outCancel, outOk); return a; })());
   out.appendChild(outForm);
   document.body.appendChild(out);
   outCancel.addEventListener('click', () => out.close());
   outOk.addEventListener('click', () => { out.close(); logout(); });
+  toDev.addEventListener('click', () => { out.close(); switchApiEnv('dev', { storage }); });
 
   // ---- 狀態 ----
   function setLocks(locked) {
@@ -186,7 +194,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
 
   button.addEventListener('click', () => openLogin(false));
   window.addEventListener('tbx:company-login', (e) => openLogin(!(e.detail && e.detail.fresh)));
-  window.addEventListener('tbx:company-logout', () => { if (!out.open) out.showModal(); });
+  window.addEventListener('tbx:company-logout', () => {
+    toDev.hidden = !(API_ENV === 'prod' && shell.company().admin);
+    if (!out.open) out.showModal();
+  });
   shell.__checkCompany = check;
   setInterval(check, CHECK_INTERVAL);
 

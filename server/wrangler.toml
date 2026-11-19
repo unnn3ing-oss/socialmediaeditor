@@ -35,3 +35,33 @@ crons = ["17 19 * * *"]
 
 # Secrets 不寫在這裡，用 wrangler secret put 設定：
 #   COMPANY_PASSWORD、ADMIN_PASSWORD、SESSION_SECRET、FB_USER_TOKEN、RUNDOWN_URL、RUNDOWN_TOKEN
+
+# ---- 測試後端（toolbox-api-dev）：npx wrangler deploy --env dev ----
+# 網站只有在正式後端用管理員密碼登入後，才能從登出視窗「切到測試後端」（shell/config.js 的 DEV_API_BASE）。
+# 綁定不會從上面繼承，要自己寫一份；D1／KV／R2 用另外建立的，不要填正式的 ID。
+# Secrets 也要另外設，且和正式用不同的值：npx wrangler secret put ADMIN_PASSWORD --env dev（其餘同上）
+[env.dev]
+name = "toolbox-api-dev"
+
+[env.dev.vars]
+ALLOWED_ORIGIN = "https://unnn3ing-oss.github.io"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "toolbox-dev"
+database_id = "填入測試用 D1 的 ID"
+
+[[env.dev.r2_buckets]]
+binding = "FILES"
+bucket_name = "toolbox-files-dev"
+
+[[env.dev.kv_namespaces]]
+binding = "CACHE"
+id = "填入測試用 KV 的 ID"
+
+[[env.dev.durable_objects.bindings]]
+name = "FB_TIMER"
+class_name = "FbCommentTimer"
+
+[env.dev.triggers]
+crons = ["17 19 * * *"]

@@ -5,6 +5,13 @@ const ext = createExt();
 
 export const CHECKS = [
   {
+    // 測試後端：由 apienv.js 設定；正式後端時不顯示
+    id: 'apienv',
+    label: '後端環境',
+    passive: true,
+    onClick: () => window.dispatchEvent(new CustomEvent('tbx:api-prod')),
+  },
+  {
     id: 'extension',
     label: '正在檢查外掛',
     // 外掛通常幾十毫秒就回；超過 400ms 還沒回，先顯示「未安裝外掛」，之後有回再改成已連線（不用空等 3 秒）。

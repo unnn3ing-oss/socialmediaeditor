@@ -554,3 +554,22 @@ test('後端內嵌管理頁：登入後讀到授權名單並可新增', async ()
   assert.deepEqual(errs, []);
   await ctx.close();
 });
+
+test('測試後端：頁首標「測試後端」且 API 打 dev；正式不顯示', async () => {
+  const { page } = await open({ width: 1280, height: 800 });
+  assert.equal(await page.isVisible('#envTag'), false);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 800 } });
+  const p2 = await ctx.newPage();
+  await p2.addInitScript(() => { try { localStorage.setItem('tbx.api', 'dev'); } catch {} });
+  const hosts = [];
+  await p2.route(/^https:\/\/toolbox-api(-dev)?\.19jpz-3\.workers\.dev\//, (r) => { hosts.push(new URL(r.request().url()).host); return r.fulfill({ json: { ok: false, code: 'bad_password' } }); });
+  await p2.goto(srv.url + 'admin/');
+  await p2.waitForSelector('#envTag:not([hidden])');
+  assert.equal(await p2.isVisible('#envTag'), true);
+  await p2.fill('#pw', 'x');
+  await p2.click('#loginBtn');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual([...new Set(hosts)], ['toolbox-api-dev.19jpz-3.workers.dev']);
+  if (process.env.SHOT_DIR) await p2.screenshot({ path: process.env.SHOT_DIR + '/admin-dev.png' });
+  await ctx.close();
+});

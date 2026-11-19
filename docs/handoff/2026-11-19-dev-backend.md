@@ -17,20 +17,21 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `shell/config.js` | `PROD_API_BASE`／`DEV_API_BASE`／`API_ENV_KEY`／`readApiEnv()`／`API_ENV`；`API_BASE` 依環境 | ⬜ |
-| `sdk/api.js` | `COMPANY_KEY` 依 `API_ENV` | ⬜ |
-| `shell/company.js` | 登出視窗加「切到測試後端」（admin 且正式才顯示） | ⬜ |
-| `shell/apienv.js`（新）＋`shell/status.js` | 「測試後端」膠囊＋切回正式確認視窗 | ⬜ |
-| `admin/index.html`／`admin.js` | 測試模式頁首標「測試後端」 | ⬜ |
-| `server/wrangler.toml` | `[env.dev]` | ⬜ |
-| `docs/deploy.md` | 「測試後端」一節 | ⬜ |
-| 測試 | 單元 `test/apienv.test.js`；e2e `test/e2e/company.e2e.js` 加案例 | ⬜ |
+| `shell/config.js` | `PROD_API_BASE`／`DEV_API_BASE`／`API_ENV_KEY`／`readApiEnv()`／`API_ENV`；`API_BASE` 依環境 | ✅ |
+| `sdk/api.js` | `COMPANY_KEY` 依 `API_ENV` | ✅ |
+| `shell/company.js` | 登出視窗加「切到測試後端」（admin 且正式才顯示） | ✅ |
+| `shell/apienv.js`（新）＋`shell/status.js` | 「測試後端」膠囊＋切回正式確認視窗 | ✅ |
+| `admin/index.html`／`admin.js` | 測試模式頁首標「測試後端」 | ✅ |
+| `server/wrangler.toml` | `[env.dev]` | ✅ |
+| `docs/deploy.md` | 「測試後端」一節 | ✅ |
+| 測試 | 單元 `test/apienv.test.js`；e2e `test/e2e/company.e2e.js` 加案例 | ✅ |
 
 ## 下一步
-- [ ] 依上表實作
-- [ ] npm test、build --check、相關 e2e（company、shell、admin、sidepanel）
-- [ ] 獨立審查
-- [ ] 截圖給使用者確認
+- [x] 依上表實作（另：`shell/shell.css` 測試後端膠囊橘底填色）
+- [x] npm test 677、build --check、全部 e2e 221 通過
+- [x] 獨立審查：Important「env.dev 沒 migrations」查證不成立（wrangler `migrations` 是 inheritable，dry-run 無警告）；Minor 修掉無效 waitForFunction
+- [ ] 使用者看截圖確認 → 說「推」才併入 main（同 commit 更新 CLAUDE.md 目前進度）
+- [ ] 使用者部署：docs/deploy.md 步驟 6-3
 
 ## 測試
 `npm test`、`node build.js --check`、`npx playwright test test/e2e/company.e2e.js test/e2e/shell.e2e.js test/e2e/admin.e2e.js test/e2e/sidepanel.e2e.js --trace off`（依實際設定檔）。

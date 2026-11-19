@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=d47cf81738"
+      "entry": "tools/pattern/index.html?v=b3cc39041b"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=28d3a1f99c"
+      "entry": "tools/linepush/index.html?v=fa0c8549e4"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=b593e4621c"
+      "entry": "tools/collage/index.html?v=4c89239d7b"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=6d8d21eb29"
+      "entry": "tools/watermark/index.html?v=e123615637"
     },
     {
       "id": "resize",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=431f5a189a"
+      "entry": "tools/resize/index.html?v=013f8875bc"
     },
     {
       "id": "design",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=6d2dcb86fb"
+      "entry": "tools/design/index.html?v=173e7d72b5"
     },
     {
       "id": "fbpost",
@@ -78,7 +78,7 @@
       ],
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=ecf1c5ba36"
+      "entry": "tools/fbpost/index.html?v=78cca6ca3e"
     },
     {
       "id": "fbvideo",
@@ -92,7 +92,7 @@
       ],
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=576a05ff44"
+      "entry": "tools/fbvideo/index.html?v=5c8e874bd0"
     },
     {
       "id": "livereq",
@@ -103,7 +103,7 @@
       "requires": [],
       "icon": "tools/livereq/icon.svg",
       "thumb": "tools/livereq/thumb.svg",
-      "entry": "tools/livereq/index.html?v=63c672dec8"
+      "entry": "tools/livereq/index.html?v=54f0241e1a"
     },
     {
       "id": "ytdl",
@@ -117,7 +117,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=edd7ee98d0"
+      "entry": "tools/ytdl/index.html?v=a5db3d271b"
     }
   ]
 }
