@@ -5,6 +5,7 @@ import { createToolbar } from './toolbar.js';
 import { createPanes } from './panes.js';
 import { initStatus } from './status.js';
 import { initCompany } from './company.js';
+import { initApiEnv } from './apienv.js';
 
 const $ = (id) => document.getElementById(id);
 const showcaseEl = $('showcase');
@@ -152,6 +153,7 @@ async function start() {
 const status = initStatus({ root: $('status'), shell: window.tbxShell, openInstall });
 // 手機狀態收在「工具」面板裡：有需要注意的狀態時在「工具」鈕上加提示點
 window.tbxShell.onStatus(() => toolbar.setAlert(statuses.get('company')?.state === 'warn'));
+initApiEnv({ shell: window.tbxShell });
 initCompany({ shell: window.tbxShell, button: $('company-btn') });
 // 偵測不到外掛時不自動跳出教學；使用者按頂列膠囊／「安裝外掛」才開。
 status.runAll();

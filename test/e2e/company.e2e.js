@@ -20,10 +20,11 @@ test.after(async () => { await browser.close(); await srv.close(); });
 async function open() {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 820 } });
   const page = await ctx.newPage();
-  const api = { statusCode: 200, authOk: true, authDown: false, bodies: [] };
+  const api = { statusCode: 200, authOk: true, authDown: false, bodies: [], hosts: [] };
   await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
-  await page.route('https://toolbox-api.19jpz-3.workers.dev/**', async (r) => {
+  await page.route(/^https:\/\/toolbox-api(-dev)?\.19jpz-3\.workers\.dev\//, async (r) => {
     const req = r.request();
+    api.hosts.push(new URL(req.url()).host);
     if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
     const p = new URL(req.url()).pathname;
     const exp = Math.floor(Date.now() / 1000) + 30 * 86400;
@@ -184,4 +185,45 @@ test('員工編號查無：顯示 bad_staff 錯誤；切到公司密碼分頁仍
   await page.click('#company-btn');
   assert.equal(await page.locator('#company-dialog [data-tab=password]').getAttribute('aria-selected'), 'true');
   assert.equal(await page.isVisible('#company-dialog input[name=password]'), true);
+});
+
+test('測試後端：一般公司密碼看不到切換入口', async () => {
+  const { page } = await open();
+  await unlock(page);
+  await page.waitForSelector('#status [data-status=company]');
+  await page.click('#status [data-status=company]');
+  assert.equal(await page.isVisible('#to-dev-backend'), false);
+  assert.equal(await page.locator('#status [data-status=apienv]').count(), 0);
+});
+
+test('測試後端：管理員切過去 → 測試膠囊、憑證分開、打 dev 網址 → 切回正式', async () => {
+  const { page, api } = await open();
+  await unlock(page, 'admin-pw');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  await page.click('#status [data-status=company]');
+  assert.equal(await page.isVisible('#to-dev-backend'), true);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/to-dev.png' });
+  await Promise.all([page.waitForEvent('load'), page.click('#to-dev-backend')]);
+  await page.waitForSelector('#status [data-status=apienv]');
+  assert.equal(await page.textContent('#status [data-status=apienv]'), '測試後端');
+  assert.equal(await page.evaluate(() => localStorage.getItem('tbx.api')), 'dev');
+  // 正式憑證保留，但測試後端還沒登入：公司工具鎖住、出現登入按鈕
+  assert.ok(await page.evaluate(() => localStorage.getItem('tbx.company')));
+  assert.equal(await page.isVisible('#company-btn'), true);
+  api.hosts.length = 0;
+  await unlock(page, 'admin-pw');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  assert.ok(api.hosts.length > 0 && api.hosts.every((h) => h === 'toolbox-api-dev.19jpz-3.workers.dev'));
+  assert.ok(await page.evaluate(() => localStorage.getItem('tbx.company.dev')));
+  // 測試後端裡不再出現「切到測試後端」
+  await page.click('#status [data-status=company]');
+  assert.equal(await page.isVisible('#to-dev-backend'), false);
+  await page.click('#company-logout-dialog .btn-secondary:not(#to-dev-backend)');
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/dev-pill.png' });
+  await page.click('#status [data-status=apienv]');
+  await Promise.all([page.waitForEvent('load'), page.click('#apienv-dialog .btn-primary')]);
+  await page.waitForSelector('#status [data-status=company]');
+  assert.equal(await page.locator('#status [data-status=apienv]').count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem('tbx.api')), null);
+  assert.match(await page.textContent('#status [data-status=company]'), /（管理員）/);
 });

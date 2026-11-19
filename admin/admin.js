@@ -1,5 +1,5 @@
 // 管理後台（admin/index.html）。token 只放在記憶體，重新整理就要重新登入。
-import { API_BASE } from '../shell/config.js';
+import { API_BASE, API_ENV } from '../shell/config.js';
 
 // 不讓別的網站把後台嵌進框架（GitHub Pages 不能設 x-frame-options）
 if (window.top !== window.self) {
@@ -9,6 +9,7 @@ if (window.top !== window.self) {
 }
 
 (function () {
+  if (API_ENV === 'dev') document.getElementById('envTag').hidden = false;
   var token = '';
   var pending = '';
   var $ = function (id) { return document.getElementById(id); };

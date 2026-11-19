@@ -1,7 +1,8 @@
-// 後端呼叫：自動帶公司憑證（localStorage['tbx.company'] = { token, exp(秒) }）。
-import { API_BASE } from '../shell/config.js';
+// 後端呼叫：自動帶公司憑證（localStorage['tbx.company'] = { token, exp(秒) }；測試後端用 'tbx.company.dev'）。
+import { API_BASE, API_ENV } from '../shell/config.js';
 
-export const COMPANY_KEY = 'tbx.company';
+export const companyKey = (env) => (env === 'dev' ? 'tbx.company.dev' : 'tbx.company');
+export const COMPANY_KEY = companyKey(API_ENV);
 
 export function readCompany(storage, nowMs = Date.now()) {
   try {
