@@ -67,6 +67,13 @@ const call = (page, op, payload = {}) => page.evaluate(([op, payload]) => new Pr
   postMessage({ source: 'tbx-web', nonce, op, payload }, '*');
 }), [op, payload]);
 
+// 設定步驟是彈窗精靈：打開（沒開的話）→ 跳到第 3 步 → 按「啟動」
+async function clickStart(page) {
+  if (!(await page.isVisible('#setup-card'))) await page.click('#open-setup');
+  await page.click('.stepper li[data-step="3"] button');
+  await page.click('#start');
+}
+
 test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加入、下載完成', async () => {
   const page = await ctx.newPage();
   const errors = [];
@@ -75,7 +82,7 @@ test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加�
   await page.waitForFunction(() => document.getElementById('conn-pill').textContent !== '尚未連線', null, { timeout: 15000 });
 
   // 1. 還沒登錄下載助手：按啟動 → not_installed，設定步驟展開、不顯示已連線
-  await page.click('#start');
+  await clickStart(page);
   const st = await call(page, 'ytdl.get_status');
   assert.equal(st.ok, true);
   await page.waitForTimeout(1500);
@@ -83,6 +90,13 @@ test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加�
   assert.ok(['not_installed', 'forbidden', 'stopped'].includes(notInstalled), notInstalled);
   assert.notEqual(await page.textContent('#conn-pill'), '已連線');
   assert.equal(await page.isVisible('#setup-card'), true);
+  assert.equal(await page.$eval('#setup-card', (d) => d.open && d.matches(':modal')), true, '設定步驟是彈窗');
+  // 一次只顯示一步；上一步／下一步切換
+  assert.deepEqual(await page.$$eval('#steps .step', (els) => els.map((e) => !e.hidden)), [false, false, true]);
+  await page.click('#step-prev');
+  assert.deepEqual(await page.$$eval('#steps .step', (els) => els.map((e) => !e.hidden)), [false, true, false]);
+  assert.equal(await page.isEnabled('#step-next'), true);
+  assert.equal(await page.isEnabled('#step-prev'), true);
   assert.equal(await page.getAttribute('#download-win', 'href'), 'installers/ytdl-install-windows.cmd');
   for (const f of ['ytdl-install-windows.cmd', 'ytdl-install-mac.zip', 'ytdl-install-mac.sh']) {
     assert.ok(fs.existsSync(path.join(ROOT, 'tools/ytdl/installers', f)), f);
@@ -91,7 +105,7 @@ test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加�
 
   // 2. 登錄下載助手後按啟動 → 已連線
   registerHost();
-  await page.click('#start');
+  await clickStart(page);
   // 測試環境沒有 ffmpeg／Deno：狀態是 running，膠囊顯示「需要處理」（真電腦由安裝檔裝好就是「已連線」）
   const until = Date.now() + 20000;
   while ((await call(page, 'ytdl.get_status')).data.state !== 'running') {
@@ -99,6 +113,8 @@ test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加�
     await page.waitForTimeout(300);
   }
   await page.waitForFunction(() => ['已連線', '需要處理'].includes(document.getElementById('conn-pill').textContent), null, { timeout: 10000 });
+  await page.click('#setup-close'); // 使用者自己打開的，要自己關
+  assert.equal(await page.isVisible('#setup-card'), false);
 
   // 3. 輸出資料夾、貼網址 → 帶出標題
   const out = path.join(work, 'out');
@@ -204,7 +220,7 @@ test('YT 下載：工作區卡片有間距，新增列各元件同高 48px、更
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
     await page.goto(srv.url + 'tools/ytdl/index.html');
     await page.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
-    await page.evaluate(() => { document.getElementById('work').hidden = false; });
+    await page.evaluate(() => { document.getElementById('work').hidden = false; document.getElementById('side').hidden = false; });
     const gap = await page.$eval('#work', (el) => getComputedStyle(el).rowGap);
     assert.equal(gap, '14px');
     const hs = await page.evaluate(() => ['#add-card .in', '#mode', '#quality', '#add-btn'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().height)));
@@ -246,4 +262,91 @@ test('YT 下載：抓取影片資訊中的列，封面與標題顯示骨架；�
     assert.deepEqual(r, { fetching: true, sk: true, anim: 'sk-shimmer', after: { fetching: false, sk: false, title: '影片標題' } });
     await page.close();
   } finally { await browser.close(); await srv.close(); }
+});
+
+test('YT 下載版面：網頁左側欄＋右主區；側邊欄（embed=side）單欄、設定與工具收合', async () => {
+  const { serve } = require('../helpers/serve.js');
+  const { launch } = require('../helpers/browser.js');
+  const srv = await serve(ROOT);
+  const browser = await launch();
+  const reveal = () => { for (const id of ['work', 'side']) document.getElementById(id).hidden = false; };
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 })).newPage();
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await page.goto(srv.url + 'tools/ytdl/index.html');
+    await page.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
+    await page.evaluate(reveal);
+    const box = (q) => page.$eval(q, (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+    const side = await box('#side'), main = await box('#add-card');
+    assert.ok(side.x + side.w <= main.x, `側欄在左 ${JSON.stringify([side, main])}`);
+    assert.equal(Math.round(side.w), 300);
+    assert.equal(await page.isVisible('#side-tools > summary'), false, '網頁不顯示收合標題');
+    assert.equal(await page.isVisible('#doctor-check'), true);
+    assert.equal(await page.isVisible('#tab-card'), false, '網頁沒有目前分頁卡');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: path.join(process.env.E2E_SHOTS, 'ytdl-web-2col.png') });
+    // 沒外掛時側欄隱藏、主區單欄滿版
+    await page.evaluate(() => { document.getElementById('side').hidden = true; });
+    assert.ok((await box('#add-card')).w > 1100);
+
+    const sp = await (await browser.newContext({ viewport: { width: 400, height: 800 }, deviceScaleFactor: 1 })).newPage();
+    await sp.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await sp.goto(srv.url + 'tools/ytdl/index.html?embed=side');
+    await sp.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
+    await sp.evaluate(reveal);
+    assert.equal(await sp.evaluate(() => document.documentElement.classList.contains('is-side')), true);
+    const s2 = await sp.$eval('#side', (el) => el.getBoundingClientRect().top);
+    const q2 = await sp.$eval('#queue-card', (el) => el.getBoundingClientRect().bottom);
+    assert.ok(s2 >= q2, '設定與工具在清單下面');
+    assert.equal(await sp.isVisible('#side-tools > summary'), true);
+    assert.equal(await sp.isVisible('#doctor-check'), false, '預設收合');
+    await sp.click('#side-tools > summary');
+    assert.equal(await sp.isVisible('#doctor-check'), true);
+    assert.equal(await sp.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, '400px 無水平溢位');
+    const sw = await sp.$eval('#start-all', (el) => el.getBoundingClientRect().width);
+    assert.ok(sw > 300, '開始全部下載滿版 ' + sw);
+  } finally { await browser.close(); await srv.close(); }
+});
+
+test('外掛側邊欄：有「YT 下載」分頁；目前分頁是 YouTube 時顯示目前分頁卡', async () => {
+  await ctx.route('https://www.youtube.com/**', (r) => r.fulfill({ headers: { 'content-type': 'text/html; charset=utf-8' }, body: '<!doctype html><title>測試影片標題 - YouTube</title><p>yt</p>' }));
+  const sp = await ctx.newPage();
+  await sp.setViewportSize({ width: 400, height: 800 });
+  await sp.goto(`chrome-extension://${EXT_ID}/core/sidepanel.html`);
+  await sp.click('#tabYtdl');
+  assert.equal(await sp.getAttribute('#tabYtdl', 'aria-selected'), 'true');
+  assert.equal(await sp.isVisible('#paneYtdl'), true);
+  assert.equal(await sp.isVisible('#panePost'), false);
+  assert.match(await sp.getAttribute('#ytdlApp', 'src'), /panel\.html\?tool=ytdl&embed=side$/);
+  const panel = sp.frame({ url: /panel\.html\?tool=ytdl/ }) ?? (await (await sp.waitForSelector('#ytdlApp')).contentFrame());
+  const toolFrame = async () => {
+    for (let i = 0; i < 100; i++) {
+      const f = sp.frames().find((fr) => /tools\/ytdl\/index\.html/.test(fr.url()));
+      if (f) return f;
+      await sp.waitForTimeout(100);
+    }
+    throw new Error('沒有載入 YT 工具');
+  };
+  assert.ok(panel);
+  const tool = await toolFrame();
+  assert.match(tool.url(), /embed=side/);
+  await tool.waitForFunction(() => document.documentElement.classList.contains('is-side') && !document.getElementById('work').hidden, null, { timeout: 15000 });
+
+  const yt = await ctx.newPage();
+  await yt.goto('https://www.youtube.com/watch?v=vTab');
+  await yt.bringToFront();
+  await tool.waitForFunction(() => !document.getElementById('tab-card').hidden, null, { timeout: 10000 });
+  assert.equal(await tool.textContent('#tab-title'), '測試影片標題');
+  assert.equal(await tool.textContent('#tab-kind'), '影片');
+  assert.equal(await tool.isVisible('#add-url'), false);
+  assert.equal(await tool.getAttribute('#add-btn', 'aria-label'), '增加目前分頁：測試影片標題');
+  if (process.env.E2E_SHOTS) await sp.screenshot({ path: path.join(process.env.E2E_SHOTS, 'ytdl-sidepanel.png') });
+  await tool.click('#tab-paste');
+  assert.equal(await tool.isVisible('#add-url'), true);
+  assert.equal(await tool.isVisible('#tab-card'), false);
+  // 回到側邊欄本身那個分頁（不是 YouTube）：卡片收起
+  await sp.bringToFront();
+  await tool.waitForFunction(() => document.getElementById('tab-card').hidden, null, { timeout: 10000 });
+  await yt.close();
+  await sp.close();
 });

@@ -10,7 +10,7 @@ const ops = () => Object.entries(mod).filter(([name, fn]) => typeof fn === "func
 const EXPECTED = [
   "get_status", "start", "set_output_dir", "doctor", "diagnostics", "update_engine", "update_info", "update_apply",
   "queue_get", "queue_add", "queue_remove", "queue_retry", "queue_clear", "queue_start", "queue_stop",
-  "queue_copy_text", "queue_download_cover", "settings_set",
+  "queue_copy_text", "queue_download_cover", "settings_set", "current_tab",
 ].sort();
 
 test("op 在 init 之前被呼叫：回 {ok:false} 而不是拋例外", async () => {
@@ -190,4 +190,19 @@ test("update_info 只比對 tools/ytdl/host/ 這層的 *.py", async () => {
     assert.equal(env.store["ytdl-update-info"].hostChangedCount, 1, "結果存在 ytdl-update-info");
     assert.deepEqual(env.touched.filter(([k]) => k === "action"), []);
   } finally { globalThis.fetch = realFetch; delete globalThis.chrome; }
+});
+
+test("current_tab：只回 YouTube／IG 分頁，其他分頁回 null", async () => {
+  const env = fakeChrome();
+  globalThis.chrome = env.chromeStub;
+  try {
+    mod.init(fakeCtx().ctx);
+    env.chromeStub.tabs.query = async () => [{ id: 1, url: "https://www.youtube.com/watch?v=abc", title: "標題 - YouTube" }];
+    const yt = await mod.current_tab();
+    assert.deepEqual(yt, { ok: true, data: { tab: { url: "https://www.youtube.com/watch?v=abc", kind: "video", chip: "影片", title: "標題" } } });
+    env.chromeStub.tabs.query = async () => [{ id: 2, url: "https://example.com/", title: "x" }];
+    assert.deepEqual(await mod.current_tab(), { ok: true, data: { tab: null } });
+    env.chromeStub.tabs.query = async () => [{ id: 3 }]; // 沒權限的分頁拿不到網址
+    assert.deepEqual(await mod.current_tab(), { ok: true, data: { tab: null } });
+  } finally { delete globalThis.chrome; }
 });

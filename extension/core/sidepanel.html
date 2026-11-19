@@ -11,6 +11,7 @@
   <div class="top-row">
     <nav class="tabs" role="tablist" aria-label="側邊欄">
       <button type="button" role="tab" id="tabPost" aria-controls="panePost" aria-selected="true">發文</button>
+      <button type="button" role="tab" id="tabYtdl" aria-controls="paneYtdl" aria-selected="false">YT 下載</button>
       <button type="button" role="tab" id="tabInfo" aria-controls="paneInfo" aria-selected="false">狀態與更新<span class="dot" id="infoDot" hidden>新</span></button>
     </nav>
     <button type="button" class="icon-btn" id="openSite" aria-label="網頁版（在新分頁開啟小編工具箱）" data-tip="網頁版">
@@ -22,6 +23,11 @@
 <!-- 發文：嵌入網站的單一工具外殼（panel.html），流程和網頁版的「排程發布」相同 -->
 <main class="pane-post" id="panePost" role="tabpanel" aria-labelledby="tabPost">
   <iframe id="app" title="排程發布" allow="clipboard-read; clipboard-write"></iframe>
+</main>
+
+<!-- YT 下載：嵌入網站的 panel.html?tool=ytdl&embed=side（窄版排版照原版影片批量下載器側邊欄）；第一次切到這頁才載入 -->
+<main class="pane-post" id="paneYtdl" role="tabpanel" aria-labelledby="tabYtdl" hidden>
+  <iframe id="ytdlApp" title="YT 批量下載" allow="clipboard-read; clipboard-write"></iframe>
 </main>
 
 <div class="wrap" id="paneInfo" role="tabpanel" aria-labelledby="tabInfo" hidden>

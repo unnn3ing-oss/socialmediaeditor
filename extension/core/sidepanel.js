@@ -1,9 +1,10 @@
-// 側邊欄（版面照網新快速排程）：頂列「網頁版」＋分頁「發文／狀態與更新」。
+// 側邊欄（版面照網新快速排程）：頂列「網頁版」＋分頁「發文／YT 下載／狀態與更新」。
 // 發文分頁嵌入網站的 panel.html?tool=fbpost（後端 toolbox-api）；狀態分頁的公司模式與一鍵檢測由嵌入頁用 postMessage 回報。
 // 更新邏輯在 updater.js。
 const SITE = 'https://unnn3ing-oss.github.io/socialmediaeditor/';
 const SITE_ORIGIN = new URL(SITE).origin;
 const PANEL = SITE + 'panel.html?tool=fbpost';
+const YTDL_PANEL = SITE + 'panel.html?tool=ytdl&embed=side';
 
 document.getElementById('openSite').addEventListener('click', () => { chrome.tabs.create({ url: SITE }); });
 const VER = `v${self.Updater.verOf(chrome.runtime.getManifest())}`;
@@ -13,17 +14,20 @@ document.getElementById('extVer2').textContent = VER;
 // ---- 分頁：記住上次停在哪一頁；切換只隱藏，不重建（發文內容不會消失）----
 (function () {
   const tabs = { post: [document.getElementById('tabPost'), document.getElementById('panePost')],
+    ytdl: [document.getElementById('tabYtdl'), document.getElementById('paneYtdl')],
     info: [document.getElementById('tabInfo'), document.getElementById('paneInfo')] };
+  const ytdlFrame = document.getElementById('ytdlApp');
   function show(name) {
     for (const [k, [tab, pane]] of Object.entries(tabs)) {
       tab.setAttribute('aria-selected', String(k === name));
       pane.hidden = k !== name;
     }
+    if (name === 'ytdl' && !ytdlFrame.src) ytdlFrame.src = YTDL_PANEL; // 第一次切過來才載入，之後只隱藏不重建
     try { localStorage.setItem('tbx-sp-tab', name); } catch (e) { /* 存不了就算了 */ }
   }
   for (const [k, [tab]] of Object.entries(tabs)) tab.addEventListener('click', () => show(k));
   let saved = 'post';
-  try { saved = localStorage.getItem('tbx-sp-tab') === 'info' ? 'info' : 'post'; } catch (e) { /* 預設發文 */ }
+  try { const v = localStorage.getItem('tbx-sp-tab'); saved = Object.hasOwn(tabs, v || '') ? v : 'post'; } catch (e) { /* 預設發文 */ }
   show(saved);
 })();
 

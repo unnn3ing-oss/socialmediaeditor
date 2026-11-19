@@ -15,14 +15,23 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/ytdl/index.html`、`ytdl.css`、`app.js` | 兩欄＋彈窗；embed=side 窄版 | ⬜ |
-| `tools/ytdl/ext/index.js` | 推目前分頁 | ⬜ |
-| `extension/core/sidepanel.*` | 新分頁 | ⬜ |
-| `extension/core/manifest.base.json`、`extension/changelog.json` | 3.10 | ⬜ |
-| e2e | 調整 ytdl 測試 | ⬜ |
+| `tools/ytdl/index.html`、`ytdl.css`、`app.js` | 兩欄＋彈窗；embed=side 窄版 | ✅ |
+| `tools/ytdl/ext/index.js` | 推目前分頁 | ✅ |
+| `extension/core/sidepanel.*` | 新分頁 | ✅ |
+| `extension/core/manifest.base.json`、`extension/changelog.json` | 3.10 | ✅ |
+| e2e | 調整 ytdl 測試 | ✅ |
 
 ## 下一步
-- [ ] 讀 app.js、panel.html、ext/index.js，實作
+- [x] 實作（網頁兩欄＋彈窗精靈、embed=side 窄版、目前分頁 op／推播、側邊欄分頁、3.10）
+- [x] npm test 659、e2e 213、build --check 通過
+- [ ] 獨立審查 → 給使用者截圖確認 → 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
+
+## 實作重點
+- `shell/panel.js`：panel.html 帶 `embed=side` 時傳給工具 iframe（`?v=...&embed=side`）。
+- `tools/ytdl/index.html`：`<html class="is-side">` 由內嵌 script 依 `?embed=side` 加；左側欄 `#side` 內是 `<details id="side-tools">`（網頁 JS 設 open、CSS 藏 summary；側邊欄預設收合）。
+- 設定步驟 `<dialog id="setup-card">`：自動打開只在「外掛在、下載助手沒在跑」；已連上但缺元件不擋畫面。一次一步，`viewStep` 跟著 `suggested`，進度往前就重設。
+- 目前分頁：`ext/index.js` `current_tab` op＋`tabs.onActivated`／`windows.onFocusChanged`／`tabs.onUpdated` 推 `{type:'current_tab', tab}`（150ms 合併）；`bridge-client` `onTab`；只在 is-side 顯示。
+- 側邊欄：`extension/core/sidepanel.*` 第二個分頁「YT 下載」，第一次切過去才設 iframe src。
 
 ## 測試
 `npm test`、`node build.js --check`、`npm run e2e`（ytdl 相關＋整合時全部）。

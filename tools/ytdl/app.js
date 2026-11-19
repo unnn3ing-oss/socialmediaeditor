@@ -45,18 +45,49 @@ let setupOverride = null; // null＝自動（沒連好才展開）；true／fals
 
 const deployed = () => isDeployed({ detected: client.detected(), status, hostOutdated: Boolean(queue?.hostOutdated) });
 
+const isSide = document.documentElement.classList.contains("is-side"); // 嵌在外掛側邊欄（?embed=side）
+const dialog = $("setup-card");
+let viewStep = null; // 使用者按上一步／下一步看的那一步；null＝跟著「現在該做」那一步
+let lastSuggested = 0;
+let closingByCode = false;
+
+function showDialog(show) {
+  if (show && !dialog.open) { try { dialog.showModal(); } catch { dialog.setAttribute("open", ""); } }
+  else if (!show && dialog.open) { closingByCode = true; dialog.close(); closingByCode = false; }
+}
+
+function renderSteps(states, suggested) {
+  if (suggested !== lastSuggested) { lastSuggested = suggested; viewStep = null; } // 進度往前了：跳到新的那一步
+  const current = viewStep ?? suggested;
+  document.querySelectorAll("#steps .step").forEach((step) => {
+    const n = Number(step.dataset.step);
+    step.dataset.s = states[n - 1];
+    step.hidden = n !== current;
+  });
+  document.querySelectorAll(".stepper li").forEach((item) => {
+    const n = Number(item.dataset.step);
+    item.dataset.s = states[n - 1];
+    const button = item.querySelector("button");
+    if (n === current) button.setAttribute("aria-current", "step"); else button.removeAttribute("aria-current");
+  });
+  $("step-prev").disabled = current <= 1;
+  $("step-next").disabled = current >= 3;
+}
+
 function renderSetup() {
   const detected = client.detected();
   const ok = deployed();
   const now = Date.now();
-  if (ok && !wasDeployed) { wasDeployed = true; setupOverride = null; } // 連好了：自動收起
+  if (ok && !wasDeployed) { wasDeployed = true; setupOverride = null; } // 連好了：自動關閉
   else if (!ok && wasDeployed) { wasDeployed = false; unhealthySince = now; setupOverride = null; }
-  const show = setupOverride ?? (detected && !ok && now - unhealthySince >= 1500);
-  setHidden($("setup-card"), !show);
+  // 自動打開只在「還沒連上下載助手」時；已連上但缺元件，看頂部提示與「環境檢查」，不擋住清單
+  const show = setupOverride ?? (detected && !ok && status.state !== "running" && now - unhealthySince >= 1500);
+  showDialog(show);
   $("open-setup").setAttribute("aria-expanded", String(show));
 
-  const { states } = wizardSteps({ detected, passedInstaller, status, deployed: ok });
-  document.querySelectorAll("#steps .step").forEach((step) => { step.dataset.s = states[Number(step.dataset.step) - 1]; });
+  const { states, suggested } = wizardSteps({ detected, passedInstaller, status, deployed: ok });
+  renderSteps(states, suggested);
+  $("setup-dot").dataset.s = ok ? "done" : detected && status.state === "running" ? "warn" : "todo";
   setHidden($("ext-found"), !detected);
   setText($("ext-version"), detected && client.version() ? `（v${client.version()}）` : "");
   const summary = connectSummary({ detected, deployed: ok, status });
@@ -76,7 +107,13 @@ function renderSetup() {
   syncSetupTimer();
 }
 
-$("open-setup").addEventListener("click", () => { setupOverride = $("setup-card").hidden; renderSetup(); });
+dialog.addEventListener("close", () => { if (!closingByCode) { setupOverride = false; renderSetup(); $("open-setup").focus(); } });
+$("setup-close").addEventListener("click", () => { setupOverride = false; renderSetup(); $("open-setup").focus(); });
+$("step-prev").addEventListener("click", () => { viewStep = Math.max(1, (viewStep ?? lastSuggested) - 1); renderSetup(); });
+$("step-next").addEventListener("click", () => { viewStep = Math.min(3, (viewStep ?? lastSuggested) + 1); renderSetup(); });
+document.querySelectorAll(".stepper li").forEach((item) => item.querySelector("button").addEventListener("click", () => { viewStep = Number(item.dataset.step); renderSetup(); }));
+
+$("open-setup").addEventListener("click", () => { setupOverride = !dialog.open; renderSetup(); });
 function installOpener() {
   // 工具在外殼的 iframe 裡：請外殼開安裝教學；單獨開這個頁面時拿不到
   try {
@@ -136,6 +173,8 @@ function renderQueueArea() {
   setHidden($("no-extension"), !missing && !phoneOnly);
   setHidden($("no-ext-install"), phoneOnly || !canOpenInstall());
   setHidden($("work"), !detected); // 沒外掛時整個收起（只隱藏，輸入的內容還在），連上自動恢復
+  setHidden($("side"), !detected);
+  renderTabCard();
   const hostText = hostNotice({ detected, status, wasRunning: hostWasRunning, gaveUp, updating });
   setText($("conn-note"), hostText?.text ?? "");
   $("conn-note").dataset.kind = hostText?.kind ?? "info";
@@ -246,8 +285,42 @@ function connectHost() {
 // 這個 3 秒計時保留：連上時 autoConnect 回傳 send:false（不送訊息，幾乎無成本），斷線後靠它自動重連
 setInterval(connectHost, 3000);
 
+// ---------- 側邊欄：目前分頁 ----------
+// 網頁：左側欄的 details 固定展開（summary 由 CSS 隱藏）；側邊欄：預設收合「設定與工具」。
+if (!isSide) $("side-tools").open = true;
+let currentTab = null; // { url, kind, chip, title }：作用中分頁是 YouTube／IG 時才有（外掛推播）
+let pastingFor = null; // 按了「改貼網址」的那個分頁網址
+const tabCardShown = () => isSide && Boolean(currentTab) && currentTab.url !== pastingFor;
+function renderTabCard() {
+  const shown = tabCardShown() && client.detected();
+  setHidden($("tab-card"), !shown);
+  setHidden($("add-in"), shown);
+  if (!shown) { $("add-btn").removeAttribute("aria-label"); return; }
+  $("add-btn").setAttribute("aria-label", `增加目前分頁：${currentTab.title}`);
+  setText($("tab-kind"), currentTab.chip);
+  setText($("tab-title"), currentTab.title);
+  $("tab-title").title = currentTab.title;
+}
+function setCurrentTab(tab) {
+  currentTab = tab && typeof tab.url === "string" ? tab : null;
+  if (currentTab?.url !== pastingFor) pastingFor = null;
+  renderTabCard();
+}
+if (isSide) {
+  client.onTab(setCurrentTab);
+  client.onChange((detected) => { if (detected) send({ type: "current_tab" }).then((r) => { if (r?.ok) setCurrentTab(r.tab); }).catch(() => {}); });
+}
+$("tab-paste").addEventListener("click", () => { pastingFor = currentTab?.url ?? null; renderTabCard(); $("add-url").focus(); });
+
 // ---------- 加入與執行 ----------
 async function addFromBox() {
+  if (tabCardShown()) {
+    try {
+      const result = await send({ type: "queue_add", url: currentTab.url });
+      setNote("add-note", result?.ok === false ? result.error : "", "error");
+    } catch (error) { setNote("add-note", error.message, "error"); }
+    return;
+  }
   setNote("add-note", await addPastedUrls($("add-url"), send), "error");
 }
 $("add-btn").addEventListener("click", addFromBox);
