@@ -18,24 +18,28 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbvideo/index.html`、`fbvideo.css` | RD 開關、正方形封面、按鈕改名、多文選單 dialog | ⬜ |
-| `tools/fbvideo/editor.js` | 發布方式加草稿／多文、多文目標、pagesForSend 帶 mode | ⬜ |
-| `tools/fbvideo/app.js` | 套用提示、送出帶 draft／cross、RD entry 帶 slot | ⬜ |
-| `server/fb/video.js` | 欄位 `mode`（now/sched/draft）、`cross`（JSON 目標粉專）、finish 草稿參數、多文呼叫與狀態 | ⬜ |
-| `server/fb/rundown.js` | entry 接受 `slot: 'draft'｜'cross'`、`kind: 'video'｜'reel'` | ⬜ |
-| `docs/rundown-gs/rdslot.js`＋`docs/rundown-gs-draft-slot.md` | 補丁函式（可在 Node 測）＋貼法 | ⬜ |
-| 測試 | `test/server/fb-video*.test.js`、`test/rdslot.test.js`、`test/e2e/fbvideo*.e2e.js` | ⬜ |
+| `tools/fbvideo/index.html`、`fbvideo.css` | RD 開關、正方形封面、按鈕改名、多文選單 dialog `#crossDlg` | ✅ |
+| `tools/fbvideo/editor.js` | `MODES`、`.pg-x` 多文按鈕、`crossFree`／`dropTarget`／`syncKind`（Reels 停用多文）、`.cm-note`、pagesForSend 帶 `draft`／`cross` | ✅ |
+| `tools/fbvideo/app.js`、`util.js` | `pickCross`（close 事件非同步，dialog 開著不理）、RD slot、RD 失敗 toast＋複製（`toast(text, action, ms)`）、poll 多文最多 45 分 | ✅ |
+| `server/fb/video.js` | 欄位 `draft`、`xpost`（CROSS 是 SQL 關鍵字）；finish 草稿參數；狀態 `draft`；armTimer 帶 `cross`；refreshStatus 問計時器同步 xpost | ✅ |
+| `server/fb/timer.js` | `rec.cross`、`crossStep`（allow_crossposting_for_pages 一次 → 各目標 crossposted_video_id；重試 60/120/300/600/900 秒；posting 中斷＝unknown）、`crossWait` | ✅ |
+| `admin/admin.js` | 操作紀錄 video_* 動作名稱 | ✅ |
+| `server/fb/rundown.js` | entry 接受 `slot: 'draft'｜'cross'`、`kind: 'video'｜'reel'` | ✅ |
+| `docs/rundown-gs/rdslot.js`＋`docs/rundown-gs-draft-slot.md` | 補丁函式（可在 Node 測）＋貼法 | ✅ |
+| 測試 | `test/server/fb-video.test.js`＋4、`fb-timer.test.js`＋4、`test/rdslot.test.js` 9（fixture `test/fixtures/rundown-gs-base.js`）、`test/e2e/fbvideo.e2e.js`＋1 | ✅ |
 
 ## 下一步
-- [ ] 前端小改（1～3）
-- [ ] 後端草稿＋多文
-- [ ] 前端草稿＋多文
-- [ ] RD slot＋Apps Script 補丁
-- [ ] 測試、截圖、獨立審查
+- [x] 前端小改（1～3）
+- [x] 後端草稿＋多文
+- [x] 前端草稿＋多文
+- [x] RD slot＋Apps Script 補丁
+- [x] 測試（npm test 710、fbvideo e2e 8）、截圖
+- [ ] 獨立審查 → 給使用者看 → 等「推」
 
 ## 測試
 `npm test`、`node --test test/e2e/fbvideo*.e2e.js`、`node build.js --check`
 
 ## 注意事項／不能做的事
 - 不改 `-schedulenewnet`；不推 main，等使用者說「推」。
-- 草稿／多文都**尚未實測臉書**。
+- 草稿／多文都**尚未實測臉書**。官方文件（Graph v27.0 Page Videos、crossposting 指南、Reels 指南）已讀：DRAFT 兩種都列；多文需原粉專 token allow、目標粉專 token crossposted_video_id，文件列 `publish_video` 權限（NEEDED_PERMS 未加，提醒使用者）。
+- 多文＝原粉專「立即」才可（排程／草稿不能多文）；被多文粉專不留言；RD 多文 entry 在原粉專發布成功就寫（不等多文結果）。

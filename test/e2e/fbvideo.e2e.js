@@ -33,14 +33,14 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
     const s = up.length ? Math.min(...up.map((j) => j.next)) : null;
     return { next: s === null ? null : { start: s, end: Math.min(s + CH, u.size) }, jobs };
   };
-  const finish = (u) => { for (const j of Object.values(u.pages)) if (j.sent && j.state === 'uploaded') j.state = u.at ? 'scheduled' : 'processing'; };
+  const finish = (u) => { for (const [pg, j] of Object.entries(u.pages)) if (j.sent && j.state === 'uploaded') j.state = (u.drafts || []).includes(pg) ? 'draft' : u.at ? 'scheduled' : 'processing'; };
   await page.route(API_BASE + '/**', async (r) => {
     const req = r.request(), url = new URL(req.url()), p = url.pathname;
     const json = (data, status = 200) => r.fulfill({ status, headers: CORS, json: status === 200 ? { ok: true, data } : data });
     if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
     if (p === '/auth/status') return mode === 'denied' ? json({ ok: false, code: 'unauthorized', error: '請先登入' }, 401) : json({ company: true, admin: true });
     if (mode === 'company' && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_forbidden', error: '關閉', detail: { reason: '測試中' } }, 403);
-    if (p === '/fb/pages') return json(PAGES);
+    if (p === '/fb/pages') return json(opts.pages || PAGES);
     if (p === '/fb/access') return json({ mode: 'admin' });
     if (p === '/fb/me') return json({ admin: true, perms: ['view', 'post', 'edit', 'delete'] });
     if (p === '/fb/presets') return json([{ name: '抽獎', body: '留言抽獎！' }]);
@@ -66,7 +66,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
     if (p === '/fb/video/cover') { const b = req.postDataBuffer(); api.cover.push([url.searchParams.get('u'), b.length, b[0] === 0xff && b[1] === 0xd8]); return json(view(url.searchParams.get('u'))); }
     if (p === '/fb/video/publish') {
       const b = JSON.parse(req.postData()); api.publish.push(b);
-      const u = ups.get(b.uploadId); u.at = b.pages.find((x) => x.at)?.at ?? null; u.title = b.title;
+      const u = ups.get(b.uploadId); u.at = b.pages.find((x) => x.at)?.at ?? null; u.title = b.title; u.drafts = b.pages.filter((x) => x.draft).map((x) => x.page);
       for (const [pg, j] of Object.entries(u.pages)) if (b.pages.some((x) => x.page === pg) && ['uploading', 'uploaded'].includes(j.state)) j.sent = true;
       finish(u);
       return json(view(b.uploadId));
@@ -148,7 +148,8 @@ test('Reels_ 檔名：去前後綴當標題、自動 hashtag、按鈕與自訂�
   assert.equal(seen.length, new Set(seen).size, '同一段不重送');
   await page.click(ED + ' .cm-add');
   await page.selectOption(ED + ' .cm-row select.preset', '0');
-  await page.check('#rdOn');
+  await page.click('.rd-switch .track');
+  assert.equal(await page.isChecked('#rdOn'), true);
   await page.click('#sendBtn');
   await until(() => api.publish.length === 1);
   const b = api.publish[0];
@@ -188,7 +189,8 @@ test('類型判斷；每支各自粉專與排程；套用到全部影片；RD �
   assert.deepEqual([...new Set(api.start.map((s) => s.name))].sort(), ['Shorts_短.mp4', '橫式.mp4']);
   assert.equal(await page.textContent('#sendBtn'), '全部送出（2 支）');
   if (SHOT) { await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(400); await page.screenshot({ path: path.join(SHOT, 'fbvideo-desktop.png') }); }
-  await page.check('#rdOn');
+  await page.click('.rd-switch .track');
+  assert.equal(await page.isChecked('#rdOn'), true);
   await page.click('#sendBtn');
   await until(() => api.publish.length === 2);
   for (const b of api.publish) { assert.equal(b.pages[0].at, null); assert.ok(b.pages[1].at > Date.now() / 1000); }
@@ -261,7 +263,7 @@ test('封面：從影片選一格 → 類型右側與左欄縮圖換成封面；
   await page.waitForSelector('#app:not([hidden])');
   await page.setInputFiles('#fileIn', file('橫式.mp4', 'wide'));
   await page.waitForSelector('.vq-thumb img');
-  assert.match(await page.textContent(ED + ' .cover-img'), /臉書自動/);
+  assert.match(await page.textContent(ED + ' .cover-img'), /自動/);
   const kindBox = await page.locator(ED + ' .kind').boundingBox(), coverBox = await page.locator(ED + ' .cover').boundingBox();
   assert.ok(Math.abs(kindBox.y + kindBox.height / 2 - (coverBox.y + coverBox.height / 2)) < 4, '封面和類型同一列');
   await page.click(ED + ' .cover-btn');
@@ -274,11 +276,12 @@ test('封面：從影片選一格 → 類型右側與左欄縮圖換成封面；
   await page.waitForFunction(() => !document.getElementById('coverDlg').open);
   await page.waitForSelector(ED + ' .cover-img img');
   assert.equal(await page.textContent(ED + ' .cover-btn'), '更換封面');
+  if (SHOT) await page.locator(ED + ' .cover').screenshot({ path: path.join(SHOT, 'fbvideo-cover.png') });
   assert.equal(await page.getAttribute('.vq-item.is-cur .vq-thumb img', 'src'), await page.getAttribute(ED + ' .cover-img img', 'src'), '左欄縮圖跟著換');
   // 恢復臉書自動 → 再選一次
   await page.click(ED + ' .cover-btn');
   await page.click('#coverAuto');
-  await page.waitForSelector(ED + ' .cover-img span:has-text("臉書自動")');
+  await page.waitForSelector(ED + ' .cover-img span:has-text("自動")');
   await page.click(ED + ' .cover-btn');
   await page.click('#coverUse');
   await page.waitForSelector(ED + ' .cover-img img');
@@ -305,6 +308,59 @@ test('手機寬度：上方橫向縮圖列，不超出畫面', async () => {
   assert.ok(over <= 0, 'overflow ' + over);
   assert.equal(await page.$eval('#vqList', (u) => getComputedStyle(u).flexDirection), 'row');
   if (SHOT) { await page.evaluate(() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); }); await page.waitForTimeout(400); await page.screenshot({ path: path.join(SHOT, 'fbvideo-mobile.png') }); }
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('發布方式：草稿＋多文發佈（跳選單選粉專）、RD 寫預留格；Reels 不能多文；RD 開關與正方形封面', async () => {
+  const pages = [...PAGES, { id: '333', short: '國際', order: 3, rd: 'intl' }];
+  const { page, errors, api } = await newPage('admin', { width: 1280, height: 900 }, { pages });
+  await page.waitForSelector('#app:not([hidden])');
+  // RD 開關：看得到軌道，點了會開、顏色變成主色
+  const track = page.locator('.rd-switch .track');
+  assert.ok(await track.isVisible());
+  const off = await track.evaluate((e) => getComputedStyle(e).backgroundColor);
+  await track.click();
+  assert.equal(await page.isChecked('#rdOn'), true);
+  assert.ok(await until(async () => (await track.evaluate((e) => getComputedStyle(e).backgroundColor)) !== off), '開了要變色');
+  await page.setInputFiles('#fileIn', [file('橫式.mp4', 'wide')]);
+  const ED = '.ed:not([hidden])';
+  // 封面框是正方形
+  const box = await page.locator(ED + ' .cover-img').boundingBox();
+  assert.equal(Math.round(box.width), Math.round(box.height));
+  assert.equal(await page.textContent(ED + ' .apply-all'), '發布方式全套用');
+  await page.click(ED + ' .pg-dd summary');
+  await page.check(ED + ' .pg-list input[data-page="111"]');
+  // 多文：跳選單，只列沒直接上傳的粉專
+  await page.selectOption(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode', 'cross');
+  await page.waitForSelector('#crossDlg[open]');
+  assert.deepEqual(await page.$$eval('#crossList label', (l) => l.map((x) => x.textContent)), ['娛樂', '國際']);
+  // 取消 → 回到立即
+  await page.click('#crossCancel');
+  assert.equal(await page.inputValue(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode'), 'now');
+  await page.selectOption(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode', 'cross');
+  await page.check('#crossList input[value="333"]');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbvideo-cross-dialog.png') });
+  await page.click('#crossOk');
+  assert.equal(await page.textContent(ED + ' .pg-x'), '多文到：國際');
+  // 娛樂：草稿；留言提示
+  await page.check(ED + ' .pg-list input[data-page="222"]');
+  await page.selectOption(ED + ' .pg-list li:has(input[data-page="222"]) .pg-mode', 'draft');
+  assert.match(await page.textContent(ED + ' .pg-sum'), /新聞（立即＋多文到 國際）、娛樂（草稿）/);
+  assert.match(await page.textContent(ED + ' .cm-note'), /娛樂.*不會留言/);
+  if (SHOT) { await page.locator(ED).screenshot({ path: path.join(SHOT, 'fbvideo-modes.png') }); await page.locator('#foot').screenshot({ path: path.join(SHOT, 'fbvideo-foot.png') }); }
+  await until(async () => /已上傳/.test(await page.textContent('.vq-meta')));
+  await page.click('#sendBtn');
+  await until(() => api.publish.length === 1);
+  assert.deepEqual(api.publish[0].pages, [{ page: '111', at: null, cross: ['333'] }, { page: '222', at: null, draft: true }]);
+  await until(() => api.rundown.length === 1, 10000);
+  const es = api.rundown[0].entries.map((e) => [e.page, e.text, e.slot || '', e.kind || '']);
+  assert.deepEqual(es, [['news', '純影/橫式', '', ''], ['intl', '純影/橫式', 'cross', 'video'], ['ent', '純影/橫式', 'draft', 'video']]);
+  // Reels：多文選項不能用
+  await page.setInputFiles('#fileIn', [file('Reels_短.mp4', 'tall')]);
+  await page.click(ED + ' .pg-dd summary');
+  await page.check(ED + ' .pg-list input[data-page="111"]');
+  assert.equal(await page.$eval(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode option[value="cross"]', (o) => o.disabled), true);
   assert.deepEqual(errors, []);
   await page.close();
 });

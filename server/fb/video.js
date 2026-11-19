@@ -3,9 +3,11 @@
 //   Reels：/{page}/video_reels upload_phase=start → 傳到 upload_url（rupload）→ finish（video_state PUBLISHED／SCHEDULED）
 //   瀏覽器每段只送一次（/fb/video/chunk），這裡轉給「這段剛好是它下一段」的粉專；offset 不同的粉專之後自己追上。
 //   「影片傳完」＋「使用者按送出」兩個都成立才 finish（誰後到誰觸發；用 D1 搶 finishing 狀態，不會 finish 兩次）。
+//   發布方式：立即／排程／草稿（橫式 unpublished_content_type=DRAFT、Reels video_state=DRAFT；不排留言）／
+//   多文發佈（只限橫式、立即：發布後由計時器 allow_crossposting_for_pages → 各目標粉專 crossposted_video_id；目標不排留言）
 import { graph, graphVideo, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
-import { armTimer } from './timer.js';
+import { armTimer, timerStatus } from './timer.js';
 import { audit } from '../core/staff.js';
 
 class StartError extends Error {}
@@ -21,7 +23,8 @@ const MAX_TITLE = 255;
 const MAX_DESC = 63206;
 export const KINDS = ['video', 'reel'];
 // 終止狀態：不再上傳也不會 finish
-const DONE = ['processing', 'scheduled', 'published', 'failed', 'unknown', 'stopped', 'canceled'];
+const DONE = ['processing', 'scheduled', 'published', 'draft', 'failed', 'unknown', 'stopped', 'canceled'];
+export const MAX_CROSS = 10;
 
 const ready = new WeakSet();
 async function ensure(env) {
@@ -31,7 +34,8 @@ async function ensure(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS fb_video_jobs_updated ON fb_video_jobs(updated)')
   ]);
   // 舊表（沒有封面欄位）補欄位；已有就略過
-  for (const col of ["cover TEXT NOT NULL DEFAULT ''", 'cover_tries INTEGER NOT NULL DEFAULT 0', "cover_error TEXT NOT NULL DEFAULT ''", 'cover_at INTEGER NOT NULL DEFAULT 0']) {
+  // draft：1＝存草稿；xpost：多文目標 [{ page, status, error? }]（status 由計時器回報）
+  for (const col of ["cover TEXT NOT NULL DEFAULT ''", 'cover_tries INTEGER NOT NULL DEFAULT 0', "cover_error TEXT NOT NULL DEFAULT ''", 'cover_at INTEGER NOT NULL DEFAULT 0', 'draft INTEGER NOT NULL DEFAULT 0', "xpost TEXT NOT NULL DEFAULT '[]'"]) {
     try { await env.DB.prepare('ALTER TABLE fb_video_jobs ADD COLUMN ' + col).run(); } catch { /* 已有 */ }
   }
   ready.add(env.DB);
@@ -41,6 +45,7 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 const errText = (e) => String((e && e.message) || e || '失敗').slice(0, 200);
 export const validUploadId = (u) => typeof u === 'string' && /^[0-9a-f]{32}$/.test(u);
 const validPage = (p) => typeof p === 'string' && /^\d{1,30}$/.test(p);
+const xpostOf = (r) => { try { const l = JSON.parse(r.xpost || '[]'); return Array.isArray(l) ? l : []; } catch { return []; } };
 
 async function rows(env, uploadId) {
   await ensure(env);
@@ -68,7 +73,8 @@ export const view = (r) => ({
   state: r.state === 'finishing' && Date.now() - r.updated > STALE_MS ? 'unknown' : r.state,
   uploaded: r.state === 'uploading' ? r.next_start : r.size, videoId: r.video_id || '', sent: !!r.sent,
   at: r.at ?? null, title: r.title, error: r.error || '', created: r.created,
-  cover: r.cover || '', coverError: r.cover_error || ''
+  cover: r.cover || '', coverError: r.cover_error || '', draft: !!r.draft,
+  cross: xpostOf(r).map((x) => ({ page: String(x.page), status: String(x.status || 'pending'), error: String(x.error || '') }))
 });
 
 // 下一段要的範圍：上傳中的粉專裡最小的 start；end＝和它同 start 的粉專要的最大 end（上限 32MB、檔案大小）
@@ -106,7 +112,7 @@ export async function startUpload(env, form, who) {
     const old = list.find((r) => r.page === page);
     if (old && !['stopped', 'failed', 'canceled'].includes(old.state)) continue;
     const t = tokens.get(page);
-    const row = { upload_id: form.uploadId, page, kind: form.kind, name: form.name, size: form.size, state: 'uploading', session_id: '', video_id: '', upload_url: '', next_start: 0, next_end: 0, sent: 0, title: '', description: '', at: null, comments: '[]', error: '', who: String(who && who.uid || ''), created, updated: now };
+    const row = { upload_id: form.uploadId, page, kind: form.kind, name: form.name, size: form.size, state: 'uploading', session_id: '', video_id: '', upload_url: '', next_start: 0, next_end: 0, sent: 0, title: '', description: '', at: null, comments: '[]', error: '', who: String(who && who.uid || ''), draft: 0, xpost: '[]', created, updated: now };
     try {
       if (!t) throw new StartError('找不到這個粉專（token 沒有管理權限）');
       if (form.kind === 'video') {
@@ -192,13 +198,24 @@ export function parsePublish(b) {
   const title = typeof b.title === 'string' ? b.title.trim() : '';
   const description = typeof b.description === 'string' ? b.description : '';
   if (!title || [...title].length > MAX_TITLE || /[\r\n]/.test(title) || description.length > MAX_DESC || !description.trim()) return null;
-  // 每個粉專各自的時間：[{ page, at（null＝立即） }]
+  // 每個粉專各自的時間：[{ page, at（null＝立即）, draft?: true（存草稿，at 必須 null）, cross?: [目標粉專]（多文，at 必須 null） }]
   if (!Array.isArray(b.pages) || b.pages.length < 1 || b.pages.length > 20) return null;
   const pages = [];
   for (const x of b.pages) {
     if (!x || !validPage(x.page) || pages.some((y) => y.page === x.page) || (x.at !== null && !Number.isInteger(x.at))) return null;
-    pages.push({ page: x.page, at: x.at });
+    if (x.draft !== undefined && x.draft !== true) return null;
+    if (x.draft && x.at !== null) return null;
+    let cross = [];
+    if (x.cross !== undefined) {
+      if (!Array.isArray(x.cross) || x.cross.length < 1 || x.cross.length > MAX_CROSS || x.at !== null || x.draft) return null;
+      if (!x.cross.every(validPage) || new Set(x.cross).size !== x.cross.length || x.cross.includes(x.page)) return null;
+      cross = x.cross;
+    }
+    pages.push({ page: x.page, at: x.at, draft: !!x.draft, cross });
   }
+  // 多文目標不能是這支影片自己要上傳的粉專，也不能被兩個來源重複多文
+  const own = new Set(pages.map((x) => x.page)), seen = new Set();
+  for (const x of pages) for (const c of x.cross) { if (own.has(c) || seen.has(c)) return null; seen.add(c); }
   const list = b.comments === undefined ? [] : b.comments;
   if (!Array.isArray(list) || list.length > MAX_COMMENTS) return null;
   let offset = 0;
@@ -218,11 +235,18 @@ export const timeOkFor = (kind, at, now = nowSec()) => at === null || (Number.is
 export async function publish(env, form, who) {
   const list = await rows(env, form.uploadId);
   if (!list.length) return { error: 'not_found' };
-  const when = new Map(form.pages.map((x) => [x.page, x.at]));
+  const by = new Map(form.pages.map((x) => [x.page, x]));
   if (form.pages.some((x) => !timeOkFor(list[0].kind, x.at))) return { error: 'fb_bad_time', message: list[0].kind === 'reel' ? 'Reels 排程時間必須在 10 分鐘到 29 天之間。' : '影片排程時間必須在 10 分鐘到 6 個月之間。' };
+  if (list[0].kind === 'reel' && form.pages.some((x) => x.cross.length)) return { error: 'bad_request' };   // Reels 不能用 API 多文
   for (const r of list) {
-    if (r.sent || !when.has(r.page) || !['uploading', 'uploaded'].includes(r.state)) continue;
-    await update(env, r, { sent: 1, title: form.title, description: form.description, at: when.get(r.page), comments: JSON.stringify(form.comments), who: String(who && who.uid || r.who) });
+    const x = by.get(r.page);
+    if (r.sent || !x || !['uploading', 'uploaded'].includes(r.state)) continue;
+    await update(env, r, {
+      sent: 1, title: form.title, description: form.description, at: x.at, draft: x.draft ? 1 : 0,
+      comments: JSON.stringify(x.draft ? [] : form.comments),   // 草稿沒有發布時間，不排留言
+      xpost: JSON.stringify(x.cross.map((page) => ({ page, status: 'pending' }))),
+      who: String(who && who.uid || r.who)
+    });
   }
   await finishReady(env, form.uploadId, who);
   return result(env, form.uploadId);
@@ -240,18 +264,19 @@ async function finishReady(env, uploadId, who) {
     r.state = 'finishing';
     const t = tokens.get(r.page);
     if (!t) { await update(env, r, { state: 'failed', error: '找不到這個粉專（token 沒有管理權限）' }); continue; }
-    const at = r.at ?? null;
+    const at = r.at ?? null, draft = !!r.draft;
     if (at !== null && !timeOkFor(r.kind, at)) { await update(env, r, { state: 'failed', error: '排程時間已太近或超過範圍，請重新上傳' }); continue; }
     try {
       if (r.kind === 'video') {
         await graphVideo(env, 'POST', '/' + r.page + '/videos', {
           upload_phase: 'finish', upload_session_id: r.session_id, title: r.title, description: r.description,
-          ...(at !== null ? { published: 'false', scheduled_publish_time: at, unpublished_content_type: 'SCHEDULED' } : {})
+          ...(draft ? { published: 'false', unpublished_content_type: 'DRAFT' }
+            : at !== null ? { published: 'false', scheduled_publish_time: at, unpublished_content_type: 'SCHEDULED' } : {})
         }, t.token);
       } else {
         await graph(env, 'POST', '/' + r.page + '/video_reels', {
           upload_phase: 'finish', video_id: r.video_id, title: r.title, description: r.description,
-          video_state: at !== null ? 'SCHEDULED' : 'PUBLISHED', ...(at !== null ? { scheduled_publish_time: at } : {})
+          video_state: draft ? 'DRAFT' : at !== null ? 'SCHEDULED' : 'PUBLISHED', ...(at !== null ? { scheduled_publish_time: at } : {})
         }, t.token);
       }
     } catch (e) {
@@ -260,15 +285,23 @@ async function finishReady(env, uploadId, who) {
       await update(env, r, { state: e.uncertain ? 'unknown' : 'failed', error: errText(e) });
       continue;
     }
-    await update(env, r, { state: at !== null ? 'scheduled' : 'processing', error: '' });
+    await update(env, r, { state: draft ? 'draft' : at !== null ? 'scheduled' : 'processing', error: '' });
     await applyCover(env, r, t.token);
     let comments = [];
-    try { comments = JSON.parse(r.comments || '[]'); } catch { comments = []; }
-    if (comments.length && r.video_id) {
-      try { await armTimer(env, { pageId: r.page, postId: r.video_id, at: at ?? nowSec(), items: comments, kind: 'video' }); }
-      catch (e) { await update(env, r, { error: '留言沒有排上：' + errText(e) }); }
+    try { comments = draft ? [] : JSON.parse(r.comments || '[]'); } catch { comments = []; }
+    const cross = draft ? [] : xpostOf(r).map((x) => String(x.page));
+    if ((comments.length || cross.length) && r.video_id) {
+      try { await armTimer(env, { pageId: r.page, postId: r.video_id, at: at ?? nowSec(), items: comments, cross, kind: 'video' }); }
+      catch (e) {
+        const msg = errText(e);
+        await update(env, r, {
+          error: (comments.length ? '留言' : '') + (comments.length && cross.length ? '、' : '') + (cross.length ? '多文' : '') + '沒有排上：' + msg,
+          ...(cross.length ? { xpost: JSON.stringify(cross.map((page) => ({ page, status: 'failed', error: msg }))) } : {})
+        });
+      }
     }
-    await audit(env, who || { uid: r.who, name: '' }, at !== null ? 'video_schedule' : 'video_publish', r.page, r.video_id, at !== null ? 'at=' + at : '');
+    await audit(env, who || { uid: r.who, name: '' }, draft ? 'video_draft' : at !== null ? 'video_schedule' : 'video_publish', r.page, r.video_id,
+      at !== null ? 'at=' + at : cross.length ? 'cross=' + cross.join(',') : '');
   }
 }
 
@@ -290,6 +323,18 @@ export async function refreshStatus(env, uploadId) {
   if (!list.length) return { error: 'not_found' };
   const now = nowSec();
   const busy = list.filter((r) => r.video_id && (r.state === 'processing' || (r.state === 'scheduled' && r.at && r.at <= now)));
+  // 多文：還有等待中的目標就問計時器（Durable Object，不呼叫臉書）
+  for (const r of list) {
+    const xs = xpostOf(r);
+    if (!r.video_id || !xs.some((x) => x.status === 'pending' || x.status === 'posting')) continue;
+    try {
+      const d = await timerStatus(env, r.video_id);
+      if (d && Array.isArray(d.cross)) {
+        const next = xs.map((x) => { const y = d.cross.find((c) => String(c.page) === String(x.page)); return y ? { page: x.page, status: y.status, ...(y.error ? { error: String(y.error).slice(0, 200) } : {}) } : x; });
+        if (JSON.stringify(next) !== JSON.stringify(xs)) await update(env, r, { xpost: JSON.stringify(next) });
+      }
+    } catch { /* 下次再問 */ }
+  }
   const covers = list.filter((r) => r.cover === 'pending' && COVER_OK.includes(r.state) && Date.now() - (r.cover_at || 0) >= COVER_GAP);
   if (covers.length) {
     const tokens = await pageTokens(env);
@@ -314,7 +359,7 @@ export async function refreshStatus(env, uploadId) {
 export const MAX_COVER = 10 * 1024 * 1024;   // Meta：封面最大 10MB
 const COVER_TTL = 2 * 86400;
 const COVER_TRIES = 5;
-const COVER_OK = ['processing', 'scheduled', 'published'];
+const COVER_OK = ['processing', 'scheduled', 'published', 'draft'];
 export const COVER_GAP = 60 * 1000;   // 重試間隔至少 60 秒（臉書處理影片中可能還不能換）
 const coverKey = (u) => 'fbv:cover:' + u;
 export const coverType = (b) => (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? 'image/jpeg'

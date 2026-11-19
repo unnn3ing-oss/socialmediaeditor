@@ -10,7 +10,7 @@ const minText = (m) => (m < 60 ? `${m} 分鐘` : m % 60 ? `${Math.floor(m / 60)}
 
 export const STATE_TEXT = {
   uploading: '上傳中', uploaded: '已上傳，等送出', finishing: '送出中', processing: '臉書處理中', scheduled: '已排程',
-  published: '已發布', failed: '失敗', unknown: '待確認（結果不明，請到臉書確認，不會自動重送）', stopped: '已停止', canceled: '已取消'
+  published: '已發布', draft: '已存草稿', failed: '失敗', unknown: '待確認（結果不明，請到臉書確認，不會自動重送）', stopped: '已停止', canceled: '已取消'
 };
 export const jobText = (j) => {
   let t = STATE_TEXT[j.state] || j.state;
@@ -20,6 +20,9 @@ export const jobText = (j) => {
   if (j.error) t += '：' + j.error;
   return t;
 };
+export const CROSS_TEXT = { pending: '等待多文', posting: '多文中', done: '已多文', failed: '多文失敗', unknown: '多文結果不明（請到臉書確認）', canceled: '多文已取消' };
+// 發布方式：立即／排程／草稿／多文發佈（只限橫式）
+export const MODES = [['now', '立即'], ['sched', '排程'], ['draft', '草稿'], ['cross', '多文發佈']];
 // 自訂 hashtag：去空白、補 #
 export const normTag = (s) => { const t = String(s || '').replace(/\s+/g, '').replace(/^#+/, ''); return t ? '#' + t : ''; };
 
@@ -96,7 +99,7 @@ export function createEditor(v, ctx) {
 
   // ===== 發布粉專：條列、勾選＋立即／排程（排程才出時間） =====
   const pgList = q('.pg-list'), pgSum = q('.pg-sum');
-  const rows = new Map();   // page id -> { li, cb, mode, dt }
+  const rows = new Map();   // page id -> { li, cb, mode, dt, xbtn, cross: [目標粉專], prev }
   function renderPages() {
     pgList.textContent = '';
     rows.clear();
@@ -106,36 +109,86 @@ export function createEditor(v, ctx) {
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.dataset.page = p.id;
       lab.append(cb, document.createTextNode(p.short));
       const mode = document.createElement('select'); mode.className = 'pg-mode'; mode.hidden = true; mode.setAttribute('aria-label', p.short + ' 發布方式');
-      mode.innerHTML = '<option value="now">立即</option><option value="sched">排程</option>';
+      for (const [val, txt] of MODES) { const o = document.createElement('option'); o.value = val; o.textContent = txt; mode.append(o); }
       const dt = document.createElement('input'); dt.type = 'datetime-local'; dt.className = 'pg-dt'; dt.hidden = true; dt.setAttribute('aria-label', p.short + ' 排程時間');
+      const xbtn = document.createElement('button'); xbtn.type = 'button'; xbtn.className = 'btn btn-secondary btn-sm pg-x'; xbtn.hidden = true;
       cb.addEventListener('change', () => {
         if (!cb.checked && !ctx.canUncheck(v, p.id)) { cb.checked = true; return; }
+        if (cb.checked) dropTarget(p.id);
         sync1(p.id); ctx.pagesChanged(v, p.id, cb.checked);
       });
-      mode.addEventListener('change', () => {
+      mode.addEventListener('change', async () => {
+        const r = rows.get(p.id);
         if (mode.value === 'sched' && !dt.value) dt.value = toLocalInput(Math.ceil((Date.now() + 30 * 60000) / 600000) * 600000);
+        if (mode.value === 'cross') {
+          const got = await ctx.pickCross(v, p.id, r.cross, crossFree(p.id));
+          if (got === null || !got.length) { mode.value = r.prev; if (got && !got.length) r.cross = []; sync1(p.id); return; }
+          r.cross = got;
+        }
+        r.prev = mode.value;
+        sync1(p.id);
+      });
+      xbtn.addEventListener('click', async () => {
+        const r = rows.get(p.id);
+        const got = await ctx.pickCross(v, p.id, r.cross, crossFree(p.id));
+        if (got === null) return;
+        if (!got.length) { r.cross = []; mode.value = 'now'; r.prev = 'now'; } else r.cross = got;
         sync1(p.id);
       });
       dt.addEventListener('input', summary);
-      li.append(lab, mode, dt);
+      li.append(lab, mode, dt, xbtn);
       pgList.append(li);
-      rows.set(p.id, { li, cb, mode, dt });
+      rows.set(p.id, { li, cb, mode, dt, xbtn, cross: [], prev: 'now' });
     }
+    syncKind();
     summary();
   }
-  function sync1(id) {
+  const name = (id) => (ctx.pages().find((p) => p.id === id) || {}).short || id;
+  // 可以當多文目標的粉專：沒勾上傳、也沒被這支影片其他粉專拿去多文
+  function crossFree(src) {
+    const used = new Set();
+    for (const [id, r] of rows) { if (id !== src && r.cb.checked && r.mode.value === 'cross') r.cross.forEach((x) => used.add(x)); }
+    return ctx.pages().map((p) => p.id).filter((id) => id !== src && !(rows.get(id) && rows.get(id).cb.checked) && !used.has(id));
+  }
+  // 粉專改成上傳：從所有多文目標拿掉
+  function dropTarget(id) {
+    for (const [src, r] of rows) {
+      if (!r.cross.includes(id)) continue;
+      r.cross = r.cross.filter((x) => x !== id);
+      if (!r.cross.length && r.mode.value === 'cross') { r.mode.value = 'now'; r.prev = 'now'; ctx.toast(`${name(src)} 的多文粉專都改成直接上傳了，改回「立即」`); }
+      sync1(src, true);
+    }
+  }
+  function sync1(id, quiet) {
     const r = rows.get(id);
     r.mode.hidden = !r.cb.checked;
     r.dt.hidden = !r.cb.checked || r.mode.value !== 'sched';
+    r.xbtn.hidden = !r.cb.checked || r.mode.value !== 'cross';
+    r.xbtn.textContent = '多文到：' + (r.cross.map(name).join('、') || '（選粉專）');
+    r.xbtn.setAttribute('aria-label', `${name(id)} 多文到哪些粉專：${r.cross.map(name).join('、') || '未選'}（點一下修改）`);
     r.li.classList.toggle('on', r.cb.checked);
-    summary();
+    if (!quiet) summary();
   }
+  // Reels 不能多文：選項停用，已選的改回立即
+  function syncKind() {
+    const reel = v.kind === 'reel';
+    for (const [id, r] of rows) {
+      const o = r.mode.querySelector('option[value="cross"]');
+      o.disabled = reel; o.hidden = reel;
+      if (reel && r.mode.value === 'cross') { r.mode.value = 'now'; r.prev = 'now'; r.cross = []; sync1(id, true); }
+    }
+  }
+  const modeText = (r) => r.mode.value === 'sched' && r.dt.value ? '排程 ' + fmt(Date.parse(r.dt.value))
+    : r.mode.value === 'draft' ? '草稿' : r.mode.value === 'cross' ? '立即＋多文到 ' + r.cross.map(name).join('、') : '立即';
   function summary() {
     const on = [...rows.entries()].filter(([, r]) => r.cb.checked);
-    const name = (id) => (ctx.pages().find((p) => p.id === id) || {}).short || id;
     pgSum.textContent = on.length
-      ? `已選 ${on.length} 個粉專：` + on.map(([id, r]) => `${name(id)}（${r.mode.value === 'sched' && r.dt.value ? '排程 ' + fmt(Date.parse(r.dt.value)) : '立即'}）`).join('、')
+      ? `已選 ${on.length} 個粉專：` + on.map(([id, r]) => `${name(id)}（${modeText(r)}）`).join('、')
       : '尚未選粉專（點這裡選）';
+    const drafts = on.filter(([, r]) => r.mode.value === 'draft').map(([id]) => name(id));
+    const note = q('.cm-note');
+    note.hidden = !drafts.length;
+    note.textContent = drafts.length ? `存草稿的粉專（${drafts.join('、')}）不會留言；被多文的粉專也不會留言。` : '';
     ctx.changed(v);
   }
   q('.apply-all').addEventListener('click', () => ctx.applyAll(v));
@@ -201,11 +254,12 @@ export function createEditor(v, ctx) {
     else if (up.length) text = `上傳中 ${pct}%（${sizeText(done)}／${sizeText(v.size)}）`;
     else text = '上傳完成';
     const name = v.ed ? (title.value.trim() || v.name) : v.name;
-    const pages = v.jobs.filter((j) => j.state !== 'canceled').map((j) => ctx.pageName(j.page) + ' ' + jobText(j) + (j.cover === 'failed' ? '（封面未套用' + (j.coverError ? '：' + j.coverError : '') + '）' : ''));
+    const pages = v.jobs.filter((j) => j.state !== 'canceled').map((j) => ctx.pageName(j.page) + ' ' + jobText(j) + (j.cover === 'failed' ? '（封面未套用' + (j.coverError ? '：' + j.coverError : '') + '）' : '')
+      + (j.cross || []).map((c) => `．${ctx.pageName(c.page)} ${CROSS_TEXT[c.status] || c.status}${c.error ? '：' + c.error : ''}`).join(''));
     const full = `第 ${ctx.indexOf(v) + 1} 支「${name}」${text}` + (pages.length ? '．' + pages.join('．') : '');
     upText.textContent = full;
     upText.title = full;
-    upText.classList.toggle('bad', v.upload === 'error' || v.jobs.some((j) => ['failed', 'unknown'].includes(j.state)));
+    upText.classList.toggle('bad', v.upload === 'error' || v.jobs.some((j) => ['failed', 'unknown'].includes(j.state) || (j.cross || []).some((c) => ['failed', 'unknown'].includes(c.status))));
     restart.hidden = !(v.upload === 'stopped' || v.upload === 'error');
   }
 
@@ -213,9 +267,8 @@ export function createEditor(v, ctx) {
   const coverImg = q('.cover-img'), coverBtn = q('.cover-btn');
   function renderCover() {
     coverImg.textContent = '';
-    coverImg.classList.toggle('tall', v.height > v.width);
     if (v.cover) { const img = document.createElement('img'); img.src = v.cover.url; img.alt = ''; coverImg.append(img); }
-    else { const t = document.createElement('span'); t.textContent = '臉書自動'; coverImg.append(t); }
+    else { const t = document.createElement('span'); t.textContent = '自動'; coverImg.append(t); }
     coverBtn.textContent = v.cover ? '更換封面' : '從影片選封面';
   }
   coverBtn.addEventListener('click', () => ctx.pickCover(v));
@@ -223,28 +276,43 @@ export function createEditor(v, ctx) {
 
   return {
     el,
-    kindInfo, renderTags, renderUpload, renderPages, renderCover,
+    kindInfo() { kindInfo(); syncKind(); summary(); }, renderTags, renderUpload, renderPages, renderCover,
     setMeta() { renderCover(); },
     refreshPresets() { cmList.querySelectorAll('select.preset').forEach(presetOptions); },
     titleText: () => title.value.trim(),
     slugText: () => slugOf(slug.value, title.value),
     selected: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([id]) => id),
-    // 套用到全部影片用：[{ page, mode, dt }]
-    getPages: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([page, r]) => ({ page, mode: r.mode.value, dt: r.dt.value })),
+    // 發布方式全套用：[{ page, mode, dt, cross }]
+    getPages: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([page, r]) => ({ page, mode: r.mode.value, dt: r.dt.value, cross: [...r.cross] })),
     setPages(list) {
+      const own = new Set(list.map((y) => y.page));
       for (const [id, r] of rows) {
         const x = list.find((y) => y.page === id);
         r.cb.checked = !!x;
-        if (x) { r.mode.value = x.mode; r.dt.value = x.dt; }
-        sync1(id);
+        if (x) {
+          r.cross = x.mode === 'cross' ? x.cross.filter((c) => !own.has(c) && rows.has(c)) : [];
+          r.mode.value = x.mode === 'cross' && (!r.cross.length || v.kind === 'reel') ? 'now' : x.mode;
+          if (r.mode.value !== 'cross') r.cross = [];
+          r.prev = r.mode.value; r.dt.value = x.dt;
+        }
+        sync1(id, true);
       }
+      summary();
     },
-    // 送出用：[{ page, at }] 或 { error }
+    // 送出用：[{ page, at, draft?, cross? }] 或 { error }
     pagesForSend() {
       const out = [];
       const now = Math.floor(Date.now() / 1000);
       for (const [page, r] of rows) {
         if (!r.cb.checked) continue;
+        if (r.mode.value === 'draft') { out.push({ page, at: null, draft: true }); continue; }
+        if (r.mode.value === 'cross') {
+          if (v.kind === 'reel') return { error: 'Reels 不能多文發佈' };
+          const cross = r.cross.filter((c) => !(rows.get(c) && rows.get(c).cb.checked));
+          if (!cross.length) return { error: `${ctx.pageName(page)} 請選要多文到哪些粉專` };
+          out.push({ page, at: null, cross });
+          continue;
+        }
         if (r.mode.value !== 'sched') { out.push({ page, at: null }); continue; }
         const ms = Date.parse(r.dt.value);
         if (!Number.isFinite(ms)) return { error: `${ctx.pageName(page)} 請選排程時間` };

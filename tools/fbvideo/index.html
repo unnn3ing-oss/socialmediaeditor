@@ -73,7 +73,7 @@
       <button type="button" class="btn btn-secondary btn-sm" id="restartBtn" hidden>重新上傳</button>
       <p class="hint" id="footMsg"></p>
       <span class="grow"></span>
-      <label class="switch-wrap rd-wrap"><input type="checkbox" class="switch" id="rdOn"> 排入 RD</label>
+      <label class="rd-switch"><input type="checkbox" id="rdOn"><span class="track" aria-hidden="true"></span><span class="rd-lbl">排入 RD</span></label>
       <button type="button" class="btn btn-secondary" id="stopBtn" hidden>停止上傳</button>
       <button type="button" class="btn btn-primary" id="sendBtn">全部送出</button>
     </div>
@@ -88,7 +88,7 @@
       <div class="pg-head">
         <span class="lbl">發布粉專</span>
         <span class="grow"></span>
-        <button type="button" class="btn btn-secondary btn-sm apply-all">套用到全部影片</button>
+        <button type="button" class="btn btn-secondary btn-sm apply-all">發布方式全套用</button>
       </div>
       <details class="pg-dd">
         <summary><span class="pg-sum">尚未選粉專</span><span class="caret" aria-hidden="true"></span></summary>
@@ -104,7 +104,7 @@
         <span class="grow"></span>
         <span class="cover">
           <span class="cover-lbl">封面</span>
-          <span class="cover-img" aria-hidden="true"><span>臉書自動</span></span>
+          <span class="cover-img" aria-hidden="true"><span>自動</span></span>
           <button type="button" class="btn btn-secondary btn-sm cover-btn">從影片選封面</button>
         </span>
       </div>
@@ -120,6 +120,7 @@
       </div>
       <label class="lbl">授權<input type="text" class="lic" placeholder="照原樣放在 hashtag 下一行，空白＝不放"></label>
       <span class="lbl">留言（選填）</span>
+      <p class="cm-note hint" hidden></p>
       <div class="cm-list"></div>
       <button type="button" class="btn btn-secondary btn-sm cm-add">＋ 新增留言</button>
       <label class="lbl rd-slug-l">RD SLUG<input type="text" class="slug" maxlength="20"></label>
@@ -144,6 +145,16 @@
     <span class="grow"></span>
     <button type="button" class="btn btn-secondary" id="coverCancel">取消</button>
     <button type="button" class="btn btn-primary" id="coverUse">使用這一格</button>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="crossDlg" aria-labelledby="crossTitle">
+  <h2 id="crossTitle">多文發佈</h2>
+  <p class="hint" id="crossHint"></p>
+  <ul class="cross-list" id="crossList"></ul>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="crossCancel">取消</button>
+    <button type="button" class="btn btn-primary" id="crossOk">確定</button>
   </div>
 </dialog>
 

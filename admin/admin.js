@@ -719,7 +719,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除' };
+  var SF_ACT = { publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };

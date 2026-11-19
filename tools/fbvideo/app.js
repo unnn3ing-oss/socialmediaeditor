@@ -6,7 +6,7 @@
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
 import { autoKind, rdText } from './rules.js';
-import { createEditor, STATE_TEXT } from './editor.js';
+import { createEditor, STATE_TEXT, CROSS_TEXT } from './editor.js';
 import { pickCover } from './cover.js';
 import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
 
@@ -130,6 +130,31 @@ const edCtx = {
   presets: () => S.presets,
   pages: () => S.pages,
   pageName,
+  toast,
+  // 多文目標：只列網站顯示的粉專（free＝還能選的）；回陣列，取消回 null
+  pickCross(v, src, cur, free) {
+    return new Promise((res) => {
+      const d = $('crossDlg'), ul = $('crossList');
+      $('crossHint').textContent = `${pageName(src)} 發布後，把同一支影片多文到下面勾選的粉專（不重新上傳、不留言）。粉專之間要先在 Meta Business Suite 開好多文權限。`;
+      ul.textContent = '';
+      const ids = S.pages.map((p) => p.id).filter((id) => free.includes(id) || cur.includes(id));
+      for (const id of ids) {
+        const li = document.createElement('li'); const lab = document.createElement('label');
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = id; cb.checked = cur.includes(id);
+        lab.append(cb, document.createTextNode(pageName(id))); li.append(lab); ul.append(li);
+      }
+      if (!ids.length) { const li = document.createElement('li'); li.className = 'none'; li.textContent = '沒有可以多文的粉專（其他粉專都已經直接上傳）'; ul.append(li); }
+      let done = false;
+      // close 事件是非同步的：上一次關掉的 close 可能在這次打開後才到，所以 dialog 還開著就不理它
+      const onClose = () => { if (!d.open) finish(null); };
+      const finish = (val) => { if (done) return; done = true; d.removeEventListener('close', onClose); if (d.open) d.close(); res(val); };
+      $('crossOk').onclick = () => finish([...ul.querySelectorAll('input:checked')].map((x) => x.value));
+      $('crossCancel').onclick = () => finish(null);
+      d.addEventListener('close', onClose);
+      d.showModal();
+      const first = ul.querySelector('input'); if (first) first.focus();
+    });
+  },
   changed: () => { renderQueue(); if (S.cur) S.cur.ed.renderUpload(); },
   isCurrent: (v) => S.cur === v,
   indexOf: (v) => S.videos.indexOf(v),
@@ -169,7 +194,7 @@ const edCtx = {
       o.ed.setPages(list);
       for (const p of removing) dropPage(o, p);
     }
-    toast(skipped.length ? `已套用；上傳中沒套用：${skipped.join('、')}` : '已套用到全部影片');
+    toast(skipped.length ? `已套用；上傳中沒套用：${skipped.join('、')}` : '已套用發布方式到全部影片');
     sync();
   },
   restart: (v) => restartUpload(v, false)
@@ -399,15 +424,18 @@ $('sendBtn').addEventListener('click', async () => {
   poll();
 });
 
-// 送出後追蹤：處理中的每 6 秒問一次，最多 15 分鐘
+const crossOpen = (j) => (j.cross || []).some((c) => c.status === 'pending' || c.status === 'posting');
+// 送出後追蹤：處理中的每 6 秒問一次，最多 15 分鐘（多文等臉書處理影片，最多再等到 45 分鐘）
 let polling = false;
 async function poll() {
   if (polling) return;
   polling = true;
-  const until = Date.now() + 15 * 60000;
+  const t0 = Date.now();
   try {
-    while (Date.now() < until) {
-      const list = S.videos.filter((v) => v.sent && v.jobs.some((j) => j.sent && (['processing', 'finishing'].includes(j.state) || j.cover === 'pending')));
+    for (;;) {
+      const crossing = S.videos.some((v) => v.sent && v.jobs.some(crossOpen));
+      if (Date.now() - t0 > (crossing ? 45 : 15) * 60000) break;
+      const list = S.videos.filter((v) => v.sent && v.jobs.some((j) => j.sent && (['processing', 'finishing'].includes(j.state) || j.cover === 'pending' || crossOpen(j))));
       if (!list.length && !S.videos.some((v) => v.sent && isUploading(v))) break;
       await new Promise((r) => setTimeout(r, 6000));
       for (const v of list) { try { apply(v, await tb.api.call('/fb/video/status?u=' + v.uploadId)); } catch { /* 下次再問 */ } }
@@ -417,7 +445,9 @@ async function poll() {
 
 // RD：每支影片等所有已送出的粉專都有結果才寫一次；成功的粉專有 RD 區段才寫
 // 時間：排程的粉專＝排程時間；立即＝按送出當下
-const OK_STATES = ['processing', 'scheduled', 'published'];
+// 草稿：slot 'draft'（今天欄右邊「純影已上傳／草稿內／2359」下的預留格）；
+// 被多文的粉專：原粉專發布成功就寫，slot 'cross'（「多文／多文內」下的「純影/」），時間＝按送出當下
+const OK_STATES = ['processing', 'scheduled', 'published', 'draft'];
 async function maybeRd(v) {
   if (v.rdDone || !$('rdOn').checked) return;
   const sent = v.jobs.filter((j) => j.sent);
@@ -431,15 +461,32 @@ async function maybeRd(v) {
     if (!OK_STATES.includes(j.state) || !p || !p.rd) continue;
     const at = ((v.sentBody && v.sentBody.pages) || []).find((x) => x.page === j.page);
     const ms = at && at.at ? at.at * 1000 : v.sentAt;
-    const e = { page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(v.kind, slug), style: 'video' };
-    if (!entries.some((x) => x.page === e.page && x.time === e.time && x.date === e.date)) entries.push(e);
+    const e = { page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(v.kind, slug), style: 'video', ...(j.state === 'draft' ? { slot: 'draft', kind: v.kind } : {}) };
+    if (!entries.some((x) => x.page === e.page && x.time === e.time && x.date === e.date && x.slot === e.slot)) entries.push(e);
+    if (j.state === 'draft') continue;
+    for (const c of (at && at.cross) || []) {
+      const cp = S.pages.find((x) => x.id === c);
+      if (!cp || !cp.rd || entries.some((x) => x.page === cp.rd && x.slot === 'cross')) continue;
+      entries.push({ page: cp.rd, date: dateStr(v.sentAt), time: timeStr(v.sentAt), text: rdText('video', slug), style: 'video', slot: 'cross', kind: 'video' });
+    }
   }
   if (!entries.length) return;
+  const text = rdText(v.kind, slug);
   try {
     const d = await tb.api.call('/rundown', { method: 'POST', body: { entries } });
     const bad = (d.results || []).filter((x) => !x.ok);
-    toast(bad.length ? `RD 部分失敗，請手動貼「${rdText(v.kind, slug)}」` : `RD 已寫入：${rdText(v.kind, slug)}`);
-  } catch (e) { toast(`RD 寫入失敗（${errText(e)}），請手動貼「${rdText(v.kind, slug)}」`); }
+    if (bad.length) rdFail(text, bad.map((x) => (rdPageName(x.page) ? rdPageName(x.page) + '：' : '') + (x.error || '失敗')).join('；'));
+    else toast(`RD 已寫入：${text}`);
+  } catch (e) { rdFail(text, errText(e)); }
+}
+const RD_NAMES = { news: '主粉', ent: '娛樂粉', shaokang: '少康粉', intl: '國際＋粉' };
+const rdPageName = (k) => RD_NAMES[k] || '';
+// RD 失敗：顯示原因＋一鍵複製，讓使用者手動貼
+function rdFail(text, why) {
+  toast(`RD 沒有寫入（${why}），請手動貼「${text}」`, {
+    label: '複製',
+    async onClick(e) { const b = e.currentTarget; try { await navigator.clipboard.writeText(text); b.textContent = '已複製'; } catch { b.textContent = '複製失敗'; } }
+  }, 15000);
 }
 
 // ===== 送出紀錄 =====
@@ -464,6 +511,11 @@ async function loadLog() {
         const s = document.createElement('span'); s.className = 'job s-' + j.state;
         s.textContent = `${pageName(j.page)}：${STATE_TEXT[j.state] || j.state}${j.at ? ' ' + fmt(j.at * 1000) : ''}${j.error ? '（' + j.error + '）' : ''}`;
         st.append(s);
+        for (const c of j.cross || []) {
+          const x = document.createElement('span'); x.className = 'job s-' + (c.status === 'done' ? 'published' : c.status);
+          x.textContent = `${pageName(c.page)}（多文自 ${pageName(j.page)}）：${CROSS_TEXT[c.status] || c.status}${c.error ? '（' + c.error + '）' : ''}`;
+          st.append(x);
+        }
       }
       li.append(h, m, st);
       ul.append(li);

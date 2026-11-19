@@ -279,3 +279,70 @@ test('封面：存 KV → 發布成功後換到各粉專影片（is_preferred）
   r = await call(env, headers, '/fb/video/status?u=' + UID);
   assert.deepEqual(r.body.data.jobs.map((j) => j.cover), ['done', 'done'], '超過 60 秒查狀態時再試成功');
 });
+
+test('RD：slot 草稿／多文（多文只收橫式；slot 一定要 style video 與 kind）', async () => {
+  const { rundownBody } = await import('../../server/fb/rundown.js');
+  const e = { page: 'news', date: '2026-11-19', time: '12:00', text: '純影/SLUG', style: 'video' };
+  assert.deepEqual(rundownBody({ entries: [{ ...e, slot: 'draft', kind: 'reel' }] }).entries[0], { ...e, slot: 'draft', kind: 'reel' });
+  assert.equal(rundownBody({ entries: [{ ...e, slot: 'cross', kind: 'video' }] }).entries[0].slot, 'cross');
+  assert.equal(rundownBody({ entries: [{ ...e, slot: 'cross', kind: 'reel' }] }), null);
+  assert.equal(rundownBody({ entries: [{ ...e, slot: 'x', kind: 'video' }] }), null);
+  assert.equal(rundownBody({ entries: [{ ...e, slot: 'draft' }] }), null);
+  assert.equal(rundownBody({ entries: [{ ...e, style: undefined, slot: 'draft', kind: 'video' }] }), null);
+  assert.equal(rundownBody({ entries: [{ ...e, kind: 'video' }] }), null, '沒有 slot 不收 kind');
+});
+
+test('驗證：草稿／多文表單', async () => {
+  const { parsePublish } = await vm();
+  const p = { uploadId: UID, title: 't', description: 'd' };
+  assert.deepEqual(parsePublish({ ...p, pages: [{ page: '111', at: null, draft: true }] }).pages, [{ page: '111', at: null, draft: true, cross: [] }]);
+  assert.equal(parsePublish({ ...p, pages: [{ page: '111', at: nowSec() + 3600, draft: true }] }), null, '草稿不能有時間');
+  assert.equal(parsePublish({ ...p, pages: [{ page: '111', at: null, draft: 'yes' }] }), null);
+  assert.deepEqual(parsePublish({ ...p, pages: [{ page: '111', at: null, cross: ['222', '333'] }] }).pages[0].cross, ['222', '333']);
+  for (const pages of [
+    [{ page: '111', at: null, cross: [] }],
+    [{ page: '111', at: null, cross: ['111'] }],
+    [{ page: '111', at: null, cross: ['222', '222'] }],
+    [{ page: '111', at: nowSec() + 3600, cross: ['222'] }],
+    [{ page: '111', at: null, draft: true, cross: ['222'] }],
+    [{ page: '111', at: null, cross: ['222'] }, { page: '222', at: null }],
+    [{ page: '111', at: null, cross: ['333'] }, { page: '222', at: null, cross: ['333'] }],
+    [{ page: '111', at: null, cross: ['x'] }],
+    [{ page: '111', at: null, cross: Array.from({ length: 11 }, (_, i) => String(500 + i)) }]
+  ]) assert.equal(parsePublish({ ...p, pages }), null, JSON.stringify(pages));
+});
+
+test('草稿：橫式 DRAFT、Reels video_state DRAFT；不排留言；多文交給計時器；Reels 不能多文', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST video:/111/videos': (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S111', video_id: 'V111', start_offset: '0', end_offset: '4' } : c.body.upload_phase === 'transfer' ? { start_offset: '4', end_offset: '4' } : { success: true },
+    'POST video:/222/videos': (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S222', video_id: 'V222', start_offset: '0', end_offset: '4' } : c.body.upload_phase === 'transfer' ? { start_offset: '4', end_offset: '4' } : { success: true }
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 4, kind: 'video', pages: ['111', '222'] });
+  await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
+  const r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: '標題', description: 'd', comments: [{ message: '留言', delay: 0 }], pages: [{ page: '111', at: null, draft: true }, { page: '222', at: null, cross: ['333'] }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(states(r), [['111', 'draft'], ['222', 'processing']]);
+  const fin = f.calls.filter((c) => c.body && c.body.upload_phase === 'finish');
+  const f111 = fin.find((c) => c.path === 'video:/111/videos').body, f222 = fin.find((c) => c.path === 'video:/222/videos').body;
+  assert.deepEqual([f111.published, f111.unpublished_content_type, f111.scheduled_publish_time], ['false', 'DRAFT', undefined]);
+  assert.deepEqual([f222.published, f222.unpublished_content_type], [undefined, undefined]);
+  const arms = RecTimer.log.filter((x) => x[0] === '/arm').map((x) => x[1]);
+  assert.deepEqual(arms.map((a) => [a.pageId, a.postId, a.items.length, a.cross]), [['222', 'V222', 1, ['333']]], '草稿不排留言；多文來源照排留言＋多文');
+  assert.deepEqual(r.body.data.jobs.find((j) => j.page === '222').cross, [{ page: '333', status: 'pending', error: '' }]);
+  assert.equal(r.body.data.jobs.find((j) => j.page === '111').draft, true);
+});
+
+test('Reels 草稿：video_state DRAFT；Reels 送多文 → 400', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/video_reels': (c) => c.body.upload_phase === 'start' ? { video_id: 'R1', upload_url: 'https://rupload.facebook.com/video-upload/v27.0/R1' } : { success: true },
+    'POST https://rupload.facebook.com/video-upload/v27.0/R1': () => ({ success: true })
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'r.mp4', size: 4, kind: 'reel', pages: ['111'] });
+  assert.equal((await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null, cross: ['222'] }] })).status, 400);
+  await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
+  const r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null, draft: true }] });
+  assert.deepEqual(states(r), [['111', 'draft']]);
+  const fin = f.calls.find((c) => c.body && c.body.upload_phase === 'finish');
+  assert.equal(fin.body.video_state, 'DRAFT');
+  assert.equal(RecTimer.log.length, 0);
+});

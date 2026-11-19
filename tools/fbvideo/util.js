@@ -15,11 +15,16 @@ export const MAX_S = { video: 180 * 86400, reel: 29 * 86400 };
 export const rangeText = (kind) => (kind === 'reel' ? 'Reels 排程要在 10 分鐘到 29 天之間' : '影片排程要在 10 分鐘到 6 個月之間');
 
 let toastTimer = 0;
-export function toast(text) {
+export function toast(text, action = null, ms = 4000) {
   const t = $('toast');
   t.textContent = text; t.hidden = false;
+  if (action) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-secondary btn-sm toast-act'; b.textContent = action.label;
+    b.addEventListener('click', action.onClick);
+    t.append(' ', b);
+  }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
+  toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 
 export function confirmBox(title, body, yes = '確定') {

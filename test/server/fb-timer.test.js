@@ -355,3 +355,73 @@ test('舊紀錄已結束、沒有鬧鐘也沒有 purgeAt：查 status 時補排 
   assert.equal((await post('status')).status, 'done');
   await assertPurge(state);
 });
+
+// ===== 多文（影片發布）=====
+const ACC3 = { data: [{ id: '111', name: '新聞', access_token: 'PT111' }, { id: '222', name: '少康', access_token: 'PT222' }, { id: '333', name: '國際', access_token: 'PT333' }] };
+const XREC = (at, extra = {}) => ({ pageId: '111', postId: 'V1', at, kind: 'video', items: [], cross: ['222', '333'], ...extra });
+
+test('多文：只有多文沒有留言也能 arm；發布後先 allow 再各粉專 crossposted_video_id', async (t) => {
+  const { f, obj, post } = await mk(t, {
+    'GET /me/accounts': () => ACC3,
+    'GET /V1': () => ({ id: 'V1', published: true }),
+    'POST /V1': () => ({ success: true }),
+    'POST /222/videos': () => ({ id: 'X222' }),
+    'POST /333/videos': () => ({ id: 'X333' })
+  });
+  assert.equal((await post('arm', XREC(nowSec() - 120))).ok, true);
+  assert.equal((await post('status')).status, 'pending');
+  await obj.alarm();
+  const allow = f.calls.filter((c) => c.method === 'POST' && c.path === '/V1');
+  assert.equal(allow.length, 1);
+  assert.deepEqual(JSON.parse(allow[0].body.allow_crossposting_for_pages), [{ page_id: '222', allow: true }, { page_id: '333', allow: true }]);
+  assert.equal(allow[0].body.access_token, 'PT111');
+  const xs = f.calls.filter((c) => c.method === 'POST' && /^\/\d+\/videos$/.test(c.path));
+  assert.deepEqual(xs.map((c) => [c.path, c.body.crossposted_video_id, c.body.access_token]), [['/222/videos', 'V1', 'PT222'], ['/333/videos', 'V1', 'PT333']]);
+  const s = await post('status');
+  assert.equal(s.status, 'done');
+  assert.deepEqual(s.cross, [{ page: '222', status: 'done', videoId: 'X222' }, { page: '333', status: 'done', videoId: 'X333' }]);
+  await obj.alarm();
+  assert.equal(f.calls.filter((c) => c.method === 'POST' && /^\/\d+\/videos$/.test(c.path)).length, 2, '不重複多文');
+});
+
+test('多文：一個粉專失敗會拉長間隔重試、不影響另一個；限流立刻失敗', async (t) => {
+  let n222 = 0;
+  const { f, state, obj, post } = await mk(t, {
+    'GET /me/accounts': () => ACC3,
+    'GET /V1': () => ({ id: 'V1', published: true }),
+    'POST /V1': () => ({ success: true }),
+    'POST /222/videos': () => { n222++; return n222 === 1 ? gErr(1363026, 400, '影片還在處理') : { id: 'X222' }; },
+    'POST /333/videos': () => gErr(4, 400, '限流')
+  });
+  await post('arm', XREC(nowSec() - 120));
+  await obj.alarm();
+  let s = await post('status');
+  assert.deepEqual(s.cross.map((c) => c.status), ['pending', 'failed']);
+  const a = await state.storage.getAlarm();
+  assert.ok(a >= Date.now() + 55000 && a <= Date.now() + 61000, '第 1 次失敗 60 秒後再試');
+  const rec = await state.storage.get('rec'); rec.cross[0].next = Date.now() - 1; await state.storage.put('rec', rec);
+  await obj.alarm();
+  s = await post('status');
+  assert.deepEqual(s.cross.map((c) => c.status), ['done', 'failed']);
+  assert.equal(f.calls.filter((c) => c.method === 'POST' && c.path === '/V1').length, 1, 'allow 只做一次');
+});
+
+test('多文：posting 途中中斷 → 不重送，標結果不明', async (t) => {
+  const { f, state, obj, post } = await mk(t, { 'GET /me/accounts': () => ACC3, 'GET /V1': () => ({ id: 'V1', published: true }) });
+  await post('arm', XREC(nowSec() - 120, { cross: ['222'] }));
+  const rec = await state.storage.get('rec'); rec.cross[0].status = 'posting'; rec.published = true; rec.crossAllowed = true; await state.storage.put('rec', rec);
+  await obj.alarm();
+  assert.equal((await post('status')).cross[0].status, 'unknown');
+  assert.equal(f.calls.filter((c) => c.method === 'POST').length, 0);
+});
+
+test('多文：cancel 一起取消；非影片不收 cross', async (t) => {
+  const { post } = await mk(t, {});
+  await post('arm', XREC(nowSec() + 3600));
+  await post('cancel');
+  const s = await post('status');
+  assert.deepEqual(s.cross.map((c) => c.status), ['canceled', 'canceled']);
+  assert.equal(s.status, 'done');
+  assert.equal((await post('arm', { ...XREC(nowSec() + 3600), kind: undefined })).ok, false, '非影片：沒有留言又不能多文 → 不接受');
+  assert.equal((await post('arm', XREC(nowSec() + 3600, { cross: ['abc'] }))).ok, false);
+});
