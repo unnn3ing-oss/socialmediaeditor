@@ -39,6 +39,7 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
 .tp-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}.tp-list li{border:1px solid var(--edge);border-radius:14px;padding:12px 14px}.tp-list li.on{border-color:#155eef;background:#f4f8ff}.tp-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:700}.tp-badge{font-size:12px;font-weight:700;color:#155eef;background:#e0eaff;border-radius:99px;padding:2px 8px}.tp-meta{margin:4px 0 0;color:var(--mute);font-size:14px}.tp-list .row{margin-top:8px}.tp-add input{flex:1;min-width:160px}#tpPick{max-width:100%}
+.us-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:10px}.us-list li{border:1px solid var(--edge);border-radius:14px;padding:10px 14px}.us-head{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font-weight:700}.us-head small{font-weight:400;color:var(--mute)}.us-bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;margin-top:6px;font-size:14px}.us-bar{height:8px;border-radius:99px;background:#eef2f6;overflow:hidden}.us-bar i{display:block;height:100%;background:#155eef}.us-bar.warn i{background:#f79009}.us-bar.bad i{background:#d92d20}.us-regain{margin:6px 0 0;color:var(--danger);font-weight:700;font-size:14px}
 .fb-state{font-weight:600}.fb-state.on{color:#166534}.fb-state.off{color:var(--danger)}
 .fb-missing{margin:8px 0 0;padding-left:20px;color:var(--danger);font-weight:600}
 .fb-warn{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;font-weight:600}.fb-warn.bad{background:#fef3f2;border-color:#fecdca;color:#b42318}
@@ -221,7 +222,17 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         </div>
     </section>
 
-    <section class="card" id="whCard">
+    <section class="card" id="usCard">
+        <h2>速率限制</h2>
+        <p>臉書沒有查用量的 API，這裡顯示工具最近一次呼叫臉書時，回應附帶的用量（%）。App＝用使用者權杖的呼叫（1 小時內 200 × 使用者數）；粉專＝用粉專權杖的呼叫（24 小時內 4800 × 互動人數）。任一項到 100% 就會被臉書暫停一段時間。</p>
+        <p class="fb-state" id="usThrottle" hidden></p>
+        <ul class="us-list" id="usList"></ul>
+        <div class="row"><button id="usReload" type="button">重新整理</button><button id="usAsk" type="button">立即查詢</button></div>
+        <p class="fb-hint">「立即查詢」會對使用中組別的每個粉專各打一次最輕的查詢，會用掉一點額度。</p>
+        <p class="msg" id="usMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="whCard">
 
       <h2>Webhook</h2>
 
@@ -549,7 +560,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   }
   function fbLoad() {
     say($('fbMsg'), '');
-    return Promise.all([acLoad(), tpLoad().then(fbReload), pgLoad(), psLoad(), vsLoad(), whLoad()]);
+    return Promise.all([acLoad(), tpLoad().then(fbReload), pgLoad(), psLoad(), vsLoad(), whLoad(), usLoad()]);
   }
   // ---- 權杖組別（/admin/fb/profiles）：命名、切換使用中；設定中的組別（tpCur）給臉書連線與 App 密鑰用 ----
   var tpCur = '', tpData = null;
@@ -667,6 +678,54 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       return fbLoad();
     }).catch(function (e) { say($('appMsg'), '失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('appClear').disabled = false; });
+  };
+  // ---- 速率限制（/admin/fb/usage）：只讀存好的用量；立即查詢才會呼叫臉書 ----
+  function usAgo(ms) { var m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? '剛剛' : m < 60 ? m + ' 分鐘前' : m < 1440 ? Math.round(m / 60) + ' 小時前' : Math.round(m / 1440) + ' 天前'; }
+  var US_LABEL = { CODE4: 'App 呼叫太多', CODE17: '使用者呼叫太多', CODE32: '粉專呼叫太多（使用者權杖）', CODE613: '呼叫太頻繁', CODE80001: '粉專呼叫太多（粉專權杖）' };
+  function usItem(title, sub, u) {
+    var li = document.createElement('li');
+    var h = document.createElement('div'); h.className = 'us-head';
+    var t = document.createElement('span'); t.textContent = title; h.appendChild(t);
+    var s = document.createElement('small'); s.textContent = sub; h.appendChild(s);
+    li.appendChild(h);
+    var g = document.createElement('div'); g.className = 'us-bars';
+    [['呼叫次數', u.callCount], ['CPU 時間', u.totalCputime], ['處理時間', u.totalTime]].forEach(function (x) {
+      var v = Math.max(0, Number(x[1]) || 0);
+      var lb = document.createElement('span'); lb.textContent = x[0];
+      var bar = document.createElement('span'); bar.className = 'us-bar' + (v >= 90 ? ' bad' : v >= 75 ? ' warn' : '');
+      bar.setAttribute('role', 'meter'); bar.setAttribute('aria-label', title + ' ' + x[0]); bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', '100'); bar.setAttribute('aria-valuenow', String(v));
+      var fill = document.createElement('i'); fill.style.width = Math.min(v, 100) + '%'; bar.appendChild(fill);
+      var pv = document.createElement('span'); pv.textContent = v + '%';
+      g.appendChild(lb); g.appendChild(bar); g.appendChild(pv);
+    });
+    li.appendChild(g);
+    if (u.regainMin > 0) { var r = document.createElement('p'); r.className = 'us-regain'; r.textContent = '已被臉書暫停，約 ' + u.regainMin + ' 分鐘後恢復'; li.appendChild(r); }
+    return li;
+  }
+  function usShow(d) {
+    var ul = $('usList'); ul.textContent = '';
+    if (d.app) ul.appendChild(usItem('App（使用者權杖）', '最後更新：' + usAgo(d.app.at), d.app));
+    (d.pages || []).forEach(function (p) { ul.appendChild(usItem(p.name || ('粉專 ' + p.id), '粉專．最後更新：' + usAgo(p.at), p)); });
+    if (!ul.children.length) { var li = document.createElement('li'); li.textContent = '還沒有用量資料：工具呼叫臉書後會出現，或按「立即查詢」。'; ul.appendChild(li); }
+    var th = $('usThrottle');
+    th.hidden = !d.throttle;
+    if (d.throttle) { th.textContent = '最近一次被臉書限流：' + fmtTime(d.throttle.at) + '．' + (US_LABEL['CODE' + d.throttle.code] || ('錯誤碼 ' + d.throttle.code)); th.className = 'fb-state off'; }
+  }
+  function usLoad() {
+    return api('/admin/fb/usage').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      usShow(res.data);
+    }).catch(function (e) { say($('usMsg'), '讀取用量失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('usReload').onclick = function () { say($('usMsg'), ''); usLoad(); };
+  $('usAsk').onclick = function () {
+    $('usAsk').disabled = true; say($('usMsg'), '向臉書查詢中');
+    api('/admin/fb/usage/refresh', { method: 'POST' }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      usShow(res.data);
+      say($('usMsg'), '已查詢 ' + res.data.asked + ' 次' + (res.data.failed ? '，' + res.data.failed + ' 次失敗' : '') + '。', res.data.failed ? 'err' : 'good');
+    }).catch(function (e) { say($('usMsg'), '查詢失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('usAsk').disabled = false; });
   };
   // ---- Webhook（/admin/fb/webhook）：回呼網址、驗證權杖、簽章狀態、最後收到 ----
   function whLoad() {

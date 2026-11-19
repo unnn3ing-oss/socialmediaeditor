@@ -14,11 +14,16 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/usage.js`（新） | 解析標頭、合併、節流寫入、讀取 | ⬜ |
-| `server/fb/graph.js` | 回應後 `noteUsage`、限流時 `noteThrottle` | ⬜ |
-| `server/fb/index.js` | `GET /admin/fb/usage`、`POST /admin/fb/usage/refresh` | ⬜ |
-| 管理頁兩份 | 「速率限制」卡片 | ⬜ |
-| 測試 | `test/server/fb-usage.test.js`、admin e2e | ⬜ |
+| `server/fb/usage.js`（新） | 解析標頭、合併、節流寫入、讀取 | ✅ |
+| `server/fb/graph.js` | 回應後 `noteUsage`、限流時 `noteThrottle` | ✅ |
+| `server/fb/index.js` | `GET /admin/fb/usage`、`POST /admin/fb/usage/refresh` | ✅ |
+| 管理頁兩份 | 「速率限制」卡片 | ✅ |
+| 測試 | `test/server/fb-usage.test.js`、admin e2e | ✅ |
+
+## 結果
+- npm test 686（`fb-usage.test.js` 3 項）、admin e2e 25（速率限制 1 項）、全部 e2e 225／226（`fbpost-compose` 既有字型時間競爭偶發，單獨重跑 3 次全過）、build --check、獨立審查通過。
+- 審查修正：高用量時也至少隔 10 秒寫一次（限流紀錄、立即查詢除外）；graph.js 註解位置。未改：跨執行個體先讀再寫可能互蓋（顯示用，可接受）。
+- [ ] 使用者看截圖 → 說「推」才併入 main
 
 ## 注意事項
 - 後端需重新部署（正式＋測試），外掛不改。
