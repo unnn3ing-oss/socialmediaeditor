@@ -7,6 +7,7 @@ import { handleAdmin, adminExtras } from './core/admin.js';
 import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb } from './fb/index.js';
+import { handleFbHook } from './fb/webhook.js';
 import { cleanupSends } from './fb/sends.js';
 import { adminStaff, cleanupAudit } from './core/staff.js';
 
@@ -20,6 +21,7 @@ const modules = [
   (req, env, ctx, path) => handleAssets(req, env, path),
   (req, env, ctx, path) => handleLogs(req, env, path),
   (req, env, ctx, path) => handleFetch(req, env, path),
+  (req, env, ctx, path) => handleFbHook(req, env, path),
   (req, env, ctx, path) => handleFb(req, env, ctx, path),
   (req, env, ctx, path) => handleAdmin(req, env, path)
 ];

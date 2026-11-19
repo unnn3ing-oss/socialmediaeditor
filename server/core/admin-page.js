@@ -43,6 +43,7 @@ td.err{color:var(--danger);font-weight:600}
 .fb-warn{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;font-weight:600}.fb-warn.bad{background:#fef3f2;border-color:#fecdca;color:#b42318}
 .fb-detail{margin:8px 0 0;padding-left:20px;color:var(--ink,#1f2328)}.fb-detail li{margin:2px 0}.fb-hint{margin:6px 0 0;font-size:13px;color:#5b6472}
 .pg-card{border:1px solid #e6ecf6;border-radius:14px;padding:12px 14px;margin:10px 0}.pg-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pg-no{font-variant-numeric:tabular-nums;color:var(--mute);font-weight:700;min-width:1.5em}.pg-name{font-weight:700;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}.pg-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px 12px;align-items:end;margin-top:8px}.pg-grid label{margin:0;font-size:14px;color:var(--mute)}.pg-grid label input[type=text],.pg-grid label select{margin-top:4px;color:var(--ink);font-size:16px}.pg-grid .pg-wide{grid-column:1/-1}.pg-grid .pg-showlbl{display:flex;align-items:center;gap:6px;min-height:44px;white-space:nowrap}@media (max-width:560px){.pg-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pg-grid .pg-showlbl{grid-column:1/-1}}.ac-row button[aria-pressed=true]{background:var(--soft);border-color:var(--brand);color:var(--brand);font-weight:700}
+.wh-list{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px;margin:10px 0 0;align-items:center}.wh-list dt{color:var(--mute,#5f6b82);font-size:14px}.wh-list dd{margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}.wh-list code{overflow-wrap:anywhere;min-width:0}.wh-list dd.good{color:#166534;font-weight:600}.wh-list dd.err{color:var(--danger);font-weight:600}@media (max-width:560px){.wh-list{grid-template-columns:1fr}.wh-list dt{margin-top:6px}}
 .fb-tok{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.fb-app .fb-sub{margin:0 0 6px;font-weight:700}.fb-app input+label{margin-top:10px}.fb-tok label{display:block;margin-bottom:6px;font-size:13px;color:var(--muted,#5b6472)}.fb-tok .row{margin-top:8px}
 #pgRows input[type=checkbox]{width:22px;height:22px;min-height:0}
 textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit;resize:vertical}
@@ -207,6 +208,31 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
           <p class="msg" id="appMsg" role="status"></p>
         </div>
     </section>
+
+    <section class="card" id="whCard">
+
+      <h2>Webhook</h2>
+
+      <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。目前只記錄收到的時間與事件種類，不保存內容。</p>
+
+      <dl class="wh-list">
+
+        <dt>回呼網址</dt><dd><code id="whUrl">尚未讀取</code><button id="whUrlCopy" type="button">複製</button></dd>
+
+        <dt>驗證權杖</dt><dd><code id="whTok">尚未讀取</code><button id="whTokCopy" type="button">複製</button></dd>
+
+        <dt>簽章檢查</dt><dd id="whSign">尚未讀取</dd>
+
+        <dt>最後收到</dt><dd id="whLast">尚未讀取</dd>
+
+      </dl>
+
+      <div class="row"><button id="whRefresh" type="button">重新整理</button></div>
+
+      <p class="msg" id="whMsg" role="status"></p>
+
+    </section>
+
 
     <section class="card" id="pgCard">
       <h2>粉專設定</h2>
@@ -511,7 +537,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   }
   function fbLoad() {
     say($('fbMsg'), '');
-    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad(), appLoad()]);
+    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad(), appLoad(), whLoad()]);
   }
   // ---- App 密鑰（/admin/fb/app）：只回有沒有設定與 App ID，Secret 永不回傳 ----
   function appShow(d) {
@@ -549,6 +575,26 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     }).catch(function (e) { say($('appMsg'), '失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('appClear').disabled = false; });
   };
+  // ---- Webhook（/admin/fb/webhook）：回呼網址、驗證權杖、簽章狀態、最後收到 ----
+  function whLoad() {
+    return api('/admin/fb/webhook').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data;
+      $('whUrl').textContent = d.url;
+      $('whTok').textContent = d.verifyToken || '後端沒有 SESSION_SECRET，無法產生';
+      $('whSign').textContent = d.signReady ? '已設定 App 密鑰，可以驗證臉書簽章' : '還沒設定 App 密鑰（見「臉書連線」），收到的通知一律拒收';
+      $('whSign').className = d.signReady ? 'good' : 'err';
+      $('whLast').textContent = d.last ? fmtTime(d.last.at) + '．' + (d.last.object || '未知') + (d.last.fields.length ? '／' + d.last.fields.join('、') : '') : '還沒收到';
+    }).catch(function (e) { say($('whMsg'), '讀取 Webhook 狀態失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function whCopy(id, label) {
+    var t = $(id).textContent;
+    if (!navigator.clipboard) { say($('whMsg'), '這個瀏覽器不能自動複製，請手動選取。', 'err'); return; }
+    navigator.clipboard.writeText(t).then(function () { say($('whMsg'), '已複製' + label + '。', 'good'); }, function () { say($('whMsg'), '複製失敗，請手動選取。', 'err'); });
+  }
+  $('whUrlCopy').onclick = function () { whCopy('whUrl', '回呼網址'); };
+  $('whTokCopy').onclick = function () { whCopy('whTok', '驗證權杖'); };
+  $('whRefresh').onclick = function () { say($('whMsg'), ''); whLoad(); };
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
     if (!v) { say($('fbTokMsg'), '請先貼上權杖。', 'err'); return; }
