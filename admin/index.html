@@ -56,9 +56,20 @@
         <p class="msg" id="acMsg" role="status"></p>
       </section>
 
+      <section class="card" id="tpCard">
+        <h2>權杖組別</h2>
+        <p>可以存好幾組臉書權杖（例如主管的、自己的），各自命名，選一組「使用中」給排程發布與影片發布用；切換後粉專清單換成那一組的粉專。已排程的留言、影片封面、改時間與刪除，使用中那組沒有該粉專時會改用其他組的權杖。最多 5 組。</p>
+        <ul class="tp-list" id="tpList"></ul>
+        <label for="tpName">新增一組（名稱最多 20 字）</label>
+        <div class="row tp-add"><input id="tpName" type="text" maxlength="20" placeholder="例如：主管權杖、鈞評測試"><button id="tpAdd" type="button">新增組別</button></div>
+        <p class="msg" id="tpMsg" role="status"></p>
+      </section>
+
       <section class="card" id="fbCard">
         <h2>臉書連線</h2>
-        <p>後端用主管的「使用者權杖」換好各粉專權杖並存起來，之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
+        <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
+        <select id="tpPick"></select>
+        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
         <p class="fb-state" id="fbState">狀態：尚未讀取</p>
         <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
         <ul class="fb-detail" id="fbDetail" hidden></ul>
@@ -66,7 +77,7 @@
         <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
         <p class="msg" id="fbMsg" role="status"></p>
         <div class="fb-tok">
-          <label for="fbTok">換權杖：貼上主管的「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
+          <label for="fbTok">換權杖：貼上「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
           <p class="fb-hint" id="fbTokHint"></p>
           <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
           <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>

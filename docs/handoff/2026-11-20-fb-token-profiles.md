@@ -20,18 +20,24 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/tokenstore.js` | `fb_settings` k=`profiles`（`{active,list:[{id,name,created}]}`）；`kOf(base,pid)`＝p1 用原 key、其他 `base@pid`；`forProfile(env,pid)`（`Object.create(env)`＋`__fbProfile`）；`profileId`；各函式依組別；`otherPageTokens`；`allAppCreds`；markBroken 依權杖所屬組 | ⬜ |
-| `server/fb/pages.js` | `pageTokens` 合併（使用中優先＋其他組）、`activePageTokens` 給 listPages／tokenStatus；KV 快取 key 依組；connectToken 存 App 名稱 | ⬜ |
-| `server/fb/graph.js` | `markBroken(env, token)` | ⬜ |
-| `server/fb/webhook.js` | 用所有組的 App 密鑰驗簽章 | ⬜ |
-| `server/fb/index.js` | `/admin/fb/profiles` GET／POST，`/admin/fb/profiles/<id>` POST（改名）／DELETE，`/admin/fb/profiles/<id>/activate`；既有 status／token／app／refresh 接 `?p=<id>` | ⬜ |
-| 管理頁兩份（`admin/`、`server/core/admin-page.js`） | 「權杖組別」卡片（列表、切換、改名、刪除、新增）；臉書連線與 App 密鑰卡片上方「設定中的組別」下拉，API 帶 `?p=` | ⬜ |
-| 測試 | `test/server/fb-profiles.test.js`；admin e2e | ⬜ |
+| `server/fb/tokenstore.js` | `fb_settings` k=`profiles`（`{active,list:[{id,name,created}]}`）；`kOf(base,pid)`＝p1 用原 key、其他 `base@pid`；`forProfile(env,pid)`（`Object.create(env)`＋`__fbProfile`）；`profileId`；各函式依組別；`otherPageTokens`；`allAppCreds`；markBroken 依權杖所屬組 | ✅ |
+| `server/fb/pages.js` | `pageTokens` 合併（使用中優先＋其他組）、`activePageTokens` 給 listPages／tokenStatus；KV 快取 key 依組；connectToken 存 App 名稱 | ✅ |
+| `server/fb/graph.js` | `markBroken(env, token)` | ✅ |
+| `server/fb/webhook.js` | 用所有組的 App 密鑰驗簽章 | ✅ |
+| `server/fb/index.js` | `/admin/fb/profiles` GET／POST，`/admin/fb/profiles/<id>` POST（改名）／DELETE，`/admin/fb/profiles/<id>/activate`；既有 status／token／app／refresh 接 `?p=<id>` | ✅ |
+| 管理頁兩份（`admin/`、`server/core/admin-page.js`） | 「權杖組別」卡片（列表、切換、改名、刪除、新增）；臉書連線與 App 密鑰卡片上方「設定中的組別」下拉，API 帶 `?p=` | ✅ |
+| 測試 | `test/server/fb-profiles.test.js`；admin e2e | ✅ |
 
 ## 下一步
-- [ ] 後端（tokenstore → pages → graph／webhook → index）＋單元測試
-- [ ] 管理頁兩份＋e2e
-- [ ] npm test、build --check、全部 e2e、獨立審查、截圖
+- [x] 後端（tokenstore → pages → graph／webhook → index）＋單元測試（`test/server/fb-profiles.test.js` 5 項）
+- [x] 管理頁兩份＋e2e（「權杖組別」卡片：列表／切換為使用中／設定這一組／重新命名（prompt）／刪除（confirm）／新增；臉書連線卡片上方「設定中的組別」下拉）
+- [x] npm test 682、build --check、全部 e2e 222、獨立審查通過（Minor 2 已修：刪組別清 KV 快取）
+- [ ] 使用者確認截圖 → 說「推」才併入 main（同 commit 更新 CLAUDE.md）
+- [ ] 部署正式＋測試後端
+
+## 已知限制（審查 Minor，未改）
+- 方案 A 只補其他組「已存好的粉專權杖」：只靠 Secret `FB_USER_TOKEN`（沒按過「驗證並儲存」）的 p1，切走後它的已排程留言會失敗 → 部署後先在管理頁對 p1 按一次「驗證並儲存」即可。
+- 新增／改名沒有鎖（只有單一管理員操作）；`pageTokens` 每次多讀其他組（最多 4 次 D1）。
 
 ## 注意事項／不能做的事
 - 不改發文核心邏輯（post.js、timer.js、video.js 只透過 pageTokens 受影響）。

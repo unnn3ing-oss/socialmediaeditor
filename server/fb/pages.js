@@ -2,8 +2,9 @@
 //   管理頁「驗證並儲存」時已換好、存進 D1 的粉專權杖（不會過期）優先；
 //   沒有時（例：只設 Secret FB_USER_TOKEN）用使用者權杖 → /me/accounts（不足時用精細範圍逐一查）取各粉專 token（KV 快取 1 小時）
 //   ＋ D1 fb_pages 的顯示設定
+//   權杖組別（tokenstore.js）：粉專清單只列「使用中」那組；pageTokens 另外補上其他組存好的粉專（方案 A：切換後已排程的留言、封面、改時間仍可用）
 import { graph, isTokenError, exchangeToken } from './graph.js';
-import { userToken, storedPageTokens, savePageTokens, notePageTokens, brokenAt, appCred } from './tokenstore.js';
+import { userToken, storedPageTokens, savePageTokens, notePageTokens, brokenAt, appCred, profileId, otherPageTokens, DEFAULT_PROFILE } from './tokenstore.js';
 
 const CACHE_KEY = 'fb:accounts';
 const CACHE_TTL = 3600;
@@ -29,25 +30,46 @@ async function granularPageIds(env, ut) {
 // 取各粉專 { id, name, token }；沒設 token → fb_off；token 壞了 → fb_token
 // 先走 /me/accounts，再查一次 debug_token；精細範圍裡 /me/accounts 沒列到的（例：從企業管理平台指派的粉專，/me/accounts 回空），
 // 改用精細範圍的粉專 ID 逐一查 /{id}?fields=name,access_token 換粉專 token
-export async function pageTokens(env) {
+const cacheKeys = (pid) => (pid === DEFAULT_PROFILE ? [CACHE_KEY, NONE_KEY] : [CACHE_KEY + '@' + pid, NONE_KEY + '@' + pid]);
+
+// 使用中（或 forProfile 指定）那一組的粉專：粉專清單、管理頁狀態用
+export async function activePageTokens(env) {
+  const pid = await profileId(env);
+  const [cKey, nKey] = cacheKeys(pid);
   const st = await storedPageTokens(env);
-  if (st) { notePageTokens(env, st.pages); return new Map(st.pages.map((p) => [p.id, p])); }
+  if (st) { notePageTokens(env, st.pages, pid); return new Map(st.pages.map((p) => [p.id, p])); }
   let list = null;
-  try { list = env.CACHE ? await env.CACHE.get(CACHE_KEY, 'json') : null; } catch { list = null; }
-  if (Array.isArray(list)) { notePageTokens(env, list); return new Map(list.map((p) => [p.id, p])); }
+  try { list = env.CACHE ? await env.CACHE.get(cKey, 'json') : null; } catch { list = null; }
+  if (Array.isArray(list)) { notePageTokens(env, list, pid); return new Map(list.map((p) => [p.id, p])); }
   const { token: ut } = await userToken(env);
   if (!ut) throw new FbSetupError('fb_off');
   let none = null;
-  try { none = env.CACHE ? await env.CACHE.get(NONE_KEY) : null; } catch { none = null; }
+  try { none = env.CACHE ? await env.CACHE.get(nKey) : null; } catch { none = null; }
   if (none) throw new FbSetupError('fb_no_pages');   // 剛查過是空的：60 秒內不再逐頁查，避免限流
   list = await fetchPages(env, ut);
   if (!list.length) {   // 空的只記 60 秒（補權限後很快生效；「重新讀取粉專」會清掉）
-    if (env.CACHE) { try { await env.CACHE.put(NONE_KEY, '1', { expirationTtl: NONE_TTL }); } catch { /* 記不了就算了 */ } }
+    if (env.CACHE) { try { await env.CACHE.put(nKey, '1', { expirationTtl: NONE_TTL }); } catch { /* 記不了就算了 */ } }
     throw new FbSetupError('fb_no_pages');
   }
-  if (env.CACHE) await env.CACHE.put(CACHE_KEY, JSON.stringify(list), { expirationTtl: CACHE_TTL });
-  notePageTokens(env, list);
+  if (env.CACHE) await env.CACHE.put(cKey, JSON.stringify(list), { expirationTtl: CACHE_TTL });
+  notePageTokens(env, list, pid);
   return new Map(list.map((p) => [p.id, p]));
+}
+
+// 發文／留言／改時間／刪除／影片用：使用中那組優先，沒有的粉專再從其他組補（方案 A）
+//   使用中那組讀不到（沒權杖、沒粉專、權杖壞）但其他組有存好的粉專時，就只用其他組；都沒有才丟原本的錯
+export async function pageTokens(env) {
+  let map = null, err = null;
+  try { map = await activePageTokens(env); } catch (e) { if (!(e instanceof FbSetupError)) throw e; err = e; }
+  const others = await otherPageTokens(env).catch(() => []);
+  if (!map && !others.length) throw err;
+  const out = map ? new Map(map) : new Map();
+  for (const o of others) {
+    notePageTokens(env, o.pages, o.pid);
+    for (const p of o.pages) if (!out.has(p.id)) out.set(p.id, p);
+  }
+  if (!out.size && err) throw err;
+  return out;
 }
 
 // 用指定的使用者權杖換出各粉專 token：[{ id, name, token }]；權杖壞了丟 fb_token
@@ -78,7 +100,10 @@ export async function fetchPages(env, ut) {
   return list;
 }
 
-export async function clearPageCache(env) { if (env.CACHE) { await env.CACHE.delete(CACHE_KEY); await env.CACHE.delete(NONE_KEY); } }
+export async function clearPageCache(env) {
+  if (!env.CACHE) return;
+  for (const k of cacheKeys(await profileId(env))) await env.CACHE.delete(k);
+}
 
 // 舊資料表沒有 utm_text（純文字貼文用的 UTM）→ 補欄位；每個執行個體只檢查一次
 const colsOk = new WeakSet();   // 依 D1 綁定記錄
@@ -97,7 +122,7 @@ async function settings(env) {
 
 // 合併臉書粉專與設定；all=false 只回「顯示」的
 export async function listPages(env, { all = false } = {}) {
-  const [tokens, conf] = await Promise.all([pageTokens(env), settings(env)]);
+  const [tokens, conf] = await Promise.all([activePageTokens(env), settings(env)]);
   const out = [];
   for (const p of tokens.values()) {
     const c = conf.get(p.id);
@@ -200,7 +225,7 @@ export async function connectToken(env, raw, save) {
   if (!d.ok) return d;
   let userExpires = info.expires;
   if (extended) { try { userExpires = (await tokenInfo(env, ut)).expires; } catch { userExpires = null; } }
-  await save(ut, { pages: d.pages, expires: 0, dataExpires: d.dataExpires, userExpires });
+  await save(ut, { pages: d.pages, expires: 0, dataExpires: d.dataExpires, userExpires, app: info.app || '' });
   return { ok: true, ut, extended, pages: d.pages.length };
 }
 
@@ -214,7 +239,7 @@ export async function refreshPages(env) {
   let d;
   try { d = await derivePages(env, ut, false); } catch (e) { if (isTokenError(e)) return { cleared: true, renewed: false, reason: 'user_expired' }; throw e; }
   if (!d.ok) return { cleared: true, renewed: false, reason: /無效或已過期/.test(d.error) ? 'user_expired' : 'failed', error: d.error };
-  await savePageTokens(env, { pages: d.pages, expires: 0, dataExpires: d.dataExpires, userExpires: st.userExpires });
+  await savePageTokens(env, { pages: d.pages, expires: 0, dataExpires: d.dataExpires, userExpires: st.userExpires, app: st.app || '' });
   return { cleared: true, renewed: true, pages: d.pages.length };
 }
 
@@ -257,10 +282,10 @@ export async function tokenStatus(env) {
   if (st) {
     pages = st.pages.length;
     if (!userValid) missing = [];   // 使用者權杖過期查不到權限，不代表粉專權杖缺權限
-    notePageTokens(env, st.pages);
+    notePageTokens(env, st.pages, await profileId(env));
     try { const pi = await tokenInfo(env, st.pages[0].token); valid = pi.valid; if (!app) app = pi.app; } catch (e) { if (isTokenError(e)) valid = false; }
   } else if (userValid) {
-    try { pages = (await pageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; else if (e.code !== 'fb_no_pages') throw e; }
+    try { pages = (await activePageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; else if (e.code !== 'fb_no_pages') throw e; }
   }
   const broken = await brokenAt(env);
   const stored = st ? { pages: st.pages.length, expires: st.expires, dataExpires: st.dataExpires, savedAt: st.savedAt } : null;

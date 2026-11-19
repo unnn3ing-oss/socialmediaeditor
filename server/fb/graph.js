@@ -45,7 +45,7 @@ export async function graph(env, method, path, params, token, base = GRAPH) {
     const code = Number(err.code) || -1;
     // 5xx／讀不到內容／臉書的「未知錯誤」(1)、「暫時無法服務」(2)：請求可能已被處理，發文要當待確認
     const uncertain = !res.ok && (res.status >= 500 || data == null || code === 1 || code === 2);
-    if (isTokenError({ code }) && isPageToken(env, token)) await markBroken(env);   // 粉專權杖失效：管理頁與工具顯示提醒
+    if (isTokenError({ code }) && isPageToken(env, token)) await markBroken(env, token);   // 粉專權杖失效：管理頁與工具顯示提醒
     throw new GraphError(code, err.message || '臉書回應錯誤（HTTP ' + res.status + '）', res.status, err.error_subcode, uncertain);
   }
   return data;

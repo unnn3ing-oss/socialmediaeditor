@@ -3,7 +3,7 @@
 //   POST：用「App 密鑰」驗 X-Hub-Signature-256；只記最後收到的時間與事件種類（D1 fb_settings k='webhook_last'），不存內容
 //   驗證權杖由 SESSION_SECRET 衍生，不另存
 import { readBody } from '../core/http.js';
-import { appCred } from './tokenstore.js';
+import { allAppCreds } from './tokenstore.js';
 
 export const HOOK_PATH = '/fbhook';
 const LAST_KEY = 'webhook_last';
@@ -68,9 +68,12 @@ export async function handleFbHook(request, env, path) {
   if (request.method === 'POST') {
     const buf = await readBody(request, MAX_BODY);
     if (!buf) return text('too large', 413);
-    const cred = await appCred(env);
+    // 權杖組別各自的 App 密鑰：任一組驗得過就算（不同 App 各自訂閱 Webhook）
+    const creds = await allAppCreds(env);
     const sig = request.headers.get('x-hub-signature-256') || '';
-    if (!cred || !sig.startsWith('sha256=') || !sameText(sig.slice(7).toLowerCase(), await hmacHex(cred.secret, buf))) return text('forbidden', 403);
+    let okSig = false;
+    if (sig.startsWith('sha256=')) for (const c of creds) if (sameText(sig.slice(7).toLowerCase(), await hmacHex(c.secret, buf))) { okSig = true; break; }
+    if (!okSig) return text('forbidden', 403);
     let body;
     try { body = JSON.parse(new TextDecoder().decode(buf)); } catch { return text('bad request', 400); }
     if (!body || typeof body !== 'object') return text('bad request', 400);
@@ -85,7 +88,7 @@ export async function webhookState(request, env) {
   return {
     url: new URL(request.url).origin + HOOK_PATH,
     verifyToken: await verifyToken(env),
-    signReady: !!(await appCred(env)),
+    signReady: (await allAppCreds(env)).length > 0,
     last: await readLast(env)
   };
 }
