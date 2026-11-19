@@ -139,6 +139,8 @@ test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加�
   }
   assert.ok(fs.readdirSync(out).some((f) => f.includes('影片 vA')), fs.readdirSync(out).join(','));
   assert.ok(await page.evaluate(() => [...document.querySelectorAll('#queue-list textarea')].some((t) => t.offsetParent)), '網頁版有內文框');
+  // 標題列只寫總數（完成、速度、剩餘不寫）
+  await page.waitForFunction(() => document.getElementById('queue-stats').textContent === '共 1 支', null, { timeout: 5000 });
   if (process.env.E2E_SHOTS) await page.screenshot({ path: path.join(process.env.E2E_SHOTS, 'ytdl-done.png'), fullPage: true });
 
   // 5. 壞網址被擋；未知 op 被核心擋
