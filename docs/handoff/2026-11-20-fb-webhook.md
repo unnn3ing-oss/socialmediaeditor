@@ -15,17 +15,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/webhook.js`（新） | `handleFbHook`、`verifyToken`、`webhookState` | ⬜ |
-| `server/index.js` | modules 加 `handleFbHook` | ⬜ |
-| `server/fb/index.js` | `GET /admin/fb/webhook` | ⬜ |
-| `admin/`、`server/core/admin-page.js` | Webhook 卡片 | ⬜ |
-| `privacy/index.html` | 補 Webhook 一句（中英） | ⬜ |
-| 測試 | `test/server/fb-webhook.test.js`、admin e2e | ⬜ |
+| `server/fb/webhook.js`（新） | `handleFbHook`、`verifyToken`、`webhookState` | ✅ |
+| `server/index.js` | modules 加 `handleFbHook` | ✅ |
+| `server/fb/index.js` | `GET /admin/fb/webhook` | ✅ |
+| `admin/`、`server/core/admin-page.js` | Webhook 卡片 | ✅ |
+| `privacy/index.html` | 補 Webhook 一句（中英） | ✅ |
+| 測試 | `test/server/fb-webhook.test.js`、admin e2e | ✅ |
 
 ## 下一步
-- [ ] 後端＋單元測試
-- [ ] 管理頁兩份＋e2e
-- [ ] 隱私權政策、審查、給使用者看；「推」才併 main（同 commit 更新 CLAUDE.md）
+- [x] 後端＋單元測試（`test/server/fb-webhook.test.js` 3 項）
+- [x] 管理頁兩份＋e2e（admin 22 項）
+- [x] 隱私權政策（中英各一列）
+- [ ] 獨立審查 → 給使用者看；「推」才併 main（同 commit 更新 CLAUDE.md）
 
 ## 測試
 `npm test`、`node build.js --check`、`node --test test/e2e/admin.e2e.js test/e2e/legal.e2e.js`。

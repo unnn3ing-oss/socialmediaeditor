@@ -84,6 +84,31 @@
         </div>
       </section>
 
+      <section class="card" id="whCard">
+
+        <h2>Webhook</h2>
+
+        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。目前只記錄收到的時間與事件種類，不保存內容。</p>
+
+        <dl class="wh-list">
+
+          <dt>回呼網址</dt><dd><code id="whUrl">尚未讀取</code><button id="whUrlCopy" type="button">複製</button></dd>
+
+          <dt>驗證權杖</dt><dd><code id="whTok">尚未讀取</code><button id="whTokCopy" type="button">複製</button></dd>
+
+          <dt>簽章檢查</dt><dd id="whSign">尚未讀取</dd>
+
+          <dt>最後收到</dt><dd id="whLast">尚未讀取</dd>
+
+        </dl>
+
+        <div class="row"><button id="whRefresh" type="button">重新整理</button></div>
+
+        <p class="msg" id="whMsg" role="status"></p>
+
+      </section>
+
+
       <section class="card" id="pgCard">
         <h2>粉專設定</h2>
         <p>簡稱只影響網頁上的顯示；UTM 只影響第 1 則留言裡的文章連結：「圖文」用在選套版、純文字圖，「文字」用在純文字貼文（空白就不加 UTM，發文時會提醒）。RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>

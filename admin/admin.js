@@ -252,7 +252,7 @@ if (window.top !== window.self) {
   var fbLoaded = false;
   function fbLoad() {
     fbLoaded = true; say($('fbMsg'), '');
-    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad(), appLoad()]);
+    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad(), appLoad(), whLoad()]);
   }
   // ---- App 密鑰（/admin/fb/app）：只回有沒有設定與 App ID，Secret 永不回傳 ----
   function appShow(d) {
@@ -290,6 +290,26 @@ if (window.top !== window.self) {
     }).catch(function (e) { say($('appMsg'), '失敗：' + (e && e.message || ''), 'err'); })
       .then(function () { $('appClear').disabled = false; });
   };
+  // ---- Webhook（/admin/fb/webhook）：回呼網址、驗證權杖、簽章狀態、最後收到 ----
+  function whLoad() {
+    return api('/admin/fb/webhook').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data;
+      $('whUrl').textContent = d.url;
+      $('whTok').textContent = d.verifyToken || '後端沒有 SESSION_SECRET，無法產生';
+      $('whSign').textContent = d.signReady ? '已設定 App 密鑰，可以驗證臉書簽章' : '還沒設定 App 密鑰（見「臉書連線」），收到的通知一律拒收';
+      $('whSign').className = d.signReady ? 'good' : 'err';
+      $('whLast').textContent = d.last ? fmtTime(d.last.at) + '．' + (d.last.object || '未知') + (d.last.fields.length ? '／' + d.last.fields.join('、') : '') : '還沒收到';
+    }).catch(function (e) { say($('whMsg'), '讀取 Webhook 狀態失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function whCopy(id, label) {
+    var t = $(id).textContent;
+    if (!navigator.clipboard) { say($('whMsg'), '這個瀏覽器不能自動複製，請手動選取。', 'err'); return; }
+    navigator.clipboard.writeText(t).then(function () { say($('whMsg'), '已複製' + label + '。', 'good'); }, function () { say($('whMsg'), '複製失敗，請手動選取。', 'err'); });
+  }
+  $('whUrlCopy').onclick = function () { whCopy('whUrl', '回呼網址'); };
+  $('whTokCopy').onclick = function () { whCopy('whTok', '驗證權杖'); };
+  $('whRefresh').onclick = function () { say($('whMsg'), ''); whLoad(); };
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
     if (!v) { say($('fbTokMsg'), '請先貼上權杖。', 'err'); return; }

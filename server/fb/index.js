@@ -11,6 +11,7 @@ import { listPresets, validPresets, savePresets } from './presets.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
+import { webhookState } from './webhook.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
 export function fbFail(request, env, e) {
@@ -202,6 +203,7 @@ adminRoute('POST', /^\/admin\/fb\/app$/, async (request, env) => {
   return ok(request, env, await appState(env));
 });
 adminRoute('DELETE', /^\/admin\/fb\/app$/, async (request, env) => { await clearAppCred(env); return ok(request, env, await appState(env)); });
+adminRoute('GET', /^\/admin\/fb\/webhook$/, async (request, env) => ok(request, env, await webhookState(request, env)));
 adminRoute('GET', /^\/admin\/fb\/video-settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)));
 adminRoute('POST', /^\/admin\/fb\/video-settings$/, async (request, env) => {
   const v = validVideoSettings(await readJsonBody(request, 16384));

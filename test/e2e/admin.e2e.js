@@ -38,6 +38,7 @@ const DATA = {
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
   'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP', extended: true }; },
+  'GET /admin/fb/webhook': { url: 'https://api.example/fbhook', verifyToken: '0123456789abcdef0123456789abcdef', signReady: false, last: { at: Date.UTC(2026, 10, 20, 2, 31), object: 'page', fields: ['feed'] } },
   'GET /admin/fb/app': () => APP,
   'POST /admin/fb/app': (b) => { APP_SAVED = b; APP = { configured: true, appId: b.appId, source: 'admin', savedAt: Date.UTC(2026, 10, 20, 2, 30) }; return APP; },
   'DELETE /admin/fb/app': () => { APP = { configured: false, appId: '', source: null, savedAt: null }; return APP; },
@@ -323,6 +324,26 @@ test('活動留言：手機 390px 不橫向捲動', async () => {
   await page.waitForSelector('#psRows .ps-row');
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(over <= 0, '橫向捲動 ' + over);
+});
+
+test('Webhook 卡片：顯示回呼網址、驗證權杖、簽章狀態、最後收到；複製', async () => {
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await login(page);
+  await page.waitForFunction(() => /fbhook/.test(document.getElementById('whUrl').textContent));
+  assert.equal(await page.textContent('#whUrl'), 'https://api.example/fbhook');
+  assert.equal(await page.textContent('#whTok'), '0123456789abcdef0123456789abcdef');
+  assert.match(await page.textContent('#whSign'), /還沒設定 App 密鑰/);
+  assert.match(await page.textContent('#whLast'), /2026-11-20.*page／feed/);
+  await page.click('#whTokCopy');
+  await page.waitForFunction(() => /已複製驗證權杖/.test(document.getElementById('whMsg').textContent));
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '0123456789abcdef0123456789abcdef');
+  if (SHOT) await page.locator('#whCard').screenshot({ path: path.join(SHOT, 'admin-webhook.png') });
+  await page.setViewportSize({ width: 375, height: 800 });
+  const over = await page.$eval('#whCard', (c) => c.scrollWidth > c.clientWidth + 1);
+  assert.equal(over, false, '手機寬不超出');
+  assert.ok(calls.some((c) => c.key === 'GET /admin/fb/webhook' && c.auth === 'Bearer T'));
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });
 
 test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成功清空、只顯示 App ID）、清除', async () => {
