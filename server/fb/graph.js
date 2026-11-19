@@ -22,14 +22,14 @@ export async function graph(env, method, path, params, token, base = GRAPH) {
   const init = { method };
   if (method === 'GET' || method === 'DELETE') {
     for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    url.searchParams.set('access_token', token);
+    if (token) url.searchParams.set('access_token', token);
   } else if (params instanceof FormData) {
-    params.set('access_token', token);
+    if (token) params.set('access_token', token);
     init.body = params;
   } else {
     const body = new URLSearchParams();
     for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== null) body.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
-    body.set('access_token', token);
+    if (token) body.set('access_token', token);
     init.body = body;
   }
   let res, data;
@@ -54,14 +54,18 @@ export async function graph(env, method, path, params, token, base = GRAPH) {
 // 影片上傳主機（graph-video）；params 有 Blob 時請自己包成 FormData
 export const graphVideo = (env, method, path, params, token) => graph(env, method, path, params, token, GRAPH_VIDEO);
 
-// 短效使用者權杖 → 長效（約 60 天）：需要 Secrets FB_APP_ID、FB_APP_SECRET（App 密鑰只在後端，不經前端）
-// 沒設定回 null；臉書拒絕丟 GraphError
-export const canExtend = (env) => typeof env.FB_APP_ID === 'string' && !!env.FB_APP_ID.trim() && typeof env.FB_APP_SECRET === 'string' && !!env.FB_APP_SECRET.trim();
-export async function exchangeToken(env, ut) {
-  if (!canExtend(env)) return null;
+// 短效使用者權杖 → 長效（約 60 天）：cred＝appCred() 的結果（App 密鑰只在後端，不經前端）；臉書拒絕丟 GraphError
+export async function exchangeToken(env, ut, cred) {
   const d = await graph(env, 'GET', '/oauth/access_token', {
-    grant_type: 'fb_exchange_token', client_id: env.FB_APP_ID.trim(), client_secret: env.FB_APP_SECRET.trim(), fb_exchange_token: ut
-  }, ut);
+    grant_type: 'fb_exchange_token', client_id: cred.appId, client_secret: cred.secret, fb_exchange_token: ut
+  }, null);
   if (!d || typeof d.access_token !== 'string' || !d.access_token) throw new GraphError(-1, '臉書沒有回傳長效權杖', 200);
   return d.access_token;
+}
+
+// 驗證 App ID＋App Secret 是一對（client_credentials 換得到 App 權杖）；不對丟 GraphError
+export async function checkAppCred(env, appId, secret) {
+  const d = await graph(env, 'GET', '/oauth/access_token', { grant_type: 'client_credentials', client_id: appId, client_secret: secret }, null);
+  if (!d || typeof d.access_token !== 'string' || !d.access_token) throw new GraphError(-1, '臉書沒有回傳 App 權杖', 200);
+  return true;
 }

@@ -72,6 +72,16 @@
           <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
           <p class="msg" id="fbTokMsg" role="status"></p>
         </div>
+        <div class="fb-tok fb-app">
+          <p class="fb-sub">App 密鑰（由 App 管理員輸入一次，存了之後不再顯示；用來把剛產生的權杖自動延長）</p>
+          <p class="fb-state" id="appState">狀態：尚未讀取</p>
+          <label for="appId">App ID</label>
+          <input id="appId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="20" placeholder="應用程式設定 &gt; 基本資料 的「應用程式編號」">
+          <label for="appSecret">App Secret</label>
+          <input id="appSecret" type="password" autocomplete="off" spellcheck="false" maxlength="32" placeholder="同一頁的「應用程式密鑰」">
+          <div class="row"><button id="appSave" type="button">驗證並儲存</button><button id="appClear" type="button" hidden>清除</button></div>
+          <p class="msg" id="appMsg" role="status"></p>
+        </div>
       </section>
 
       <section class="card" id="pgCard">

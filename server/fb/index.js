@@ -3,8 +3,8 @@ import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
 import { audit } from '../core/staff.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError } from './pages.js';
-import { saveToken, clearToken, savePageTokens } from './tokenstore.js';
-import { GraphError } from './graph.js';
+import { saveToken, clearToken, savePageTokens, appCred, saveAppCred, clearAppCred, APP_ID_RE, APP_SECRET_RE } from './tokenstore.js';
+import { GraphError, checkAppCred } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
@@ -182,6 +182,26 @@ adminRoute('DELETE', /^\/admin\/fb\/token$/, async (request, env) => {
   await clearPageCache(env);
   return ok(request, env, await tokenStatus(env));
 });
+// App 密鑰（自動延長權杖用）：只回有沒有設定、App ID、來源、設定時間；App Secret 永不回傳
+async function appState(env) {
+  const c = await appCred(env);
+  return c ? { configured: true, appId: c.appId, source: c.source, savedAt: c.savedAt } : { configured: false, appId: '', source: null, savedAt: null };
+}
+adminRoute('GET', /^\/admin\/fb\/app$/, async (request, env) => ok(request, env, await appState(env)));
+adminRoute('POST', /^\/admin\/fb\/app$/, async (request, env) => {
+  const body = await readJsonBody(request, 2048);
+  const appId = body && typeof body.appId === 'string' ? body.appId.trim() : '';
+  const secret = body && typeof body.secret === 'string' ? body.secret.trim() : '';
+  if (!APP_ID_RE.test(appId)) return fail(request, env, 'bad_request', 'App ID 是 1～20 位數字。');
+  if (!APP_SECRET_RE.test(secret)) return fail(request, env, 'bad_request', 'App Secret 是 32 位英數字。');
+  try { await checkAppCred(env, appId, secret); } catch (e) {
+    if (e instanceof GraphError) return fail(request, env, 'fb_error', 'App ID 和 App Secret 對不上（臉書：' + String(e.message).slice(0, 120) + '）。');
+    throw e;
+  }
+  await saveAppCred(env, appId, secret);
+  return ok(request, env, await appState(env));
+});
+adminRoute('DELETE', /^\/admin\/fb\/app$/, async (request, env) => { await clearAppCred(env); return ok(request, env, await appState(env)); });
 adminRoute('GET', /^\/admin\/fb\/video-settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)));
 adminRoute('POST', /^\/admin\/fb\/video-settings$/, async (request, env) => {
   const v = validVideoSettings(await readJsonBody(request, 16384));

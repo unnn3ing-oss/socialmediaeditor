@@ -6,6 +6,10 @@
 const KEY = 'user_token';
 const PAGES_KEY = 'page_tokens';
 const BROKEN_KEY = 'token_broken';
+//   k='app_cred'：App ID＋App Secret（主管在管理頁輸入，用來把短效權杖自動延長）JSON { appId, secret, savedAt }
+const APP_KEY = 'app_cred';
+export const APP_ID_RE = /^\d{1,20}$/;
+export const APP_SECRET_RE = /^[A-Za-z0-9]{32}$/;
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64 = (u8) => btoa(String.fromCharCode(...u8));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -107,3 +111,26 @@ export function notePageTokens(env, list) {
   for (const p of list) if (p && p.token) s.add(p.token);
 }
 export const isPageToken = (env, t) => !!(env && typeof env === 'object' && handed.has(env) && handed.get(env).has(t));
+
+// App 密鑰：管理頁存的優先，否則 Secrets FB_APP_ID／FB_APP_SECRET；都沒有或格式不對回 null
+// 回 { appId, secret, source:'admin'|'secret', savedAt }（secret 只給後端用，不能回傳前端）
+export async function appCred(env) {
+  const v = await readRow(env, APP_KEY);
+  if (v) {
+    const plain = await decryptToken(env, v);
+    try {
+      const o = plain ? JSON.parse(plain) : null;
+      if (o && APP_ID_RE.test(String(o.appId)) && APP_SECRET_RE.test(String(o.secret))) {
+        return { appId: String(o.appId), secret: String(o.secret), source: 'admin', savedAt: Number(o.savedAt) || null };
+      }
+    } catch { /* 壞掉就退回 Secret */ }
+  }
+  const id = typeof env.FB_APP_ID === 'string' ? env.FB_APP_ID.trim() : '';
+  const sec = typeof env.FB_APP_SECRET === 'string' ? env.FB_APP_SECRET.trim() : '';
+  if (id && sec) return { appId: id, secret: sec, source: 'secret', savedAt: null };
+  return null;
+}
+export async function saveAppCred(env, appId, secret) {
+  await writeRow(env, APP_KEY, await encryptToken(env, JSON.stringify({ appId, secret, savedAt: Date.now() })));
+}
+export async function clearAppCred(env) { await deleteRow(env, APP_KEY); }

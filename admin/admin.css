@@ -76,3 +76,4 @@ textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line
 .sf-add{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:8px 0 12px}.sf-f{margin:0;flex:1 1 150px;min-width:0;font-size:14px;color:var(--mute)}.sf-f input,.sf-f select{margin-top:4px;color:var(--ink);font-size:16px}
 .sf-table{min-width:780px}.sf-table th,.sf-table td,#auWrap th,#auWrap td{white-space:nowrap}.sf-table select{min-width:120px}.sf-contact{width:150px;min-width:120px}.sf-ops{white-space:nowrap}.sf-ops button{margin-right:8px}
 .sg-row input[type=text]{max-width:320px}.sg-perms{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0}.sg-perm{display:flex;align-items:center;gap:6px;margin:0;font-weight:400;min-height:36px}.sg-perm input{width:20px;height:20px;min-height:0}.sg-used{color:var(--mute);font-size:14px}
+.fb-app .fb-sub{margin:0 0 6px;font-weight:700}.fb-app input+label{margin-top:10px}

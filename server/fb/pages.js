@@ -2,8 +2,8 @@
 //   管理頁「驗證並儲存」時已換好、存進 D1 的粉專權杖（不會過期）優先；
 //   沒有時（例：只設 Secret FB_USER_TOKEN）用使用者權杖 → /me/accounts（不足時用精細範圍逐一查）取各粉專 token（KV 快取 1 小時）
 //   ＋ D1 fb_pages 的顯示設定
-import { graph, isTokenError, canExtend, exchangeToken } from './graph.js';
-import { userToken, storedPageTokens, savePageTokens, notePageTokens, brokenAt } from './tokenstore.js';
+import { graph, isTokenError, exchangeToken } from './graph.js';
+import { userToken, storedPageTokens, savePageTokens, notePageTokens, brokenAt, appCred } from './tokenstore.js';
 
 const CACHE_KEY = 'fb:accounts';
 const CACHE_TTL = 3600;
@@ -173,7 +173,7 @@ async function derivePages(env, ut, extended) {
   if (pinfo.expires !== 0) {
     return { ok: false, error: extended
       ? '延長後換到的粉專權杖仍會過期，請重新產生權杖再試。'
-      : '這是短效權杖，換到的粉專權杖約 1 小時就會失效。後端沒有設定 FB_APP_ID／FB_APP_SECRET，無法自動延長：請先到「存取權杖偵錯工具」按 Extend，再貼延長後的權杖。' };
+      : '這是短效權杖，換到的粉專權杖約 1 小時就會失效。還沒設定「App 密鑰」，無法自動延長：請先到「存取權杖偵錯工具」按 Extend 再貼，或請 App 管理員在下方輸入 App 密鑰。' };
   }
   return { ok: true, pages, dataExpires: pinfo.dataExpires };
 }
@@ -187,12 +187,13 @@ export async function connectToken(env, raw, save) {
   if (info.type && info.type !== 'USER') return { ok: false, error: `這是 ${info.type} 權杖，請貼「使用者權杖」（User）。` };
   if (info.scopes.length && !info.scopes.includes('pages_manage_posts')) return { ok: false, error: '權杖缺少 pages_manage_posts 權限。' };
   let ut = raw, extended = false;
-  if (canExtend(env)) {
-    if (info.appId && info.appId !== env.FB_APP_ID.trim()) {
-      return { ok: false, error: `這個權杖屬於另一個 App（${info.app || info.appId}），請在 Graph API Explorer 選後端設定的 App 再產生。` };
+  const cred = await appCred(env);
+  if (cred) {
+    if (info.appId && info.appId !== cred.appId) {
+      return { ok: false, error: `這個權杖屬於另一個 App（${info.app || info.appId}），請在 Graph API Explorer 選 App ID ${cred.appId} 的 App 再產生。` };
     }
-    try { ut = await exchangeToken(env, raw); extended = true; } catch (e) {
-      return { ok: false, error: '自動延長失敗：' + errText(e) + '。請確認 FB_APP_ID／FB_APP_SECRET 和權杖是同一個 App。' };
+    try { ut = await exchangeToken(env, raw, cred); extended = true; } catch (e) {
+      return { ok: false, error: '自動延長失敗：' + errText(e) + '。請確認「App 密鑰」和權杖是同一個 App（App Secret 換過要重新輸入）。' };
     }
   }
   const d = await derivePages(env, ut, extended);
@@ -242,7 +243,7 @@ export async function quickWarn(env) {
 //   stored＝存好的粉專權杖 { pages, expires, dataExpires, savedAt }（不含權杖）；autoExtend＝後端有沒有 App 密鑰
 export async function tokenStatus(env) {
   const { token: ut, source } = await userToken(env);
-  const autoExtend = canExtend(env);
+  const autoExtend = !!(await appCred(env));
   if (!ut) return { configured: false, valid: false, userValid: false, expires: null, missing: NEEDED_PERMS.slice(), pages: 0, source: null, app: '', autoExtend, stored: null, broken: null, warn: null };
   const st = await storedPageTokens(env);
   let userValid = true, missing = NEEDED_PERMS.slice(), expires = null, pages = 0, app = '';

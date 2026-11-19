@@ -21,6 +21,7 @@ const PAGES = [
   { id: '1', name: 'TVBS 新聞', short: '新聞', utm: '', rd: 'news', order: 0, show: 1 },
   { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', utmText: '?&utm_medium=text', rd: 'ent', order: 1, show: 1 },
   { id: '3', name: 'TVBS 少康戰情室', short: '少康', utm: '', rd: '', order: 2, show: 0 }];
+let APP = { configured: false, appId: '', source: null, savedAt: null }, APP_SAVED = null;
 const DATA = {
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
@@ -37,6 +38,9 @@ const DATA = {
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
   'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP', extended: true }; },
+  'GET /admin/fb/app': () => APP,
+  'POST /admin/fb/app': (b) => { APP_SAVED = b; APP = { configured: true, appId: b.appId, source: 'admin', savedAt: Date.UTC(2026, 10, 20, 2, 30) }; return APP; },
+  'DELETE /admin/fb/app': () => { APP = { configured: false, appId: '', source: null, savedAt: null }; return APP; },
   'DELETE /admin/fb/token': { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'secret', app: 'DEV-TOOL' },
   'GET /admin/rundown': { configured: true },
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN(2026)', sheets: ['2026/11'] },
@@ -319,6 +323,31 @@ test('活動留言：手機 390px 不橫向捲動', async () => {
   await page.waitForSelector('#psRows .ps-row');
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(over <= 0, '橫向捲動 ' + over);
+});
+
+test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成功清空、只顯示 App ID）、清除', async () => {
+  APP = { configured: false, appId: '', source: null, savedAt: null };
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  await login(page);
+  await page.waitForFunction(() => /未設定/.test(document.getElementById('appState').textContent));
+  assert.equal(await page.isVisible('#appClear'), false);
+  assert.equal(await page.getAttribute('#appSecret', 'type'), 'password');
+  await page.click('#appSave');
+  assert.match(await page.textContent('#appMsg'), /請填 App ID 和 App Secret/);
+  await page.fill('#appId', ' 1234567890 ');
+  await page.fill('#appSecret', 'abcdef0123456789abcdef0123456789');
+  await page.click('#appSave');
+  await page.waitForFunction(() => /已驗證並儲存/.test(document.getElementById('appMsg').textContent));
+  assert.deepEqual(APP_SAVED, { appId: '1234567890', secret: 'abcdef0123456789abcdef0123456789' });
+  assert.equal(await page.inputValue('#appSecret'), '', '成功後清空');
+  await page.waitForFunction(() => /已設定；App ID 1234567890/.test(document.getElementById('appState').textContent));
+  assert.ok(!(await page.textContent('#fbCard, body')).includes('abcdef0123456789abcdef0123456789'), '畫面不顯示 Secret');
+  if (SHOT) await page.locator('#appState').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'admin-fb-app.png') });
+  page.once('dialog', (d) => d.accept());
+  await page.click('#appClear');
+  await page.waitForFunction(() => /已清除/.test(document.getElementById('appMsg').textContent));
+  assert.ok(calls.some((c) => c.key === 'DELETE /admin/fb/app' && c.auth === 'Bearer T'));
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });
 
 test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後清空輸入框）；改回 Secret 打 DELETE', async () => {

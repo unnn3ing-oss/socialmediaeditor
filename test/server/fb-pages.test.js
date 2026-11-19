@@ -436,3 +436,60 @@ test('tokenWarn：14 天內提醒、過期為 bad；有存粉專權杖看資料�
   assert.equal(tokenWarn({ stored: { dataExpires: 0 }, userExpires: s - 10, now }), null);
   assert.equal(tokenWarn({ stored: null, userExpires: 0, broken: now, now }).level, 'bad');
 });
+
+// ---- App 密鑰（管理頁輸入）----
+const SEC32 = 'abcdef0123456789ABCDEF0123456789';
+test('App 密鑰：格式檢查、client_credentials 驗證通過才加密存；永不回傳 Secret；清除', async (t) => {
+  const f = installFetch({
+    'GET /oauth/access_token': (c) => (c.query.grant_type === 'client_credentials' && c.query.client_id === '555' && c.query.client_secret === SEC32 ? { access_token: '555|apptoken', token_type: 'bearer' } : gErr(1, 400, 'Error validating client secret'))
+  }); t.after(f.restore);
+  const env = mkEnv();
+  const adm = await auth(env, 'admin');
+  const post = (b) => call(env, '/admin/fb/app', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify(b) });
+  assert.equal((await call(env, '/admin/fb/app', { headers: await auth(env, 'company', true) })).status, 401, '公司憑證不能看');
+  assert.deepEqual((await (await call(env, '/admin/fb/app', { headers: adm })).json()).data, { configured: false, appId: '', source: null, savedAt: null });
+  let b = await (await post({ appId: '55a', secret: SEC32 })).json(); assert.match(b.error, /App ID/);
+  b = await (await post({ appId: '555', secret: 'short' })).json(); assert.match(b.error, /32 位/);
+  assert.ok(!f.calls.length, '格式不對不打臉書');
+  b = await (await post({ appId: '555', secret: SEC32.replace('a', 'b') })).json(); assert.equal(b.code, 'fb_error'); assert.match(b.error, /對不上/);
+  assert.ok(!(await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'app_cred'").first().catch(() => null)));
+  const r = await post({ appId: ' 555 ', secret: SEC32 });
+  const txt = await r.text();
+  assert.equal(r.status, 200, txt);
+  assert.ok(!txt.includes(SEC32) && !txt.includes('apptoken'), '不回傳 Secret 與 App 權杖');
+  const d = JSON.parse(txt).data;
+  assert.equal(d.configured, true); assert.equal(d.appId, '555'); assert.equal(d.source, 'admin'); assert.ok(d.savedAt);
+  const row = await env.DB.prepare("SELECT v FROM fb_settings WHERE k = 'app_cred'").first();
+  assert.ok(row.v.startsWith('v1.') && !row.v.includes(SEC32), '加密存');
+  assert.ok(!('access_token' in f.calls.at(-1).query), '驗證時不帶 access_token');
+  const del = (await (await call(env, '/admin/fb/app', { method: 'DELETE', headers: adm })).json()).data;
+  assert.equal(del.configured, false);
+});
+
+test('App 密鑰：管理頁存的優先於 Secret；貼權杖時用它自動延長、比對 App ID', async (t) => {
+  const f = installFetch({
+    'GET /oauth/access_token': (c) => (c.query.grant_type === 'client_credentials' ? { access_token: 'x|y' }
+      : c.query.client_id === '555' && c.query.client_secret === SEC32 ? { access_token: 'LONG2' } : gErr(101, 400, 'wrong app')),
+    'GET /debug_token': debugBy({
+      SHORT: { data: { type: 'USER', is_valid: true, app_id: '555', application: 'DEV-TOOL', expires_at: nowSec() + 3600, scopes: ['pages_manage_posts'] } },
+      '*': { data: { type: 'USER', is_valid: true, app_id: '555', expires_at: 0, scopes: ['pages_manage_posts'] } }
+    }),
+    'GET /me/accounts': () => ACCOUNTS,
+    'GET /me/permissions': () => ({ data: [] })
+  }); t.after(f.restore);
+  const env = appEnv();   // Secret 是 999
+  const adm = await auth(env, 'admin');
+  const app0 = (await (await call(env, '/admin/fb/app', { headers: adm })).json()).data;
+  assert.equal(app0.source, 'secret'); assert.equal(app0.appId, '999');
+  // 權杖是 555 的 → 用 Secret 999 會被擋
+  let b = await (await call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'SHORT' }) })).json();
+  assert.match(b.error, /App ID 999/);
+  await call(env, '/admin/fb/app', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ appId: '555', secret: SEC32 }) });
+  b = await (await call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ token: 'SHORT' }) })).json();
+  assert.equal(b.ok, true, JSON.stringify(b)); assert.equal(b.data.extended, true); assert.equal(b.data.autoExtend, true);
+  const { storedToken } = await import('../../server/fb/tokenstore.js');
+  assert.equal(await storedToken(env), 'LONG2');
+  // 「改回 Secret」（刪使用者權杖）不動 App 密鑰
+  await call(env, '/admin/fb/token', { method: 'DELETE', headers: adm });
+  assert.equal((await (await call(env, '/admin/fb/app', { headers: adm })).json()).data.source, 'admin');
+});
