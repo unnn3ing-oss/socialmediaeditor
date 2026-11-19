@@ -75,7 +75,13 @@ const GROUPS = [
   { id: 'viewer', name: '唯讀', perms: ['view'] },
   { id: 'editor', name: '小編', perms: ['view', 'post', 'edit'] },
   { id: 'lead', name: '主管', perms: ['view', 'post', 'edit', 'delete', 'bypass'] }];
-function sfState() { return { staff: STAFF, groups: GROUPS.map((g) => ({ ...g, used: STAFF.filter((s) => s.group === g.id).length })), perms: PERMS }; }
+// STAFF_AS：設了就模擬「非系統管理者」看到的名單（canEdit／assignable／me）
+let STAFF_AS = null;
+function sfState() {
+  const base = { staff: STAFF, groups: GROUPS.map((g) => ({ ...g, used: STAFF.filter((s) => s.group === g.id).length })), perms: PERMS };
+  if (!STAFF_AS) return base;
+  return { ...base, staff: STAFF.map((s) => ({ ...s, canEdit: s.id !== STAFF_AS.id })), groups: base.groups.map((g) => ({ ...g, assignable: g.id !== 'lead' })), me: { role: 'mgr', canLevel: false, canAdd: true, id: STAFF_AS.id } };
+}
 function staffRoute(req, u, key) {
   const p = u.pathname;
   if (!(p.startsWith('/admin/staff') || p === '/admin/audit')) return null;
@@ -631,14 +637,14 @@ test('速率限制：App 與各粉專三個 % 長條（≥75 黃、≥90 紅）�
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/usage/refresh' && c.auth === 'Bearer T'));
 });
 
-test('首頁員工（管理者）直接進入：只看到層級有的卡片與分類，沒有解鎖區，按鈕是「離開管理頁」', async () => {
+test('首頁員工（管理者）直接進入：只看到層級有的卡片與分類，沒有解鎖區、不顯示登出鈕', async () => {
   resetStaff();
   const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['access', 'staff', 'audit', 'logs'], name: '王小明', id: 'A001' };
   const { page, calls } = await open({ width: 1280, height: 860 }, '', { token: 'F1', me });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#login'), false);
   assert.equal(await page.textContent('#whoTag'), '王小明・管理者');
-  assert.equal(await page.textContent('#logout'), '離開管理頁');
+  assert.equal(await page.isVisible('#logout'), false);
   assert.equal(await page.isVisible('#unlockBar'), false);
   assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['fb', 'staff', 'logs']);
   assert.equal(await page.isVisible('#acCard'), true);
@@ -702,13 +708,36 @@ test('授權名單（管理者）：不能動的列唯讀、層級只顯示文�
   resetStaff();
   STAFF[0].level = 'mgr'; STAFF[1].level = 'user'; STAFF[2].level = 'user';
   const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['staff'], name: '王小明', id: 'A001' };
+  STAFF_AS = { id: 'A001' };
   const { page } = await open({ width: 1280, height: 860 }, '#staff', { token: 'F4', me });
-  await page.route(API + '/admin/staff', (r) => r.fulfill({ json: { ok: true, data: { ...sfState(),
-    staff: STAFF.map((s) => ({ ...s, canEdit: s.id !== 'A001' })), groups: sfState().groups.map((g) => ({ ...g, assignable: g.id !== 'lead' })), me: { role: 'mgr', canLevel: false, canAdd: true, id: 'A001' } } } }));
   await page.waitForSelector('#sfWrap:not([hidden])');
   const row0 = await page.$$eval('#sfRows tr:first-child select, #sfRows tr:first-child button, #sfRows tr:first-child input', (els) => els.map((e) => e.disabled));
   assert.ok(row0.every(Boolean), '自己那列全部停用');
   assert.equal(await page.$eval('#sfRows tr:nth-child(2) td:nth-child(3)', (td) => td.textContent), '普通');
   assert.equal(await page.$eval('#sfRows tr:nth-child(2) button', (b) => b.disabled), false);
   assert.deepEqual(await page.$$eval('#sfGroup option', (o) => o.map((x) => x.value)), ['viewer', 'editor']);
+  STAFF_AS = null;
+});
+
+// 只在 SHOT_DIR 時拍（給使用者確認版面用）
+test('截圖：電腦版（系統管理者、管理者）與手機版', async () => {
+  if (!SHOT) return;
+  resetStaff();
+  STAFF[0].level = 'mgr';
+  const shot = async (page, name) => { await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOT, name), fullPage: true }); };
+  const { page } = await open({ width: 1280, height: 860 }, '#staff');
+  await login(page);
+  await page.waitForSelector('#lvRows tr'); await page.waitForSelector('#sfWrap:not([hidden])');
+  await shot(page, 'admin-sys-staff.png');
+  await page.click('#tab-fb'); await page.waitForSelector('#tpList li');
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.screenshot({ path: path.join(SHOT, 'admin-sys-fb.png') });
+  const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], name: '王小明', id: 'A001' };
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#fb', { token: 'F9', me });
+  await p2.waitForSelector('#app:not([hidden])'); await p2.waitForTimeout(500);
+  await p2.screenshot({ path: path.join(SHOT, 'admin-mgr-fb.png') });
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
+  const { page: p3 } = await open({ width: 390, height: 844 }, '#fb', { token: 'F8', me: locked });
+  await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
+  await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
 });

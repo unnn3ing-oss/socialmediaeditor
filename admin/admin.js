@@ -55,8 +55,9 @@ if (window.top !== window.self) {
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
     $('whoTag').hidden = false;
     $('whoTag').textContent = (me.role === 'sys' ? '' : me.name + '・') + me.roleName + (me.role === 'sys' && !me.unlocked ? '（敏感設定已鎖）' : '');
-    $('logout').hidden = false;
-    $('logout').textContent = frontToken && token !== frontToken ? '鎖定' : (frontToken ? '離開管理頁' : '登出');
+    // 首頁憑證進來且沒解鎖：不顯示（「回工具箱」就是離開）；解鎖過＝鎖定；管理密碼登入＝登出
+    $('logout').hidden = !!frontToken && token === frontToken;
+    $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
   function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; lvLoaded = false; sfState = null; }
   // 用目前的 token 讀身分；成功就進入管理頁
@@ -625,7 +626,6 @@ if (window.top !== window.self) {
   // 登出：首頁憑證進來的＝回首頁；解鎖過的＝鎖回去；管理密碼登入的＝登出
   $('logout').onclick = function () {
     if (frontToken && token !== frontToken) { token = frontToken; say($('unlockMsg'), ''); enter($('loginMsg')); return; }
-    if (frontToken) { location.href = '../'; return; }
     signOut(); say($('loginMsg'), ''); $('pw').focus();
   };
   // 解鎖敏感設定：輸入管理員密碼換 admin 憑證（只放記憶體）
