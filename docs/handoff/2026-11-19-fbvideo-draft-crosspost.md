@@ -33,8 +33,10 @@
 - [x] 後端草稿＋多文
 - [x] 前端草稿＋多文
 - [x] RD slot＋Apps Script 補丁
-- [x] 測試（npm test 710、fbvideo e2e 8）、截圖
-- [ ] 獨立審查 → 給使用者看 → 等「推」
+- [x] 測試（npm test 711、fbvideo e2e 8）、截圖
+- [x] 獨立審查通過；已修 #1 來源失敗時多文顯示失敗（`view()`）、#3 離開多文清目標＋預勾取交集、#4 影片計時器未發布追蹤上限 60 次
+- [ ] 給使用者看 → 等「推」（推時更新 CLAUDE.md 目前進度）
+- 未修（審查 Minor）：多文目標 RD 在原粉專成功就寫、不等多文結果；`rdSlotAdd` 不去重（靠前端 `rdDone` 擋）
 
 ## 測試
 `npm test`、`node --test test/e2e/fbvideo*.e2e.js`、`node build.js --check`

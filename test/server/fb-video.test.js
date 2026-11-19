@@ -346,3 +346,15 @@ test('Reels 草稿：video_state DRAFT；Reels 送多文 → 400', async (t) => 
   assert.equal(fin.body.video_state, 'DRAFT');
   assert.equal(RecTimer.log.length, 0);
 });
+
+test('多文來源 finish 失敗 → 多文顯示失敗（前端不會一直等）', async (t) => {
+  const { env, headers } = await setup(t, {
+    'POST video:/111/videos': (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S111', video_id: 'V111', start_offset: '0', end_offset: '4' } : c.body.upload_phase === 'transfer' ? { start_offset: '4', end_offset: '4' } : gErr(100, 400, '參數錯誤')
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 4, kind: 'video', pages: ['111'] });
+  await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
+  const r = await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '111', at: null, cross: ['222'] }] });
+  assert.deepEqual(states(r), [['111', 'failed']]);
+  assert.deepEqual(r.body.data.jobs[0].cross, [{ page: '222', status: 'failed', error: '原影片沒有發布' }]);
+  assert.equal(RecTimer.log.length, 0);
+});

@@ -74,7 +74,13 @@ export const view = (r) => ({
   uploaded: r.state === 'uploading' ? r.next_start : r.size, videoId: r.video_id || '', sent: !!r.sent,
   at: r.at ?? null, title: r.title, error: r.error || '', created: r.created,
   cover: r.cover || '', coverError: r.cover_error || '', draft: !!r.draft,
-  cross: xpostOf(r).map((x) => ({ page: String(x.page), status: String(x.status || 'pending'), error: String(x.error || '') }))
+  // 原影片沒有發布（失敗／不明／停止／取消）：還在等的多文顯示失敗，前端不會一直等
+  cross: xpostOf(r).map((x) => {
+    const wait = !x.status || x.status === 'pending' || x.status === 'posting';
+    return wait && ['failed', 'unknown', 'stopped', 'canceled'].includes(r.state)
+      ? { page: String(x.page), status: 'failed', error: '原影片沒有發布' }
+      : { page: String(x.page), status: String(x.status || 'pending'), error: String(x.error || '') };
+  })
 });
 
 // 下一段要的範圍：上傳中的粉專裡最小的 start；end＝和它同 start 的粉專要的最大 end（上限 32MB、檔案大小）

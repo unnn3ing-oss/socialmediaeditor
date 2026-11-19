@@ -121,16 +121,19 @@ export function createEditor(v, ctx) {
         const r = rows.get(p.id);
         if (mode.value === 'sched' && !dt.value) dt.value = toLocalInput(Math.ceil((Date.now() + 30 * 60000) / 600000) * 600000);
         if (mode.value === 'cross') {
-          const got = await ctx.pickCross(v, p.id, r.cross, crossFree(p.id));
+          const free = crossFree(p.id);
+          const got = await ctx.pickCross(v, p.id, r.cross.filter((x) => free.includes(x)), free);
           if (got === null || !got.length) { mode.value = r.prev; if (got && !got.length) r.cross = []; sync1(p.id); return; }
           r.cross = got;
         }
+        if (mode.value !== 'cross') r.cross = [];   // 離開多文就清掉目標，免得之後預勾已被別的粉專拿走的
         r.prev = mode.value;
         sync1(p.id);
       });
       xbtn.addEventListener('click', async () => {
         const r = rows.get(p.id);
-        const got = await ctx.pickCross(v, p.id, r.cross, crossFree(p.id));
+        const free = crossFree(p.id);
+        const got = await ctx.pickCross(v, p.id, r.cross.filter((x) => free.includes(x)), free);
         if (got === null) return;
         if (!got.length) { r.cross = []; mode.value = 'now'; r.prev = 'now'; } else r.cross = got;
         sync1(p.id);

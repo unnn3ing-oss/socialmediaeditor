@@ -20,6 +20,7 @@ const FIRST_DELAY = 60;                    // 排定時間後 60 秒第一次檢
 const RETRY = [30, 60, 120, 240];          // 一般錯誤的重試間隔（秒）；第 5 次失敗就停
 const MAX_ATTEMPTS = 5;
 const MAX_RETIMES = 20;                    // 到點還沒發布的追蹤次數上限
+const MAX_RETIMES_VIDEO = 60;              // 影片：臉書處理長影片可能超過 20 分鐘，放寬到約 1 小時
 export const PURGE_AFTER = 14 * 86400 * 1000;   // 留言全部結束（完成／取消／失敗）後 14 天刪除整筆紀錄（隱私權政策）
 const nowSec = () => Math.floor(Date.now() / 1000);
 const toSec = (v) => (typeof v === 'number' ? v : Number.isFinite(Date.parse(v)) ? Math.floor(Date.parse(v) / 1000) : null);
@@ -157,7 +158,7 @@ export class FbCommentTimer {
       }
       if (!post.is_published) {
         rec.retimes = (rec.retimes || 0) + 1;
-        if (rec.retimes > MAX_RETIMES) {
+        if (rec.retimes > (rec.kind === 'video' ? MAX_RETIMES_VIDEO : MAX_RETIMES)) {
           [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '貼文遲遲未發布'; } });
           await s.put('rec', rec); return this.schedule(rec);
         }
