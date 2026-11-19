@@ -812,6 +812,22 @@ test('沒有 view 權限：列表區隱藏並提示；讀不到 /fb/me 視為全
   await b.page.close();
 });
 
+test('管理員：臉書權杖快到期／失效時頂端顯示提醒；沒有提醒時不顯示', async () => {
+  const a = await newPage('admin', { width: 1280, height: 700 }, { me: { admin: true, perms: [], mode: 'admin', tokenWarn: { level: 'bad', text: '發文時遇到臉書權杖失效，請到管理頁「臉書連線」檢查並換新權杖。' } } });
+  await a.page.goto(srv.url + 'tools/fbpost/index.html');
+  await a.page.waitForSelector('#tokWarn:not([hidden])');
+  assert.match(await a.page.textContent('#tokWarn'), /權杖失效/);
+  assert.equal(await a.page.getAttribute('#tokWarn', 'class'), 'tok-warn bad');
+  if (SHOT) await a.page.screenshot({ path: SHOT + '/fbpost-tokwarn.png' });
+  await a.page.close();
+  const b = await newPage('admin', { width: 1280, height: 700 }, { me: { admin: true, perms: [], mode: 'admin', tokenWarn: null } });
+  await b.page.goto(srv.url + 'tools/fbpost/index.html');
+  await b.page.waitForSelector('#fbpostApp:not([hidden])');
+  await b.page.waitForTimeout(300);
+  assert.equal(await b.page.isVisible('#tokWarn'), false);
+  await b.page.close();
+});
+
 test('防重複：同一則再送沿用 sendId；結果不明先確認，確定才帶 retry；換網址換新 sendId', async () => {
   const field = (body, k) => { const m = new RegExp('name="' + k + '"\\r\\n\\r\\n([^\\r]*)\\r\\n').exec(body); return m ? m[1] : null; };
   let n = 0;

@@ -50,6 +50,7 @@ $('tabs').addEventListener('click', (e) => {
     $('noView').hidden = perms.includes('view');
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
+    if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
   }).catch(() => {});
   $('fbpostOff').closest('main').hidden = true;
   $('fbpostApp').hidden = false;

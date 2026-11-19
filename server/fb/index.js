@@ -2,9 +2,9 @@
 import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
 import { audit } from '../core/staff.js';
-import { listPages, validPages, savePages, clearPageCache, tokenStatus, checkNewToken, FbSetupError } from './pages.js';
-import { saveToken, clearToken } from './tokenstore.js';
-import { GraphError } from './graph.js';
+import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError } from './pages.js';
+import { saveToken, clearToken, savePageTokens, appCred, saveAppCred, clearAppCred, APP_ID_RE, APP_SECRET_RE } from './tokenstore.js';
+import { GraphError, checkAppCred } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
@@ -30,8 +30,10 @@ const routes = [];
 export function route(method, re, handler, need = null) { routes.push([method, re, handler, need]); }
 
 // 自己是誰、能做什麼（前端依此隱藏按鈕）
+// tokenWarn＝臉書權杖快到期／失效的提醒（只給管理員；不呼叫臉書）
 route('GET', /^\/fb\/me$/, async (request, env, ctx, m, me) => ok(request, env, {
-  admin: me.admin, id: me.staff ? me.staff.id : '', name: me.who.name, group: me.staff ? me.staff.groupName : '', perms: me.perms, mode: me.mode
+  admin: me.admin, id: me.staff ? me.staff.id : '', name: me.who.name, group: me.staff ? me.staff.groupName : '', perms: me.perms, mode: me.mode,
+  tokenWarn: me.admin ? await quickWarn(env).catch(() => null) : null
 }));
 
 route('GET', /^\/fb\/pages$/, async (request, env) => {
@@ -165,22 +167,41 @@ adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
   await savePresets(env, list);
   return ok(request, env, await listPresets(env));
 });
-// 管理頁換權杖：先驗證才存；回傳狀態，不回傳權杖
+// 管理頁換權杖：驗證 → 自動延長（有 App 密鑰時）→ 換粉專權杖並確認不過期 → 才存；回傳狀態，不回傳權杖
 adminRoute('POST', /^\/admin\/fb\/token$/, async (request, env) => {
   const body = await readJsonBody(request, 8192);
   const token = body && typeof body.token === 'string' ? body.token.trim() : '';
   if (!token || token.length > 1000 || /\s/.test(token)) return fail(request, env, 'bad_request', '請貼上完整的權杖。');
-  const c = await checkNewToken(env, token);
+  const c = await connectToken(env, token, async (ut, rec) => { await saveToken(env, ut); await savePageTokens(env, rec); });
   if (!c.ok) return fail(request, env, 'fb_token', c.error);
-  await saveToken(env, token);
   await clearPageCache(env);
-  return ok(request, env, await tokenStatus(env));
+  return ok(request, env, { ...(await tokenStatus(env)), extended: c.extended });
 });
 adminRoute('DELETE', /^\/admin\/fb\/token$/, async (request, env) => {
   await clearToken(env);
   await clearPageCache(env);
   return ok(request, env, await tokenStatus(env));
 });
+// App 密鑰（自動延長權杖用）：只回有沒有設定、App ID、來源、設定時間；App Secret 永不回傳
+async function appState(env) {
+  const c = await appCred(env);
+  return c ? { configured: true, appId: c.appId, source: c.source, savedAt: c.savedAt } : { configured: false, appId: '', source: null, savedAt: null };
+}
+adminRoute('GET', /^\/admin\/fb\/app$/, async (request, env) => ok(request, env, await appState(env)));
+adminRoute('POST', /^\/admin\/fb\/app$/, async (request, env) => {
+  const body = await readJsonBody(request, 2048);
+  const appId = body && typeof body.appId === 'string' ? body.appId.trim() : '';
+  const secret = body && typeof body.secret === 'string' ? body.secret.trim() : '';
+  if (!APP_ID_RE.test(appId)) return fail(request, env, 'bad_request', 'App ID 是 1～20 位數字。');
+  if (!APP_SECRET_RE.test(secret)) return fail(request, env, 'bad_request', 'App Secret 是 32 位英數字。');
+  try { await checkAppCred(env, appId, secret); } catch (e) {
+    if (e instanceof GraphError) return fail(request, env, 'fb_error', 'App ID 和 App Secret 對不上（臉書：' + String(e.message).slice(0, 120) + '）。');
+    throw e;
+  }
+  await saveAppCred(env, appId, secret);
+  return ok(request, env, await appState(env));
+});
+adminRoute('DELETE', /^\/admin\/fb\/app$/, async (request, env) => { await clearAppCred(env); return ok(request, env, await appState(env)); });
 adminRoute('GET', /^\/admin\/fb\/video-settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)));
 adminRoute('POST', /^\/admin\/fb\/video-settings$/, async (request, env) => {
   const v = validVideoSettings(await readJsonBody(request, 16384));
@@ -198,7 +219,7 @@ adminRoute('POST', /^\/admin\/fb\/access$/, async (request, env) => {
   await setAccessState(env, { mode: body.mode, reason });
   return ok(request, env, await accessState(env));
 });
-adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => { await clearPageCache(env); return ok(request, env, { cleared: true }); });
+adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => ok(request, env, await refreshPages(env)));
 
 // 掛在 core/admin.js 的 adminExtras（已通過管理憑證）
 export async function adminFb(request, env, path) {

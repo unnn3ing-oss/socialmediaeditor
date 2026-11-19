@@ -21,10 +21,13 @@ const PAGES = [
   { id: '1', name: 'TVBS 新聞', short: '新聞', utm: '', rd: 'news', order: 0, show: 1 },
   { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', utmText: '?&utm_medium=text', rd: 'ent', order: 1, show: 1 },
   { id: '3', name: 'TVBS 少康戰情室', short: '少康', utm: '', rd: '', order: 2, show: 0 }];
+let APP = { configured: false, appId: '', source: null, savedAt: null }, APP_SAVED = null;
 const DATA = {
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
-  'GET /admin/fb/status': { configured: true, valid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3 },
+  'GET /admin/fb/status': { configured: true, valid: true, userValid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3, autoExtend: true,
+    stored: { pages: 3, expires: 0, dataExpires: Math.floor(Date.UTC(2027, 1, 10, 4, 0) / 1000), savedAt: Date.UTC(2026, 10, 19, 4, 0) },
+    warn: { level: 'warn', days: 10, text: '臉書權杖 10 天後到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。' } },
   'GET /admin/fb/pages': PAGES,
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
@@ -34,7 +37,10 @@ const DATA = {
   'POST /admin/fb/refresh': {},
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
-  'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP' }; },
+  'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP', extended: true }; },
+  'GET /admin/fb/app': () => APP,
+  'POST /admin/fb/app': (b) => { APP_SAVED = b; APP = { configured: true, appId: b.appId, source: 'admin', savedAt: Date.UTC(2026, 10, 20, 2, 30) }; return APP; },
+  'DELETE /admin/fb/app': () => { APP = { configured: false, appId: '', source: null, savedAt: null }; return APP; },
   'DELETE /admin/fb/token': { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'secret', app: 'DEV-TOOL' },
   'GET /admin/rundown': { configured: true },
   'POST /admin/rundown/ping': { title: 'FB RUNDOWN(2026)', sheets: ['2026/11'] },
@@ -179,9 +185,16 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   await login(page);
   await page.waitForSelector('#pgWrap:not([hidden])');
   const st = await page.textContent('#fbState');
-  assert.match(st, /連線正常/);
-  assert.match(st, /到期日 2027-01-05/);
+  assert.match(st, /可以發文/);
   assert.match(st, /粉專 3 個/);
+  const det = await page.textContent('#fbDetail');
+  assert.match(det, /粉專權杖：3 個，永不過期/);
+  assert.match(det, /資料存取期限：2027-02-10/);
+  assert.match(det, /使用者權杖：到期日 2027-01-05/);
+  assert.equal(await page.isVisible('#fbWarn'), true);
+  assert.match(await page.textContent('#fbWarn'), /10 天後到期/);
+  assert.match(await page.textContent('#fbTokHint'), /會自動延長/);
+  if (SHOT) await page.locator('#fbState').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'admin-fb-token.png') });
   assert.match(await page.textContent('#fbMissing'), /缺少權限：pages_manage_posts/);
   assert.equal(await page.locator('#pgRows .pg-card').count(), 3);
   assert.deepEqual(await page.$$eval('#pgRows .pg-card', (rs) => rs.map((r) => r.querySelector('.pg-no').textContent + r.querySelector('.pg-name').textContent)), ['1TVBS 新聞', '2TVBS 娛樂', '3TVBS 少康戰情室']);
@@ -312,6 +325,31 @@ test('活動留言：手機 390px 不橫向捲動', async () => {
   assert.ok(over <= 0, '橫向捲動 ' + over);
 });
 
+test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成功清空、只顯示 App ID）、清除', async () => {
+  APP = { configured: false, appId: '', source: null, savedAt: null };
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  await login(page);
+  await page.waitForFunction(() => /未設定/.test(document.getElementById('appState').textContent));
+  assert.equal(await page.isVisible('#appClear'), false);
+  assert.equal(await page.getAttribute('#appSecret', 'type'), 'password');
+  await page.click('#appSave');
+  assert.match(await page.textContent('#appMsg'), /請填 App ID 和 App Secret/);
+  await page.fill('#appId', ' 1234567890 ');
+  await page.fill('#appSecret', 'abcdef0123456789abcdef0123456789');
+  await page.click('#appSave');
+  await page.waitForFunction(() => /已驗證並儲存/.test(document.getElementById('appMsg').textContent));
+  assert.deepEqual(APP_SAVED, { appId: '1234567890', secret: 'abcdef0123456789abcdef0123456789' });
+  assert.equal(await page.inputValue('#appSecret'), '', '成功後清空');
+  await page.waitForFunction(() => /已設定；App ID 1234567890/.test(document.getElementById('appState').textContent));
+  assert.ok(!(await page.textContent('#fbCard, body')).includes('abcdef0123456789abcdef0123456789'), '畫面不顯示 Secret');
+  if (SHOT) await page.locator('#appState').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'admin-fb-app.png') });
+  page.once('dialog', (d) => d.accept());
+  await page.click('#appClear');
+  await page.waitForFunction(() => /已清除/.test(document.getElementById('appMsg').textContent));
+  assert.ok(calls.some((c) => c.key === 'DELETE /admin/fb/app' && c.auth === 'Bearer T'));
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
+});
+
 test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後清空輸入框）；改回 Secret 打 DELETE', async () => {
   const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
@@ -321,9 +359,9 @@ test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後
   assert.match(await page.textContent('#fbTokMsg'), /請先貼上權杖/);
   await page.fill('#fbTok', '  EAAnew123  ');
   await page.click('#fbTokSave');
-  await page.waitForFunction(() => /已換成新權杖/.test(document.getElementById('fbTokMsg').textContent));
+  await page.waitForFunction(() => /已自動延長權杖/.test(document.getElementById('fbTokMsg').textContent));
   assert.deepEqual(TOK_SAVED, { token: 'EAAnew123' });
-  assert.match(await page.textContent('#fbTokMsg'), /（App：NEW-APP），粉專 6 個/);
+  assert.match(await page.textContent('#fbTokMsg'), /並換好 6 個粉專權杖（永不過期）；App：NEW-APP/);
   assert.equal(await page.inputValue('#fbTok'), '', '成功後清空');
   assert.equal(await page.getAttribute('#fbTok', 'type'), 'password');
   page.once('dialog', (d) => d.accept());

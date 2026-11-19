@@ -60,6 +60,7 @@ $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t
     $('sendBtn').hidden = !S.canPost;
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
+    if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
   }).catch(() => {});
   tb.api.call('/fb/video/settings').then((s) => { if (s) { S.settings = s; S.videos.forEach((v) => v.ed.renderTags()); } }).catch(() => {});
   tb.api.call('/fb/presets').then((l) => { S.presets = Array.isArray(l) ? l : []; S.videos.forEach((v) => v.ed.refreshPresets()); }).catch(() => {});

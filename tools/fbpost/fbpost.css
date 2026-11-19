@@ -367,3 +367,7 @@ body.no-scroll { overflow: hidden; }
 .noview { margin: 16px 0; padding: 14px 16px; border-radius: var(--radius-control); background: var(--warn-bg); color: var(--warn-text); }
 #fbpostApp.no-post #newBtn, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
 #needStaff { margin-top: 12px; }
+
+/* 臉書權杖快到期／失效提醒（只有管理員看得到） */
+.tok-warn{margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;font-weight:600;font-size:14px}
+.tok-warn.bad{background:#fef3f2;border-color:#fecdca;color:#b42318}

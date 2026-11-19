@@ -1,6 +1,15 @@
-// 管理頁存的臉書使用者權杖：D1 fb_settings 一列（k='user_token'），用 SESSION_SECRET 衍生的 AES-GCM 金鑰加密後才存。
-// 讀取順序：管理頁存的 → Secret FB_USER_TOKEN。權杖本身永遠不回傳給前端。
+// 管理頁存的臉書權杖：D1 fb_settings，用 SESSION_SECRET 衍生的 AES-GCM 金鑰加密後才存。權杖本身永遠不回傳給前端。
+//   k='user_token'：使用者權杖（讀取順序：管理頁存的 → Secret FB_USER_TOKEN）
+//   k='page_tokens'：「驗證並儲存」當下換好的粉專權杖 JSON { pages:[{id,name,token}], expires, dataExpires, userExpires, savedAt }
+//     長效使用者權杖換到的粉專權杖不會過期（expires 0），發文優先用它；使用者權杖過期也不影響
+//   k='token_broken'：發文時遇到權杖失效（190／102）的時間（毫秒），換新權杖時清掉
 const KEY = 'user_token';
+const PAGES_KEY = 'page_tokens';
+const BROKEN_KEY = 'token_broken';
+//   k='app_cred'：App ID＋App Secret（主管在管理頁輸入，用來把短效權杖自動延長）JSON { appId, secret, savedAt }
+const APP_KEY = 'app_cred';
+export const APP_ID_RE = /^\d{1,20}$/;
+export const APP_SECRET_RE = /^[A-Za-z0-9]{32}$/;
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64 = (u8) => btoa(String.fromCharCode(...u8));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -25,13 +34,24 @@ export async function decryptToken(env, blob) {
   try { return dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv) }, await aesKey(env), unb64(ct))); } catch { return null; }
 }
 
+async function readRow(env, k) {
+  if (!env.DB) return null;
+  try { const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(k).first(); return r ? r.v : null; } catch { return null; }
+}
+async function writeRow(env, k, v) {
+  await ensureTable(env);
+  await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
+    .bind(k, v, Date.now()).run();
+}
+async function deleteRow(env, k) {
+  await ensureTable(env);
+  await env.DB.prepare('DELETE FROM fb_settings WHERE k = ?').bind(k).run();
+}
+
 // 管理頁存的權杖；沒有、表不存在或解不開都回 null
 export async function storedToken(env) {
-  if (!env.DB) return null;
-  try {
-    const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(KEY).first();
-    return r ? await decryptToken(env, r.v) : null;
-  } catch { return null; }
+  const v = await readRow(env, KEY);
+  return v ? await decryptToken(env, v) : null;
 }
 
 // 實際使用的權杖與來源：{ token, source: 'admin'|'secret'|null }
@@ -42,12 +62,75 @@ export async function userToken(env) {
   return { token: null, source: null };
 }
 
-export async function saveToken(env, token) {
-  await ensureTable(env);
-  await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
-    .bind(KEY, await encryptToken(env, token), Date.now()).run();
-}
+export async function saveToken(env, token) { await writeRow(env, KEY, await encryptToken(env, token)); }
+// 改回 Secret：使用者權杖、粉專權杖、失效旗標一起刪
 export async function clearToken(env) {
-  await ensureTable(env);
-  await env.DB.prepare('DELETE FROM fb_settings WHERE k = ?').bind(KEY).run();
+  await deleteRow(env, KEY);
+  await deleteRow(env, PAGES_KEY);
+  await deleteRow(env, BROKEN_KEY);
 }
+
+// 存好的粉專權杖；沒有、解不開或格式不對回 null
+export async function storedPageTokens(env) {
+  const v = await readRow(env, PAGES_KEY);
+  if (!v) return null;
+  const plain = await decryptToken(env, v);
+  if (!plain) return null;
+  try {
+    const o = JSON.parse(plain);
+    if (!o || !Array.isArray(o.pages) || !o.pages.length) return null;
+    const pages = o.pages.filter((p) => p && typeof p.id === 'string' && typeof p.token === 'string' && p.token)
+      .map((p) => ({ id: p.id, name: String(p.name || p.id), token: p.token }));
+    if (!pages.length) return null;
+    const num = (x) => (Number.isFinite(Number(x)) && x !== null && x !== undefined ? Number(x) : null);
+    return { pages, expires: num(o.expires), dataExpires: num(o.dataExpires), userExpires: num(o.userExpires), savedAt: num(o.savedAt) };
+  } catch { return null; }
+}
+export async function savePageTokens(env, rec) {
+  await writeRow(env, PAGES_KEY, await encryptToken(env, JSON.stringify({ ...rec, savedAt: Date.now() })));
+  await deleteRow(env, BROKEN_KEY);
+}
+
+// 發文遇到權杖失效：記時間（只記第一次）；讀不到回 null
+export async function markBroken(env) {
+  if (!env.DB) return;
+  try { if (!(await readRow(env, BROKEN_KEY))) await writeRow(env, BROKEN_KEY, String(Date.now())); } catch { /* 記不了就算了 */ }
+}
+export async function brokenAt(env) {
+  const v = Number(await readRow(env, BROKEN_KEY));
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+export async function clearBroken(env) { try { await deleteRow(env, BROKEN_KEY); } catch { /* 沒表就算了 */ } }
+
+// 這個執行個體發出去過的粉專權杖（graph.js 遇到權杖失效時，只有粉專權杖才記失效旗標；使用者權杖驗證失敗不算）
+const handed = new WeakMap();
+export function notePageTokens(env, list) {
+  if (!env || typeof env !== 'object') return;
+  let s = handed.get(env);
+  if (!s) handed.set(env, (s = new Set()));
+  for (const p of list) if (p && p.token) s.add(p.token);
+}
+export const isPageToken = (env, t) => !!(env && typeof env === 'object' && handed.has(env) && handed.get(env).has(t));
+
+// App 密鑰：管理頁存的優先，否則 Secrets FB_APP_ID／FB_APP_SECRET；都沒有或格式不對回 null
+// 回 { appId, secret, source:'admin'|'secret', savedAt }（secret 只給後端用，不能回傳前端）
+export async function appCred(env) {
+  const v = await readRow(env, APP_KEY);
+  if (v) {
+    const plain = await decryptToken(env, v);
+    try {
+      const o = plain ? JSON.parse(plain) : null;
+      if (o && APP_ID_RE.test(String(o.appId)) && APP_SECRET_RE.test(String(o.secret))) {
+        return { appId: String(o.appId), secret: String(o.secret), source: 'admin', savedAt: Number(o.savedAt) || null };
+      }
+    } catch { /* 壞掉就退回 Secret */ }
+  }
+  const id = typeof env.FB_APP_ID === 'string' ? env.FB_APP_ID.trim() : '';
+  const sec = typeof env.FB_APP_SECRET === 'string' ? env.FB_APP_SECRET.trim() : '';
+  if (id && sec) return { appId: id, secret: sec, source: 'secret', savedAt: null };
+  return null;
+}
+export async function saveAppCred(env, appId, secret) {
+  await writeRow(env, APP_KEY, await encryptToken(env, JSON.stringify({ appId, secret, savedAt: Date.now() })));
+}
+export async function clearAppCred(env) { await deleteRow(env, APP_KEY); }
