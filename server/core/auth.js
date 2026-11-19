@@ -1,5 +1,6 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
+import { cardsFor } from './levels.js';
 import { findStaff, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG } from './staff.js';
 
 export const MIN_SECRET = 32;
@@ -61,7 +62,8 @@ async function staffLogin(request, env, staffId) {
   if (!staff) { await sleep(failDelay(env)); return fail(request, env, 'bad_staff'); }
   await touchLogin(env, staff.id);
   const exp = nowSec() + sessionTtl(env);
-  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, false, staff.id), exp, staff: { id: staff.id, name: staff.name, group: staff.groupName } });
+  const manage = (await cardsFor(env, staff.level)).length > 0;
+  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, false, staff.id), exp, staff: { id: staff.id, name: staff.name, group: staff.groupName, level: staff.level }, manage });
 }
 
 async function companyLogin(request, env) {
@@ -77,7 +79,7 @@ async function companyLogin(request, env) {
     if (!adm) { await sleep(failDelay(env)); return fail(request, env, 'bad_password'); }
   }
   const exp = nowSec() + (adm ? ADMIN_FRONT_TTL : sessionTtl(env));
-  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, adm), exp, ...(adm ? { admin: true } : {}) });
+  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, adm), exp, ...(adm ? { admin: true, manage: true } : {}) });
 }
 
 // 員工自己的資料：GET 讀（姓名、權限組、分機），POST { contact } 只能改自己的分機
@@ -101,7 +103,9 @@ export async function handleAuth(request, env, path) {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');
     if (!t) return fail(request, env, 'unauthorized');
-    const data = { company: true, exp: t.exp, ...(t.adm ? { admin: true } : {}), ...(t.staff ? { staff: { id: t.staff.id, name: t.staff.name, group: t.staff.groupName } } : {}) };
+    const data = { company: true, exp: t.exp, ...(t.adm ? { admin: true } : {}), ...(t.staff ? { staff: { id: t.staff.id, name: t.staff.name, group: t.staff.groupName, level: t.staff.level } } : {}) };
+    // manage：首頁要不要顯示「管理頁」按鈕（管理員密碼登入，或員工層級至少有一張卡片）
+    data.manage = !!t.adm || (!!t.staff && (await cardsFor(env, t.staff.level)).length > 0);
     // 剩不到一半效期就續一張；舊的到期前仍有效。管理員憑證不續（續了會變成普通憑證，到期請重新輸入）
     if (!t.adm && t.exp - nowSec() < sessionTtl(env) / 2) {
       const exp = nowSec() + sessionTtl(env);

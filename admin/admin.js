@@ -1,5 +1,8 @@
-// 管理後台（admin/index.html）。token 只放在記憶體，重新整理就要重新登入。
+// 管理後台（admin/index.html）。
+//   進入方式：首頁登入的公司憑證（localStorage，員工編號或管理員密碼）直接進；或在這裡輸入管理員密碼（admin 憑證只放記憶體）。
+//   可見卡片依 GET /admin/me 的 cards（層級權限見 server/core/adminperm.js）；敏感卡片要輸入管理員密碼解鎖。
 import { API_BASE, API_ENV } from '../shell/config.js';
+import { companyKey } from '../sdk/api.js';
 
 // 不讓別的網站把後台嵌進框架（GitHub Pages 不能設 x-frame-options）
 if (window.top !== window.self) {
@@ -12,6 +15,16 @@ if (window.top !== window.self) {
   if (API_ENV === 'dev') document.getElementById('envTag').hidden = false;
   var token = '';
   var pending = '';
+  var me = null;          // GET /admin/me：{ role, roleName, unlocked, cards, name, id? }
+  var frontToken = '';    // 首頁登入的憑證（有的話）
+  function can(k) { return !!me && me.cards.indexOf(k) >= 0; }
+  function readFront() {
+    try {
+      var v = JSON.parse(localStorage.getItem(companyKey(API_ENV)));
+      if (v && typeof v.token === 'string' && typeof v.exp === 'number' && v.exp * 1000 > Date.now()) return v.token;
+    } catch (e) { /* 沒有 */ }
+    return '';
+  }
   var $ = function (id) { return document.getElementById(id); };
 
   function say(el, text, kind) { el.textContent = text || ''; el.className = 'msg' + (kind ? ' ' + kind : ''); }
@@ -26,8 +39,42 @@ if (window.top !== window.self) {
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   function expired() {
+    // 解鎖用的管理員憑證過期：退回首頁憑證（重新鎖住），不用整個登出
+    if (frontToken && token !== frontToken) { token = frontToken; enter($('loginMsg')).then(function (ok) { if (ok) say($('unlockMsg'), '解鎖已過期，需要時請再輸入一次管理員密碼。', 'err'); else expired(); }); return; }
+    var front = token && token === frontToken;
     signOut();
-    say($('loginMsg'), '登入已過期，請重新登入。', 'err');
+    say($('loginMsg'), front ? '首頁的登入已過期或已停用，請回工具箱首頁重新登入，或在這裡輸入管理員密碼。' : '登入已過期，請重新登入。', 'err');
+  }
+
+  // ---- 身分與可見卡片 ----
+  var SECTIONS = Array.prototype.slice.call(document.querySelectorAll('[data-card]'));
+  function applyMe() {
+    SECTIONS.forEach(function (el) { el.hidden = !can(el.getAttribute('data-card')); });
+    TABS.forEach(function (t) {
+      var vis = Array.prototype.some.call($('panel-' + t).querySelectorAll('[data-card]'), function (el) { return !el.hidden; });
+      $('tab-' + t).hidden = !vis;
+    });
+    $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
+    $('whoTag').hidden = false;
+    $('whoTag').textContent = (me.role === 'sys' ? '' : me.name + '・') + me.roleName + (me.role === 'sys' && !me.unlocked ? '（敏感設定已鎖）' : '');
+    // 首頁憑證進來且沒解鎖：不顯示（「回工具箱」就是離開）；解鎖過＝鎖定；管理密碼登入＝登出
+    $('logout').hidden = !!frontToken && token === frontToken;
+    $('logout').textContent = frontToken ? '鎖定' : '登出';
+  }
+  function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; lvLoaded = false; sfState = null; }
+  // 用目前的 token 讀身分；成功就進入管理頁
+  function enter(msgEl) {
+    return api('/admin/me').then(function (res) {
+      if (!res.ok) {
+        if (res.code === 'forbidden') { say(msgEl, '你的層級在管理頁沒有任何可用的功能。', 'err'); return false; }
+        if (res.code === 'unauthorized') return false;
+        say(msgEl, res.error || '讀取身分失敗。', 'err'); return false;
+      }
+      me = res.data; resetLoaded();
+      $('login').hidden = true; $('app').hidden = false; say($('loginMsg'), '');
+      applyMe(); showTab(tabFromHash());
+      return true;
+    });
   }
 
   function load() {
@@ -66,11 +113,8 @@ if (window.top !== window.self) {
     e.preventDefault();
     $('loginBtn').disabled = true; say($('loginMsg'), '登入中');
     api('/admin/login', { method: 'POST', body: JSON.stringify({ password: $('pw').value }) }).then(function (res) {
-      if (res.ok) {
-        token = res.data.token; $('pw').value = '';
-        $('login').hidden = true; $('app').hidden = false; $('logout').hidden = false; say($('loginMsg'), '');
-        assetsLoaded = false; showTab(tabFromHash());
-      } else say($('loginMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '登入失敗。'), 'err');
+      if (res.ok) { token = res.data.token; $('pw').value = ''; return enter($('loginMsg')); }
+      say($('loginMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '登入失敗。'), 'err');
     }).catch(function () { say($('loginMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('loginBtn').disabled = false; });
   };
@@ -253,7 +297,16 @@ if (window.top !== window.self) {
   var fbLoaded = false;
   function fbLoad() {
     fbLoaded = true; say($('fbMsg'), '');
-    return Promise.all([acLoad(), tpLoad().then(fbReload), pgLoad(), psLoad(), vsLoad(), whLoad(), usLoad()]);
+    var jobs = [];
+    if (can('access')) jobs.push(acLoad());
+    if (can('profiles')) jobs.push(tpLoad().then(function () { if (can('fbconn')) return fbReload(); }));
+    else if (can('fbconn')) jobs.push(fbReload());
+    if (can('pages')) jobs.push(pgLoad());
+    if (can('presets')) jobs.push(psLoad());
+    if (can('video')) jobs.push(vsLoad());
+    if (can('webhook')) jobs.push(whLoad());
+    if (can('usage')) jobs.push(usLoad());
+    return Promise.all(jobs);
   }
   // ---- 權杖組別（/admin/fb/profiles）：命名、切換使用中；設定中的組別（tpCur）給臉書連線與 App 密鑰用 ----
   var tpCur = '', tpData = null;
@@ -567,12 +620,78 @@ if (window.top !== window.self) {
   };
 
   function signOut() {
-    token = ''; pending = '';
-    $('app').hidden = true; $('logout').hidden = true; $('confirm').hidden = true; $('sfConfirm').hidden = true; $('login').hidden = false;
-    fbLoaded = false; rdLoaded = false; staffLoaded = false; sfState = null; sfPending = null; pgItems = []; psItems = [];
+    token = ''; pending = ''; me = null; frontToken = '';
+    $('app').hidden = true; $('logout').hidden = true; $('whoTag').hidden = true; $('confirm').hidden = true; $('sfConfirm').hidden = true; $('login').hidden = false;
+    resetLoaded(); sfPending = null; pgItems = []; psItems = [];
     try { $('pw').focus(); } catch (e) {}
   }
-  $('logout').onclick = function () { signOut(); say($('loginMsg'), ''); $('pw').focus(); };
+  // 登出：首頁憑證進來的＝回首頁；解鎖過的＝鎖回去；管理密碼登入的＝登出
+  $('logout').onclick = function () {
+    if (frontToken && token !== frontToken) { token = frontToken; say($('unlockMsg'), ''); enter($('loginMsg')); return; }
+    signOut(); say($('loginMsg'), ''); $('pw').focus();
+  };
+  // 解鎖敏感設定：輸入管理員密碼換 admin 憑證（只放記憶體）
+  $('unlockForm').onsubmit = function (e) {
+    e.preventDefault();
+    $('unlockBtn').disabled = true; say($('unlockMsg'), '解鎖中');
+    api('/admin/login', { method: 'POST', body: JSON.stringify({ password: $('unlockPw').value }) }).then(function (res) {
+      if (!res.ok) return say($('unlockMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '解鎖失敗。'), 'err');
+      var prev = token; token = res.data.token; $('unlockPw').value = ''; say($('unlockMsg'), '');
+      return enter($('unlockMsg')).then(function (ok) { if (!ok) token = prev; });
+    }).catch(function () { say($('unlockMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('unlockBtn').disabled = false; });
+  };
+
+  // ---- 層級權限（/admin/levels，只有已解鎖的系統管理者）----
+  var lvLoaded = false, lvData = null;
+  function lvRender(levels) {
+    var tb = $('lvRows'); tb.textContent = '';
+    lvData.cards.forEach(function (c) {
+      var tr = document.createElement('tr');
+      var th = document.createElement('td'); th.textContent = c.name + (c.sensitive && !c.locked ? ' ⚠' : ''); tr.appendChild(th);
+      ['mgr', 'user'].forEach(function (lv) {
+        var td = document.createElement('td');
+        if (c.locked) { td.textContent = '只有系統管理者'; td.className = 'lv-lock'; }
+        else {
+          var cb = document.createElement('input'); cb.type = 'checkbox'; cb.dataset.lv = lv; cb.dataset.key = c.key;
+          cb.checked = levels[lv].indexOf(c.key) >= 0;
+          cb.setAttribute('aria-label', (lv === 'mgr' ? '管理者' : '普通') + '：' + c.name);
+          cb.onchange = function () {
+            if (cb.checked && c.sensitive && !window.confirm('「' + c.name + '」含權杖或權限設定，勾給' + (lv === 'mgr' ? '管理者' : '普通') + '後，對方不用輸入管理員密碼就能使用。確定要勾嗎？')) { cb.checked = false; return; }
+            // 普通 ⊆ 管理者：普通勾了，管理者跟著勾；管理者取消，普通跟著取消
+            var other = tb.querySelector('input[data-key="' + c.key + '"][data-lv="' + (lv === 'mgr' ? 'user' : 'mgr') + '"]');
+            if (lv === 'user' && cb.checked) other.checked = true;
+            if (lv === 'mgr' && !cb.checked) other.checked = false;
+          };
+          td.appendChild(cb);
+        }
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  }
+  function lvPick() {
+    var r = { mgr: [], user: [] };
+    Array.prototype.forEach.call($('lvRows').querySelectorAll('input[type=checkbox]'), function (cb) { if (cb.checked) r[cb.dataset.lv].push(cb.dataset.key); });
+    return r;
+  }
+  function lvLoad() {
+    lvLoaded = true; say($('lvMsg'), '讀取中');
+    return api('/admin/levels').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      lvData = res.data; lvRender(lvData.levels); say($('lvMsg'), '');
+    }).catch(function (e) { lvLoaded = false; say($('lvMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('lvReset').onclick = function () { if (lvData) { lvRender(lvData.defaults); say($('lvMsg'), '已還原成預設，按「儲存」才會生效。'); } };
+  $('lvSave').onclick = function () {
+    $('lvSave').disabled = true; say($('lvMsg'), '儲存中');
+    api('/admin/levels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lvPick()) }).then(function (res) {
+      if (res.ok) { lvData = res.data; lvRender(lvData.levels); say($('lvMsg'), '已儲存，對方下一次操作就會套用。', 'good'); }
+      else if (res.code === 'unauthorized') expired();
+      else say($('lvMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('lvMsg'), '連不上後端，請稍後再試。', 'err'); })
+      .then(function () { $('lvSave').disabled = false; });
+  };
 
   // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #fb 等記住目前分類
 
@@ -611,21 +730,33 @@ if (window.top !== window.self) {
       say(msgEl, res.error || '操作失敗。', 'err'); return false;
     }).catch(function () { say(msgEl, '連不上後端，請稍後再試。', 'err'); return false; });
   }
+  var LV_NAME = { mgr: '管理者', user: '普通' };
   function sfGroupSelect(cur, label) {
     var s = document.createElement('select'); s.setAttribute('aria-label', label);
-    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; s.appendChild(o); });
+    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; if (g.assignable === false && g.id !== cur) o.disabled = true; s.appendChild(o); });
     s.value = cur; return s;
   }
   function sfRender() {
     if (!sfState) return;
     var keep = $('sfGroup').value;
     $('sfGroup').textContent = '';
-    sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('sfGroup').appendChild(o); });
+    sfState.groups.forEach(function (g) { if (g.assignable === false) return; var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('sfGroup').appendChild(o); });
     if (keep) $('sfGroup').value = keep;
+    var meSt = sfState.me || {};
+    $('sfForm').hidden = meSt.canAdd === false;
     var tb = $('sfRows'); tb.textContent = '';
     sfState.staff.forEach(function (s) {
       var tr = document.createElement('tr');
       tr.appendChild(sfEl('td', '', s.id)); tr.appendChild(sfEl('td', '', s.name));
+      var tl = document.createElement('td');
+      if (meSt.canLevel) {
+        var ls = document.createElement('select'); ls.setAttribute('aria-label', s.name + ' 的層級');
+        ['user', 'mgr'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = LV_NAME[k]; ls.appendChild(o); });
+        ls.value = s.level;
+        ls.onchange = function () { ls.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { level: ls.value }, $('sfMsg'), '已把「' + s.name + '」改成' + LV_NAME[ls.value] + '。').then(function (ok) { if (!ok) sfRender(); }); };
+        tl.appendChild(ls);
+      } else tl.textContent = LV_NAME[s.level] || '普通';
+      tr.appendChild(tl);
       var tg = document.createElement('td'), sel = sfGroupSelect(s.group, s.name + ' 的權限組');
       sel.onchange = function () { sel.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { group: sel.value }, $('sfMsg'), '已更新「' + s.name + '」的權限組。').then(function (ok) { if (!ok) sfRender(); }); };
       tg.appendChild(sel); tr.appendChild(tg);
@@ -642,6 +773,8 @@ if (window.top !== window.self) {
       var del = sfEl('button', 'danger', '移除'); del.type = 'button';
       del.onclick = function () { sfPending = s.id; $('sfCfText').textContent = s.name + '（' + s.id + '）會從名單移除，對方下一次操作就會被擋。'; $('sfConfirm').hidden = false; $('sfCfYes').focus(); };
       ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
+      // 不能動的列（層級不比自己低、或是自己）：全部唯讀
+      if (s.canEdit === false) Array.prototype.forEach.call(tr.querySelectorAll('select, input, button'), function (el) { if (!(meSt.canLevel && el.getAttribute('aria-label') === s.name + ' 的層級')) { el.disabled = true; el.title = '只能修改層級比你低的人'; } });
       tb.appendChild(tr);
     });
     $('sfWrap').hidden = !sfState.staff.length; $('sfEmpty').hidden = !!sfState.staff.length;
@@ -731,7 +864,8 @@ if (window.top !== window.self) {
 
   var TABS = ['fb', 'staff', 'rd', 'assets', 'logs'];
   var assetsLoaded = false;
-  function tabFromHash() { var t = location.hash.slice(1); return TABS.indexOf(t) >= 0 ? t : TABS[0]; }
+  function visTabs() { return TABS.filter(function (t) { return !$('tab-' + t).hidden; }); }
+  function tabFromHash() { var t = location.hash.slice(1), v = visTabs(); return v.indexOf(t) >= 0 ? t : v[0]; }
   function showTab(id, focus) {
     TABS.forEach(function (t) {
       var on = t === id, b = $('tab-' + t);
@@ -741,22 +875,34 @@ if (window.top !== window.self) {
     if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
     if (focus) $('tab-' + id).focus();
     if (id === 'fb' && !fbLoaded && token) fbLoad();
-    if (id === 'staff' && !staffLoaded && token) { staffLoaded = true; sfLoad(); }
-    if (id === 'rd' && !rdLoaded && token) rdLoad();
-    if (id === 'assets' && !assetsLoaded && token) { assetsLoaded = true; load(); }
+    if (id === 'staff' && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
+    if (id === 'staff' && !lvLoaded && token && can('levels')) lvLoad();
+    if (id === 'rd' && !rdLoaded && token && can('rundown')) rdLoad();
+    if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
   }
-  TABS.forEach(function (t, i) {
+  TABS.forEach(function (t) {
     var b = $('tab-' + t);
     b.onclick = function () { showTab(t); };
     b.onkeydown = function (e) {
+      var v = visTabs(), i = v.indexOf(t);
       var d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-      if (e.key === 'Home') d = -i; else if (e.key === 'End') d = TABS.length - 1 - i;
+      if (e.key === 'Home') d = -i; else if (e.key === 'End') d = v.length - 1 - i;
       if (d === undefined) return;
       e.preventDefault();
-      showTab(TABS[(i + d + TABS.length) % TABS.length], true);
+      showTab(v[(i + d + v.length) % v.length], true);
     };
   });
-  window.addEventListener('hashchange', function () { if (token) showTab(tabFromHash()); });
-  // 進頁面顯示登入區時，直接把游標放在密碼框
-  if (!$('login').hidden) { try { $('pw').focus(); } catch (e) {} }
+  window.addEventListener('hashchange', function () { if (me) showTab(tabFromHash()); });
+  // 首頁已登入（員工編號或管理員密碼）就直接進；否則顯示密碼登入
+  frontToken = readFront();
+  if (frontToken) {
+    token = frontToken;
+    $('login').hidden = true;
+    enter($('loginMsg')).then(function (ok) {
+      if (ok) return;
+      token = ''; frontToken = ''; $('login').hidden = false;
+      if (!$('loginMsg').textContent) say($('loginMsg'), '首頁的登入沒有管理頁權限或已過期，請輸入管理員密碼。', 'err');
+      try { $('pw').focus(); } catch (e) {}
+    }).catch(function () { token = ''; frontToken = ''; $('login').hidden = false; say($('loginMsg'), '連不上後端，請稍後再試。', 'err'); });
+  } else { try { $('pw').focus(); } catch (e) {} }
 })();

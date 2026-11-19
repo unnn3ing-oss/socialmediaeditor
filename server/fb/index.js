@@ -292,16 +292,16 @@ adminRoute('DELETE', /^\/admin\/fb\/profiles\/(p[0-9a-f]{1,8})$/, async (request
 });
 
 // 掛在 core/admin.js 的 adminExtras（已通過管理憑證）
-export async function adminFb(request, env, path) {
+export async function adminFb(request, env, path, who) {
   const rd = await adminRundown(request, env, path);
   if (rd) return rd;
   for (const [method, re, handler] of adminRoutes) {
     const m = re.exec(path);
     if (!m || request.method !== method) continue;
     try {
-      // ?p=<組別>：臉書連線／App 密鑰／重新讀取粉專改作用在指定的權杖組別（預設＝使用中）
+      // ?p=<組別>：臉書連線／App 密鑰／重新讀取粉專改作用在指定的權杖組別（預設＝使用中）；只有系統管理者能指定，其他人一律使用中組別
       let e = env;
-      const pid = /^\/admin\/fb\/(status|token|app|refresh)$/.test(path) ? new URL(request.url).searchParams.get('p') : null;
+      const pid = who && who.role === 'sys' && /^\/admin\/fb\/(status|token|app|refresh)$/.test(path) ? new URL(request.url).searchParams.get('p') : null;
       if (pid) {
         if (!PROFILE_ID_RE.test(pid) || !(await readProfiles(env)).list.some((x) => x.id === pid)) return fail(request, env, 'bad_request', '找不到這個組別。');
         e = forProfile(env, pid);

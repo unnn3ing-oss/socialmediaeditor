@@ -54,7 +54,7 @@ test('組別：預設只有 p1「預設」；新增、改名、名稱驗證、�
   const f = fb(); t.after(f.restore);
   const env = mkEnv({});
   const adm = await auth(env, 'admin');
-  assert.equal((await call(env, '/admin/fb/profiles', { headers: await auth(env, 'company', true) })).status, 401, '前端管理員憑證不能進 /admin');
+  assert.equal((await call(env, '/admin/fb/profiles', { headers: await auth(env, 'company', true) })).status, 403, '前端管理員憑證要解鎖');
   let r = await api(env, adm, 'GET', '/admin/fb/profiles');
   assert.equal(r.status, 200);
   assert.deepEqual(r.j.data.list.map((x) => [x.id, x.name, x.active, x.hasToken]), [['p1', '預設', true, false]]);

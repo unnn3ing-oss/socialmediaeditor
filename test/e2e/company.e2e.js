@@ -37,13 +37,13 @@ async function open() {
         return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'stf', exp, staff: { id: 'A123', name: '王小明', group: '小編組' } } } });
       }
       if (!api.authOk) return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'bad_password', error: 'x' } });
-      if (JSON.parse(req.postData()).password === 'admin-pw') return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'adm', exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true } } });
+      if (JSON.parse(req.postData()).password === 'admin-pw') return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'adm', exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true, manage: true } } });
       return r.fulfill({ headers: CORS, json: { ok: true, data: { token: 'tok', exp } } });
     }
     if (p === '/auth/status') {
       if (api.statusCode === 401) return r.fulfill({ status: 401, headers: CORS, json: { ok: false, code: 'unauthorized', error: 'x' } });
       if (/stf/.test(req.headers().authorization || '')) return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp, staff: { id: 'A123', name: '王小明', group: '小編組' } } } });
-      if (/adm/.test(req.headers().authorization || '')) return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true } } });
+      if (/adm/.test(req.headers().authorization || '')) return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp: Math.floor(Date.now() / 1000) + 12 * 3600, admin: true, manage: true } } });
       return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp } } });
     }
     return r.fulfill({ status: 404, headers: CORS, json: { ok: false, code: 'not_found' } });
@@ -148,6 +148,22 @@ test('管理密碼登入：解鎖公司工具，膠囊顯示（管理員）剩 1
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tbx.company')).admin), true);
   await page.reload();
   await page.waitForFunction(() => /（管理員），剩 1[12] 小時/.test(document.querySelector('#status [data-status=company]')?.textContent || ''));
+});
+
+test('管理頁膠囊：管理員密碼登入才出現（員工、公司密碼沒有），重新整理仍在，點了前往 admin/', async () => {
+  const { page } = await open();
+  await unlock(page, 'good');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  assert.equal(await page.isVisible('#status [data-status=manage]'), false);
+  await page.evaluate(() => localStorage.removeItem('tbx.company'));
+  const { page: p2 } = await open();
+  await unlock(p2, 'admin-pw');
+  await p2.waitForSelector('#status [data-status=manage]');
+  assert.equal(await p2.textContent('#status [data-status=manage]'), '管理頁');
+  await p2.reload();
+  await p2.waitForSelector('#status [data-status=manage]');
+  await p2.route('**/admin/', (r) => r.fulfill({ contentType: 'text/html', body: '<p>admin</p>' }));
+  await Promise.all([p2.waitForURL(/\/admin\/$/), p2.click('#status [data-status=manage]')]);
 });
 
 test('員工編號分頁：預設、送 staffId、成功顯示姓名、tb.company.staff 讀得到', async () => {

@@ -4,6 +4,7 @@ export const DEFAULT_ORIGIN = 'https://unnn3ing-oss.github.io';
 export const MESSAGES = {
   bad_password: '密碼不正確。',
   unauthorized: '需要登入。',
+  forbidden: '沒有這個功能的權限。',
   not_found: '找不到。',
   too_large: '內容太大。',
   bad_request: '請求內容不正確。',
@@ -20,7 +21,7 @@ export const MESSAGES = {
   rundown_off: '後端尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN。',
   rundown_failed: '連不上 Rundown 的 Apps Script。'
 };
-export const STATUS = { bad_password: 200, unauthorized: 401, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
+export const STATUS = { bad_password: 200, unauthorized: 401, forbidden: 403, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
   fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
 
 export function originAllowed(request, env) {
