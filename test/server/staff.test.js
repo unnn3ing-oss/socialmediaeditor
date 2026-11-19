@@ -23,7 +23,15 @@ async function adminH(env) {
 }
 const post = (env, h, path, body) => call(env, path, { method: 'POST', headers: h, body: JSON.stringify(body) });
 const bearer = (t) => ({ authorization: 'Bearer ' + t });
-async function login(env, staffId) { return call(env, '/auth', { method: 'POST', body: JSON.stringify({ staffId }) }); }
+// 員工登入：已設密碼就用 PW；還沒設就由管理頁重置拿設定碼，再設 PW 並登入
+const PW = 'password-123';
+async function login(env, staffId) {
+  const q = await call(env, '/auth', { method: 'POST', body: JSON.stringify({ staffId }) });
+  if (!q.body.ok) return q;
+  if (q.body.data.next === 'password') return call(env, '/auth', { method: 'POST', body: JSON.stringify({ staffId, password: PW }) });
+  const r = await call(env, '/admin/staff/' + encodeURIComponent(staffId) + '/reset', { method: 'POST', headers: await adminH(env) });
+  return call(env, '/auth', { method: 'POST', body: JSON.stringify({ staffId, code: r.body.data.setup.code, newPassword: PW }) });
+}
 async function setup(t) {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
   const env = mkEnv({ FB_USER_TOKEN: 'U' });
@@ -68,9 +76,8 @@ test('員工編號登入：名單內才發憑證（帶 uid、轉大寫）、記�
   // 停用後不能登入
   await post(env, adm, '/admin/staff/T1', { enabled: false });
   assert.equal((await login(env, 'T1')).body.code, 'bad_staff');
-  // 公司密碼登入照舊
-  const c = await call(env, '/auth', { method: 'POST', body: JSON.stringify({ password: 'company-pass-123' }) });
-  assert.equal(c.body.ok, true); assert.equal(c.body.data.staff, undefined);
+  // 公司密碼登入已拿掉
+  assert.equal((await call(env, '/auth', { method: 'POST', body: JSON.stringify({ password: 'company-pass-123' }) })).status, 400);
 });
 
 test('立即撤銷：停用或移除後，原本的憑證連 /auth/status、公司素材、排程發布都失效；重新啟用恢復', async (t) => {
@@ -95,7 +102,7 @@ test('續期保留員工編號', async (t) => {
   const { body } = await call(env, '/admin/staff', { headers: adm });
   await post(env, adm, '/admin/staff', { id: 'T1', name: '甲', group: groupId(body.data, '檢視') });
   const { signToken, readToken } = await tok();
-  const old = await signToken(env.SESSION_SECRET, 'company', nowSec() + 60, false, 'T1');   // 剩不到一半效期
+  const old = await signToken(env.SESSION_SECRET, 'company', nowSec() + 60, false, 'T1', 1);   // 剩不到一半效期
   const st = await call(env, '/auth/status', { headers: bearer(old) });
   assert.ok(st.body.data.renew);
   assert.equal((await readToken(env.SESSION_SECRET, st.body.data.renew.token, nowSec())).uid, 'T1');
@@ -137,9 +144,10 @@ test('關閉時：管理組（bypass）可用、發文組被擋並看到原因�
   const r = await call(env, '/fb/pages', { headers: p });
   assert.equal(r.status, 403); assert.equal(r.body.code, 'fb_forbidden'); assert.deepEqual(r.body.detail, { reason: '維護中' });
   const { signToken } = await tok();
-  const a = bearer(await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true));
+  env.SYS_STAFF_ID = 'SYS1';
+  const a = bearer(await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1));
   const me = await call(env, '/fb/me', { headers: a });
-  assert.equal(me.body.data.admin, true); assert.equal(me.body.data.name, '管理員');
+  assert.equal(me.body.data.admin, true); assert.equal(me.body.data.name, '系統管理者');
 });
 
 test('權限組管理：名稱不能重複、使用中不能刪、沒人用可刪', async (t) => {
@@ -180,14 +188,14 @@ test('分機：自己讀寫 /staff/me、格式驗證、只能改自己；公司�
   assert.equal(add.body.data.staff[0].contact, '0912-345-678');
   await post(env, adm, '/admin/staff', { id: 'C2', name: '乙', group: g });
   assert.equal((await call(env, '/staff/me')).status, 401);
-  const c = await call(env, '/auth', { method: 'POST', body: JSON.stringify({ password: 'company-pass-123' }) });
-  assert.equal((await call(env, '/staff/me', { headers: bearer(c.body.data.token) })).body.code, 'fb_need_staff');
+  const { signToken } = await tok();
+  assert.equal((await call(env, '/staff/me', { headers: bearer(await signToken(env.SESSION_SECRET, 'company', nowSec() + 600)) })).status, 401, '沒有員工編號的舊公司憑證無效');
   const h = bearer((await login(env, 'C2')).body.data.token);
-  assert.deepEqual((await call(env, '/staff/me', { headers: h })).body.data, { id: 'C2', name: '乙', group: '檢視', contact: '' });
+  assert.deepEqual((await call(env, '/staff/me', { headers: h })).body.data, { id: 'C2', name: '乙', group: '檢視', contact: '', level: 'user' });
   assert.equal((await post(env, h, '/staff/me', { contact: '1'.repeat(31) })).status, 400);
   assert.equal((await post(env, h, '/staff/me', { contact: '<b>' })).status, 400);
   const saved = await post(env, h, '/staff/me', { contact: '#12345', id: 'C1', name: '改名' });
-  assert.deepEqual(saved.body.data, { id: 'C2', name: '乙', group: '檢視', contact: '#12345' }, '只改自己的分機，不能改姓名或別人');
+  assert.deepEqual(saved.body.data, { id: 'C2', name: '乙', group: '檢視', contact: '#12345', level: 'user' }, '只改自己的分機，不能改姓名或別人');
   const list = (await call(env, '/admin/staff', { headers: adm })).body.data.staff;
   assert.deepEqual(list.map((s) => [s.id, s.contact]), [['C1', '0912-345-678'], ['C2', '#12345']]);
   assert.equal((await post(env, adm, '/admin/staff/C2', { contact: '' })).body.data.staff[1].contact, '');

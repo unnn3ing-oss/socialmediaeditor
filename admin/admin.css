@@ -51,6 +51,16 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .sk{height:20px;border-radius:6px;background:linear-gradient(90deg,#eef2f6 25%,#f5f7fa 50%,#eef2f6 75%);background-size:200% 100%;animation:sk 1.2s linear infinite;margin:10px 0}
 @keyframes sk{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.sk{animation:none}}
+.sf-code{width:min(440px,calc(100vw - 32px));border:1px solid var(--line);border-radius:var(--radius-dialog,20px);padding:24px;background:var(--surface);color:var(--text)}
+.sf-code::backdrop{background:rgba(16,24,40,.45)}
+.sf-code h2{margin:0 0 8px;font-size:18px}
+.sf-code p{margin:0;color:var(--muted)}
+.sf-code-box{display:flex;align-items:center;gap:12px;margin:12px 0 8px;padding:14px 16px;border-radius:12px;background:var(--fill)}
+.sf-code-box b{flex:1;font:700 28px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:6px;color:var(--text)}
+.sf-code-note{font-size:13px}
+.sf-code .row{justify-content:flex-end;margin-top:16px}
+.tag.warn{border-color:transparent;background:var(--warn-bg);color:var(--warn-text)}
+.tag.bad{border-color:transparent;background:var(--bad-bg);color:var(--bad-text)}
 .confirm{border:1px solid var(--bad-line);border-radius:14px;padding:16px;margin-top:16px;background:var(--bad-bg)}
 [hidden]{display:none!important}
 .login{max-width:480px;margin:56px auto;padding:28px}

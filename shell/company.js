@@ -1,11 +1,14 @@
-// 公司模式：輸入密碼解鎖公司工具；憑證過期時自動跳登入彈窗，已開著的公司窗格保留內容。
+// 公司模式：員工編號＋自己的密碼登入（第一次或被重置後用設定碼設密碼），解鎖公司工具；
+// 登入後右上角「● 公司模式 名字」，點了開帳號彈窗（姓名、層級、員工編號、分機、解鎖有效、通知、管理頁、變更密碼、登出）。
+// 憑證過期時自動跳登入彈窗，已開著的公司窗格保留內容。
 import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
 import { API_ENV } from './config.js';
 import { switchApiEnv } from './apienv.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
-
-const TAB_KEY = 'tbx.loginTab';
+const ID_KEY = 'tbx.staffId';   // 記住上次登入的員工編號（這台瀏覽器）
+const LEVEL_NAMES = { sys: '系統管理者', mgr: '管理者', user: '普通' };
+const PW_MIN = 8;
 const isNetworkFailure = (e) => !e || !e.code || /^http_5/.test(e.code) || e.code === 'bad_response' || e.code === 'misconfigured';
 
 const mk = (tag, cls, text) => {
@@ -14,145 +17,348 @@ const mk = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
+function field(labelText, attrs, hint) {
+  const label = mk('label', 'field', labelText);
+  const input = mk('input');
+  Object.assign(input, attrs);
+  label.appendChild(input);
+  const wrap = mk('div', 'login-field');
+  wrap.appendChild(label);
+  if (hint) wrap.appendChild(mk('p', 'login-note', hint));
+  return { wrap, input };
+}
+const pad = (n) => String(n).padStart(2, '0');
+const fmtExp = (exp) => { const d = new Date(exp * 1000); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const leftText = (exp) => { const ms = exp * 1000 - Date.now(); return ms < 86400000 ? `剩 ${Math.max(0, Math.ceil(ms / 3600000))} 小時` : `剩 ${Math.ceil(ms / 86400000)} 天`; };
 
-export function initCompany({ shell, button, storage = window.localStorage, api = createApi({ storage }) }) {
+// account：true＝首頁（按鈕變「● 公司模式 名字」＋帳號彈窗）；false＝外掛側邊欄（按鈕只用來開登入）
+export function initCompany({ shell, button, storage = window.localStorage, api = createApi({ storage }), account = true }) {
   const internal = shell._internal;
+  const getId = () => { try { return storage.getItem(ID_KEY) || ''; } catch { return ''; } };
+  const setId = (v) => { try { if (v) storage.setItem(ID_KEY, v); else storage.removeItem(ID_KEY); } catch { /* 靜默 */ } };
 
-  // ---- 登入彈窗 ----
+  // ---- 登入彈窗：同一個區塊，先員工編號，再自動判斷「輸入密碼」或「設定碼＋設定新密碼」 ----
   const dlg = mk('dialog', 'dialog');
   dlg.id = 'company-dialog';
   const form = mk('form');
   form.method = 'dialog';
+  form.noValidate = true;
   const title = mk('h2', null, '登入公司帳號');
-  // 兩個分頁用 hidden 切換（不重建 DOM）：員工編號（預設）｜公司密碼
-  const tabs = mk('div', 'login-tabs');
-  tabs.setAttribute('role', 'tablist');
-  const tabStaff = mk('button', null, '員工編號');
-  const tabPw = mk('button', null, '公司密碼');
-  for (const [b, n] of [[tabStaff, 'staff'], [tabPw, 'password']]) { b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = n; }
-  tabs.append(tabStaff, tabPw);
-  const staffPane = mk('div');
-  const staffLabel = mk('label', 'field', '員工編號');
-  const staffInput = mk('input');
-  staffInput.type = 'text';
-  staffInput.name = 'staffId';
-  staffInput.autocomplete = 'username';
-  staffInput.autocapitalize = 'characters';
-  staffInput.setAttribute('inputmode', 'text');
-  staffInput.spellcheck = false;
-  staffLabel.appendChild(staffInput);
-  staffPane.append(staffLabel, mk('p', 'login-note', '有排程發布權限的同事用員工編號登入；其他工具也會一起解鎖。'));
-  const pwPane = mk('div');
-  const label = mk('label', 'field', '公司密碼');
-  const input = mk('input');
-  input.type = 'password';
-  input.name = 'password';
-  input.autocomplete = 'off';
-  label.appendChild(input);
-  pwPane.appendChild(label);
-  let tab = 'staff';
-  try { if (storage.getItem(TAB_KEY) === 'password') tab = 'password'; } catch { /* 靜默 */ }
-  function setTab(n, focus = false) {
-    tab = n;
-    for (const b of [tabStaff, tabPw]) { const on = b.dataset.tab === n; b.classList.toggle('is-on', on); b.setAttribute('aria-selected', String(on)); }
-    staffPane.hidden = n !== 'staff';
-    pwPane.hidden = n !== 'password';
-    staffInput.required = n === 'staff';
-    input.required = n === 'password';
-    err.textContent = '';
-    if (focus) (n === 'staff' ? staffInput : input).focus();
-  }
-  tabs.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-tab]'); if (!b) return;
-    setTab(b.dataset.tab, true);
-    try { storage.setItem(TAB_KEY, b.dataset.tab); } catch { /* 靜默 */ }
-  });
-  const err = mk('p', null, '');
+  // 步驟 id：員工編號
+  const fId = field('員工編號', { type: 'text', name: 'staffId', autocomplete: 'username', autocapitalize: 'characters', spellcheck: false });
+  // 步驟 pw／setup 上方：目前的員工編號＋「換一個」
+  const who = mk('div', 'login-who');
+  const whoText = mk('span');
+  const whoChange = mk('button', 'login-link', '換一個');
+  whoChange.type = 'button';
+  who.append(whoText, whoChange);
+  // 步驟 pw：密碼
+  const fPw = field('密碼', { type: 'password', name: 'password', autocomplete: 'current-password' }, '忘記密碼請找管理者重置');
+  // 步驟 setup：設定碼＋新密碼×2
+  const fCode = field('設定碼', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputMode: 'numeric', spellcheck: false }, '管理者新增你或重置密碼時給你的 6 碼，24 小時內有效');
+  const fNew = field('新密碼', { type: 'password', name: 'newPassword', autocomplete: 'new-password' }, `至少 ${PW_MIN} 個字`);
+  const fNew2 = field('再輸入一次', { type: 'password', name: 'newPassword2', autocomplete: 'new-password' });
+  const err = mk('p', 'login-err', '');
   err.setAttribute('role', 'alert');
-  err.style.cssText = 'margin:8px 0 0;color:#b42318;font-size:14px;min-height:1.4em';
   const actions = mk('div', 'actions');
   const cancel = mk('button', 'btn btn-secondary', '取消');
   cancel.type = 'button';
-  const submit = mk('button', 'btn btn-primary', '解鎖');
+  const submit = mk('button', 'btn btn-primary', '下一步');
   submit.type = 'submit';
   actions.append(cancel, submit);
-  form.append(title, tabs, staffPane, pwPane, err, actions);
-  setTab(tab);
+  // 隱藏的帳號欄：讓瀏覽器密碼管理員在密碼步驟也知道是哪個帳號
+  const hiddenUser = mk('input');
+  Object.assign(hiddenUser, { readOnly: true, type: 'text', name: 'username', autocomplete: 'username', tabIndex: -1 });
+  hiddenUser.className = 'login-hidden-user';
+  hiddenUser.setAttribute('aria-hidden', 'true');
+  form.append(title, fId.wrap, who, hiddenUser, fPw.wrap, fCode.wrap, fNew.wrap, fNew2.wrap, err, actions);
   dlg.appendChild(form);
   document.body.appendChild(dlg);
 
-  function openLogin(expired = false) {
-    title.textContent = expired ? '公司密碼已過期' : '登入公司帳號';
+  let step = 'id', staffId = '', expiredTitle = false;
+  // 用 hidden 切換步驟（不重建 DOM）
+  function setStep(n) {
+    step = n;
+    fId.wrap.hidden = n !== 'id';
+    who.hidden = n === 'id';
+    hiddenUser.hidden = n === 'id';
+    fPw.wrap.hidden = n !== 'pw';
+    for (const f of [fCode, fNew, fNew2]) f.wrap.hidden = n !== 'setup';
+    whoText.textContent = '';
+    whoText.append('員工編號 ', mk('b', null, staffId));
+    hiddenUser.value = staffId;
+    title.textContent = n === 'setup' ? '第一次登入，請設定密碼' : expiredTitle ? '登入已過期，請重新登入' : '登入公司帳號';
+    submit.textContent = n === 'id' ? '下一步' : n === 'pw' ? '登入' : '設定並登入';
     err.textContent = '';
-    input.value = '';
-    staffInput.value = '';
-    setTab(tab);
+    const focus = n === 'id' ? fId.input : n === 'pw' ? fPw.input : fCode.input;
+    if (dlg.open) focus.focus();
+  }
+
+  function openLogin(expired = false) {
+    expiredTitle = expired;
+    for (const f of [fId, fPw, fCode, fNew, fNew2]) f.input.value = '';
+    staffId = getId();
+    fId.input.value = staffId;
     if (!dlg.open) dlg.showModal();
-    (tab === 'staff' ? staffInput : input).focus();
+    setStep(staffId ? 'pw' : 'id');
   }
   cancel.addEventListener('click', () => dlg.close());
+  whoChange.addEventListener('click', () => { fId.input.value = staffId; setStep('id'); fId.input.select(); });
+
+  const MSG = {
+    bad_staff: '查不到這個員工編號，或已停用',
+    setup_expired: '設定碼已過期或還沒發，請找管理者重置密碼拿新的設定碼',
+  };
+  function showError(ex) {
+    if (isNetworkFailure(ex)) { err.textContent = '連不上伺服器，請稍後再試'; return; }
+    err.textContent = MSG[ex.code] || (ex.message && ex.message !== '呼叫失敗' ? ex.message.replace(/。$/, '') : '登入失敗，請再試一次');
+  }
+  function done(data) {
+    storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.staff ? { staff: data.staff } : {}) }));
+    setId(data.staff ? data.staff.id : staffId);
+    unlocked(data.exp, data.staff || null, !!data.manage);
+    dlg.close();
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.textContent = '';
+    if (step === 'id') {
+      staffId = fId.input.value.trim().toUpperCase();
+      if (!staffId) { err.textContent = '請輸入員工編號'; fId.input.focus(); return; }
+    } else if (step === 'pw') {
+      if (!fPw.input.value) { err.textContent = '請輸入密碼'; fPw.input.focus(); return; }
+    } else {
+      if (!/^\d{6}$/.test(fCode.input.value.trim()) && fCode.input.value.trim().length < PW_MIN) { err.textContent = '請輸入 6 碼設定碼'; fCode.input.focus(); return; }
+      if ([...fNew.input.value].length < PW_MIN) { err.textContent = `新密碼至少 ${PW_MIN} 個字`; fNew.input.focus(); return; }
+      if (fNew.input.value !== fNew2.input.value) { err.textContent = '兩次輸入的新密碼不一樣'; fNew2.input.focus(); return; }
+    }
     submit.disabled = true;
     try {
-      const body = tab === 'staff' ? { staffId: staffInput.value.trim() } : { password: input.value };
-      const data = await api.call('/auth', { method: 'POST', body });
-      storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.admin ? { admin: true } : {}), ...(data.staff ? { staff: data.staff } : {}) }));
-      unlocked(data.exp, !!data.admin, data.staff || null, !!data.manage);
-      dlg.close();
+      if (step === 'id') {
+        const r = await api.call('/auth', { method: 'POST', body: { staffId } });
+        setStep(r.next === 'setup' ? 'setup' : 'pw');
+      } else if (step === 'pw') {
+        done(await api.call('/auth', { method: 'POST', body: { staffId, password: fPw.input.value } }));
+      } else {
+        done(await api.call('/auth', { method: 'POST', body: { staffId, code: fCode.input.value.trim(), newPassword: fNew.input.value } }));
+      }
     } catch (ex) {
-      err.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試'
-        : (ex.code === 'bad_staff' ? '查不到這個員工編號，或已停用' : (tab === 'staff' ? '登入失敗，請再試一次' : '密碼不對，請再試一次'));
+      if (ex && ex.code === 'need_setup') { setStep('setup'); return; }
+      if (ex && ex.code === 'bad_staff' && step !== 'id') { setStep('id'); fId.input.value = staffId; }
+      showError(ex);
+      if (step === 'pw') { fPw.input.value = ''; fPw.input.focus(); }
     } finally {
       submit.disabled = false;
     }
   });
 
-  // ---- 登出確認 ----
-  const out = mk('dialog', 'dialog');
-  out.id = 'company-logout-dialog';
-  const outForm = mk('div');
-  const outCancel = mk('button', 'btn btn-secondary', '取消');
-  outCancel.type = 'button';
-  const outOk = mk('button', 'btn btn-primary', '登出公司模式');
-  outOk.type = 'button';
-  // 只有正式後端＋管理員密碼登入才看得到（同事看不到入口）
-  const toDev = mk('button', 'btn btn-secondary', '切到測試後端');
+  // ---- 變更密碼 ----
+  const cp = mk('dialog', 'dialog');
+  cp.id = 'company-password-dialog';
+  const cpForm = mk('form');
+  cpForm.method = 'dialog';
+  cpForm.noValidate = true;
+  const cpUser = mk('input');
+  Object.assign(cpUser, { readOnly: true, type: 'text', name: 'username', autocomplete: 'username', tabIndex: -1 });
+  cpUser.className = 'login-hidden-user';
+  cpUser.setAttribute('aria-hidden', 'true');
+  const cOld = field('目前密碼', { type: 'password', name: 'password', autocomplete: 'current-password' });
+  const cNew = field('新密碼', { type: 'password', name: 'newPassword', autocomplete: 'new-password' }, `至少 ${PW_MIN} 個字。改好後，其他裝置會被登出`);
+  const cNew2 = field('再輸入一次', { type: 'password', name: 'newPassword2', autocomplete: 'new-password' });
+  const cErr = mk('p', 'login-err', '');
+  cErr.setAttribute('role', 'alert');
+  const cActions = mk('div', 'actions');
+  const cCancel = mk('button', 'btn btn-secondary', '取消');
+  cCancel.type = 'button';
+  const cOk = mk('button', 'btn btn-primary', '變更');
+  cOk.type = 'submit';
+  cActions.append(cCancel, cOk);
+  cpForm.append(mk('h2', null, '變更密碼'), cpUser, cOld.wrap, cNew.wrap, cNew2.wrap, cErr, cActions);
+  cp.appendChild(cpForm);
+  document.body.appendChild(cp);
+  cCancel.addEventListener('click', () => cp.close());
+  cp.addEventListener('close', () => button.focus());
+  function openChangePassword() {
+    for (const f of [cOld, cNew, cNew2]) f.input.value = '';
+    cErr.textContent = '';
+    const s = shell.company().staff;
+    cpUser.value = s ? s.id : '';
+    cp.showModal();
+    cOld.input.focus();
+  }
+  cpForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    cErr.textContent = '';
+    if (!cOld.input.value) { cErr.textContent = '請輸入目前密碼'; cOld.input.focus(); return; }
+    if ([...cNew.input.value].length < PW_MIN) { cErr.textContent = `新密碼至少 ${PW_MIN} 個字`; cNew.input.focus(); return; }
+    if (cNew.input.value !== cNew2.input.value) { cErr.textContent = '兩次輸入的新密碼不一樣'; cNew2.input.focus(); return; }
+    cOk.disabled = true;
+    try {
+      const data = await api.call('/staff/me/password', { method: 'POST', body: { password: cOld.input.value, newPassword: cNew.input.value } });
+      storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.staff ? { staff: data.staff } : {}) }));
+      unlocked(data.exp, data.staff || null, !!data.manage);
+      cp.close();
+      showToast('密碼已變更，其他裝置已登出');
+    } catch (ex) {
+      if (ex && ex.code === 'unauthorized') { cp.close(); expire(); return; }
+      cErr.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試' : (ex.message || '變更失敗').replace(/。$/, '');
+    } finally {
+      cOk.disabled = false;
+    }
+  });
+
+  // 小提示（變更密碼成功）
+  function showToast(text) {
+    const t = mk('div', 'acct-toast', text);
+    t.setAttribute('role', 'status');
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
+  // ---- 帳號彈窗（非模態，點外面或 Esc 關閉，焦點回按鈕）----
+  const pop = mk('div', 'acct-pop');
+  pop.id = 'acct-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', '帳號');
+  pop.hidden = true;
+  const head = mk('div', 'acct-head');
+  const av = mk('div', 'acct-av');
+  av.setAttribute('aria-hidden', 'true');
+  const nameBox = mk('div');
+  const nameEl = mk('b', 'acct-name');
+  const lvEl = mk('span', 'acct-lv');
+  nameBox.append(nameEl, lvEl);
+  head.append(av, nameBox);
+  const dl = mk('dl', 'acct-dl');
+  const dd = {};
+  for (const [k, label] of [['id', '員工編號'], ['contact', '分機'], ['exp', '解鎖有效']]) {
+    dl.append(mk('dt', null, label));
+    dd[k] = mk('dd');
+    dd[k].dataset.k = k;
+    dl.append(dd[k]);
+  }
+  const notice = mk('div', 'acct-sec');
+  notice.append(mk('h3', null, '通知'), mk('div', 'acct-empty', '目前沒有通知'));
+  const act = mk('div', 'acct-act');
+  const manageBtn = mk('a', 'btn btn-primary acct-manage', '管理頁');
+  manageBtn.href = new URL('admin/', document.baseURI).href;
+  const cpBtn = mk('button', 'btn btn-secondary', '變更密碼');
+  cpBtn.type = 'button';
+  const outBtn = mk('button', 'btn btn-secondary', '登出');
+  outBtn.type = 'button';
+  outBtn.id = 'company-logout';
+  act.append(manageBtn, cpBtn, outBtn);
+  // 只有正式後端的系統管理者看得到（同事看不到入口）
+  const toDev = mk('button', 'acct-dev', '切到測試後端');
   toDev.type = 'button';
   toDev.id = 'to-dev-backend';
-  toDev.hidden = true;
-  outForm.append(mk('h2', null, '登出公司模式'), mk('p', null, '登出後，公司專屬工具會從櫥窗和工具列隱藏。'), (() => { const a = mk('div', 'actions'); a.append(toDev, outCancel, outOk); return a; })());
-  out.appendChild(outForm);
-  document.body.appendChild(out);
-  outCancel.addEventListener('click', () => out.close());
-  outOk.addEventListener('click', () => { out.close(); logout(); });
-  toDev.addEventListener('click', () => { out.close(); switchApiEnv('dev', { storage }); });
+  pop.append(head, dl, notice, act, toDev);
+  document.body.appendChild(pop);
+
+  let manage = false;
+  let contactReq = 0;
+  function renderPop() {
+    const c = shell.company();
+    const s = c.staff || {};
+    const name = s.name || (c.admin ? '管理員' : '');
+    av.textContent = [...name][0] || '';
+    nameEl.textContent = name;
+    const level = s.level || (c.admin ? 'sys' : '');
+    lvEl.textContent = LEVEL_NAMES[level] || '';
+    lvEl.hidden = !lvEl.textContent;
+    dd.id.textContent = s.id || '—';
+    dd.exp.textContent = '';
+    if (c.exp) dd.exp.append(fmtExp(c.exp), ' ', mk('small', null, `（${leftText(c.exp)}）`));
+    manageBtn.hidden = !manage;
+    cpBtn.hidden = !s.id;
+    toDev.hidden = !(API_ENV === 'prod' && level === 'sys');
+  }
+  // 分機每次開彈窗讀一次（直播需求單可能改過）；讀不到顯示「—」
+  async function loadContact() {
+    const my = ++contactReq;
+    dd.contact.textContent = '…';
+    if (!(shell.company().staff || {}).id) { dd.contact.textContent = '—'; return; }
+    try {
+      const p = await api.call('/staff/me');
+      if (my === contactReq) dd.contact.textContent = (p && p.contact) || '未填';
+    } catch { if (my === contactReq) dd.contact.textContent = '—'; }
+  }
+  // 貼在按鈕下方、右緣對齊；窄螢幕左右撐滿（CSS）
+  function place() {
+    const r = button.getBoundingClientRect();
+    pop.style.top = Math.round(r.bottom + 8) + 'px';
+    pop.style.right = Math.max(16, Math.round(window.innerWidth - r.right)) + 'px';
+  }
+  function openPop() {
+    if (!account) return;
+    renderPop();
+    place();
+    pop.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    loadContact();
+    (manageBtn.hidden ? cpBtn.hidden ? outBtn : cpBtn : manageBtn).focus();
+  }
+  function closePop(focusBack = true) {
+    if (pop.hidden) return;
+    pop.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    if (focusBack) button.focus();
+  }
+  window.addEventListener('resize', () => { if (!pop.hidden) place(); });
+  pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closePop(); } });
+  document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target) && !button.contains(e.target)) closePop(false); });
+  cpBtn.addEventListener('click', () => { closePop(false); openChangePassword(); });
+  outBtn.addEventListener('click', () => { closePop(false); logout(); button.focus(); });
+  toDev.addEventListener('click', () => { closePop(false); switchApiEnv('dev', { storage }); });
+  manageBtn.addEventListener('click', () => closePop(false));
+
+  // ---- 右上角按鈕：未登入「登入」；已登入「● 公司模式 名字」 ----
+  function renderButton() {
+    if (!account) return;
+    const c = shell.company();
+    button.textContent = '';
+    if (!c.unlocked) {
+      button.className = 'btn btn-secondary btn-sm';
+      button.textContent = '登入';
+      button.removeAttribute('aria-haspopup');
+      button.removeAttribute('aria-expanded');
+      return;
+    }
+    const s = c.staff || {};
+    button.className = 'acct-pill';
+    button.setAttribute('aria-haspopup', 'dialog');
+    button.setAttribute('aria-expanded', String(!pop.hidden));
+    const dot = mk('span', 'acct-dot');
+    dot.setAttribute('aria-hidden', 'true');
+    button.append(dot, mk('span', 'acct-mode', '公司模式'), mk('span', 'acct-nm', s.name || (c.admin ? '管理員' : '')));
+  }
+  button.addEventListener('click', () => {
+    if (!shell.company().unlocked) { openLogin(false); return; }
+    if (pop.hidden) openPop(); else closePop();
+  });
 
   // ---- 狀態 ----
   function setLocks(locked) {
     for (const t of internal.getCatalog()) if (t.tier === 'company') internal.panes.setLocked(t.id, locked);
   }
 
-  // admin：前端用管理密碼登入（12 小時、不受暫停排程發布限制），剩餘時間改用小時
-  // manage：顯示「管理頁」膠囊（管理員密碼登入，或員工層級在管理頁至少有一張卡片）
-  function unlocked(exp, admin = false, staff = null, manage = false) {
-    internal.setCompany({ unlocked: true, exp, admin: Boolean(admin), staff: staff || null });
-    const left = exp * 1000 - Date.now();
-    const text = staff && staff.name ? `${staff.name} 已登入，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`
-      : admin ? `公司素材已解鎖（管理員），剩 ${Math.max(0, Math.ceil(left / 3600000))} 小時`
-      : `公司素材已解鎖，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`;
-    shell.setStatus('company', { state: 'ok', text });
-    shell.setStatus('manage', manage ? { state: 'ok', text: '管理頁' } : { state: 'hidden', text: '' });
-    button.hidden = true;
+  // staff：員工資料 { id, name, group, level }；admin：舊版首頁管理員憑證（已不再發出，到期前仍可用）
+  function unlocked(exp, staff = null, mg = false, admin = false) {
+    internal.setCompany({ unlocked: true, exp, admin: Boolean(admin || (staff && staff.level === 'sys')), staff: staff || null });
+    manage = mg;
+    shell.setStatus('company', { state: 'hidden', text: '' });
+    renderButton();
+    if (!pop.hidden) renderPop();
     setLocks(false);
   }
 
   function locked() {
     internal.setCompany({ unlocked: false, exp: null, admin: false, staff: null });
+    manage = false;
     shell.setStatus('company', { state: 'hidden', text: '' });
-    shell.setStatus('manage', { state: 'hidden', text: '' });
-    button.hidden = false;
+    closePop(false);
+    renderButton();
   }
 
   function logout() {
@@ -185,28 +391,25 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       const now = readCompany(storage); // api.call 若收到 renew 會已更新
       const staff = data.staff || null;
       if (staff) { try { const c = readCompany(storage); if (c) storage.setItem(COMPANY_KEY, JSON.stringify({ ...c, staff })); } catch { /* 靜默 */ } }
-      unlocked(now ? now.exp : data.exp, !!data.admin, staff, !!data.manage);
+      unlocked(now ? now.exp : data.exp, staff, !!data.manage, !!data.admin);
     } catch (e) {
       if (isNetworkFailure(e)) {
-        if (!shell.company().unlocked) shell.setStatus('company', { state: 'warn', text: '無法確認公司密碼' });
+        if (!shell.company().unlocked) shell.setStatus('company', { state: 'warn', text: '無法確認登入狀態' });
         return;
       }
       expire();
     }
   }
 
-  button.addEventListener('click', () => openLogin(false));
   window.addEventListener('tbx:company-login', (e) => openLogin(!(e.detail && e.detail.fresh)));
-  window.addEventListener('tbx:company-logout', () => {
-    toDev.hidden = !(API_ENV === 'prod' && shell.company().admin);
-    if (!out.open) out.showModal();
-  });
+  window.addEventListener('tbx:company-logout', () => { if (shell.company().unlocked) openPop(); });
   shell.__checkCompany = check;
   setInterval(check, CHECK_INTERVAL);
+  renderButton();
 
   // 開站：有憑證就確認；憑證已經過期（本機時間）也算失敗
   if (hasStoredToken()) {
-    shell.setStatus('company', { state: 'checking', text: '正在確認公司密碼' });
+    shell.setStatus('company', { state: 'checking', text: '正在確認登入狀態' });
     return check();
   }
   return Promise.resolve();

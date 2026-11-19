@@ -14,6 +14,9 @@ export const MESSAGES = {
   fb_forbidden: '排程發布目前關閉。',
   bad_staff: '查不到這個員工編號，或已停用。',
   fb_need_staff: '排程發布需要用員工編號登入。',
+  locked: '連續輸入錯誤太多次，請稍後再試。',
+  need_setup: '這個帳號還沒設定密碼，請用設定碼設定。',
+  setup_expired: '設定碼已過期或還沒發，請找管理者重置密碼拿新的設定碼。',
   fb_no_perm: '你的權限組不能使用這個功能。',
   fb_no_pages: '臉書 token 沒有可管理的粉專：授權時要勾選粉專，並有 pages_manage_posts 權限。',
   fb_error: '臉書回應錯誤。',
@@ -22,7 +25,7 @@ export const MESSAGES = {
   rundown_failed: '連不上 Rundown 的 Apps Script。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, forbidden: 403, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
-  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
+  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

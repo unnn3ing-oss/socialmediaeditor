@@ -3,7 +3,7 @@
 // 預覽用縮小的畫布，下載時用原圖大小重畫一次；位置、大小都用「佔整張圖的比例」記錄，所以兩邊的結果一致。
 //
 // 搬進小編工具箱：選檔／拖曳／貼上改用 SDK（tb.files.bind），下載改用 tb.download。
-// 公司 Logo（新版、舊版）不在程式裡，輸入公司密碼後才用 tb.assets.get('logo.news'／'logo.old') 從後端取；
+// 公司 Logo（新版、舊版）不在程式裡，登入後才用 tb.assets.get('logo.news'／'logo.old') 從後端取；
 // 沒密碼時只有「上傳自己的 Logo」。
 // =====================================================================================
 import { tb } from '../../sdk/toolbox.js';
@@ -52,7 +52,7 @@ tb.init('watermark');
   const outs = { size: $('wmSizeOut'), transparency: $('wmTransparencyOut'), margin: $('wmMarginOut') };
   let busy = false;
 
-  let company = false;                    // 有公司密碼、而且拿得到公司 Logo 才是 true
+  let company = false;                    // 已登入、而且拿得到公司 Logo 才是 true
   const logoField = $('wmLogoField');
   const LOGO_HINT_COMPANY = '新版是向量圖、放多大都清楚；舊版是 170×100 的白色 PNG，放大會偏糊。兩個都是淺色，照片偏亮時可以改成自己上傳的圖。';
   const LOGO_HINT_UPLOAD = '建議用背景透明的 PNG／SVG；也能直接把圖拖進來、或貼上（先點一下上面的框再按 Ctrl+V）。';

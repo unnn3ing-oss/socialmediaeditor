@@ -15,7 +15,8 @@ async function call(env, path, init = {}) {
 }
 async function auth(env, kind, adm = false) {
   const { signToken } = await tok();
-  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) };
+  if (adm) env.SYS_STAFF_ID = 'SYS1';
+  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) };
 }
 const ACCOUNTS = { data: [{ id: '111', name: 'TVBS 新聞', access_token: 'PT111' }, { id: '222', name: '少康戰情室', access_token: 'PT222' }, { id: '333', name: '氣象站', access_token: 'PT333' }] };
 const fbEnv = () => mkEnv({ FB_USER_TOKEN: 'USERTOKEN' });
@@ -25,16 +26,15 @@ async function staffAuth(env, id = 'A001', group = 2) {
   const r = await call(env, '/admin/staff', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify({ id, name: '測試', group }) });
   assert.equal(r.status, 200);
   const { signToken } = await tok();
-  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, id)) };
+  return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, id, 1)) };
 }
 
 test('/fb/pages：無憑證 401、公司密碼憑證 403（要員工編號）、管理員 200', async (t) => {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS }); t.after(f.restore);
   const env = fbEnv();
   assert.equal((await call(env, '/fb/pages')).status, 401);
-  const r403 = await call(env, '/fb/pages', { headers: await auth(env, 'company') });
-  assert.equal(r403.status, 403);
-  assert.equal((await r403.json()).code, 'fb_need_staff');
+  // 沒有員工編號的舊公司憑證（公司密碼已拿掉）一律無效
+  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company') })).status, 401);
   const r = await call(env, '/fb/pages', { headers: await auth(env, 'company', true) });
   assert.equal(r.status, 200);
   const { data } = await r.json();
@@ -262,7 +262,7 @@ test('開放／關閉：預設關閉；開放後名單內的人可用；關閉�
   const env = fbEnv();
   const adm = await auth(env, 'admin');
   const company = await staffAuth(env);
-  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company') })).status, 403, '公司密碼憑證不論開放關閉都不行');
+  assert.equal((await call(env, '/fb/pages', { headers: await auth(env, 'company') })).status, 401, '公司密碼憑證不論開放關閉都不行');
   const set = (body, h = adm) => call(env, '/admin/fb/access', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.deepEqual((await (await call(env, '/admin/fb/access', { headers: adm })).json()).data, { mode: 'admin', reason: '' });
   const r0 = await call(env, '/fb/pages', { headers: company });

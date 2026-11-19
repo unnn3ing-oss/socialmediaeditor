@@ -14,7 +14,7 @@ async function setup(t, gas, extra = {}) {
   const f = installFetch({ [GAS]: gas }); t.after(f.restore);
   const env = mkEnv({ RUNDOWN_URL: GAS, RUNDOWN_TOKEN: 'rd-token-123456', ...extra });
   const { signToken } = await tok();
-  const h = async (kind, adm) => ({ origin: ORIGIN, 'content-type': 'application/json', authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) });
+  const h = async (kind, adm) => (adm && (env.SYS_STAFF_ID = 'SYS1'), { origin: ORIGIN, 'content-type': 'application/json', authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) });
   const w = await load();
   const call = async (path, headers, body) => {
     const r = await w.fetch(new Request('https://api.test' + path, { method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body) }), env, { waitUntil() {} });
@@ -43,9 +43,9 @@ test('格式驗證', async (t) => {
   assert.equal(f.calls.length, 0);
 });
 
-test('權限：公司憑證 403、無憑證 401', async (t) => {
+test('權限：舊公司憑證 401、無憑證 401', async (t) => {
   const { h, call } = await setup(t, () => ({ ok: true, results: [] }));
-  assert.equal((await call('/rundown', await h('company', false), { entries: [E()] })).status, 403);
+  assert.equal((await call('/rundown', await h('company', false), { entries: [E()] })).status, 401);
   assert.equal((await call('/rundown', { origin: ORIGIN }, { entries: [E()] })).status, 401);
 });
 

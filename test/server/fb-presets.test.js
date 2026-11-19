@@ -12,7 +12,7 @@ async function call(env, path, headers, body) {
   const r = await w.fetch(new Request('https://api.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) }), env, { waitUntil() {} });
   return { status: r.status, body: await r.json() };
 }
-const auth = async (env, kind, adm) => { const { signToken } = await tok(); return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm)) }; };
+const auth = async (env, kind, adm) => { const { signToken } = await tok(); if (adm) env.SYS_STAFF_ID = 'SYS1'; return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, false, adm ? 'SYS1' : '', adm ? 1 : 0)) }; };
 
 test('活動留言：管理頁整份存、讀；排程發布讀得到；驗證', async () => {
   const env = mkEnv();
@@ -26,7 +26,7 @@ test('活動留言：管理頁整份存、讀；排程發布讀得到；驗證',
   assert.deepEqual((await call(env, '/admin/fb/presets', adm, { presets: [list[1]] })).body.data, [list[1]]);
   // 排程發布（管理員前端憑證）讀得到；一般公司憑證測試期間 403；沒憑證 401
   assert.deepEqual((await call(env, '/fb/presets', await auth(env, 'company', true))).body.data, [list[1]]);
-  assert.equal((await call(env, '/fb/presets', await auth(env, 'company', false))).status, 403);
+  assert.equal((await call(env, '/fb/presets', await auth(env, 'company', false))).status, 401);
   assert.equal((await call(env, '/fb/presets', {})).status, 401);
   // 公司密碼憑證不能進 /admin
   assert.equal((await call(env, '/admin/fb/presets', await auth(env, 'company', false), { presets: [] })).status, 401);
