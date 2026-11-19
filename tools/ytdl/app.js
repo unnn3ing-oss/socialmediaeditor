@@ -202,7 +202,7 @@ function renderQueueArea() {
     retry: (uid) => send({ type: "queue_retry", uid }),
     copy: (uid, button) => copyRowText(send, uid, button),
     cover: (uid, button) => downloadRowCover(send, uid, button),
-  }, { showText: true }); // 網頁在每支影片下面顯示【標題】與標籤
+  }, { showText: !isSide }); // 網頁在每支影片下面顯示【標題】與標籤；側邊欄不顯示（用「複製內文」）
   $("queue-empty").hidden = queue.items.length > 0;
   const parts = queue.items.length ? [`共 ${info.total} 支`, `完成 ${info.done}`] : [];
   if (info.speed) parts.push(`速度 ${formatSpeed(info.speed)}`);
