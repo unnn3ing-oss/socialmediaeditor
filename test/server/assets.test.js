@@ -22,7 +22,8 @@ async function call(path, init = {}, env) {
 }
 async function tok(env, kind) {
   const { signToken } = await loadToken();
-  return signToken(env.SESSION_SECRET, kind, nowSec() + 600);
+  // 公司憑證要有員工編號或是（舊版）管理員憑證；這裡用後者，不用建名單
+  return signToken(env.SESSION_SECRET, kind, nowSec() + 600, kind === 'company');
 }
 const bearer = (t) => ({ authorization: 'Bearer ' + t });
 async function put(env, key, bytes, tier, token) {
@@ -105,7 +106,7 @@ test('11 MB → too_large', async () => {
 test('非 admin 呼叫 PUT／DELETE／list → 401', async () => {
   const env = mkEnv();
   assert.equal((await put(env, 'a.png', PNG, 'company')).status, 401);
-  assert.equal((await put(env, 'a.png', PNG, 'company', await tok(env, 'company'))).status, 401);
+  assert.equal((await put(env, 'a.png', PNG, 'company', await (await loadToken()).signToken(env.SESSION_SECRET, 'company', nowSec() + 600))).status, 401);
   assert.equal((await call('/admin/assets/a.png', { method: 'DELETE' }, env)).status, 401);
   assert.equal((await call('/admin/assets', {}, env)).status, 401);
 });

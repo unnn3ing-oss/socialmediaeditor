@@ -60,8 +60,9 @@ export async function saveLevels(env, body) {
   return v;
 }
 
-// 某層級（'mgr'／'user'）可用的卡片
+// 某層級（'sys'／'mgr'／'user'）可用的卡片；系統管理者（未解鎖）＝全部非敏感卡片
 export async function cardsFor(env, level) {
+  if (level === 'sys') return CARD_KEYS.filter((k) => !SENSITIVE.includes(k));
   const lv = await readLevels(env);
   return level === 'mgr' ? lv.mgr : lv.user;
 }

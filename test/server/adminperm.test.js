@@ -17,7 +17,8 @@ async function call(env, path, init = {}) {
   const r = await w.fetch(new Request('https://api.test' + path, { ...init, headers: { origin: ORIGIN, ...(init.body ? { 'content-type': 'application/json' } : {}), ...(init.headers || {}) } }), env, { waitUntil() {} });
   return { status: r.status, body: await r.json().catch(() => null) };
 }
-const sign = async (env, kind, adm = false, uid = '') => { const { signToken } = await tok(); return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm, uid)) }; };
+// 員工憑證帶 pv 1（剛新增、還沒改過密碼的版本）
+const sign = async (env, kind, adm = false, uid = '', pv = 1) => { const { signToken } = await tok(); return { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, kind, nowSec() + 600, adm, uid, pv)) }; };
 const post = (env, h, path, body) => call(env, path, { method: 'POST', headers: h, body: JSON.stringify(body) });
 const del = (env, h, path) => call(env, path, { method: 'DELETE', headers: h });
 const gid = (d, name) => d.groups.find((g) => g.name === name).id;
@@ -70,7 +71,7 @@ test('身分：admin 憑證全開；adm:1 擋敏感卡片；公司密碼憑證 4
   assert.equal((await call(env, '/auth/status', { headers: m1 })).body.data.manage, true);
   assert.equal((await call(env, '/auth/status', { headers: m1 })).body.data.staff.level, 'mgr');
   assert.equal((await call(env, '/auth/status', { headers: u1 })).body.data.manage, false);
-  assert.equal((await call(env, '/auth/status', { headers: co })).body.data.manage, false);
+  assert.equal((await call(env, '/auth/status', { headers: co })).status, 401, '沒有員工編號的舊公司憑證無效');
 });
 
 test('停用、移除、降層級立即生效', async (t) => {

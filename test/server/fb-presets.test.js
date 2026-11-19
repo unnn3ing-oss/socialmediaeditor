@@ -26,7 +26,7 @@ test('活動留言：管理頁整份存、讀；排程發布讀得到；驗證',
   assert.deepEqual((await call(env, '/admin/fb/presets', adm, { presets: [list[1]] })).body.data, [list[1]]);
   // 排程發布（管理員前端憑證）讀得到；一般公司憑證測試期間 403；沒憑證 401
   assert.deepEqual((await call(env, '/fb/presets', await auth(env, 'company', true))).body.data, [list[1]]);
-  assert.equal((await call(env, '/fb/presets', await auth(env, 'company', false))).status, 403);
+  assert.equal((await call(env, '/fb/presets', await auth(env, 'company', false))).status, 401);
   assert.equal((await call(env, '/fb/presets', {})).status, 401);
   // 公司密碼憑證不能進 /admin
   assert.equal((await call(env, '/admin/fb/presets', await auth(env, 'company', false), { presets: [] })).status, 401);

@@ -1,8 +1,8 @@
 // 管理頁權限：誰在用（adminWho）、每條 /admin/* 屬於哪張卡片（cardFor），以及 /admin/me、/admin/levels。
 //   admin 憑證（管理頁輸入管理員密碼，只放記憶體）＝系統管理者、已解鎖，全部卡片。
-//   公司憑證帶 adm:1（首頁管理員密碼登入，存在 localStorage）＝系統管理者、未解鎖：敏感卡片不能用。
-//   公司憑證帶 uid（員工編號）＝依名單層級（mgr／user）與層級權限表；bearer() 每次查名單，停用立即失效。
-//   公司密碼憑證（沒有 uid、沒有 adm）不能進管理頁。
+//   員工憑證（uid）且是 SYS_STAFF_ID ＝系統管理者、未解鎖：敏感卡片不能用（舊版首頁管理員憑證 adm:1 同樣，已不再發出）。
+//   其他員工憑證＝依名單層級（mgr／user）與層級權限表；bearer() 每次查名單，停用／改密碼立即失效。
+//   沒有 uid、沒有 adm 的舊公司密碼憑證不能進管理頁。
 //   沒對應到卡片的路徑一律只給已解鎖的系統管理者（新增路由忘了標也不會開放出去）。
 import { ok, fail, readBody } from './http.js';
 import { bearer } from './auth.js';
@@ -20,7 +20,7 @@ export const ROUTES = [
   [/^\/admin\/fb\/presets$/, 'presets'],
   [/^\/admin\/fb\/video-settings$/, 'video'],
   [/^\/admin\/staff-groups(\/\d{1,9})?$/, 'groups'],
-  [/^\/admin\/staff(\/[^/]+)?$/, 'staff'],
+  [/^\/admin\/staff(\/[^/]+(\/reset)?)?$/, 'staff'],
   [/^\/admin\/audit$/, 'audit'],
   [/^\/admin\/rundown(\/ping)?$/, 'rundown'],
   [/^\/admin\/assets(\/[^/]+)?$/, 'assets'],
@@ -38,6 +38,8 @@ export async function adminWho(request, env) {
   if (!t) return null;
   if (t.adm) return { role: 'sys', unlocked: false, cards: new Set(CARD_KEYS.filter((k) => !SENSITIVE.includes(k))), name: LEVEL_NAMES.sys };
   if (!t.staff) return null;
+  // 系統管理者（SYS_STAFF_ID 員工登入）＝未解鎖的系統管理者，敏感卡片要在管理頁再輸入管理員密碼
+  if (t.staff.level === 'sys') return { role: 'sys', unlocked: false, cards: new Set(CARD_KEYS.filter((k) => !SENSITIVE.includes(k))), name: t.staff.name, staff: t.staff, uid: t.staff.id };
   const role = t.staff.level === 'mgr' ? 'mgr' : 'user';
   const lv = await readLevels(env);
   return { role, unlocked: false, cards: new Set(lv[role]), name: t.staff.name, staff: t.staff, uid: t.staff.id };

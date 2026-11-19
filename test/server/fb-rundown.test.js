@@ -43,9 +43,9 @@ test('格式驗證', async (t) => {
   assert.equal(f.calls.length, 0);
 });
 
-test('權限：公司憑證 403、無憑證 401', async (t) => {
+test('權限：舊公司憑證 401、無憑證 401', async (t) => {
   const { h, call } = await setup(t, () => ({ ok: true, results: [] }));
-  assert.equal((await call('/rundown', await h('company', false), { entries: [E()] })).status, 403);
+  assert.equal((await call('/rundown', await h('company', false), { entries: [E()] })).status, 401);
   assert.equal((await call('/rundown', { origin: ORIGIN }, { entries: [E()] })).status, 401);
 });
 
