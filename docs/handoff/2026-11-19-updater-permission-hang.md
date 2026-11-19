@@ -13,10 +13,14 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `extension/core/updater.js` | 新增 `ensurePermission(dir,{timeoutMs,onPrompt})`；`getFolder(opts)` 用它 | ⬜ |
-| `extension/core/sidepanel.js` | `apply()` 傳 onPrompt 顯示等待彈窗；逾時走 `chooseFolder(true)` | ⬜ |
-| `test/updater.test.js` | 逾時、granted、denied 測試 | ⬜ |
-| manifest.base.json／changelog.json | 3.11 | ⬜ |
+| `extension/core/updater.js` | 新增 `ensurePermission(dir,{timeoutMs,onPrompt})`；`getFolder(opts)` 用它 | ✅ |
+| `extension/core/sidepanel.js` | `apply()` 傳 onPrompt 顯示等待彈窗；逾時走 `chooseFolder(true)` | ✅ |
+| `test/updater.test.js` | 逾時、granted、denied 測試 | ✅ |
+| manifest.base.json／changelog.json | 3.11 | ✅ |
+
+## 補充
+- 另修：選資料夾按「取消」後兩個按鈕停在灰色（原本只有 catch 會恢復）。
+- 測試：`test/updater.test.js` 加 ensurePermission 單元測試＋側邊欄流程（等待彈窗→重選資料夾→取消後按鈕恢復）。npm test、sidepanel／ytdl e2e 通過。
 
 ## 測試
 `npm test`、`node build.js --check`、`npm run e2e`（sidepanel 相關）。

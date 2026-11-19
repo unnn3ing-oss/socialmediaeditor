@@ -226,9 +226,11 @@ document.getElementById('extVer2').textContent = VER;
     applyBtn.disabled = checkBtn.disabled = true;
     try {
       // 記住的資料夾直接用（權限過期時 Chrome 會在這次點擊問一次）；沒有或打不開才請人選
-      let dir = await Updater.getFolder();
+      let dir = await Updater.getFolder({
+        onPrompt: () => modal({ title: '等待 Chrome 允許存取資料夾…', body: ['如果 Chrome 跳出「要讓這個擴充功能編輯檔案嗎」，請按允許。', '10 秒內沒有回應，會改成請你重新選擇資料夾。'] }),
+      });
       if (!dir) dir = await chooseFolder(await Updater.hasSavedFolder());
-      if (!dir) { closeModal(); show('已取消，沒有更新任何檔案'); return; }
+      if (!dir) { closeModal(); show('已取消，沒有更新任何檔案'); applyBtn.disabled = checkBtn.disabled = false; return; }
       busy = true;
       modal({ title: '更新中', body: ['準備下載…', '請不要關閉側邊欄。'], progress: 0 });
       await Updater.apply(dir, latest, (msg) => {
