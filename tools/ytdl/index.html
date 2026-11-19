@@ -44,11 +44,11 @@
 
       <div id="work">
       <section id="add-card" class="yt-card addc" aria-label="增加影片">
-        <!-- 側邊欄才有：作用中分頁是 YouTube／IG 時，用它代替網址框，「增加」就加入這個分頁 -->
+        <!-- 側邊欄才有：作用中分頁是 YouTube／IG 時，用它代替網址框與下方「增加」，卡片上的「增加」加入這個分頁 -->
         <div id="tab-card" class="tab-slot" hidden>
           <span id="tab-kind" class="tab-chip">影片</span>
           <span class="tab-text"><span class="tab-label">目前分頁</span><span id="tab-title" class="tab-title"></span></span>
-          <button id="tab-paste" class="tab-paste" type="button">改貼網址</button>
+          <button id="tab-add" class="btn btn-primary btn-sm tab-add" type="button">增加</button>
         </div>
         <label class="in" id="add-in">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
@@ -82,6 +82,7 @@
         </div>
         <ul id="queue-list" class="qlist"></ul>
         <p id="queue-empty" class="queue-empty">清單是空的</p>
+        <div id="queue-foot" class="queue-foot" hidden></div>
       </section>
       </div>
     </div>

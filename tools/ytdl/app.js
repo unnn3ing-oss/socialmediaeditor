@@ -179,7 +179,7 @@ function renderQueueArea() {
   setText($("conn-note"), hostText?.text ?? "");
   $("conn-note").dataset.kind = hostText?.kind ?? "info";
   setHidden($("conn-note"), !hostText);
-  for (const id of ["add-url", "add-btn", "cooldown", "limit", "auto-cover"]) $(id).disabled = !detected;
+  for (const id of ["add-url", "add-btn", "tab-add", "cooldown", "limit", "auto-cover"]) $(id).disabled = !detected;
   renderHostNote($("host-note"), queue, { updateAvailable: updateOffered() });
   const folderLocked = outputDirLocked(queue); // 下載中的工作沿用開始時的資料夾，改了要等下一批
   $("outdir").disabled = !connected || folderLocked;
@@ -289,38 +289,40 @@ setInterval(connectHost, 3000);
 // 網頁：左側欄的 details 固定展開（summary 由 CSS 隱藏）；側邊欄：預設收合「設定與工具」。
 if (!isSide) $("side-tools").open = true;
 let currentTab = null; // { url, kind, chip, title }：作用中分頁是 YouTube／IG 時才有（外掛推播）
-let pastingFor = null; // 按了「改貼網址」的那個分頁網址
-const tabCardShown = () => isSide && Boolean(currentTab) && currentTab.url !== pastingFor;
+const tabCardShown = () => isSide && Boolean(currentTab);
+// 在 YouTube／IG 分頁時：卡片上的「增加」代替網址框與下方「增加」（要貼別的網址就切到其他分頁）
 function renderTabCard() {
   const shown = tabCardShown() && client.detected();
   setHidden($("tab-card"), !shown);
   setHidden($("add-in"), shown);
-  if (!shown) { $("add-btn").removeAttribute("aria-label"); return; }
-  $("add-btn").setAttribute("aria-label", `增加目前分頁：${currentTab.title}`);
+  setHidden($("add-btn"), shown);
+  if (!shown) return;
+  $("tab-add").setAttribute("aria-label", `增加目前分頁：${currentTab.title}`);
   setText($("tab-kind"), currentTab.chip);
   setText($("tab-title"), currentTab.title);
   $("tab-title").title = currentTab.title;
 }
 function setCurrentTab(tab) {
   currentTab = tab && typeof tab.url === "string" ? tab : null;
-  if (currentTab?.url !== pastingFor) pastingFor = null;
   renderTabCard();
 }
 if (isSide) {
   client.onTab(setCurrentTab);
   client.onChange((detected) => { if (detected) send({ type: "current_tab" }).then((r) => { if (r?.ok) setCurrentTab(r.tab); }).catch(() => {}); });
+  // 側邊欄：「開始全部下載」放清單最下面滿版（只搬一次，不重建）
+  $("queue-foot").append($("start-all"));
+  setHidden($("queue-foot"), false);
 }
-$("tab-paste").addEventListener("click", () => { pastingFor = currentTab?.url ?? null; renderTabCard(); $("add-url").focus(); });
+$("tab-add").addEventListener("click", async () => {
+  if (!currentTab) return;
+  try {
+    const result = await send({ type: "queue_add", url: currentTab.url });
+    setNote("add-note", result?.ok === false ? result.error : "", "error");
+  } catch (error) { setNote("add-note", error.message, "error"); }
+});
 
 // ---------- 加入與執行 ----------
 async function addFromBox() {
-  if (tabCardShown()) {
-    try {
-      const result = await send({ type: "queue_add", url: currentTab.url });
-      setNote("add-note", result?.ok === false ? result.error : "", "error");
-    } catch (error) { setNote("add-note", error.message, "error"); }
-    return;
-  }
   setNote("add-note", await addPastedUrls($("add-url"), send), "error");
 }
 $("add-btn").addEventListener("click", addFromBox);
