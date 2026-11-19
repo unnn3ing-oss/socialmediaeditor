@@ -1,5 +1,5 @@
 # 臉書：自動延長權杖＋存粉專權杖＋到期提醒
-- 狀態：進行中　- 分支：claude/admiring-knuth-ku3kd3　- 最後更新：2026-11-19
+- 狀態：進行中（第二段：管理頁輸入 App 密鑰）　- 分支：claude/admiring-knuth-ku3kd3　- 最後更新：2026-11-19
 - 使用者原始需求：「能用主管的 User token 自動幫我換好粉專權杖並存起來嗎？」→ 選「方案2 開始」（後端用 App ID＋App Secret 自動把短效權杖轉長效）。只有 A 方案（主管個人 User token），沒有系統使用者權杖。
 
 ## 已定案的決定
@@ -40,3 +40,18 @@
 ## 注意事項／不能做的事
 - 權杖、App Secret 永遠不回傳前端、不寫 log。
 - 不推 main，使用者說「推」才併。**後端需重新部署**＋`wrangler secret put FB_APP_ID`／`FB_APP_SECRET`；外掛不升版號。
+
+## 第二段：管理頁輸入 App 密鑰（做法 3，使用者 2026-11-19「開始」）
+背景：App 管理員只能是主管（原則），使用者拿不到 App Secret、也不能被加成管理員 → 主管登入管理頁自己輸入 App ID＋App Secret，加密存 D1。
+
+| 項目 | 決定 |
+|---|---|
+| 存放 | D1 `fb_settings` k=`app_cred`，AES-GCM 加密 JSON `{appId, secret, savedAt}` |
+| 讀取順序 | 管理頁存的 → Secrets `FB_APP_ID`／`FB_APP_SECRET` |
+| 驗證 | `GET /oauth/access_token?grant_type=client_credentials` 成功才存；App ID 1～20 位數字、Secret 32 位英數字 |
+| 路由 | `GET`／`POST`／`DELETE /admin/fb/app`（僅管理憑證，只回 configured、appId、source、savedAt，永不回 Secret） |
+| 畫面 | 「臉書連線」卡片最下方「App 密鑰」區（狀態、App ID、App Secret 密碼框、驗證並儲存、清除），兩份管理頁 |
+
+- [ ] tokenstore／graph／pages／index 後端＋單元測試
+- [ ] 兩份管理頁＋e2e
+- [ ] deploy.md、審查、給使用者看
