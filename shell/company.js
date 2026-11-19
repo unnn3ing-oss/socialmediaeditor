@@ -99,7 +99,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       const body = tab === 'staff' ? { staffId: staffInput.value.trim() } : { password: input.value };
       const data = await api.call('/auth', { method: 'POST', body });
       storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.admin ? { admin: true } : {}), ...(data.staff ? { staff: data.staff } : {}) }));
-      unlocked(data.exp, !!data.admin, data.staff || null);
+      unlocked(data.exp, !!data.admin, data.staff || null, !!data.manage);
       dlg.close();
     } catch (ex) {
       err.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試'
@@ -135,13 +135,15 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   // admin：前端用管理密碼登入（12 小時、不受暫停排程發布限制），剩餘時間改用小時
-  function unlocked(exp, admin = false, staff = null) {
+  // manage：顯示「管理頁」膠囊（管理員密碼登入，或員工層級在管理頁至少有一張卡片）
+  function unlocked(exp, admin = false, staff = null, manage = false) {
     internal.setCompany({ unlocked: true, exp, admin: Boolean(admin), staff: staff || null });
     const left = exp * 1000 - Date.now();
     const text = staff && staff.name ? `${staff.name} 已登入，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`
       : admin ? `公司素材已解鎖（管理員），剩 ${Math.max(0, Math.ceil(left / 3600000))} 小時`
       : `公司素材已解鎖，剩 ${Math.max(0, Math.ceil(left / 86400000))} 天`;
     shell.setStatus('company', { state: 'ok', text });
+    shell.setStatus('manage', manage ? { state: 'ok', text: '管理頁' } : { state: 'hidden', text: '' });
     button.hidden = true;
     setLocks(false);
   }
@@ -149,6 +151,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   function locked() {
     internal.setCompany({ unlocked: false, exp: null, admin: false, staff: null });
     shell.setStatus('company', { state: 'hidden', text: '' });
+    shell.setStatus('manage', { state: 'hidden', text: '' });
     button.hidden = false;
   }
 
@@ -182,7 +185,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       const now = readCompany(storage); // api.call 若收到 renew 會已更新
       const staff = data.staff || null;
       if (staff) { try { const c = readCompany(storage); if (c) storage.setItem(COMPANY_KEY, JSON.stringify({ ...c, staff })); } catch { /* 靜默 */ } }
-      unlocked(now ? now.exp : data.exp, !!data.admin, staff);
+      unlocked(now ? now.exp : data.exp, !!data.admin, staff, !!data.manage);
     } catch (e) {
       if (isNetworkFailure(e)) {
         if (!shell.company().unlocked) shell.setStatus('company', { state: 'warn', text: '無法確認公司密碼' });

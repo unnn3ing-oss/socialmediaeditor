@@ -62,7 +62,8 @@ async function staffLogin(request, env, staffId) {
   if (!staff) { await sleep(failDelay(env)); return fail(request, env, 'bad_staff'); }
   await touchLogin(env, staff.id);
   const exp = nowSec() + sessionTtl(env);
-  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, false, staff.id), exp, staff: { id: staff.id, name: staff.name, group: staff.groupName } });
+  const manage = (await cardsFor(env, staff.level)).length > 0;
+  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, false, staff.id), exp, staff: { id: staff.id, name: staff.name, group: staff.groupName, level: staff.level }, manage });
 }
 
 async function companyLogin(request, env) {
@@ -78,7 +79,7 @@ async function companyLogin(request, env) {
     if (!adm) { await sleep(failDelay(env)); return fail(request, env, 'bad_password'); }
   }
   const exp = nowSec() + (adm ? ADMIN_FRONT_TTL : sessionTtl(env));
-  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, adm), exp, ...(adm ? { admin: true } : {}) });
+  return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, adm), exp, ...(adm ? { admin: true, manage: true } : {}) });
 }
 
 // 員工自己的資料：GET 讀（姓名、權限組、分機），POST { contact } 只能改自己的分機

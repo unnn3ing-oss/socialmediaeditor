@@ -26,6 +26,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #status .pill-warn { color: var(--warn-text); }
 #status button.pill:hover { background: var(--fill); }
 /* 測試後端：填色，和一般提醒區分，避免以為在正式環境 */
+#status .pill[data-status=manage] { color: var(--accent); font-weight: 600; }
+#status .pill[data-status=manage]::before { display: none; }
 #status .pill[data-status=apienv] { background: #fef0c7; color: #93370d; font-weight: 700; padding: 0 12px; min-height: 36px; border-radius: 99px; }
 #status button.pill[data-status=apienv]:hover { background: #fedf89; }
 

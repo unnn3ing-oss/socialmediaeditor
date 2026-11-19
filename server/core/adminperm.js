@@ -49,6 +49,8 @@ export const meInfo = (who) => ({ role: who.role, roleName: LEVEL_NAMES[who.role
 export function gate(request, env, who, path) {
   const card = cardFor(path);
   if (card ? who.cards.has(card) : who.role === 'sys' && who.unlocked) return null;
+  // 權限組卡片要讀名單資料（權限組清單與使用人數）：只有權限組卡片的人也能 GET /admin/staff
+  if (card === 'staff' && path === '/admin/staff' && request.method === 'GET' && who.cards.has('groups')) return null;
   return fail(request, env, 'forbidden');
 }
 

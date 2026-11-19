@@ -31,6 +31,13 @@ export const CHECKS = [
     onWarnClick: ({ openInstall }) => openInstall(),
   },
   {
+    // 管理頁入口：company.js 依 /auth、/auth/status 的 manage 顯示（管理員密碼登入，或員工層級有卡片）
+    id: 'manage',
+    label: '管理頁',
+    passive: true,
+    onClick: () => { window.location.href = new URL('admin/', document.baseURI).href; },
+  },
+  {
     // 公司素材：由 company.js 自己更新狀態；未解鎖時不顯示（state 'hidden'）
     id: 'company',
     label: '正在確認公司密碼',
