@@ -24,7 +24,9 @@
 ## 下一步
 - [x] 實作（網頁兩欄＋彈窗精靈、embed=side 窄版、目前分頁 op／推播、側邊欄分頁、3.10）
 - [x] npm test 659、e2e 213、build --check 通過
-- [ ] 獨立審查 → 給使用者截圖確認 → 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
+- [x] 獨立審查（修 dialog close 旗標，`6f617d8`）
+- [x] 依使用者要求拿掉 AI 式說明文字（使用前請先確認、環境檢查／診斷／版本說明、設定步驟說明；清單空白改「清單是空的」；TOOL.md 同步）
+- [ ] 給使用者截圖確認 → 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 實作重點
 - `shell/panel.js`：panel.html 帶 `embed=side` 時傳給工具 iframe（`?v=...&embed=side`）。

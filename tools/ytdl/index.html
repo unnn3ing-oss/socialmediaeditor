@@ -28,8 +28,6 @@
         <button id="open-setup" class="btn btn-secondary btn-sm setup-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="setup-card"><span id="setup-dot" class="chip-dot" data-s="todo" aria-hidden="true"></span>設定步驟</button>
       </header>
 
-      <p class="yt-legal"><b>使用前請先確認</b>：YouTube 條款原則上不允許用官方功能以外的方式下載；影片裡的音樂與外部素材，授權範圍可能只限 YouTube。請先取得頻道管理部門同意，轉發到其他平台前也請確認授權。如果管理部門能直接提供成品原檔，畫質會比從 YouTube 抓下來的更好。</p>
-
       <div id="update-banner" class="notice update-banner" role="status" aria-live="polite" data-kind="info" hidden>
         <b id="update-banner-text"></b>
         <span id="update-banner-hint" class="ub-hint"></span>
@@ -83,7 +81,7 @@
           </div>
         </div>
         <ul id="queue-list" class="qlist"></ul>
-        <p id="queue-empty" class="queue-empty">清單是空的。貼上網址按「增加」，影片的標題和封面會自動帶進來。</p>
+        <p id="queue-empty" class="queue-empty">清單是空的</p>
       </section>
       </div>
     </div>
@@ -122,7 +120,6 @@
 
           <section class="side-sec" aria-labelledby="doctor-title">
             <h2 id="doctor-title">環境檢查</h2>
-            <p class="st-note">下載助手連不上或下載有問題時，先按這裡看哪一項有狀況。還是不行，重新執行 YT 下載助手安裝檔就會自動檢查並修復。</p>
             <div class="field"><button id="doctor-check" class="btn btn-secondary btn-sm" type="button" disabled>檢查環境</button></div>
             <ul id="doctor-list" class="dr-list"></ul>
             <p id="doctor-summary" class="dr-summary" role="status" aria-live="polite"></p>
@@ -130,7 +127,6 @@
             <button id="doctor-fix" class="btn btn-secondary btn-sm" type="button" hidden>嘗試自動修復</button>
             <div class="diag">
               <button id="diag-copy" class="btn btn-secondary btn-sm" type="button" aria-label="複製診斷資訊，貼給維護的人">複製診斷資訊</button>
-              <p class="diag-note">內容已隱藏使用者名稱，只含版本、檢查結果與近期紀錄</p>
               <p id="diag-copy-status" class="diag-status" role="status" aria-live="polite" hidden></p>
               <textarea id="diag-copy-text" class="diag-text" rows="6" readonly spellcheck="false" aria-label="診斷資訊，全選後複製" hidden></textarea>
             </div>
@@ -149,7 +145,6 @@
               <button id="engine-update" class="btn btn-secondary btn-sm" type="button" disabled>更新下載引擎</button>
             </div>
             <p id="up-note" class="st-note" role="status" aria-live="polite" hidden></p>
-            <p class="st-note">小編工具箱外掛本身的更新由工具箱處理，這裡只管下載助手與下載引擎（yt-dlp）。</p>
           </section>
         </div>
       </details>
@@ -162,7 +157,6 @@
   <div class="sd-head">
     <div class="sd-title">
       <h2 id="setup-title">第一次使用：三步驟設定</h2>
-      <p class="st-note">只要做一次。連上下載助手後這個視窗會自動關閉。</p>
     </div>
     <button id="setup-close" class="sd-close" type="button" aria-label="關閉設定步驟">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -178,7 +172,6 @@
     <li class="step" data-step="1" data-s="now">
       <div class="step-body">
         <h3>1. 安裝小編工具箱外掛</h3>
-        <p>這個工具要靠外掛才能連到你電腦上的下載助手。已經裝好的話這一步會自動打勾。</p>
         <div id="ext-found" class="step-ok" hidden>已偵測到外掛<span id="ext-version"></span></div>
         <button id="open-install" class="btn btn-secondary btn-sm" type="button">安裝外掛教學</button>
         <p id="install-hint" class="st-note" hidden>請到小編工具箱首頁，按頂列的「安裝外掛」。</p>
@@ -187,7 +180,6 @@
     <li class="step" data-step="2" data-s="todo" hidden>
       <div class="step-body">
         <h3>2. 下載並執行「YT 下載助手安裝檔」</h3>
-        <p>它會安裝下載要用的元件（Python、yt-dlp、ffmpeg 等）並測試能不能用，只要做一次。</p>
         <p id="installer-advice" class="st-note" data-kind="error" role="status" aria-live="polite" hidden></p>
         <div data-os="win" class="step-actions">
           <a id="download-win" class="btn btn-primary btn-sm" href="installers/ytdl-install-windows.cmd" download>下載 Windows 安裝檔</a>
@@ -205,7 +197,6 @@
     <li class="step" data-step="3" data-s="todo" hidden>
       <div class="step-body">
         <h3>3. 按「啟動」連線</h3>
-        <p>連上下載助手後這一步會自動打勾，這個視窗也會關閉。</p>
         <button id="start" class="btn btn-primary btn-sm" type="button">啟動</button>
       </div>
     </li>
