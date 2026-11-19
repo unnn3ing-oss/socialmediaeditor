@@ -249,15 +249,25 @@
     try { return !!(await kv('readonly', s => s.get('folder'))); } catch (e) { return false; }
   }
 
-  // 取回之前選過的資料夾；權限過期時（需使用者操作）重新要求
-  async function getFolder() {
+  // 確認資料夾有寫入權限。權限過期時要再問 Chrome（需使用者操作）；Chrome 的詢問有時不會顯示，
+  // requestPermission 就一直不回，所以最多等 timeoutMs，逾時回 'timeout'（呼叫端改請使用者重選資料夾）。
+  // onPrompt()：要問 Chrome 之前呼叫（側邊欄顯示「等待允許」）。回傳 'granted'／'denied'／'timeout'。
+  async function ensurePermission(dir, { timeoutMs = 10000, onPrompt = () => {} } = {}) {
+    const opts = { mode: 'readwrite' };
+    try { if ((await dir.queryPermission(opts)) === 'granted') return 'granted'; } catch (e) { return 'denied'; }
+    onPrompt();
+    let timer;
+    const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve('timeout'), timeoutMs); });
+    const asked = Promise.resolve().then(() => dir.requestPermission(opts)).then((r) => (r === 'granted' ? 'granted' : 'denied'), () => 'denied');
+    try { return await Promise.race([asked, timeout]); } finally { clearTimeout(timer); }
+  }
+
+  // 取回之前選過的資料夾；權限過期時重新要求（見 ensurePermission）。拿不到回 null
+  async function getFolder(permOpts) {
     let dir;
     try { dir = await kv('readonly', s => s.get('folder')); } catch (e) { return null; }
     if (!dir) return null;
-    const opts = { mode: 'readwrite' };
-    if ((await dir.queryPermission(opts)) !== 'granted') {
-      if ((await dir.requestPermission(opts)) !== 'granted') return null;
-    }
+    if ((await ensurePermission(dir, permOpts)) !== 'granted') return null;
     try { await verifyFolder(dir); } catch (e) { return null; }
     return dir;
   }
@@ -329,5 +339,5 @@
     return full ? `${lead}（原文：${full.length > 160 ? full.slice(0, 160) + '…' : full}）` : lead;
   }
 
-  root.Updater = { REPO, checkLatest, pickFolder, getFolder, hasSavedFolder, apply, gitBlobSha, diffManifest, isSafePath, notesBetween, zhError, verOf };
+  root.Updater = { REPO, checkLatest, pickFolder, getFolder, ensurePermission, hasSavedFolder, apply, gitBlobSha, diffManifest, isSafePath, notesBetween, zhError, verOf };
 })(self);

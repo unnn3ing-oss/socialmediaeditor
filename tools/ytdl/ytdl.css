@@ -173,21 +173,30 @@ body.no-desktop #setup-card, body.no-desktop #open-setup, body.no-desktop #conn-
 .tab-text { display: grid; min-width: 0; line-height: 1.35; }
 .tab-label { font-size: 11.5px; color: var(--muted); font-weight: 700; }
 .tab-title { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab-paste { min-height: 36px; border: 0; background: none; padding: 0 8px; font: 700 12.5px var(--font); color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; border-radius: 8px; }
-.tab-paste:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.addc .btn[hidden] { display: none; }
+.queue-foot { padding: 4px 12px 12px; }
+.queue-foot[hidden] { display: none; }
 
 /* 外掛側邊欄（is-side）：照原版側邊欄，單欄由上而下；「設定與工具」收合在最下面 */
 .is-side .yt { padding: 12px 12px 28px; }
 .is-side .yt-shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side"; gap: 12px; }
 .is-side .yt-main { gap: 10px; }
-.is-side .addc { padding: 10px; gap: 8px; }
-.is-side .addc .in { flex-basis: 100%; }
-.is-side .addc .segmented { flex: 1 1 0; min-width: 0; }
-.is-side .addc .segmented span { padding: 0 6px; }
-.is-side #add-btn { flex: 1 1 100%; }
-.is-side .qh { padding: 12px; }
-.is-side .qh .act { width: 100%; margin: 0; }
-.is-side .qh .act .btn { flex: 1; }
+.is-side .addc { padding: 10px; gap: 8px; flex-wrap: wrap; }
+.is-side .addc .in { flex-basis: 100%; height: 40px; }
+.is-side .addc .in input { font-size: 14px; }
+/* 側邊欄縮小：切換鈕與「增加」同一列、高 40px（照原版側邊欄） */
+.is-side .addc .segmented, .is-side .addc .btn { height: 40px; min-height: 40px; }
+.is-side .addc .segmented { flex: 1 1 0; min-width: 0; padding: 4px; gap: 4px; border-radius: 14px; }
+.is-side .addc .segmented span { min-height: 32px; padding: 0 6px; border-radius: 10px; font-size: 13px; }
+.is-side #add-btn { flex: none; padding: 0 14px; font-size: 14px; }
+.is-side .tab-slot { min-height: 0; padding: 6px 6px 6px 8px; gap: 8px; }
+.is-side .tab-add { height: 36px; min-height: 36px; padding: 0 14px; font-size: 14px; }
+.is-side .qh { padding: 10px 12px; gap: 6px 10px; }
+.is-side .qh h2 { font-size: 14px; }
+.is-side .qh .act { margin-left: auto; width: auto; }
+.is-side .qh .act .btn { flex: none; }
+.is-side .qh .act .btn, .is-side .clear-ask button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side #start-all { width: 100%; height: 44px; min-height: 44px; font-size: 15px; font-weight: 700; }
 .is-side .yt-side { position: static; max-height: none; padding: 0; }
 .is-side .side-tools > summary { display: flex; align-items: center; min-height: 48px; padding: 0 16px; font-weight: 700; cursor: pointer; list-style: none; border-radius: var(--radius-card); }
 .is-side .side-tools > summary::-webkit-details-marker { display: none; }
@@ -207,3 +216,8 @@ body.no-desktop #setup-card, body.no-desktop #open-setup, body.no-desktop #conn-
 .qtitle .qtitle-sk { display: block; width: 70%; height: 14px; margin: 3px 0; }
 .qrow.is-fetching .qph { background: linear-gradient(90deg, var(--fill) 25%, #fff 50%, var(--fill) 75%); background-size: 200% 100%; animation: sk-shimmer 1.5s infinite; }
 @media (prefers-reduced-motion: reduce) { .qrow.is-fetching .qph { animation: none; } }
+/* 側邊欄：頂部與清單列的按鈕也縮小（放在 820px 規則之後才蓋得過） */
+.is-side .yt-head .btn { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side .qacts { gap: 4px; }
+.is-side .qacts button { width: 24px; height: 24px; border-radius: 6px; }
+.is-side .qacts button svg { width: 14px; height: 14px; }

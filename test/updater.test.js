@@ -193,3 +193,60 @@ test('verOf：有 version_name 用它，否則用 version', async () => {
   assert.equal(U.verOf({ version: '1.1', version_name: '1.01' }), '1.01');
   assert.equal(U.verOf({ version: '1.53' }), '1.53');
 });
+
+test('ensurePermission：已有權限直接 granted；Chrome 詢問不回應時 10 秒後回 timeout（不會一直卡住）；拒絕回 denied', async () => {
+  const U = await loadUpdater();
+  const dir = (query, request) => ({ queryPermission: async () => query, requestPermission: request });
+  let prompted = 0;
+  const onPrompt = () => { prompted++; };
+  assert.equal(await U.ensurePermission(dir('granted', () => assert.fail('不該再問')), { onPrompt }), 'granted');
+  assert.equal(prompted, 0);
+  const t0 = Date.now();
+  assert.equal(await U.ensurePermission(dir('prompt', () => new Promise(() => {})), { timeoutMs: 50, onPrompt }), 'timeout');
+  assert.ok(Date.now() - t0 < 1000);
+  assert.equal(prompted, 1);
+  assert.equal(await U.ensurePermission(dir('prompt', async () => 'granted'), { onPrompt }), 'granted');
+  assert.equal(await U.ensurePermission(dir('prompt', async () => 'denied'), { onPrompt }), 'denied');
+  assert.equal(await U.ensurePermission(dir('prompt', async () => { throw new Error('x'); }), { onPrompt }), 'denied');
+  assert.equal(prompted, 4);
+});
+
+test('sidepanel 更新：等 Chrome 給資料夾權限時顯示等待彈窗；拿不到就改請使用者重選資料夾，按鈕不會卡在灰色', async () => {
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    await page.addInitScript(() => {
+      window.chrome = {
+        runtime: { id: 'self', getManifest: () => ({ version: '1.00', name: '小編工具箱' }), getURL: (p) => 'local://' + p, reload() {} },
+        tabs: { create: () => {} },
+        action: { setBadgeText: () => Promise.resolve(), setBadgeBackgroundColor: () => Promise.resolve() },
+        storage: { local: { get: async () => ({}), set: async () => {} } },
+      };
+      window.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
+      try { localStorage.setItem('tbx-sp-offered', 'abc'); } catch (e) { /* file:// */ }
+    });
+    await page.goto('file://' + path.join(ROOT, 'extension/core/sidepanel.html'));
+    await page.waitForFunction(() => document.getElementById('updateCard').getAttribute('aria-busy') === 'false');
+    await page.evaluate(() => {
+      window.__titles = [];
+      const dlg = document.getElementById('upDlgTitle');
+      new MutationObserver(() => window.__titles.push(dlg.textContent)).observe(dlg, { childList: true, characterData: true, subtree: true });
+      Updater.checkLatest = async () => ({ hasUpdate: true, sha: 'abc', date: '2026-11-19T00:00:00Z', message: 'm', version: '1.01', localVersion: '1.00', changed: [{ path: 'a.js', sha: 'x' }], notes: [] });
+      Updater.hasSavedFolder = async () => true;
+      // 模擬 Chrome 的詢問一直沒回應：要問之前呼叫 onPrompt，逾時後 getFolder 回 null
+      Updater.getFolder = async (opts) => { opts.onPrompt(); await new Promise((r) => setTimeout(r, 100)); return null; };
+    });
+    await page.click('#tabInfo');
+    await page.click('#upCheckBtn');
+    await page.waitForSelector('#upApplyBtn:not([hidden])');
+    await page.click('#upApplyBtn');
+    await page.waitForFunction(() => document.getElementById('upDlgTitle').textContent === '重新選擇外掛資料夾');
+    const titles = await page.evaluate(() => window.__titles);
+    assert.ok(titles.includes('等待 Chrome 允許存取資料夾…'), JSON.stringify(titles));
+    assert.ok(await page.isVisible('#upDlg'));
+    // 取消 → 按鈕恢復可以按
+    await page.click('#upDlgBtns button:has-text("取消")');
+    await page.waitForFunction(() => !document.getElementById('upApplyBtn').disabled && !document.getElementById('upCheckBtn').disabled);
+    assert.match(await page.textContent('#upStatus'), /已取消/);
+  } finally { await browser.close(); }
+});

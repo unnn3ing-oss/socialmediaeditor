@@ -138,6 +138,7 @@ test('YT 下載：沒有下載助手 → 設定步驟；登錄後啟動 → 加�
     await page.waitForTimeout(300);
   }
   assert.ok(fs.readdirSync(out).some((f) => f.includes('影片 vA')), fs.readdirSync(out).join(','));
+  assert.ok(await page.evaluate(() => [...document.querySelectorAll('#queue-list textarea')].some((t) => t.offsetParent)), '網頁版有內文框');
   if (process.env.E2E_SHOTS) await page.screenshot({ path: path.join(process.env.E2E_SHOTS, 'ytdl-done.png'), fullPage: true });
 
   // 5. 壞網址被擋；未知 op 被核心擋
@@ -339,11 +340,23 @@ test('外掛側邊欄：有「YT 下載」分頁；目前分頁是 YouTube 時�
   assert.equal(await tool.textContent('#tab-title'), '測試影片標題');
   assert.equal(await tool.textContent('#tab-kind'), '影片');
   assert.equal(await tool.isVisible('#add-url'), false);
-  assert.equal(await tool.getAttribute('#add-btn', 'aria-label'), '增加目前分頁：測試影片標題');
+  assert.equal(await tool.isVisible('#add-btn'), false, '在 YouTube 分頁時只有卡片上的「增加」');
+  assert.equal(await tool.getAttribute('#tab-add', 'aria-label'), '增加目前分頁：測試影片標題');
+  // 切換鈕與「增加」縮小到 40px、同一列；開始全部下載在清單最下面
+  const hs = await tool.evaluate(() => ['#mode', '#quality'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().height)));
+  assert.deepEqual(hs, [40, 40]);
+  assert.equal(await tool.evaluate(() => document.getElementById('start-all').parentElement.id), 'queue-foot');
+  // 清單列：複製內文／移除 24px，側邊欄不顯示內文框（網頁版的第一支測試有內文框）
+  const acts = await tool.evaluate(() => [...document.querySelectorAll('#queue-list .qacts button:not([hidden])')].map((b) => [Math.round(b.getBoundingClientRect().width), Math.round(b.getBoundingClientRect().height)]));
+  assert.ok(acts.length >= 2 && acts.every(([w, h]) => w === 24 && h === 24), JSON.stringify(acts));
+  assert.equal(await tool.evaluate(() => [...document.querySelectorAll('#queue-list textarea')].filter((t) => t.offsetParent).length), 0);
   if (process.env.E2E_SHOTS) await sp.screenshot({ path: path.join(process.env.E2E_SHOTS, 'ytdl-sidepanel.png') });
-  await tool.click('#tab-paste');
-  assert.equal(await tool.isVisible('#add-url'), true);
-  assert.equal(await tool.isVisible('#tab-card'), false);
+  await tool.click('#tab-add');
+  const until = Date.now() + 15000;
+  while (!(await call(tool, 'ytdl.queue_get')).data.state.items.some((it) => String(it.url).includes('vTab'))) {
+    assert.ok(Date.now() < until, '按卡片上的增加沒有加入目前分頁');
+    await tool.waitForTimeout(300);
+  }
   // 回到側邊欄本身那個分頁（不是 YouTube）：卡片收起
   await sp.bringToFront();
   await tool.waitForFunction(() => document.getElementById('tab-card').hidden, null, { timeout: 10000 });
