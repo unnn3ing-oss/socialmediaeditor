@@ -6,7 +6,7 @@
 
 // 各 op 建議的等待時間（毫秒，見 tools/ytdl/PROTOCOL.md）；沒列的用 DEFAULT。
 export const TIMEOUTS = {
-  get_status: 5000, start: 5000, set_output_dir: 30000, doctor: 130000, diagnostics: 70000, update_engine: 300000,
+  get_status: 5000, current_tab: 5000, start: 5000, set_output_dir: 30000, doctor: 130000, diagnostics: 70000, update_engine: 300000,
   update_info: 60000, update_apply: 600000, queue_get: 5000, queue_add: 60000, queue_remove: 5000, queue_retry: 5000,
   queue_clear: 10000, queue_start: 10000, queue_stop: 10000, queue_copy_text: 30000, queue_download_cover: 30000, settings_set: 5000,
 };
@@ -18,7 +18,7 @@ export function createBridgeClient({ ext, pingEveryMs = 2000, lostAfterMs = 6000
   let lastSeen = 0;
   let pinging = false;
   const unsubscribe = ext.on("ytdl", onPush); // 推播（SDK 在外掛重新載入後會自動再訂閱）
-  const listeners = { change: [], state: [], status: [], version: [], progress: [] };
+  const listeners = { change: [], state: [], status: [], version: [], progress: [], tab: [] };
   const emit = (kind, value) => listeners[kind].forEach((callback) => callback(value));
 
   function setDetected(value) {
@@ -34,6 +34,7 @@ export function createBridgeClient({ ext, pingEveryMs = 2000, lostAfterMs = 6000
     if (data.type === "queue_state") emit("state", data.state);
     else if (data.type === "status") emit("status", data);
     else if (data.type === "update_progress") emit("progress", data);
+    else if (data.type === "current_tab") emit("tab", data.tab ?? null);
   }
 
   async function ping() {
@@ -65,6 +66,7 @@ export function createBridgeClient({ ext, pingEveryMs = 2000, lostAfterMs = 6000
     onState: (callback) => listeners.state.push(callback),
     onStatus: (callback) => listeners.status.push(callback),
     onProgress: (callback) => listeners.progress.push(callback),
+    onTab: (callback) => listeners.tab.push(callback),
     stop() { clearInterval(timer); unsubscribe?.(); },
     // message.type 是 op 名稱（去掉 "ytdl." 前綴），其餘欄位就是 payload。
     // 成功回 { ok:true, ...data }；外掛回報失敗（SDK reject）轉成 { ok:false, error, code }；沒偵測到外掛或逾時則 reject。

@@ -9,6 +9,7 @@ import { createController } from "./lib/queue-controller.js";
 import { OUTPUT_DIR_LOCKED_TEXT } from "./lib/queue.js";
 import { NOT_CONNECTED_TEXT, diagnosticsReply } from "./lib/diagnostics.js";
 import { injectBridge } from "./lib/inject.js";
+import { describeTab } from "./lib/page.js";
 
 const NOT_READY = { ok: false, code: "not_ready", error: "下載功能還沒啟動，請重新整理頁面或重新載入外掛" };
 const NOT_CONNECTED = "尚未連線下載助手";
@@ -283,6 +284,24 @@ export const queue_copy_text = queueOp((c, { uid }) => c.copyText(uid));
 export const queue_download_cover = queueOp((c, { uid }) => c.downloadCover(uid));
 export const settings_set = queueOp((c, { settings }) => { c.setSettings(settings); return { ok: true }; });
 
+// ---- 目前分頁（側邊欄的「目前分頁」卡）：只回 YouTube／Instagram 網址的分頁；其他分頁回 null ----
+// 不需要 tabs 權限：這些網站已在 host 權限內，Chrome 才會給網址與標題。
+async function activeTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return describeTab(tab?.url, tab?.title);
+  } catch { return null; }
+}
+let tabTimer = null;
+function pushTab() {
+  clearTimeout(tabTimer);
+  tabTimer = setTimeout(async () => emit({ type: "current_tab", tab: await activeTab() }), 150);
+}
+export async function current_tab() {
+  if (!ctx) return NOT_READY;
+  return { ok: true, data: { tab: await activeTab() } };
+}
+
 // ---- 啟動 ----
 async function backgroundCheck() {
   if (updating) return; // 更新正在寫同一批檔案
@@ -329,6 +348,9 @@ export function init(context) {
     // 外掛重新載入後，已開著的工具箱分頁要補上 bridge（核心 bridge 能防重複注入）。
     chrome.runtime.onStartup?.addListener(() => { injectBridge(chrome); checks?.trigger(); });
     chrome.alarms?.onAlarm?.addListener((alarm) => { if (alarm.name === UPDATE_ALARM) checks?.trigger(); });
+    chrome.tabs?.onActivated?.addListener(pushTab);
+    chrome.windows?.onFocusChanged?.addListener(pushTab);
+    chrome.tabs?.onUpdated?.addListener((_id, change, tab) => { if (tab?.active && (change.url || change.title || change.status === "complete")) pushTab(); });
   }
   injectBridge(chrome);
   ensureUpdateAlarm().catch(() => {});

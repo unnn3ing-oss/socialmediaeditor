@@ -65,7 +65,7 @@ body.sp{height:100vh;min-height:0;display:flex;flex-direction:column;overflow:hi
   font-size:12px;font-weight:500;white-space:nowrap;pointer-events:none;opacity:0;transform:translateY(-2px);transition:opacity .12s ease,transform .12s ease}
 .icon-btn:hover::after,.icon-btn:focus-visible::after{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.icon-btn,.icon-btn::after{transition:none}}
-.tabs button{flex:1 1 0;min-height:44px;border:0;background:none;padding:0;font:inherit;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.tabs button{flex:1 1 0;min-height:44px;border:0;background:none;padding:0;font:inherit;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
 .tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
 .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .tabs .dot{margin-left:6px;padding:0 6px;border-radius:999px;background:#d92d20;color:#fff;font-size:11px;font-weight:500}

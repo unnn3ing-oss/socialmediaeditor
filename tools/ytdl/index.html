@@ -10,173 +10,203 @@
 <link rel="stylesheet" href="../../ui/tokens.css">
 <link rel="stylesheet" href="web/queue-view.css">
 <link rel="stylesheet" href="ytdl.css">
+<script>
+  // 嵌在外掛側邊欄（?embed=side）：先加 class，第一次畫面就是窄版，不閃爍
+  if (new URLSearchParams(location.search).get("embed") === "side") document.documentElement.classList.add("is-side");
+</script>
 </head>
 <body>
+<!-- 版面照原版「影片批量下載器」：網頁＝左側欄（設定狀態、下載設定、環境檢查、版本與更新）＋右主區（增加、下載清單）；
+     側邊欄（is-side）＝單欄：標題 → 目前分頁／增加 → 下載清單 → 「設定與工具」收合。外觀用工具箱設計。 -->
 <main class="yt">
-  <header class="yt-head">
-    <h1>YT 批量下載</h1>
-    <span class="pill" id="conn-pill">尚未連線</span>
-    <span class="grow"></span>
-    <button id="open-setup" class="btn btn-secondary btn-sm" type="button" aria-expanded="false" aria-controls="setup-card">設定步驟</button>
-  </header>
+  <div class="yt-shell">
+    <div class="yt-main">
+      <header class="yt-head">
+        <h1>YT 批量下載</h1>
+        <span class="pill" id="conn-pill">尚未連線</span>
+        <span class="grow"></span>
+        <button id="open-setup" class="btn btn-secondary btn-sm setup-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="setup-card"><span id="setup-dot" class="chip-dot" data-s="todo" aria-hidden="true"></span>設定步驟</button>
+      </header>
 
-  <p class="yt-legal"><b>使用前請先確認</b>：YouTube 條款原則上不允許用官方功能以外的方式下載；影片裡的音樂與外部素材，授權範圍可能只限 YouTube。請先取得頻道管理部門同意，轉發到其他平台前也請確認授權。如果管理部門能直接提供成品原檔，畫質會比從 YouTube 抓下來的更好。</p>
+      <div id="update-banner" class="notice update-banner" role="status" aria-live="polite" data-kind="info" hidden>
+        <b id="update-banner-text"></b>
+        <span id="update-banner-hint" class="ub-hint"></span>
+        <div class="ub-bar" aria-hidden="true"><i></i></div>
+      </div>
+      <div id="no-extension" class="notice no-ext" role="status" hidden>
+        <span id="no-ext-text"></span>
+        <button id="no-ext-install" class="btn btn-primary btn-sm" type="button">安裝外掛</button>
+      </div>
+      <div id="conn-note" class="notice" role="status" aria-live="polite" hidden></div>
+      <div id="note" class="notice" role="status" aria-live="polite" data-kind="error" hidden></div>
+      <div id="host-note" class="notice" role="status" aria-live="polite" data-kind="error" hidden></div>
+      <div id="abort-note" class="notice" role="alert" data-kind="error" hidden></div>
 
-  <div id="update-banner" class="notice update-banner" role="status" aria-live="polite" data-kind="info" hidden>
-    <b id="update-banner-text"></b>
-    <span id="update-banner-hint" class="ub-hint"></span>
-    <div class="ub-bar" aria-hidden="true"><i></i></div>
-  </div>
-  <div id="no-extension" class="notice no-ext" role="status" hidden>
-    <span id="no-ext-text"></span>
-    <button id="no-ext-install" class="btn btn-primary btn-sm" type="button">安裝外掛</button>
-  </div>
-  <div id="conn-note" class="notice" role="status" aria-live="polite" hidden></div>
-  <div id="note" class="notice" role="status" aria-live="polite" data-kind="error" hidden></div>
-  <div id="host-note" class="notice" role="status" aria-live="polite" data-kind="error" hidden></div>
-  <div id="abort-note" class="notice" role="alert" data-kind="error" hidden></div>
-
-  <!-- 設定步驟：沒連好時自動展開，連好後收起；按「設定步驟」可再打開。只切換 hidden，不重建。 -->
-  <section id="setup-card" class="yt-card setup" aria-labelledby="setup-title" hidden>
-    <h2 id="setup-title">第一次使用：三步驟設定</h2>
-    <p id="connect-status" class="connect-status" role="status" aria-live="polite"></p>
-    <ol id="steps" class="steps">
-      <li class="step" data-step="1" data-s="now">
-        <span class="step-dot" aria-hidden="true"></span>
-        <div class="step-body">
-          <h3>安裝小編工具箱外掛</h3>
-          <p>這個工具要靠外掛才能連到你電腦上的下載助手。已經裝好的話這一步會自動打勾。</p>
-          <div id="ext-found" class="step-ok" hidden>已偵測到外掛<span id="ext-version"></span></div>
-          <button id="open-install" class="btn btn-secondary btn-sm" type="button">安裝外掛教學</button>
-          <p id="install-hint" class="st-note" hidden>請到小編工具箱首頁，按頂列的「安裝外掛」。</p>
+      <div id="work">
+      <section id="add-card" class="yt-card addc" aria-label="增加影片">
+        <!-- 側邊欄才有：作用中分頁是 YouTube／IG 時，用它代替網址框，「增加」就加入這個分頁 -->
+        <div id="tab-card" class="tab-slot" hidden>
+          <span id="tab-kind" class="tab-chip">影片</span>
+          <span class="tab-text"><span class="tab-label">目前分頁</span><span id="tab-title" class="tab-title"></span></span>
+          <button id="tab-paste" class="tab-paste" type="button">改貼網址</button>
         </div>
-      </li>
-      <li class="step" data-step="2" data-s="todo">
-        <span class="step-dot" aria-hidden="true"></span>
-        <div class="step-body">
-          <h3>下載並執行「YT 下載助手安裝檔」</h3>
-          <p>它會安裝下載要用的元件（Python、yt-dlp、ffmpeg 等）並測試能不能用，只要做一次。</p>
-          <p id="installer-advice" class="st-note" data-kind="error" role="status" aria-live="polite" hidden></p>
-          <div data-os="win" class="step-actions">
-            <a id="download-win" class="btn btn-primary btn-sm" href="installers/ytdl-install-windows.cmd" download>下載 Windows 安裝檔</a>
-            <span class="st-note">Chrome 若顯示「這類檔案可能有害」，請在下載清單按「保留」，再雙擊它。</span>
+        <label class="in" id="add-in">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+          <input id="add-url" type="text" placeholder="貼上 YouTube 或 Instagram Reel 網址，按 Enter 或「增加」" autocomplete="off" spellcheck="false" aria-label="影片網址">
+        </label>
+        <div id="mode" class="segmented" role="radiogroup" aria-label="下載內容">
+          <label><input type="radio" name="mode" value="video" checked><span>影片</span></label>
+          <label><input type="radio" name="mode" value="audio"><span>音訊</span></label>
+        </div>
+        <div id="quality" class="segmented" role="radiogroup" aria-label="解析度">
+          <label><input type="radio" name="quality" value="1080" checked><span>1080p</span></label>
+          <label><input type="radio" name="quality" value="720"><span>720p</span></label>
+        </div>
+        <div id="audio-format" class="segmented" role="radiogroup" aria-label="音訊格式（位元率自動取最高）" title="位元率自動取來源的最高品質" hidden>
+          <label><input type="radio" name="audio-format" value="mp3" checked><span>MP3</span></label>
+          <label><input type="radio" name="audio-format" value="aac"><span>AAC</span></label>
+        </div>
+        <button id="add-btn" class="btn btn-primary" type="button">增加</button>
+        <p id="add-note" class="add-note" role="status" aria-live="polite" hidden></p>
+      </section>
+
+      <section id="queue-card" class="yt-card" aria-labelledby="queue-title">
+        <div class="qh">
+          <h2 id="queue-title">下載清單</h2>
+          <div id="queue-stats" class="stats"></div>
+          <div class="act">
+            <span id="cooldown-chip" class="cool-chip" hidden></span>
+            <button id="clear-all" class="btn btn-secondary btn-sm" type="button" hidden>清除全部</button>
+            <button id="start-all" class="btn btn-primary btn-sm" type="button" disabled>開始全部下載</button>
           </div>
-          <div data-os="mac" class="step-actions">
-            <p class="st-note">Mac：複製下面這一行，貼到「終端機」（Cmd+空白鍵，輸入「終端機」）再按 Enter。</p>
-            <div class="name-row"><code id="mac-command"></code><button id="copy-mac-command" class="btn btn-primary btn-sm" type="button">複製安裝指令</button></div>
-            <a id="download-mac" class="btn btn-secondary btn-sm" href="installers/ytdl-install-mac.zip" download>改下載 Mac 安裝檔（備用）</a>
-          </div>
-          <p id="installer-status" class="st-note" role="status" aria-live="polite" hidden></p>
-          <button id="installer-ran" class="btn btn-secondary btn-sm" type="button">我已執行安裝檔</button>
         </div>
-      </li>
-      <li class="step" data-step="3" data-s="todo">
-        <span class="step-dot" aria-hidden="true"></span>
-        <div class="step-body">
-          <h3>按「啟動」連線</h3>
-          <p>連上下載助手後這一步會自動打勾，整個設定區也會收起來。</p>
-          <button id="start" class="btn btn-primary btn-sm" type="button">啟動</button>
+        <ul id="queue-list" class="qlist"></ul>
+        <p id="queue-empty" class="queue-empty">清單是空的</p>
+      </section>
+      </div>
+    </div>
+
+    <!-- 左側欄（網頁）／「設定與工具」收合（側邊欄）：同一份元素，網頁時 details 固定展開、summary 隱藏 -->
+    <aside class="yt-side" id="side" aria-label="設定與工具">
+      <details id="side-tools" class="side-tools">
+        <summary>設定與工具</summary>
+        <div class="side-body">
+          <section class="side-sec" aria-labelledby="settings-title">
+            <h2 id="settings-title">下載設定</h2>
+            <div class="field">
+              <label for="cooldown" class="field-label">每支影片間隔（冷卻）</label>
+              <div class="slide">
+                <input id="cooldown" type="range" min="3" max="60" step="1" value="10">
+                <output id="cooldown-out" for="cooldown">10 秒</output>
+              </div>
+            </div>
+            <div class="field">
+              <label for="limit" class="field-label">頻道或播放清單最多展開</label>
+              <div class="suffix"><input id="limit" type="number" min="1" max="1000" step="1" value="50" inputmode="numeric"><span>支</span></div>
+            </div>
+            <div class="field">
+              <label class="check"><input id="auto-cover" type="checkbox" checked><span>下載完影片後，自動下載封面</span></label>
+            </div>
+            <div class="field">
+              <label for="outdir" class="field-label">存放資料夾</label>
+              <div class="row">
+                <input id="outdir" type="text" spellcheck="false" disabled>
+                <button id="save-outdir" class="btn btn-secondary btn-sm" type="button" disabled>儲存</button>
+              </div>
+              <p id="outdir-hint" class="st-note" hidden></p>
+            </div>
+            <p id="settings-note" class="st-note" role="status" aria-live="polite" hidden></p>
+          </section>
+
+          <section class="side-sec" aria-labelledby="doctor-title">
+            <h2 id="doctor-title">環境檢查</h2>
+            <div class="field"><button id="doctor-check" class="btn btn-secondary btn-sm" type="button" disabled>檢查環境</button></div>
+            <ul id="doctor-list" class="dr-list"></ul>
+            <p id="doctor-summary" class="dr-summary" role="status" aria-live="polite"></p>
+            <p id="doctor-fixed" class="dr-fixed" role="status" aria-live="polite"></p>
+            <button id="doctor-fix" class="btn btn-secondary btn-sm" type="button" hidden>嘗試自動修復</button>
+            <div class="diag">
+              <button id="diag-copy" class="btn btn-secondary btn-sm" type="button" aria-label="複製診斷資訊，貼給維護的人">複製診斷資訊</button>
+              <p id="diag-copy-status" class="diag-status" role="status" aria-live="polite" hidden></p>
+              <textarea id="diag-copy-text" class="diag-text" rows="6" readonly spellcheck="false" aria-label="診斷資訊，全選後複製" hidden></textarea>
+            </div>
+          </section>
+
+          <section class="side-sec" aria-labelledby="update-title">
+            <h2 id="update-title">版本與更新</h2>
+            <dl class="versions">
+              <dt>目前版本</dt><dd id="up-current">尚未連線</dd>
+              <dt>下載助手</dt><dd id="up-latest">尚未檢查</dd>
+              <dt>下載引擎</dt><dd id="up-engine">尚未連線</dd>
+            </dl>
+            <div class="field row">
+              <button id="up-check" class="btn btn-secondary btn-sm" type="button" disabled>檢查更新</button>
+              <button id="up-apply" class="btn btn-primary btn-sm" type="button" hidden>更新下載助手</button>
+              <button id="engine-update" class="btn btn-secondary btn-sm" type="button" disabled>更新下載引擎</button>
+            </div>
+            <p id="up-note" class="st-note" role="status" aria-live="polite" hidden></p>
+          </section>
         </div>
-      </li>
-    </ol>
-  </section>
-
-  <div id="work">
-  <section id="add-card" class="yt-card addc" aria-label="增加影片">
-    <label class="in">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
-      <input id="add-url" type="text" placeholder="貼上 YouTube 或 Instagram Reel 網址，按 Enter 或「增加」" autocomplete="off" spellcheck="false" aria-label="影片網址">
-    </label>
-    <div id="mode" class="segmented" role="radiogroup" aria-label="下載內容">
-      <label><input type="radio" name="mode" value="video" checked><span>影片</span></label>
-      <label><input type="radio" name="mode" value="audio"><span>音訊</span></label>
-    </div>
-    <div id="quality" class="segmented" role="radiogroup" aria-label="解析度">
-      <label><input type="radio" name="quality" value="1080" checked><span>1080p</span></label>
-      <label><input type="radio" name="quality" value="720"><span>720p</span></label>
-    </div>
-    <div id="audio-format" class="segmented" role="radiogroup" aria-label="音訊格式（位元率自動取最高）" title="位元率自動取來源的最高品質" hidden>
-      <label><input type="radio" name="audio-format" value="mp3" checked><span>MP3</span></label>
-      <label><input type="radio" name="audio-format" value="aac"><span>AAC</span></label>
-    </div>
-    <button id="add-btn" class="btn btn-primary" type="button">增加</button>
-    <p id="add-note" class="add-note" role="status" aria-live="polite" hidden></p>
-  </section>
-
-  <section id="queue-card" class="yt-card" aria-labelledby="queue-title">
-    <div class="qh">
-      <h2 id="queue-title">下載清單</h2>
-      <div id="queue-stats" class="stats"></div>
-      <div class="act">
-        <span id="cooldown-chip" class="cool-chip" hidden></span>
-        <button id="clear-all" class="btn btn-secondary btn-sm" type="button" hidden>清除全部</button>
-        <button id="start-all" class="btn btn-primary btn-sm" type="button" disabled>開始全部下載</button>
-      </div>
-    </div>
-    <ul id="queue-list" class="qlist"></ul>
-    <p id="queue-empty" class="queue-empty">清單是空的。貼上網址按「增加」，影片的標題和封面會自動帶進來。</p>
-  </section>
-
-  <section class="yt-card settings" aria-labelledby="settings-title">
-    <h2 id="settings-title">下載設定</h2>
-    <div class="field">
-      <label for="cooldown" class="field-label">每支影片間隔（冷卻）</label>
-      <div class="slide">
-        <input id="cooldown" type="range" min="3" max="60" step="1" value="10">
-        <output id="cooldown-out" for="cooldown">10 秒</output>
-      </div>
-    </div>
-    <div class="field">
-      <label for="limit" class="field-label">頻道或播放清單最多展開</label>
-      <div class="suffix"><input id="limit" type="number" min="1" max="1000" step="1" value="50" inputmode="numeric"><span>支</span></div>
-    </div>
-    <div class="field">
-      <label class="check"><input id="auto-cover" type="checkbox" checked><span>下載完影片後，自動下載封面</span></label>
-    </div>
-    <div class="field">
-      <label for="outdir" class="field-label">存放資料夾</label>
-      <div class="row">
-        <input id="outdir" type="text" spellcheck="false" disabled>
-        <button id="save-outdir" class="btn btn-secondary btn-sm" type="button" disabled>儲存</button>
-      </div>
-      <p id="outdir-hint" class="st-note" hidden></p>
-    </div>
-    <p id="settings-note" class="st-note" role="status" aria-live="polite" hidden></p>
-  </section>
-
-  <section class="yt-card settings" aria-labelledby="doctor-title">
-    <h2 id="doctor-title">環境檢查</h2>
-    <p class="st-note">下載助手連不上或下載有問題時，先按這裡看哪一項有狀況。還是不行，重新執行 YT 下載助手安裝檔就會自動檢查並修復。</p>
-    <div class="field"><button id="doctor-check" class="btn btn-secondary btn-sm" type="button" disabled>檢查環境</button></div>
-    <ul id="doctor-list" class="dr-list"></ul>
-    <p id="doctor-summary" class="dr-summary" role="status" aria-live="polite"></p>
-    <p id="doctor-fixed" class="dr-fixed" role="status" aria-live="polite"></p>
-    <button id="doctor-fix" class="btn btn-secondary btn-sm" type="button" hidden>嘗試自動修復</button>
-    <div class="diag">
-      <button id="diag-copy" class="btn btn-secondary btn-sm" type="button" aria-label="複製診斷資訊，貼給維護的人">複製診斷資訊</button>
-      <p class="diag-note">內容已隱藏使用者名稱，只含版本、檢查結果與近期紀錄</p>
-      <p id="diag-copy-status" class="diag-status" role="status" aria-live="polite" hidden></p>
-      <textarea id="diag-copy-text" class="diag-text" rows="6" readonly spellcheck="false" aria-label="診斷資訊，全選後複製" hidden></textarea>
-    </div>
-  </section>
-
-  <section class="yt-card settings" aria-labelledby="update-title">
-    <h2 id="update-title">版本與更新</h2>
-    <dl class="versions">
-      <dt>目前版本</dt><dd id="up-current">尚未連線</dd>
-      <dt>下載助手</dt><dd id="up-latest">尚未檢查</dd>
-      <dt>下載引擎</dt><dd id="up-engine">尚未連線</dd>
-    </dl>
-    <div class="field row">
-      <button id="up-check" class="btn btn-secondary btn-sm" type="button" disabled>檢查更新</button>
-      <button id="up-apply" class="btn btn-primary btn-sm" type="button" hidden>更新下載助手</button>
-      <button id="engine-update" class="btn btn-secondary btn-sm" type="button" disabled>更新下載引擎</button>
-    </div>
-    <p id="up-note" class="st-note" role="status" aria-live="polite" hidden></p>
-    <p class="st-note">小編工具箱外掛本身的更新由工具箱處理，這裡只管下載助手與下載引擎（yt-dlp）。</p>
-  </section>
+      </details>
+    </aside>
   </div>
 </main>
+
+<!-- 設定步驟（彈窗精靈）：沒連好時自動打開，連好後自動關；按「設定步驟」可再打開。一次顯示一步，上一步／下一步切換（只切 hidden）。 -->
+<dialog id="setup-card" class="setup-dlg" aria-labelledby="setup-title">
+  <div class="sd-head">
+    <div class="sd-title">
+      <h2 id="setup-title">第一次使用：三步驟設定</h2>
+    </div>
+    <button id="setup-close" class="sd-close" type="button" aria-label="關閉設定步驟">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <ol class="stepper" aria-label="設定進度">
+    <li data-step="1" data-s="now"><button type="button" class="stepper-btn"><span class="step-dot" aria-hidden="true"></span><span>安裝外掛</span></button></li>
+    <li data-step="2" data-s="todo"><button type="button" class="stepper-btn"><span class="step-dot" aria-hidden="true"></span><span>安裝下載助手</span></button></li>
+    <li data-step="3" data-s="todo"><button type="button" class="stepper-btn"><span class="step-dot" aria-hidden="true"></span><span>啟動</span></button></li>
+  </ol>
+  <p id="connect-status" class="connect-status" role="status" aria-live="polite"></p>
+  <ol id="steps" class="steps">
+    <li class="step" data-step="1" data-s="now">
+      <div class="step-body">
+        <h3>1. 安裝小編工具箱外掛</h3>
+        <div id="ext-found" class="step-ok" hidden>已偵測到外掛<span id="ext-version"></span></div>
+        <button id="open-install" class="btn btn-secondary btn-sm" type="button">安裝外掛教學</button>
+        <p id="install-hint" class="st-note" hidden>請到小編工具箱首頁，按頂列的「安裝外掛」。</p>
+      </div>
+    </li>
+    <li class="step" data-step="2" data-s="todo" hidden>
+      <div class="step-body">
+        <h3>2. 下載並執行「YT 下載助手安裝檔」</h3>
+        <p id="installer-advice" class="st-note" data-kind="error" role="status" aria-live="polite" hidden></p>
+        <div data-os="win" class="step-actions">
+          <a id="download-win" class="btn btn-primary btn-sm" href="installers/ytdl-install-windows.cmd" download>下載 Windows 安裝檔</a>
+          <span class="st-note">Chrome 若顯示「這類檔案可能有害」，請在下載清單按「保留」，再雙擊它。</span>
+        </div>
+        <div data-os="mac" class="step-actions">
+          <p class="st-note">Mac：複製下面這一行，貼到「終端機」（Cmd+空白鍵，輸入「終端機」）再按 Enter。</p>
+          <div class="name-row"><code id="mac-command"></code><button id="copy-mac-command" class="btn btn-primary btn-sm" type="button">複製安裝指令</button></div>
+          <a id="download-mac" class="btn btn-secondary btn-sm" href="installers/ytdl-install-mac.zip" download>改下載 Mac 安裝檔（備用）</a>
+        </div>
+        <p id="installer-status" class="st-note" role="status" aria-live="polite" hidden></p>
+        <button id="installer-ran" class="btn btn-secondary btn-sm" type="button">我已執行安裝檔</button>
+      </div>
+    </li>
+    <li class="step" data-step="3" data-s="todo" hidden>
+      <div class="step-body">
+        <h3>3. 按「啟動」連線</h3>
+        <button id="start" class="btn btn-primary btn-sm" type="button">啟動</button>
+      </div>
+    </li>
+  </ol>
+  <div class="sd-foot">
+    <button id="step-prev" class="btn btn-secondary btn-sm" type="button">上一步</button>
+    <span class="grow"></span>
+    <button id="step-next" class="btn btn-primary btn-sm" type="button">下一步</button>
+  </div>
+</dialog>
 <script type="module" src="app.js"></script>
 </body>
 </html>

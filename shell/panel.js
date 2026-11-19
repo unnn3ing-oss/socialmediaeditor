@@ -31,7 +31,9 @@ function mountTool() {
   if (frame || !tool) return;
   frame = document.createElement('iframe');
   frame.title = tool.name;
-  frame.src = tool.entry;
+  // embed=side：嵌在外掛側邊欄，工具改用窄版排版（目前只有 YT 批量下載用）
+  const embed = new URLSearchParams(location.search).get('embed');
+  frame.src = embed === 'side' ? tool.entry + (tool.entry.includes('?') ? '&' : '?') + 'embed=side' : tool.entry;
   frame.allow = 'clipboard-read; clipboard-write';
   $('panelHost').appendChild(frame);
 }

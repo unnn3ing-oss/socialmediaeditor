@@ -46,6 +46,7 @@
 | `queue_clear` / `queue_start` / `queue_stop` | – | 舊版回覆 | 10000 |
 | `queue_copy_text` / `queue_download_cover` | `{ uid }` | 舊版回覆（`{ text }` 等） | 30000 |
 | `settings_set` | `{ settings }` | `{}` | 5000 |
+| `current_tab` | – | `{ tab }`：作用中分頁是 YouTube／IG 網址時 `{ url, kind, chip, title }`，否則 `null`（外掛 3.10 起，給側邊欄「目前分頁」卡） | 5000 |
 
 拿掉：`ping`（用核心的 `ping`）、`deploy_installer`（網頁直接連到安裝檔）、`update_check/stage/commit/rollback`（只在背景內部用）、外掛資料夾相關（`extupdate`、`deploy`、`folder-store`、`installer`）。
 
@@ -55,6 +56,7 @@
 | `status` | `{ type, state, ready, detail }`；`state`：`stopped`／`running`／`not_installed`／`forbidden` | 連線狀態改變、訂閱時 |
 | `queue_state` | `{ type, state }` | 清單改變（最多每 200ms 一次）、訂閱時 |
 | `update_progress` | `{ type, ...進度 }` | `update_apply` 進行中 |
+| `current_tab` | `{ type, tab }`（同上） | 切換分頁、視窗或分頁網址／標題改變（外掛 3.10 起） |
 
 ## 下載助手訊息（外掛 ↔ Python，stdio Native Messaging）
 與 videodownload 相同（`host/host.py`），只有這些差異：
