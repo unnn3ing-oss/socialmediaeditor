@@ -26,7 +26,8 @@
 - [x] 後端＋單元測試（`test/server/fb-webhook.test.js` 3 項）
 - [x] 管理頁兩份＋e2e（admin 22 項）
 - [x] 隱私權政策（中英各一列）
-- [ ] 獨立審查 → 給使用者看；「推」才併 main（同 commit 更新 CLAUDE.md）
+- [x] 獨立審查通過（`97260cd`）
+- [ ] 給使用者看；「推」才併 main（同 commit 更新 CLAUDE.md）
 
 ## 測試
 `npm test`、`node build.js --check`、`node --test test/e2e/admin.e2e.js test/e2e/legal.e2e.js`。
