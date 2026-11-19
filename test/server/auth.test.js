@@ -126,7 +126,7 @@ test('前端輸入管理密碼：拿到帶 adm 的公司憑證，12 小時，回
   assert.equal((await readToken(env.SESSION_SECRET, c.data.token, nowSec())).adm, false);
 });
 
-test('前端管理員憑證：/auth/status 回 admin 且不續期；不能進 /admin/*', async () => {
+test('前端管理員憑證：/auth/status 回 admin、manage 且不續期；管理頁可用日常卡片、敏感卡片要解鎖', async () => {
   const env = mkEnv();
   const a = await (await login(env.ADMIN_PASSWORD, env)).json();
   const auth = { authorization: 'Bearer ' + a.data.token };
@@ -134,7 +134,9 @@ test('前端管理員憑證：/auth/status 回 admin 且不續期；不能進 /a
   assert.equal(st.ok, true);
   assert.equal(st.data.admin, true);
   assert.equal(st.data.renew, undefined, '管理員憑證不續期（續了會變普通憑證）');
-  assert.equal((await call('/admin/assets', { headers: auth }, env)).status, 401);
+  assert.equal(st.data.manage, true);
+  assert.equal((await call('/admin/assets', { headers: auth }, env)).status, 200);
+  assert.equal((await call('/admin/levels', { headers: auth }, env)).status, 403);
 });
 
 test('沒設 ADMIN_PASSWORD 時管理密碼路徑關閉；空字串不會被當成管理密碼', async () => {

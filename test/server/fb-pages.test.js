@@ -80,7 +80,7 @@ test('POST /admin/fb/pages 驗證', async (t) => {
   const env = fbEnv();
   const send = async (headers, pages) => call(env, '/admin/fb/pages', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ pages }) });
   const ok1 = { id: '111', short: '新聞', utm: '', rd: '', order: 0, show: true };
-  assert.equal((await send(await auth(env, 'company', true), [ok1])).status, 401, '前端管理員憑證不能進 /admin');
+  assert.equal((await send(await auth(env, 'company', false), [ok1])).status, 401, '公司密碼憑證不能進 /admin');
   const adm = await auth(env, 'admin');
   assert.equal((await send(adm, [{ ...ok1, short: '字'.repeat(21) }])).status, 400);
   assert.equal((await send(adm, [{ ...ok1, short: '' }])).status, 400);
@@ -188,7 +188,7 @@ test('POST /admin/fb/token：驗證通過才加密存進 D1，之後優先用它
   const adm = await auth(env, 'admin');
   const post = (body) => call(env, '/admin/fb/token', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   // 公司憑證不能換
-  assert.equal((await call(env, '/admin/fb/token', { method: 'POST', headers: await auth(env, 'company', true), body: '{}' })).status, 401);
+  assert.equal((await call(env, '/admin/fb/token', { method: 'POST', headers: await auth(env, 'company', true), body: '{}' })).status, 403, '前端管理員憑證要解鎖');
   assert.equal((await post({ token: '' })).status, 400);
   const r = await post({ token: 'NEWTOKEN' });
   assert.equal(r.status, 200);
@@ -268,7 +268,7 @@ test('開放／關閉：預設關閉；開放後名單內的人可用；關閉�
   const r0 = await call(env, '/fb/pages', { headers: company });
   assert.equal(r0.status, 403);
   assert.deepEqual((await r0.json()).detail, { reason: '' });
-  assert.equal((await set({ mode: 'company' }, company)).status, 401, '員工憑證不能切換');
+  assert.equal((await set({ mode: 'company' }, company)).status, 403, '普通層級員工不能切換');
   assert.equal((await set({ mode: 'everyone' })).status, 400);
   assert.equal((await set({ mode: 'admin', reason: '字'.repeat(101) })).status, 400);
   assert.equal((await set({ mode: 'admin', reason: 5 })).status, 400);
@@ -446,7 +446,7 @@ test('App 密鑰：格式檢查、client_credentials 驗證通過才加密存；
   const env = mkEnv();
   const adm = await auth(env, 'admin');
   const post = (b) => call(env, '/admin/fb/app', { method: 'POST', headers: { ...adm, 'content-type': 'application/json' }, body: JSON.stringify(b) });
-  assert.equal((await call(env, '/admin/fb/app', { headers: await auth(env, 'company', true) })).status, 401, '公司憑證不能看');
+  assert.equal((await call(env, '/admin/fb/app', { headers: await auth(env, 'company', true) })).status, 403, '前端管理員憑證要解鎖才能看');
   assert.deepEqual((await (await call(env, '/admin/fb/app', { headers: adm })).json()).data, { configured: false, appId: '', source: null, savedAt: null });
   let b = await (await post({ appId: '55a', secret: SEC32 })).json(); assert.match(b.error, /App ID/);
   b = await (await post({ appId: '555', secret: 'short' })).json(); assert.match(b.error, /32 位/);

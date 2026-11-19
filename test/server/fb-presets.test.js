@@ -28,8 +28,8 @@ test('活動留言：管理頁整份存、讀；排程發布讀得到；驗證',
   assert.deepEqual((await call(env, '/fb/presets', await auth(env, 'company', true))).body.data, [list[1]]);
   assert.equal((await call(env, '/fb/presets', await auth(env, 'company', false))).status, 403);
   assert.equal((await call(env, '/fb/presets', {})).status, 401);
-  // 前端管理員憑證不能進 /admin
-  assert.equal((await call(env, '/admin/fb/presets', await auth(env, 'company', true), { presets: [] })).status, 401);
+  // 公司密碼憑證不能進 /admin
+  assert.equal((await call(env, '/admin/fb/presets', await auth(env, 'company', false), { presets: [] })).status, 401);
   // 驗證
   const bad = async (presets) => (await call(env, '/admin/fb/presets', adm, { presets })).status;
   assert.equal(await bad([{ name: '', body: 'x' }]), 400);

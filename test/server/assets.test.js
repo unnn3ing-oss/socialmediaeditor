@@ -149,13 +149,8 @@ test('/admin/login：正確密碼得到 12 小時的 admin 憑證', async () => 
   assert.equal((await (await call('/admin/login', { method: 'POST', body: JSON.stringify({ password: 'x' }) }, mkEnv({ ADMIN_PASSWORD: undefined }))).json()).code, 'misconfigured');
 });
 
-test('GET /admin 回 HTML 管理頁（不需登入）', async () => {
+test('GET /admin 轉到網站版管理頁（不需登入）', async () => {
   const res = await call('/admin', {}, mkEnv());
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get('content-type'), /text\/html/);
-  const html = await res.text();
-  assert.match(html, /<html lang="zh-Hant"/);
-  assert.match(html, /刪除這個素材/);
-  assert.match(html, /管理密碼/);
-  assert.doesNotMatch(html, /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}]/u, '不用 emoji 或箭頭');
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), 'https://unnn3ing-oss.github.io/socialmediaeditor/admin/');
 });

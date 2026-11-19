@@ -66,7 +66,7 @@ test('管理頁：GET /admin/rundown 不回網址；ping 只給管理憑證', as
   const s = await call('/admin/rundown', await h('admin'));
   assert.deepEqual(s.body.data, { configured: true, state: 'ok' });
   assert.ok(!JSON.stringify(s.body).includes('script.google'));
-  assert.equal((await call('/admin/rundown/ping', await h('company', true), {})).status, 401);
+  assert.equal((await call('/admin/rundown/ping', await h('company', false), {})).status, 401);
   const p = await call('/admin/rundown/ping', await h('admin'), {});
   assert.deepEqual(p.body.data, { title: 'FB RUNDOWN', sheets: ['2026/11'] });
   assert.deepEqual(f.calls[0].body, { token: 'rd-token-123456', action: 'ping' });

@@ -1,5 +1,6 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
+import { cardsFor } from './levels.js';
 import { findStaff, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG } from './staff.js';
 
 export const MIN_SECRET = 32;
@@ -101,7 +102,9 @@ export async function handleAuth(request, env, path) {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');
     if (!t) return fail(request, env, 'unauthorized');
-    const data = { company: true, exp: t.exp, ...(t.adm ? { admin: true } : {}), ...(t.staff ? { staff: { id: t.staff.id, name: t.staff.name, group: t.staff.groupName } } : {}) };
+    const data = { company: true, exp: t.exp, ...(t.adm ? { admin: true } : {}), ...(t.staff ? { staff: { id: t.staff.id, name: t.staff.name, group: t.staff.groupName, level: t.staff.level } } : {}) };
+    // manage：首頁要不要顯示「管理頁」按鈕（管理員密碼登入，或員工層級至少有一張卡片）
+    data.manage = !!t.adm || (!!t.staff && (await cardsFor(env, t.staff.level)).length > 0);
     // 剩不到一半效期就續一張；舊的到期前仍有效。管理員憑證不續（續了會變成普通憑證，到期請重新輸入）
     if (!t.adm && t.exp - nowSec() < sessionTtl(env) / 2) {
       const exp = nowSec() + sessionTtl(env);
