@@ -70,29 +70,33 @@
       "id": "fbpost",
       "name": "排程發布",
       "group": "發文與素材",
-      "desc": "測試中，僅管理員可用",
+      "desc": "多粉專排程發文、留言、排入 RD",
       "tier": "public",
       "requires": [],
-      "badges": [
-        "管理員測試"
-      ],
+      "gate": {
+        "check": "/fb/open",
+        "badge": "管理員測試",
+        "desc": "測試中，僅管理員可用"
+      },
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=78cca6ca3e"
+      "entry": "tools/fbpost/index.html?v=7267b3c20e"
     },
     {
       "id": "fbvideo",
       "name": "影片發布",
       "group": "發文與素材",
-      "desc": "多粉專上傳影片（橫式／Reels），測試中僅管理員可用",
+      "desc": "多粉專上傳影片（橫式／Reels）",
       "tier": "public",
       "requires": [],
-      "badges": [
-        "管理員測試"
-      ],
+      "gate": {
+        "check": "/fb/open",
+        "badge": "管理員測試",
+        "desc": "多粉專上傳影片（橫式／Reels），測試中僅管理員可用"
+      },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=5c8e874bd0"
+      "entry": "tools/fbvideo/index.html?v=41a580aed3"
     },
     {
       "id": "livereq",
