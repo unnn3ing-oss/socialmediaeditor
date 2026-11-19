@@ -572,3 +572,29 @@ canvas {
   #downloadRow { flex-wrap: wrap; gap: 8px; }
   .dock .sticker-btn { width: 44px; height: 44px; }
 }
+
+/* 載入中骨架（與 ui/tokens.css 的 .sk 相同）：body.is-loading 由 HTML 起始，套版第一次畫完後拿掉 */
+@keyframes sk-shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+.sk,
+.is-loading canvas,
+.is-loading .mode-tabs:empty::before,
+.is-loading .mode-tabs:empty::after,
+.is-loading #quickfillText {
+  background: linear-gradient(90deg, var(--track) 25%, #fff 50%, var(--track) 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.5s infinite;
+}
+.sk { display: inline-block; border-radius: 4px; }
+.sticker-sk { flex: none; width: 46px; height: 46px; border-radius: 10px; }
+.is-loading .mode-tabs:empty::before,
+.is-loading .mode-tabs:empty::after { content: ''; width: 64px; height: 28px; border-radius: 13px; }
+.is-loading #quickfillText { color: transparent; pointer-events: none; }
+.is-loading #quickfillText::placeholder { color: transparent; }
+.is-loading .page-tabs,
+.is-loading #downloadRow,
+.is-loading #quickfillBtn { pointer-events: none; opacity: .5; }
+@media (min-width: 901px) and (max-height: 820px) { .sticker-sk { width: 40px; height: 40px; } }
+@media (max-width: 820px) { .sticker-sk { width: 44px; height: 44px; } }
+@media (prefers-reduced-motion: reduce) {
+  .sk, .is-loading canvas, .is-loading .mode-tabs:empty::before, .is-loading .mode-tabs:empty::after, .is-loading #quickfillText { animation: none; }
+}
