@@ -57,7 +57,8 @@ test('員工編號登入：名單內才發憑證（帶 uid、轉大寫）、記�
   assert.equal(bad.body.ok, false); assert.equal(bad.body.code, 'bad_staff');
   const r = await login(env, 't1');
   assert.equal(r.body.ok, true);
-  assert.deepEqual(r.body.data.staff, { id: 'T1', name: '王小明', group: '發文' });
+  assert.deepEqual(r.body.data.staff, { id: 'T1', name: '王小明', group: '發文', level: 'user' });
+  assert.equal(r.body.data.manage, false);
   const { readToken } = await tok();
   assert.equal((await readToken(env.SESSION_SECRET, r.body.data.token, nowSec())).uid, 'T1');
   const st = await call(env, '/auth/status', { headers: bearer(r.body.data.token) });
