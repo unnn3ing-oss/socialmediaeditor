@@ -53,7 +53,7 @@ let closingByCode = false;
 
 function showDialog(show) {
   if (show && !dialog.open) { try { dialog.showModal(); } catch { dialog.setAttribute("open", ""); } }
-  else if (!show && dialog.open) { closingByCode = true; dialog.close(); closingByCode = false; }
+  else if (!show && dialog.open) { closingByCode = true; dialog.close(); } // close 事件是非同步的，旗標在事件裡才清掉
 }
 
 function renderSteps(states, suggested) {
@@ -107,7 +107,7 @@ function renderSetup() {
   syncSetupTimer();
 }
 
-dialog.addEventListener("close", () => { if (!closingByCode) { setupOverride = false; renderSetup(); $("open-setup").focus(); } });
+dialog.addEventListener("close", () => { if (closingByCode) { closingByCode = false; return; } { setupOverride = false; renderSetup(); $("open-setup").focus(); } });
 $("setup-close").addEventListener("click", () => { setupOverride = false; renderSetup(); $("open-setup").focus(); });
 $("step-prev").addEventListener("click", () => { viewStep = Math.max(1, (viewStep ?? lastSuggested) - 1); renderSetup(); });
 $("step-next").addEventListener("click", () => { viewStep = Math.min(3, (viewStep ?? lastSuggested) + 1); renderSetup(); });
