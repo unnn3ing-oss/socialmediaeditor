@@ -3,7 +3,7 @@ import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
 import { audit } from '../core/staff.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError } from './pages.js';
-import { saveToken, clearToken, savePageTokens, appCred, saveAppCred, clearAppCred, APP_ID_RE, APP_SECRET_RE } from './tokenstore.js';
+import { saveToken, clearToken, savePageTokens, appCred, saveAppCred, clearAppCred, APP_ID_RE, APP_SECRET_RE, readProfiles, createProfile, renameProfile, activateProfile, deleteProfile, forProfile, storedPageTokens, userToken, brokenAt, PROFILE_ID_RE, MAX_PROFILES } from './tokenstore.js';
 import { GraphError, checkAppCred } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
@@ -223,6 +223,51 @@ adminRoute('POST', /^\/admin\/fb\/access$/, async (request, env) => {
 });
 adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => ok(request, env, await refreshPages(env)));
 
+// 權杖組別：不呼叫臉書，只讀存好的資料；權杖與 Secret 一律不回傳
+async function profilesState(env) {
+  const st = await readProfiles(env);
+  const list = [];
+  for (const p of st.list) {
+    const pe = forProfile(env, p.id);
+    const [stored, ut, app, broken] = await Promise.all([storedPageTokens(pe), userToken(pe), appCred(pe), brokenAt(pe)]);
+    list.push({
+      id: p.id, name: p.name, created: p.created, active: p.id === st.active,
+      hasToken: !!(stored || ut.token), source: stored ? 'admin' : ut.source,
+      pages: stored ? stored.pages.map((x) => x.name) : [], dataExpires: stored ? stored.dataExpires : null,
+      appName: stored ? stored.app : '', appId: app ? app.appId : '', broken: !!broken
+    });
+  }
+  return { active: st.active, max: MAX_PROFILES, list };
+}
+const profileBody = async (request) => { const b = await readJsonBody(request, 2048); return b && typeof b.name === 'string' ? b.name : null; };
+adminRoute('GET', /^\/admin\/fb\/profiles$/, async (request, env) => ok(request, env, await profilesState(env)));
+adminRoute('POST', /^\/admin\/fb\/profiles$/, async (request, env) => {
+  const name = await profileBody(request);
+  if (name === null) return fail(request, env, 'bad_request');
+  const r = await createProfile(env, name);
+  if (r.error) return fail(request, env, 'bad_request', r.error);
+  return ok(request, env, { ...(await profilesState(env)), created: r.id });
+});
+adminRoute('POST', /^\/admin\/fb\/profiles\/(p[0-9a-f]{1,8})$/, async (request, env, m) => {
+  const name = await profileBody(request);
+  if (name === null) return fail(request, env, 'bad_request');
+  const r = await renameProfile(env, m[1], name);
+  if (r.error) return fail(request, env, 'bad_request', r.error);
+  return ok(request, env, await profilesState(env));
+});
+adminRoute('POST', /^\/admin\/fb\/profiles\/(p[0-9a-f]{1,8})\/activate$/, async (request, env, m) => {
+  const r = await activateProfile(env, m[1]);
+  if (r.error) return fail(request, env, 'bad_request', r.error);
+  await clearPageCache(env);
+  return ok(request, env, await profilesState(env));
+});
+adminRoute('DELETE', /^\/admin\/fb\/profiles\/(p[0-9a-f]{1,8})$/, async (request, env, m) => {
+  const r = await deleteProfile(env, m[1]);
+  if (!r.error) await clearPageCache(forProfile(env, m[1]));
+  if (r.error) return fail(request, env, 'bad_request', r.error);
+  return ok(request, env, await profilesState(env));
+});
+
 // 掛在 core/admin.js 的 adminExtras（已通過管理憑證）
 export async function adminFb(request, env, path) {
   const rd = await adminRundown(request, env, path);
@@ -230,7 +275,16 @@ export async function adminFb(request, env, path) {
   for (const [method, re, handler] of adminRoutes) {
     const m = re.exec(path);
     if (!m || request.method !== method) continue;
-    try { return await handler(request, env, m); } catch (e) { return fbFail(request, env, e); }
+    try {
+      // ?p=<組別>：臉書連線／App 密鑰／重新讀取粉專改作用在指定的權杖組別（預設＝使用中）
+      let e = env;
+      const pid = /^\/admin\/fb\/(status|token|app|refresh)$/.test(path) ? new URL(request.url).searchParams.get('p') : null;
+      if (pid) {
+        if (!PROFILE_ID_RE.test(pid) || !(await readProfiles(env)).list.some((x) => x.id === pid)) return fail(request, env, 'bad_request', '找不到這個組別。');
+        e = forProfile(env, pid);
+      }
+      return await handler(request, e, m);
+    } catch (err) { return fbFail(request, env, err); }
   }
   return null;
 }

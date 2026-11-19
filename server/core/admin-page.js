@@ -38,6 +38,7 @@ button:disabled{background:var(--dis-bg);color:var(--mute);border-color:var(--ed
 .msg{min-height:24px;margin:8px 0 0;font-weight:600}
 .msg.err{color:var(--danger)}
 td.err{color:var(--danger);font-weight:600}
+.tp-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}.tp-list li{border:1px solid var(--edge);border-radius:14px;padding:12px 14px}.tp-list li.on{border-color:#155eef;background:#f4f8ff}.tp-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:700}.tp-badge{font-size:12px;font-weight:700;color:#155eef;background:#e0eaff;border-radius:99px;padding:2px 8px}.tp-meta{margin:4px 0 0;color:var(--mute);font-size:14px}.tp-list .row{margin-top:8px}.tp-add input{flex:1;min-width:160px}#tpPick{max-width:100%}
 .fb-state{font-weight:600}.fb-state.on{color:#166534}.fb-state.off{color:var(--danger)}
 .fb-missing{margin:8px 0 0;padding-left:20px;color:var(--danger);font-weight:600}
 .fb-warn{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;font-weight:600}.fb-warn.bad{background:#fef3f2;border-color:#fecdca;color:#b42318}
@@ -181,9 +182,20 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
         <p class="msg" id="acMsg" role="status"></p>
       </section>
 
+      <section class="card" id="tpCard">
+        <h2>權杖組別</h2>
+        <p>可以存好幾組臉書權杖（例如主管的、自己的），各自命名，選一組「使用中」給排程發布與影片發布用；切換後粉專清單換成那一組的粉專。已排程的留言、影片封面、改時間與刪除，使用中那組沒有該粉專時會改用其他組的權杖。最多 5 組。</p>
+        <ul class="tp-list" id="tpList"></ul>
+        <label for="tpName">新增一組（名稱最多 20 字）</label>
+        <div class="row tp-add"><input id="tpName" type="text" maxlength="20" placeholder="例如：主管權杖、鈞評測試"><button id="tpAdd" type="button">新增組別</button></div>
+        <p class="msg" id="tpMsg" role="status"></p>
+      </section>
+
       <section class="card" id="fbCard">
       <h2>臉書連線</h2>
-      <p>後端用主管的「使用者權杖」換好各粉專權杖並存起來，之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
+        <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
+        <select id="tpPick"></select>
+      <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
       <p class="fb-state" id="fbState">狀態：尚未讀取</p>
       <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
       <ul class="fb-detail" id="fbDetail" hidden></ul>
@@ -191,7 +203,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
       <p class="msg" id="fbMsg" role="status"></p>
         <div class="fb-tok">
-          <label for="fbTok">換權杖：貼上主管的「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
+          <label for="fbTok">換權杖：貼上「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
           <p class="fb-hint" id="fbTokHint"></p>
           <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
           <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
@@ -420,7 +432,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     return '到期日 ' + fmtTime(sec * 1000);
   }
   function fbStatus() {
-    return api('/admin/fb/status').then(function (res) {
+    return api('/admin/fb/status' + tpQ()).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
       $('fbTokClear').hidden = d.source !== 'admin';
@@ -537,7 +549,88 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   }
   function fbLoad() {
     say($('fbMsg'), '');
-    return Promise.all([acLoad(), fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), pgLoad(), psLoad(), vsLoad(), appLoad(), whLoad()]);
+    return Promise.all([acLoad(), tpLoad().then(fbReload), pgLoad(), psLoad(), vsLoad(), whLoad()]);
+  }
+  // ---- 權杖組別（/admin/fb/profiles）：命名、切換使用中；設定中的組別（tpCur）給臉書連線與 App 密鑰用 ----
+  var tpCur = '', tpData = null;
+  function tpQ() { return tpCur && tpData && tpCur !== tpData.active ? '?p=' + encodeURIComponent(tpCur) : ''; }
+  function tpBtn(text, fn) { var b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.onclick = fn; return b; }
+  function tpShow(d) {
+    tpData = d;
+    if (!d.list.some(function (x) { return x.id === tpCur; })) tpCur = d.active;
+    var ul = $('tpList'); ul.textContent = '';
+    d.list.forEach(function (x) {
+      var li = document.createElement('li'); if (x.active) li.className = 'on';
+      var h = document.createElement('div'); h.className = 'tp-head';
+      var nm = document.createElement('span'); nm.textContent = x.name; h.appendChild(nm);
+      if (x.active) { var bd = document.createElement('span'); bd.className = 'tp-badge'; bd.textContent = '使用中'; h.appendChild(bd); }
+      li.appendChild(h);
+      var meta = document.createElement('p'); meta.className = 'tp-meta';
+      var bits = [];
+      if (!x.hasToken) bits.push('還沒有權杖');
+      else {
+        bits.push(x.source === 'secret' ? '權杖來自 Secret FB_USER_TOKEN' : '粉專 ' + x.pages.length + ' 個' + (x.pages.length ? '（' + x.pages.join('、') + '）' : ''));
+        if (x.appName || x.appId) bits.push('App：' + (x.appName || '') + (x.appId ? '（' + x.appId + '）' : ''));
+        if (x.dataExpires) bits.push('資料存取期限 ' + fmtTime(x.dataExpires * 1000));
+        if (x.broken) bits.push('發文時遇到權杖失效');
+      }
+      meta.textContent = bits.join('．'); li.appendChild(meta);
+      var row = document.createElement('div'); row.className = 'row';
+      if (!x.active) {
+        var act = tpBtn('切換為使用中', function () { tpCall('POST', '/admin/fb/profiles/' + x.id + '/activate', null, '已切換到「' + x.name + '」。'); });
+        act.disabled = !x.hasToken; if (!x.hasToken) act.title = '先在「臉書連線」驗證並儲存權杖';
+        row.appendChild(act);
+      }
+      row.appendChild(tpBtn('設定這一組', function () { fbPick(x.id); var c = $('fbCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start' }); }));
+      row.appendChild(tpBtn('重新命名', function () {
+        var n = window.prompt('新的組別名稱（最多 20 字）', x.name);
+        if (n === null) return;
+        tpCall('POST', '/admin/fb/profiles/' + x.id, { name: n }, '已改名。');
+      }));
+      if (!x.active) row.appendChild(tpBtn('刪除', function () {
+        if (!window.confirm('刪除「' + x.name + '」？這一組存的權杖與 App 密鑰會一起刪除，無法復原。')) return;
+        tpCall('DELETE', '/admin/fb/profiles/' + x.id, null, '已刪除。');
+      }));
+      li.appendChild(row); ul.appendChild(li);
+    });
+    $('tpAdd').disabled = d.list.length >= d.max;
+    $('tpName').disabled = d.list.length >= d.max;
+    tpPickFill();
+  }
+  function tpPickFill() {
+    var s = $('tpPick'); s.textContent = '';
+    (tpData ? tpData.list : []).forEach(function (x) {
+      var o = document.createElement('option'); o.value = x.id; o.textContent = x.name + (x.active ? '（使用中）' : ''); s.appendChild(o);
+    });
+    s.value = tpCur;
+  }
+  function tpLoad() {
+    return api('/admin/fb/profiles').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      tpShow(res.data);
+    }).catch(function (e) { say($('tpMsg'), '讀取權杖組別失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function tpCall(method, path, body, okText) {
+    var opts = { method: method };
+    if (body) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body); }
+    say($('tpMsg'), '處理中');
+    return api(path, opts).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      if (res.data && res.data.created) tpCur = res.data.created;
+      tpShow(res.data);
+      return fbLoad().then(function () { say($('tpMsg'), okText, 'good'); });
+    }).catch(function (e) { say($('tpMsg'), '失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('tpAdd').onclick = function () {
+    var n = $('tpName').value.trim();
+    if (!n) { say($('tpMsg'), '請填組別名稱。', 'err'); return; }
+    tpCall('POST', '/admin/fb/profiles', { name: n }, '已新增，請在下方「臉書連線」設定這一組的 App 密鑰與權杖。').then(function () { $('tpName').value = ''; });
+  };
+  function fbPick(id) { tpCur = id; tpPickFill(); say($('fbMsg'), ''); say($('fbTokMsg'), ''); say($('appMsg'), ''); return fbReload(); }
+  $('tpPick').onchange = function () { fbPick($('tpPick').value); };
+  // 只重讀「臉書連線」與「App 密鑰」（切換設定中的組別用）
+  function fbReload() {
+    return Promise.all([fbStatus().catch(function (e) { say($('fbMsg'), '讀取連線狀態失敗：' + (e && e.message || ''), 'err'); }), appLoad()]);
   }
   // ---- App 密鑰（/admin/fb/app）：只回有沒有設定與 App ID，Secret 永不回傳 ----
   function appShow(d) {
@@ -548,7 +641,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     $('appClear').hidden = d.source !== 'admin';
   }
   function appLoad() {
-    return api('/admin/fb/app').then(function (res) {
+    return api('/admin/fb/app' + tpQ()).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       appShow(res.data);
     }).catch(function (e) { say($('appMsg'), '讀取 App 密鑰狀態失敗：' + (e && e.message || ''), 'err'); });
@@ -557,7 +650,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     var id = $('appId').value.trim(), sec = $('appSecret').value.trim();
     if (!id || !sec) { say($('appMsg'), '請填 App ID 和 App Secret。', 'err'); return; }
     $('appSave').disabled = true; say($('appMsg'), '向臉書驗證中');
-    api('/admin/fb/app', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appId: id, secret: sec }) }).then(function (res) {
+    api('/admin/fb/app' + tpQ(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appId: id, secret: sec }) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('appSecret').value = ''; $('appId').value = '';
       say($('appMsg'), '已驗證並儲存（App ID ' + res.data.appId + '）。之後貼剛產生的權杖會自動延長。', 'good');
@@ -568,7 +661,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   $('appClear').onclick = function () {
     if (!window.confirm('清除管理頁存的 App 密鑰？清除後貼權杖前要先按 Extend。')) return;
     $('appClear').disabled = true;
-    api('/admin/fb/app', { method: 'DELETE' }).then(function (res) {
+    api('/admin/fb/app' + tpQ(), { method: 'DELETE' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       say($('appMsg'), '已清除。', 'good');
       return fbLoad();
@@ -599,7 +692,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
     var v = $('fbTok').value.trim();
     if (!v) { say($('fbTokMsg'), '請先貼上權杖。', 'err'); return; }
     $('fbTokSave').disabled = true; say($('fbTokMsg'), '向臉書驗證中');
-    api('/admin/fb/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: v }) }).then(function (res) {
+    api('/admin/fb/token' + tpQ(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: v }) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('fbTok').value = '';
       var d = res.data;
@@ -611,7 +704,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   $('fbTokClear').onclick = function () {
     if (!window.confirm('刪除管理頁存的權杖，改回使用 Secret FB_USER_TOKEN？')) return;
     $('fbTokClear').disabled = true;
-    api('/admin/fb/token', { method: 'DELETE' }).then(function (res) {
+    api('/admin/fb/token' + tpQ(), { method: 'DELETE' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       say($('fbTokMsg'), '已改回 Secret。', 'good');
       return fbLoad();
@@ -620,7 +713,7 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
   };
   $('fbRefresh').onclick = function () {
     $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
-    api('/admin/fb/refresh', { method: 'POST' }).then(function (res) {
+    api('/admin/fb/refresh' + tpQ(), { method: 'POST' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var r = res.data || {};
       var m = r.renewed ? '已重新換好粉專權杖：' + r.pages + ' 個。' : r.reason === 'user_expired' ? '使用者權杖已過期，保留原本的粉專權杖（照常發文）；要加新粉專請換新權杖。' : r.reason === 'failed' ? '沒有更新：' + (r.error || '') + ' 保留原本的粉專權杖。' : '已重新讀取。';

@@ -22,7 +22,15 @@ const PAGES = [
   { id: '2', name: 'TVBS 娛樂', short: '娛樂', utm: '?&utm_source=facebook', utmText: '?&utm_medium=text', rd: 'ent', order: 1, show: 1 },
   { id: '3', name: 'TVBS 少康戰情室', short: '少康', utm: '', rd: '', order: 2, show: 0 }];
 let APP = { configured: false, appId: '', source: null, savedAt: null }, APP_SAVED = null;
+const TP0 = () => ({ active: 'p1', max: 5, list: [
+  { id: 'p1', name: '主管權杖', created: 0, active: true, hasToken: true, source: 'admin', pages: ['新聞', '少康'], dataExpires: Math.floor(Date.UTC(2027, 1, 10) / 1000), appName: 'DEV-TOOL', appId: '999', broken: false },
+  { id: 'pabcdef12', name: '鈞評測試', created: 1, active: false, hasToken: true, source: 'admin', pages: ['評 Photography'], dataExpires: null, appName: 'socialmediaeditor', appId: '888', broken: false },
+  { id: 'p0000beef', name: '空的', created: 2, active: false, hasToken: false, source: null, pages: [], dataExpires: null, appName: '', appId: '', broken: false }] });
+let TP = TP0();
 const DATA = {
+  'GET /admin/fb/profiles': () => TP,
+  'POST /admin/fb/profiles': (b) => { TP.list.push({ id: 'p11112222', name: b.name, created: 3, active: false, hasToken: false, source: null, pages: [], dataExpires: null, appName: '', appId: '', broken: false }); return { ...TP, created: 'p11112222' }; },
+  'POST /admin/fb/profiles/pabcdef12/activate': () => { TP.list.forEach((x) => { x.active = x.id === 'pabcdef12'; }); TP.active = 'pabcdef12'; return TP; },
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
   'GET /admin/fb/status': { configured: true, valid: true, userValid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3, autoExtend: true,
@@ -572,4 +580,32 @@ test('測試後端：頁首標「測試後端」且 API 打 dev；正式不顯�
   assert.deepEqual([...new Set(hosts)], ['toolbox-api-dev.19jpz-3.workers.dev']);
   if (process.env.SHOT_DIR) await p2.screenshot({ path: process.env.SHOT_DIR + '/admin-dev.png' });
   await ctx.close();
+});
+
+test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 ?p=）、切換使用中、空的組別不能切', async () => {
+  TP = TP0();
+  const { page } = await open({ width: 1280, height: 900 }, '#fb');
+  const urls = [];
+  page.on('request', (r) => { if (/\/admin\/fb\/(status|app|token)/.test(r.url())) urls.push(r.url()); });
+  await login(page);
+  await page.waitForSelector('#tpList li');
+  assert.equal(await page.locator('#tpList li').count(), 3);
+  assert.match(await page.textContent('#tpList li.on'), /主管權杖使用中/);
+  assert.match(await page.textContent('#tpList li:nth-child(2)'), /評 Photography.*socialmediaeditor（888）/);
+  assert.equal(await page.isDisabled('#tpList li:nth-child(3) button:has-text("切換為使用中")'), true);
+  assert.equal(await page.inputValue('#tpPick'), 'p1');
+  assert.ok(urls.every((u) => !u.includes('?p=')), '使用中那組不帶 ?p=');
+  if (SHOT) await page.locator('#tpCard').screenshot({ path: path.join(SHOT, 'admin-tp.png') });
+  await page.fill('#tpName', '新的一組');
+  await page.click('#tpAdd');
+  await page.waitForFunction(() => document.querySelector('#tpPick').value === 'p11112222');
+  await page.waitForFunction(() => /已新增/.test(document.querySelector('#tpMsg').textContent));
+  urls.length = 0;
+  await page.selectOption('#tpPick', 'pabcdef12');
+  await new Promise((r) => setTimeout(r, 200));
+  assert.ok(urls.some((u) => u.endsWith('/admin/fb/status?p=pabcdef12')) && urls.some((u) => u.endsWith('/admin/fb/app?p=pabcdef12')), urls.join(' '));
+  await page.click('#tpList li:nth-child(2) button:has-text("切換為使用中")');
+  await page.waitForFunction(() => /已切換到「鈞評測試」/.test(document.querySelector('#tpMsg').textContent));
+  assert.match(await page.textContent('#tpList li.on'), /鈞評測試/);
+  if (SHOT) await page.locator('#tpCard').screenshot({ path: path.join(SHOT, 'admin-tp-switched.png') });
 });
