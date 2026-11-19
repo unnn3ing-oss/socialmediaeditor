@@ -1,5 +1,6 @@
 // 臉書 Graph API 呼叫（集中一處）。版本以 Meta 官方文件最新版為準。
 import { isPageToken, markBroken } from './tokenstore.js';
+import { noteUsage, noteThrottle } from './usage.js';
 export const GRAPH = 'https://graph.facebook.com/v27.0';
 export const GRAPH_VIDEO = 'https://graph-video.facebook.com/v27.0';   // 影片分段上傳（start／transfer／finish）
 
@@ -17,7 +18,7 @@ export const isRateLimit = (e) => !!e && [4, 17, 32, 613, 80001].includes(e.code
 export const isTokenError = (e) => !!e && [190, 102].includes(e.code);
 
 // method：GET／POST／DELETE；params：物件或 FormData；GET／DELETE 的參數放 query
-export async function graph(env, method, path, params, token, base = GRAPH) {
+export async function graph(env, method, path, params, token, base = GRAPH, { forceUsage = false } = {}) {
   const url = new URL(base + path);
   const init = { method };
   if (method === 'GET' || method === 'DELETE') {
@@ -39,6 +40,7 @@ export async function graph(env, method, path, params, token, base = GRAPH) {
   } catch (e) {
     throw new GraphError(-1, '連不上臉書', 0, undefined, true);
   }
+  try { await noteUsage(env, res.headers, { force: forceUsage }); } catch { /* 用量記錄失敗不影響呼叫 */ }
   if (res.ok && data == null) throw new GraphError(-1, '讀不到臉書的回應', res.status, undefined, true);
   if (!res.ok || !data || data.error) {
     const err = (data && data.error) || {};
@@ -46,6 +48,7 @@ export async function graph(env, method, path, params, token, base = GRAPH) {
     // 5xx／讀不到內容／臉書的「未知錯誤」(1)、「暫時無法服務」(2)：請求可能已被處理，發文要當待確認
     const uncertain = !res.ok && (res.status >= 500 || data == null || code === 1 || code === 2);
     if (isTokenError({ code }) && isPageToken(env, token)) await markBroken(env, token);   // 粉專權杖失效：管理頁與工具顯示提醒
+    if (isRateLimit({ code })) { try { await noteThrottle(env, code, err.message); } catch { /* 記不了就算了 */ } }   // 管理頁「速率限制」顯示最近一次
     throw new GraphError(code, err.message || '臉書回應錯誤（HTTP ' + res.status + '）', res.status, err.error_subcode, uncertain);
   }
   return data;

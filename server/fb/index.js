@@ -2,9 +2,9 @@
 import { ok, fail, readBody } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
 import { audit } from '../core/staff.js';
-import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError } from './pages.js';
+import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError, activePageTokens, pageTokens } from './pages.js';
 import { saveToken, clearToken, savePageTokens, appCred, saveAppCred, clearAppCred, APP_ID_RE, APP_SECRET_RE, readProfiles, createProfile, renameProfile, activateProfile, deleteProfile, forProfile, storedPageTokens, userToken, brokenAt, PROFILE_ID_RE, MAX_PROFILES } from './tokenstore.js';
-import { GraphError, checkAppCred } from './graph.js';
+import { GraphError, checkAppCred, graph } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
@@ -12,6 +12,7 @@ import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 import { webhookState } from './webhook.js';
+import { readUsage } from './usage.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
 export function fbFail(request, env, e) {
@@ -224,6 +225,26 @@ adminRoute('POST', /^\/admin\/fb\/access$/, async (request, env) => {
   return ok(request, env, await accessState(env));
 });
 adminRoute('POST', /^\/admin\/fb\/refresh$/, async (request, env) => ok(request, env, await refreshPages(env)));
+
+// 速率限制：只讀存好的用量（臉書沒有查用量的 API）；粉專名稱用各組存好的粉專對應
+async function usageState(env) {
+  const u = await readUsage(env);
+  const names = new Map();
+  try { for (const p of (await pageTokens(env)).values()) names.set(p.id, p.name); } catch { /* 沒權杖也照樣回用量 */ }
+  const pages = Object.entries(u.pages).map(([id, p]) => ({ id, name: names.get(id) || '', ...p })).sort((a, b) => (b.at || 0) - (a.at || 0));
+  return { app: u.app, pages, throttle: u.throttle };
+}
+adminRoute('GET', /^\/admin\/fb\/usage$/, async (request, env) => ok(request, env, await usageState(env)));
+// 立即查詢：使用中組別每個粉專打一次最輕的查詢（粉專權杖），再用使用者權杖打一次 /me，強制記下用量
+adminRoute('POST', /^\/admin\/fb\/usage\/refresh$/, async (request, env) => {
+  let pages = [];
+  try { pages = [...(await activePageTokens(env)).values()].slice(0, 30); } catch { pages = []; }
+  let failed = 0;
+  await Promise.all(pages.map((p) => graph(env, 'GET', '/' + p.id, { fields: 'id' }, p.token, undefined, { forceUsage: true }).catch(() => { failed++; })));
+  const { token: ut } = await userToken(env);
+  if (ut) await graph(env, 'GET', '/me', { fields: 'id' }, ut, undefined, { forceUsage: true }).catch(() => { failed++; });
+  return ok(request, env, { ...(await usageState(env)), asked: pages.length + (ut ? 1 : 0), failed });
+});
 
 // 權杖組別：不呼叫臉書，只讀存好的資料；權杖與 Secret 一律不回傳
 async function profilesState(env) {

@@ -27,7 +27,14 @@ const TP0 = () => ({ active: 'p1', max: 5, list: [
   { id: 'pabcdef12', name: '鈞評測試', created: 1, active: false, hasToken: true, source: 'admin', pages: ['評 Photography'], dataExpires: null, appName: 'socialmediaeditor', appId: '888', broken: false },
   { id: 'p0000beef', name: '空的', created: 2, active: false, hasToken: false, source: null, pages: [], dataExpires: null, appName: '', appId: '', broken: false }] });
 let TP = TP0();
+const NOWMS = Date.now();
+const USAGE = { app: { callCount: 12, totalTime: 4, totalCputime: 2, at: NOWMS - 3 * 60000 },
+  pages: [{ id: '111', name: 'TVBS 新聞', type: 'pages', callCount: 78, totalCputime: 10, totalTime: 92, regainMin: 0, at: NOWMS - 60000 },
+    { id: '222', name: '', type: 'pages', callCount: 100, totalCputime: 30, totalTime: 40, regainMin: 25, at: NOWMS - 120000 }],
+  throttle: { code: 80001, message: 'too many', at: Date.UTC(2026, 10, 20, 3, 0) } };
 const DATA = {
+  'GET /admin/fb/usage': USAGE,
+  'POST /admin/fb/usage/refresh': { ...USAGE, asked: 3, failed: 1 },
   'GET /admin/fb/profiles': () => TP,
   'POST /admin/fb/profiles': (b) => { TP.list.push({ id: 'p11112222', name: b.name, created: 3, active: false, hasToken: false, source: null, pages: [], dataExpires: null, appName: '', appId: '', broken: false }); return { ...TP, created: 'p11112222' }; },
   'POST /admin/fb/profiles/pabcdef12/activate': () => { TP.list.forEach((x) => { x.active = x.id === 'pabcdef12'; }); TP.active = 'pabcdef12'; return TP; },
@@ -608,4 +615,21 @@ test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 
   await page.waitForFunction(() => /已切換到「鈞評測試」/.test(document.querySelector('#tpMsg').textContent));
   assert.match(await page.textContent('#tpList li.on'), /鈞評測試/);
   if (SHOT) await page.locator('#tpCard').screenshot({ path: path.join(SHOT, 'admin-tp-switched.png') });
+});
+
+test('速率限制：App 與各粉專三個 % 長條（≥75 黃、≥90 紅）、被暫停顯示恢復時間、最近一次限流；立即查詢', async () => {
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  await login(page);
+  await page.waitForSelector('#usList li .us-bars');
+  assert.equal(await page.locator('#usList > li').count(), 3);
+  assert.match(await page.textContent('#usList > li:nth-child(1)'), /App（使用者權杖）.*3 分鐘前/);
+  assert.match(await page.textContent('#usList > li:nth-child(3)'), /粉專 222/);
+  assert.match(await page.textContent('#usList > li:nth-child(3) .us-regain'), /約 25 分鐘後恢復/);
+  const bars = page.locator('#usList > li:nth-child(2) .us-bar');
+  assert.deepEqual(await bars.evaluateAll((els) => els.map((e) => [e.getAttribute('aria-valuenow'), e.className])), [['78', 'us-bar warn'], ['10', 'us-bar'], ['92', 'us-bar bad']]);
+  assert.match(await page.textContent('#usThrottle'), /最近一次被臉書限流：2026-11-20.*粉專呼叫太多（粉專權杖）/);
+  if (SHOT) await page.locator('#usCard').screenshot({ path: path.join(SHOT, 'admin-usage.png') });
+  await page.click('#usAsk');
+  await page.waitForFunction(() => /已查詢 3 次，1 次失敗/.test(document.querySelector('#usMsg').textContent));
+  assert.ok(calls.some((c) => c.key === 'POST /admin/fb/usage/refresh' && c.auth === 'Bearer T'));
 });
