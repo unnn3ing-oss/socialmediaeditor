@@ -7,7 +7,6 @@ import {
   renderHostNote, renderQueue, setHidden, setText, startTicker,
 } from "./web/queue-view.js";
 import { OUTPUT_DIR_LOCKED_TEXT, cooldownText, outputDirLocked, summarize } from "./ext/lib/queue.js";
-import { formatEta, formatSpeed } from "./ext/lib/format.js";
 import { UPDATING_HINT, UPDATING_TEXT, createReloadWait, describeOutcome } from "./web/update-wait.js";
 import { createAutoConnect, extensionNotice, hostNotice } from "./web/connection.js";
 import { runCopyDiagnostics, runDoctor } from "./web/doctor-view.js";
@@ -204,10 +203,8 @@ function renderQueueArea() {
     cover: (uid, button) => downloadRowCover(send, uid, button),
   }, { showText: !isSide }); // 網頁在每支影片下面顯示【標題】與標籤；側邊欄不顯示（用「複製內文」）
   $("queue-empty").hidden = queue.items.length > 0;
-  const parts = queue.items.length ? [`共 ${info.total} 支`, `完成 ${info.done}`] : [];
-  if (info.speed) parts.push(`速度 ${formatSpeed(info.speed)}`);
-  if (info.etaSec) parts.push(`剩餘 ${formatEta(info.etaSec)}`);
-  $("queue-stats").textContent = parts.join(" · ");
+  // 標題列只寫總數；即時狀態（幾秒後下一支）由右邊的倒數膠囊顯示
+  $("queue-stats").textContent = queue.items.length ? `共 ${info.total} 支` : "";
   const cooling = cooldownText(queue, now);
   $("cooldown-chip").hidden = !cooling;
   if (cooling) $("cooldown-chip").textContent = cooling;
