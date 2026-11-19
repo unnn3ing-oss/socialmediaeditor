@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800;900&display=swap">
 <link rel="stylesheet" href="tool.css">
 </head>
-<body>
+<body class="is-loading">
 <header class="topbar">
   <div class="tb-left">
     <h1>LINE 推播圖</h1>
@@ -74,7 +74,7 @@
 <div class="dock" id="dock">
   <div class="dock-stickers" id="dockStickers" title="先在預覽圖點選要編輯的格子，再點貼圖加入；可在預覽圖上拖曳移動、滑鼠滾輪縮放，點貼圖右上角「✕」移除。">
     <span class="dock-label" id="stickerLabel">表情貼圖</span>
-    <div class="sticker-palette" id="stickerPalette"></div>
+    <div class="sticker-palette" id="stickerPalette" aria-busy="true"><span class="sticker-sk sk" aria-hidden="true"></span><span class="sticker-sk sk" aria-hidden="true"></span><span class="sticker-sk sk" aria-hidden="true"></span><span class="sticker-sk sk" aria-hidden="true"></span><span class="sticker-sk sk" aria-hidden="true"></span><span class="sticker-sk sk" aria-hidden="true"></span><span class="sticker-sk sk" aria-hidden="true"></span></div>
   </div>
   <span class="dock-sep" id="dockSep"></span>
   <div class="dock-colors" id="g4Colors" hidden>

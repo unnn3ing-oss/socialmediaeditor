@@ -9,23 +9,24 @@ tb.init('linepush');
 // 沒有 → 通用模式（六宮格＋四格 A），畫面不出現任何公司字樣。
 // ---------------------------------------------------------------------------
 const STICKER_IDS = ['smile', 'shock', 'cry', 'angry', 'kiss', 'laugh', 'meh'];
-const [headerAsset, grid4Asset, ...stickerAssets] = await Promise.all([
+// 只等黃條／娛樂四格（決定公司版或通用版）；貼圖、字型都在背景載入，不擋畫面。
+const stickerAssetsReady = Promise.all(STICKER_IDS.map(id => tb.assets.get(`sticker.${id}`).catch(() => null)));
+// 管理員登入：公司版貼圖後面再列通用版（網址相同就不重複）
+const publicStickerAssetsReady = tb.assets.admin?.()
+  ? Promise.all(STICKER_IDS.map(id => tb.assets.getPublic(`sticker.${id}`).catch(() => null)))
+  : Promise.resolve([]);
+const [headerAsset, grid4Asset] = await Promise.all([
   tb.assets.get('line.header'),
   tb.assets.get('line.grid4'),
-  ...STICKER_IDS.map(id => tb.assets.get(`sticker.${id}`)),
 ]);
-const fontAsset = await tb.assets.get('font.line');
-// 管理員登入：公司版貼圖後面再列通用版（網址相同就不重複）
-const publicStickerAssets = tb.assets.admin?.()
-  ? await Promise.all(STICKER_IDS.map(id => tb.assets.getPublic(`sticker.${id}`).catch(() => null)))
-  : [];
 const COMPANY = Boolean(headerAsset?.url || grid4Asset?.url);
 
 // 標題字型：公司版台北黑體粗體（同舊工具，FontFace 載入）；通用版 Noto Sans TC 900（Google Fonts）。
 const TITLE_FONT = 'TbTitleFont';
 async function loadTitleFont() {
   try {
-    if (COMPANY && fontAsset?.url) {
+    const fontAsset = COMPANY ? await tb.assets.get('font.line') : null;
+    if (fontAsset?.url) {
       const face = new FontFace(TITLE_FONT, `url(${fontAsset.url})`, { weight: '900' });
       await face.load();
       document.fonts.add(face);
@@ -223,15 +224,18 @@ const templatesReady = Promise.all([
 
 // Small face-covering stickers the user can drop onto a cell's photo to hide
 // a bystander. Loaded once up front the same way as the template artwork.
-const STICKER_DEFS = [
-  ...STICKER_IDS.map((id, i) => ({ key: `t${i + 1}`, src: stickerAssets[i]?.url || '' })),
-  ...STICKER_IDS.map((id, i) => ({ key: `p${i + 1}`, src: publicStickerAssets[i]?.url || '', extra: true }))
-    .filter((def, i) => def.src && def.src !== stickerAssets[i]?.url),
-].filter(def => def.src);
+// 貼圖清單在背景取得網址後才決定（buildStickerPalette 在下方建貼圖列）。
+let STICKER_DEFS = [];
 const stickerImages = {};
-const stickersReady = Promise.all(
-  STICKER_DEFS.map(def => loadImage(def.src).then(img => { stickerImages[def.key] = img; }))
-);
+const stickersReady = Promise.all([stickerAssetsReady, publicStickerAssetsReady]).then(([stickerAssets, publicStickerAssets]) => {
+  STICKER_DEFS = [
+    ...STICKER_IDS.map((id, i) => ({ key: `t${i + 1}`, src: stickerAssets[i]?.url || '' })),
+    ...STICKER_IDS.map((id, i) => ({ key: `p${i + 1}`, src: publicStickerAssets[i]?.url || '', extra: true }))
+      .filter((def, i) => def.src && def.src !== stickerAssets[i]?.url),
+  ].filter(def => def.src);
+  buildStickerPalette();
+  return Promise.all(STICKER_DEFS.map(def => loadImage(def.src).then(img => { stickerImages[def.key] = img; })));
+});
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -2539,6 +2543,10 @@ helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) helpO
 // >>> 原檔 4773-4798
 const stickerHintShown = { news: false, ent: false };
 const stickerPalette = document.getElementById('stickerPalette');
+// 貼圖網址拿到後才建（HTML 先放骨架格）
+function buildStickerPalette() {
+stickerPalette.replaceChildren();
+stickerPalette.removeAttribute('aria-busy');
 STICKER_DEFS.forEach((def, i) => {
   if (def.extra && i > 0 && !STICKER_DEFS[i - 1].extra) {
     const sep = document.createElement('span');
@@ -2569,6 +2577,7 @@ STICKER_DEFS.forEach((def, i) => {
   });
   stickerPalette.appendChild(btn);
 });
+}
 // >>> 原檔 4800-4889
 // ---------------------------------------------------------------------------
 // 新聞 / 娛樂 mode switch
@@ -3088,6 +3097,6 @@ applyModeChrome();
 render();
 headlineFontReady.then(render);
 document.fonts.ready.then(render);
-templatesReady.then(render);
+templatesReady.then(() => { render(); document.body.classList.remove('is-loading'); });
 stickersReady.then(render);
 if (COMPANY) document.getElementById('stickerLabel').textContent = 'T寶貼圖';

@@ -306,3 +306,33 @@ test('複製推播連結：反灰與複製按鈕不污染下載圖片', async ()
   assert.ok(near(px, [200, 30, 30]), '下載圖沒有選取反灰');
   assert.deepEqual(t.errors, []);
 });
+
+test('載入：字型與貼圖慢也先顯示介面，貼圖列先放骨架、載好換成貼圖', async () => {
+  const delays = { 'font-taipei-sans-bold': 3000 };
+  for (const k of ['smile', 'shock', 'cry', 'angry', 'kiss', 'laugh', 'meh']) delays['tbao-' + k] = 3000;
+  const t = await openTool(browser, srv.url, 'linepush', { company: true, delays, viewport: { width: 1280, height: 860 } });
+  const t0 = Date.now();
+  await t.frame.waitForSelector('.mode-tab');
+  await t.frame.waitForFunction(() => !document.body.classList.contains('is-loading'));
+  assert.ok(Date.now() - t0 < 2000, '介面不該等字型與貼圖');
+  assert.equal(await t.frame.locator('.sticker-sk').count(), 7);
+  assert.equal(await t.frame.locator('.sticker-btn').count(), 0);
+  assert.equal(await t.frame.locator('.sticker-sk').first().evaluate((el) => getComputedStyle(el).animationName), 'sk-shimmer');
+  await clickTab(t.frame, '娛樂');
+  assert.ok(await t.frame.locator('.mode-tab', { hasText: '娛樂' }).evaluate((b) => b.classList.contains('active')));
+  await t.frame.waitForSelector('.sticker-btn', { timeout: 8000 });
+  assert.equal(await t.frame.locator('.sticker-btn').count(), 7);
+  assert.equal(await t.frame.locator('.sticker-sk').count(), 0);
+  await t.page.close();
+});
+
+test('載入：套版還沒好時畫布、版面頁籤顯示骨架動畫，好了就拿掉', async () => {
+  const t = await openTool(browser, srv.url, 'linepush', { company: true, delays: { 'line-header': 1500, 'line-grid4-ent': 1500 }, viewport: { width: 1280, height: 860 } });
+  assert.ok(await t.frame.evaluate(() => document.body.classList.contains('is-loading')));
+  assert.equal(await t.frame.evaluate(() => getComputedStyle(document.querySelector('canvas')).animationName), 'sk-shimmer');
+  assert.equal(await t.frame.evaluate(() => getComputedStyle(document.querySelector('.mode-tabs'), '::before').animationName), 'sk-shimmer');
+  await t.frame.waitForSelector('.mode-tab');
+  await t.frame.waitForFunction(() => !document.body.classList.contains('is-loading'));
+  assert.equal(await t.frame.evaluate(() => getComputedStyle(document.querySelector('canvas')).animationName), 'none');
+  await t.page.close();
+});

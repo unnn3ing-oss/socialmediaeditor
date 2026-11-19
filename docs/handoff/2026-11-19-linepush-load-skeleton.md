@@ -1,5 +1,5 @@
 # LINE 推播載入加速＋骨架
-- 狀態：進行中　- 分支：claude/sleepy-sagan-p51rwc　- 最後更新：2026-11-19
+- 狀態：待使用者確認　- 分支：claude/sleepy-sagan-p51rwc　- 最後更新：2026-11-19
 - 使用者原始需求：「LINE 推播工具載入速度現在會要長達2~5秒才完成，且載入時預先有的骨架沒有小編工具箱design 的Skeleton載入效果」
 
 ## 已定案的決定
@@ -13,9 +13,9 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/linepush/tool.js` | 字型／貼圖背景載入、貼圖列逐張補、載完拿掉 is-loading | ⬜ |
-| `tools/linepush/tool.css`、`index.html` | `.sk` 動畫、載入中骨架（畫布、頁籤、快速填入、貼圖列） | ⬜ |
-| `test/e2e/` | 延遲字型／貼圖，畫面先可操作、骨架出現後消失 | ⬜ |
+| `tools/linepush/tool.js` | 字型／貼圖背景載入、貼圖列逐張補、載完拿掉 is-loading | ✅ |
+| `tools/linepush/tool.css`、`index.html` | `.sk` 動畫、載入中骨架（畫布、頁籤、快速填入、貼圖列） | ✅ |
+| `test/e2e/` | 延遲字型／貼圖，畫面先可操作、骨架出現後消失 | ✅ |
 
 ## 測試
 `npm test`、linepush 相關 e2e、`node build.js --check`。
