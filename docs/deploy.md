@@ -135,7 +135,7 @@ npx wrangler deploy
 
 ## 步驟 6：上傳公司素材
 
-1. 用瀏覽器打開管理後台 `https://unnn3ing-oss.github.io/socialmediaeditor/admin/`（舊網址 `後端網址/admin` 會自動轉過來）。
+1. 用瀏覽器打開管理後台 `https://unnn3ing-oss.github.io/socialmediaeditor/admin/`（舊網址 `後端網址/admin` 會自動轉過來，後端已不內建管理頁）。
    **成功的樣子：** 看到「管理登入」。
 2. 輸入 `ADMIN_PASSWORD` 按「登入」，再點左側「素材」。
    **成功的樣子：** 出現「上傳或替換素材」和「目前的素材」。密碼打錯會顯示「密碼不正確。」

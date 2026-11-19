@@ -287,7 +287,7 @@ socialmediaeditor/
 |---|---|---|---|
 | auth | `POST /auth`、`GET /auth/status` | 公司密碼換憑證、狀態查詢；前端輸入管理密碼也可登入，拿到帶 `adm` 的公司憑證（12 小時、不續期、不能進 `/admin/*`）（原為繞過「暫停排程發布」而設，排程發布移除後保留） | 簽章金鑰放 Secrets |
 | assets | `GET /assets/manifest`、`GET /assets/<key>` | 依憑證回傳公司版或通用版清單與檔案 | R2＋D1 |
-| admin | `/admin/*` | 管理頁：上傳、替換公司素材 | 另一組管理密碼 |
+| admin | `/admin/*`（`/admin` 302 轉網站版 `admin/`；`/admin/me`、`/admin/levels`） | 管理頁（只留網站版）；權限分層見 `2026-11-19-admin-levels-design.md`：每條路由對應一張卡片（`server/core/adminperm.js`），系統管理者（管理員密碼）／管理者／普通 | admin 憑證，或首頁公司憑證（`adm:1`＝系統管理者未解鎖；員工依名單 `level` 與 D1 `fb_settings` k=`admin_levels`） |
 | logs | `POST /logs` | 收集錯誤（不含內容），保留 30 天 | D1 |
 | fetch | `GET /fetch?url=`、`GET /fetch/image?url=`、`GET /fetch/article?url=`（文章 HTML，≤2 MB） | 代抓公開網頁的標題與 OG 圖；圖片代理（只收 JPG／PNG／GIF／WebP、≤10 MB，讓網頁能把主圖畫進畫布）；只允許白名單網域、轉址逐跳檢查 | KV 快取（網頁資訊） |
 | fb | `GET /fb/pages`（含 `noTextUtm`）、`GET /fb/access`、`GET /fb/presets`、`POST /fb/post`、`GET /fb/scheduled`、`GET /fb/published`、`POST /fb/posts/:id/{reschedule,cancel,delete}`；管理 `GET /admin/fb/status`、`GET/POST /admin/fb/pages`、`GET/POST /admin/fb/presets`、`POST /admin/fb/refresh`、`GET/POST /admin/fb/access` | 臉書發文（`server/fb/`）；管理頁切換開放／關閉（`access.js`，D1 `fb_settings` k=`access` 存 JSON `{mode,reason}`：`admin`＝關閉，只給 `adm` 憑證（預設）／`company`＝開放；關閉原因 ≤100 字隨 `fb_forbidden` 的 `detail.reason` 給前端停用頁）；第 1 則留言 UTM：有圖用 `utm`、純文字用 `utm_text`（空白不加）；排程留言用 Durable Object `FbCommentTimer` | Secret `FB_USER_TOKEN`；D1 `fb_pages`、`fb_presets` |
