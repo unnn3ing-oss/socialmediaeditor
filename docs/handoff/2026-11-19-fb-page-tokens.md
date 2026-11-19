@@ -52,6 +52,7 @@
 | 路由 | `GET`／`POST`／`DELETE /admin/fb/app`（僅管理憑證，只回 configured、appId、source、savedAt，永不回 Secret） |
 | 畫面 | 「臉書連線」卡片最下方「App 密鑰」區（狀態、App ID、App Secret 密碼框、驗證並儲存、清除），兩份管理頁 |
 
-- [ ] tokenstore／graph／pages／index 後端＋單元測試
-- [ ] 兩份管理頁＋e2e
-- [ ] deploy.md、審查、給使用者看
+- [x] tokenstore／graph／pages／index 後端＋單元測試（fb-pages 23 項）
+- [x] 兩份管理頁＋e2e（admin 21 項）
+- [x] deploy.md、獨立審查通過（`1ab5eba`）
+- [ ] 給使用者看 → 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
