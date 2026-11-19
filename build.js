@@ -103,6 +103,9 @@ async function build(root, { check = false, write = true } = {}) {
     tools: tools.map((t) => ({
       id: t.id, name: t.name, group: t.group, desc: t.desc, tier: t.tier, requires: t.requires,
       ...(Array.isArray(t.badges) && t.badges.length ? { badges: t.badges } : {}),
+      // gate：首頁依後端開放狀態顯示標籤（check＝不需登入的 API，回 { open }）；關閉或查不到時顯示 badge 並用 gate.desc
+      ...(t.gate && typeof t.gate.check === 'string' && /^\/[a-z0-9/-]+$/.test(t.gate.check) && typeof t.gate.badge === 'string'
+        ? { gate: { check: t.gate.check, badge: t.gate.badge, ...(typeof t.gate.desc === 'string' ? { desc: t.gate.desc } : {}) } } : {}),
       icon: at(t.id, t.icon), thumb: at(t.id, t.thumb), entry: `${at(t.id, t.entry)}?v=${contentHash(root, [`tools/${t.id}`, 'sdk', 'ui'])}`,
     })),
   }, null, 2) + '\n';

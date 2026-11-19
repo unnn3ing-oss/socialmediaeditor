@@ -6,6 +6,7 @@ import { createPanes } from './panes.js';
 import { initStatus } from './status.js';
 import { initCompany } from './company.js';
 import { initApiEnv } from './apienv.js';
+import { API_BASE } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const showcaseEl = $('showcase');
@@ -83,7 +84,7 @@ function render() {
 
 function renderCatalog() {
   const tools = shownTools();
-  renderShowcase(showcaseEl, tools, { onOpen: (id) => set(L.open(state, id)) });
+  renderShowcase(showcaseEl, tools, { onOpen: (id) => set(L.open(state, id)), apiBase: API_BASE });
   toolbar.render(tools);
   toolbar.setPressed(L.visible(state));
 }

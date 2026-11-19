@@ -2,13 +2,13 @@
   "id": "fbpost",
   "name": "排程發布",
   "group": "發文與素材",
-  "desc": "測試中，僅管理員可用",
+  "desc": "多粉專排程發文、留言、排入 RD",
   "icon": "icon.svg",
   "thumb": "thumb.svg",
   "entry": "index.html",
   "tier": "public",
   "requires": [],
-  "badges": ["管理員測試"],
+  "gate": { "check": "/fb/open", "badge": "管理員測試", "desc": "測試中，僅管理員可用" },
   "assets": {
     "sticker.smile": {
       "company": "tbao-smile",

@@ -139,6 +139,8 @@ route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, aw
 
 export async function handleFb(request, env, ctx, path) {
   if (!path.startsWith('/fb/') && path !== '/rundown') return null;
+  // 首頁用（不需登入）：只回有沒有開放，不含關閉原因
+  if (path === '/fb/open' && request.method === 'GET') return ok(request, env, { open: (await accessMode(env)) === 'company' }, { 'cache-control': 'no-store' });
   for (const [method, re, handler, need] of routes) {
     const m = re.exec(path);
     if (!m) continue;

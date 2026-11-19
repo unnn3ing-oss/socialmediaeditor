@@ -13,11 +13,17 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/index.js` | `handleFb` 開頭 `GET /fb/open` 不驗證 | ⬜ |
-| `build.js` | catalog 帶 `gate` | ⬜ |
-| `shell/showcase.js` | gate 標籤／說明、查一次後更新卡片 | ⬜ |
-| `tools/fbpost/tool.json`、`tools/fbvideo/tool.json`、`tools/fbvideo/index.html` | 同上 | ⬜ |
-| 測試 | 單元（後端路由、build）、e2e（首頁開放／關閉／查不到） | ⬜ |
+| `server/fb/index.js` | `handleFb` 開頭 `GET /fb/open` 不驗證 | ✅ |
+| `build.js` | catalog 帶 `gate` | ✅ |
+| `shell/showcase.js` | gate 標籤／說明、查一次後更新卡片 | ✅ |
+| `tools/fbpost/tool.json`、`tools/fbvideo/tool.json`、`tools/fbvideo/index.html` | 同上 | ✅ |
+| 測試 | 單元（後端路由、build）、e2e（首頁開放／關閉／查不到） | ✅ |
+
+## 結果
+- npm test 683、全部 e2e 225（新 `gate.e2e.js` 3 項；`fbpost.e2e.js` 的 fbCalls 排除 `/fb/open`）、build --check、獨立審查通過。
+- 排程發布停用頁「正在重新撰寫」也改成「這個工具目前沒有開放。」
+- 審查 nit 未改：`/fb/open` 每次讀 D1、沒限流；查詢失敗整頁視為關閉、不重試。
+- [ ] 使用者看截圖 → 說「推」才併入 main
 
 ## 注意事項
 - 後端需重新部署（正式＋測試）才有 `/fb/open`；沒部署前首頁維持顯示「管理員測試」。外掛不改。

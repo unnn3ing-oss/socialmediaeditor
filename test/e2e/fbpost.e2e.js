@@ -25,7 +25,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     const req = r.request(), u = new URL(req.url()), p = u.pathname;
     const json = (data, status = 200) => r.fulfill({ status, headers: CORS, json: status === 200 ? { ok: true, data } : data });
     if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
-    if (p.startsWith('/fb/')) fbCalls.push(p);
+    if (p.startsWith('/fb/') && p !== '/fb/open') fbCalls.push(p);   // /fb/open＝首頁查開放狀態（不需登入）
     if (p === '/auth/status') {
       if (mode === 'denied') return json({ ok: false, code: 'unauthorized', error: '請先登入' }, 401);
       if (mode === 'needStaff') return json({ company: true, exp: soon });
