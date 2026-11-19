@@ -16,15 +16,15 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/adminperm.js`（新）、`admin.js`、`staff.js`、`auth.js`、`http.js`、`fb/index.js` | 後端權限 | ⬜ |
-| `shell/`、`admin/` | 首頁按鈕、管理頁權限 | ⬜ |
-| `admin/admin.css` | 改版（先截圖給使用者確認） | ⬜ |
+| `server/core/adminperm.js`（新）、`admin.js`、`staff.js`、`auth.js`、`http.js`、`fb/index.js` | 後端權限 | ✅ |
+| `shell/`、`admin/` | 首頁按鈕（狀態列「管理頁」膠囊）、管理頁權限 | ✅ |
+| `admin/admin.css` | 改版（已做、截圖已給使用者，等確認） | 🚧 |
 | README、`docs/deploy.md` | 網址 | ⬜ |
 
 ## 下一步
-- [ ] Task 1 後端
-- [ ] Task 2 前端
-- [ ] Task 3 截圖確認 → 改版
+- [x] Task 1 後端（`adminperm.js`、`levels.js`、名單 level、`/admin/me`、`/admin/levels`）
+- [x] Task 2 前端
+- [ ] Task 3 改版：已套用並 commit，截圖給使用者，等確認或修改（截圖測試 `SHOT_DIR=… node --test --test-name-pattern=截圖： test/e2e/admin.e2e.js`）
 - [ ] Task 4 文件、審查
 
 ## 測試
@@ -33,3 +33,6 @@
 ## 注意事項
 - 改版外觀前一定先給使用者截圖確認。
 - 後端需重新部署（正式＋測試），不用手動 SQL。外掛不改。
+
+## 進度備註
+- npm test 693 通過；admin e2e 30 通過。「臉書連線：貼上權杖」e2e 偶發失敗 1 次（單獨跑 3 次都過，未改相關程式，推論既有時間競爭）。
