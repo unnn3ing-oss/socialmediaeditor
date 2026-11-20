@@ -120,13 +120,14 @@ async function settings(env) {
   return new Map((results || []).map((r) => [r.id, r]));
 }
 
-// 合併臉書粉專與設定；all=false 只回「顯示」的
-export async function listPages(env, { all = false } = {}) {
+// 合併臉書粉專與設定；all=false 只回「顯示」的；withToken＝後端內部用（數據報表），每列多帶 token，不可直接回給前端
+export async function listPages(env, { all = false, withToken = false } = {}) {
   const [tokens, conf] = await Promise.all([activePageTokens(env), settings(env)]);
   const out = [];
   for (const p of tokens.values()) {
     const c = conf.get(p.id);
     const row = { id: p.id, name: p.name, short: c ? c.short : p.name, utm: c ? c.utm : '', utmText: c ? (c.utm_text || '') : '', rd: c ? c.rd : '', order: c ? c.ord : 999, show: c ? !!c.show : true };
+    if (withToken) row.token = p.token;
     if (all || row.show) out.push(row);
   }
   out.sort((a, b) => a.order - b.order);   // 穩定排序：同順序（未設定）維持臉書回傳順序

@@ -101,3 +101,16 @@ export async function readUsage(env) {
   if (s && s.dirty) { if (s.app) cur.app = s.app; Object.assign(cur.pages, s.pages); if (s.throttle) cur.throttle = s.throttle; }
   return cur;
 }
+
+// 用量 ≥90% 或 10 分鐘內被限流＝先別打臉書（留言管理、數據報表共用）；page 可省略（只看 App 與限流）
+export const BUSY_PCT = 90;
+export const RECENT_MS = 10 * 60 * 1000;
+export async function usageBusy(env, page, now = Date.now()) {
+  const u = await readUsage(env);
+  const fresh = (x) => x && now - (Number(x.at) || 0) < RECENT_MS;
+  const peak = (x) => Math.max(x.callCount || 0, x.totalTime || 0, x.totalCputime || 0);
+  if (fresh(u.throttle)) return 'throttle';
+  if (fresh(u.app) && peak(u.app) >= BUSY_PCT) return 'app';
+  const p = page && u.pages && u.pages[page];
+  return fresh(p) && peak(p) >= BUSY_PCT ? 'page' : '';
+}

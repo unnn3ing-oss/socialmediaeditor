@@ -6,7 +6,7 @@ export function b64urlEncode(bytes) {
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function b64urlDecode(str) {
+export function b64urlDecode(str) {
   if (typeof str !== 'string' || !/^[A-Za-z0-9_-]*$/.test(str)) return null;
   const pad = str.length % 4 === 0 ? '' : '='.repeat(4 - (str.length % 4));
   try {

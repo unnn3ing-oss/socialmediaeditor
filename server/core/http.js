@@ -22,10 +22,11 @@ export const MESSAGES = {
   fb_error: '臉書回應錯誤。',
   fb_bad_time: '排程時間必須在 10 分鐘到 30 天之間。',
   rundown_off: '後端尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN。',
-  rundown_failed: '連不上 Rundown 的 Apps Script。'
+  rundown_failed: '連不上 Rundown 的 Apps Script。',
+  report_scope: '粉專、權杖組別或權限已變更，請重新查詢。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, forbidden: 403, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
-  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502 };
+  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502, report_scope: 409 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

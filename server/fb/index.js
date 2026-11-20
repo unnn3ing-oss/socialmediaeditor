@@ -13,6 +13,7 @@ import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshSt
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 import { webhookState } from './webhook.js';
 import { readUsage } from './usage.js';
+import { registerReports } from './reports.js';
 
 // 把例外轉成回應：設定錯誤（fb_off／fb_token）、臉書錯誤（fb_error 附原因）
 export function fbFail(request, env, e) {
@@ -135,6 +136,9 @@ route('GET', /^\/fb\/video\/status$/, async (request, env) => {
   return vout(request, env, await refreshStatus(env, u));
 }, 'view');
 route('GET', /^\/fb\/video\/jobs$/, async (request, env) => ok(request, env, await listJobs(env)), 'view');
+
+// 數據報表（tools/fbreports，見 reports.js）：唯讀
+registerReports(route);
 
 route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)), 'post');
 
