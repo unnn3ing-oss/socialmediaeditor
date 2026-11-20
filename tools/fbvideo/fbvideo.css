@@ -6,7 +6,7 @@ body { margin: 0; background: var(--bg, #f5f7fa); color: var(--text); font-famil
 .warn { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text); border-radius: var(--radius-control); padding: 6px 10px; font-size: 13px; margin: 6px 0; }
 
 /* 停用頁 */
-.off { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box; }
+main.off { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box; }
 .off-box { max-width: 420px; width: 100%; text-align: center; padding: 32px 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
 .off-box h1 { margin: 0 0 12px; font-size: 16px; }
 .off-box p { margin: 6px 0; color: var(--muted); line-height: 1.6; }

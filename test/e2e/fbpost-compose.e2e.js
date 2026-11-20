@@ -534,3 +534,19 @@ test('外掛側邊欄（is-side）預覽上改標題：編輯框不被側邊欄�
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('沒照片時展開「T寶／馬賽克」：貼圖列不被停用頁的 .off 樣式撐成整個畫面高（網頁＋側邊欄）', async () => {
+  for (const side of [false, true]) {
+    const { page, frame, errors } = await openFb();
+    await page.setViewportSize({ width: 360, height: 800 });
+    if (side) await frame.evaluate(() => document.documentElement.classList.add('is-side'));
+    await frame.click('#fxBtn');
+    const b = await frame.$eval('#fxBar', (e) => ({ off: e.classList.contains('off'), h: e.offsetHeight, d: getComputedStyle(e).display, hint: document.getElementById('fxHint').offsetWidth }));
+    assert.equal(b.off, true, '沒照片＝灰掉狀態');
+    assert.notEqual(b.d, 'flex');
+    assert.ok(b.h < 200, `貼圖列高度正常：${b.h}`);
+    assert.ok(b.hint > 200, `說明文字不被擠成一直條：${b.hint}`);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+});
