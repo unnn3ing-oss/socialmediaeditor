@@ -432,3 +432,20 @@ body.no-scroll { overflow: hidden; }
 .tabs-row .new-btn { margin-left: auto; flex: none; }
 /* 和分頁外框同高（外框 40＝按鈕 32＋內距 4×2）；字級 15、左右內距不變 */
 .is-side .tabs-row .new-btn { height: 40px; min-height: 40px; font-size: 15px; }
+
+/* 沒照片的預覽：兩行提示字；點一下聚焦（藍框）、拖曳照片時虛線框 */
+.cv-empty { flex-direction: column; gap: 6px; padding: 0 16px; text-align: center; color: #3b4556; }
+.cv-empty strong { font-size: 16px; font-weight: 700; }
+.cv-empty span { font-size: 13px; color: #475467; line-height: 1.5; }
+.canvas-wrap.is-blank { cursor: pointer; }
+.canvas-wrap.is-blank canvas { cursor: pointer; }
+.canvas-wrap:focus { outline: none; }
+.canvas-wrap.is-blank:focus-visible, .canvas-wrap.is-blank:focus { box-shadow: 0 0 0 3px var(--accent); }
+.canvas-wrap:not(.is-blank):focus-visible { box-shadow: 0 0 0 3px var(--accent); }
+.canvas-wrap.is-drop { box-shadow: 0 0 0 3px var(--accent); }
+.canvas-wrap.is-drop::after { content: ''; position: absolute; inset: 8px; border: 2px dashed var(--accent); border-radius: 10px; pointer-events: none; }
+.is-side .cv-empty strong { font-size: 15px; }
+.is-side .cv-empty span { font-size: 12px; }
+
+/* 標題、貼文內容：最少 4 行，內容多自動長高（compose.js grow） */
+#title, #msg { resize: none; overflow-y: hidden; }

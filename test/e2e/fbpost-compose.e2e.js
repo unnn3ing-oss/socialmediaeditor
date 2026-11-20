@@ -72,7 +72,7 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   assert.equal(await frame.isHidden('#cvEmpty'), true, '預覽已有圖');
   assert.equal(await frame.inputValue('#lead'), '', '留言內容不預先填字，避免誤刪');
   assert.match(await frame.getAttribute('#lead', 'placeholder'), /看更多新聞內容/);
-  assert.equal(await frame.locator('#pullBtn, #img, #photo, [data-mode=own]').count(), 0, '沒有帶入鈕、上傳與自己的圖');
+  assert.equal(await frame.locator('#pullBtn, #img, #photo, [data-mode=own]').count(), 0, '沒有帶入鈕與自己的圖（選照片用預覽框連點兩下）');
 
   await frame.fill('#lead', '完整報導看這裡');
   await frame.click('#pages .chip[data-page="111"] .chip-l');
@@ -445,6 +445,76 @@ test('改標題同步貼文內容的【標題】：預覽上改、標題欄改�
   await frame.fill('#msg', '只剩小編文');
   await frame.fill('#title', '再改一次');
   assert.equal(await frame.inputValue('#msg'), '只剩小編文', '沒有【】行不補回');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('標題、貼文內容預設 4 行，多打幾行自動長高、不出現框內捲軸', async () => {
+  const { page, frame, errors } = await openFb();
+  const box = (id) => frame.$eval(id, (e) => { const cs = getComputedStyle(e); return { h: e.offsetHeight, sh: e.scrollHeight, ch: e.clientHeight, lh: parseFloat(cs.lineHeight), rows: (e.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / parseFloat(cs.lineHeight) }; });
+  const t0 = await box('#title'), m0 = await box('#msg');
+  assert.equal(await frame.getAttribute('#msg', 'rows'), '4');
+  for (const b of [t0, m0]) assert.ok(b.rows > 3.6 && b.rows < 4.6, `預設 4 行：${b.rows}`);
+  await frame.fill('#msg', '一\n二\n三\n四\n五\n六\n七\n八');
+  const m1 = await box('#msg');
+  assert.ok(m1.h > m0.h + m0.lh * 3, `內文長高：${m0.h}→${m1.h}`);
+  assert.ok(m1.sh <= m1.ch + 1, '沒有框內捲軸');
+  await frame.fill('#msg', '');
+  assert.equal((await box('#msg')).h, m0.h, '清掉回到 4 行');
+  await frame.fill('#title', '一\n二\n三\n四\n五\n六');
+  assert.ok((await box('#title')).h > t0.h, '標題長高');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('沒照片的預覽：底圖＋兩行提示；點一下聚焦、連點兩下選照片、可拖曳照片進來', async () => {
+  const { page, frame, errors } = await openFb();
+  assert.equal(await frame.isVisible('#cvEmpty strong'), true);
+  assert.match(await frame.textContent('#cvEmpty'), /連點兩下選照片.*拖曳照片進來.*Ctrl\+V/);
+  const px = await frame.$eval('#cv', (c) => [...c.getContext('2d').getImageData(540, 300, 1, 1).data]);
+  assert.ok(px[3] === 255 && px[2] > 150, '畫了淡藍灰底圖：' + px);
+  // 點一下：聚焦預覽框，不開選檔
+  let chooser = false;
+  page.on('filechooser', () => { chooser = true; });
+  await frame.click('#cv');
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'cvWrap');
+  await page.waitForTimeout(200);
+  assert.equal(chooser, false, '點一下不開選檔');
+  // 連點兩下：開選檔，選了就換上照片
+  const [fc] = await Promise.all([page.waitForEvent('filechooser'), frame.dblclick('#cv')]);
+  await fc.setFiles({ name: 'a.png', mimeType: 'image/png', buffer: PHOTO });
+  await frame.waitForFunction(() => document.getElementById('cvEmpty').hidden);
+  assert.match(await frame.textContent('#pullHint'), /已選擇照片/);
+  await page.close();
+  const b = await openFb();
+  await b.frame.evaluate((b64) => {
+    const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer(); dt.items.add(new File([u8], 'x.png', { type: 'image/png' }));
+    const w = document.getElementById('cvWrap');
+    w.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    w.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, PHOTO.toString('base64'));
+  await b.frame.waitForFunction(() => document.getElementById('cvEmpty').hidden);
+  assert.match(await b.frame.textContent('#pullHint'), /已放入照片/);
+  assert.deepEqual([...errors, ...b.errors], []);
+  await b.page.close();
+});
+
+test('沒照片時也能在預覽上點標題直接改（不開選檔）', async () => {
+  const { page, frame, errors } = await openFb();
+  await frame.fill('#title', '還沒有照片的標題');
+  let chooser = false;
+  page.on('filechooser', () => { chooser = true; });
+  // 點標題那一帶（套版標題最後一行中心 y=931）；frame 在 iframe 裡，換成頁面座標
+  const r = await frame.$eval('#cv', (c) => { const b = c.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height * 931 / 1080 }; });
+  const off = await page.$eval('iframe[name=tool]', (f) => { const b = f.getBoundingClientRect(); return { x: b.left, y: b.top }; });
+  await page.mouse.click(r.x + off.x, r.y + off.y);
+  await frame.waitForSelector('#cvWrap .cv-title:not([hidden])');
+  await frame.fill('#cvWrap .cv-title', '預覽上改');
+  assert.equal(await frame.inputValue('#title'), '預覽上改');
+  await frame.press('#cvWrap .cv-title', 'Escape');
+  assert.equal(chooser, false);
+  assert.equal(await frame.isVisible('#cvEmpty'), true, '仍是沒照片狀態');
   assert.deepEqual(errors, []);
   await page.close();
 });

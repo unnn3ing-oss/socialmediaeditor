@@ -39,11 +39,24 @@ export function createComposer({ tb, assets }) {
   const px = () => (st.mode === 'color' ? TITLE_PX.color : TITLE_PX.image);
   let titleEd = null;
 
+  // 沒照片時的預覽底圖：淡藍灰往下漸深＋目前的框（角落緞帶），只在預覽、不進輸出
+  const blank = document.createElement('canvas');
+  blank.width = blank.height = SIZE;
+  { const b = blank.getContext('2d'), g = b.createLinearGradient(0, 0, 0, SIZE);
+    g.addColorStop(0, '#dbe4f3'); g.addColorStop(0.55, '#b9c3d2'); g.addColorStop(1, '#8e98a8');
+    b.fillStyle = g; b.fillRect(0, 0, SIZE, SIZE); }
+  // 標題照樣畫上去，沒照片也能在預覽上點標題直接改
+  function drawBlank(title) {
+    renderer.renderComposite(ctx, { type: 'image', image: blank, view: newView() }, title, px(), st.frame, null, undefined, { titleAnchor: 'bottom' });
+    canvas.classList.remove('pannable');
+  }
+
   function draw() {
     const src = source();
     $('cvEmpty').hidden = !!src;
-    if (!src) { ctx.clearRect(0, 0, SIZE, SIZE); return; }
+    $('cvWrap').classList.toggle('is-blank', !src);
     const title = titleEd && titleEd.editing() ? '' : $('title').value;   // 預覽上編輯中：標題由輸入框顯示
+    if (!src) { drawBlank(st.mode === 'image' ? title : ''); return; }
     renderer.renderComposite(ctx, src, title, px(), st.frame, kit.drawFx(st.fx), undefined, { titleAnchor: 'bottom' });
   }
 
@@ -58,12 +71,16 @@ export function createComposer({ tb, assets }) {
   $('fxHint').textContent = kit.hintText;
   // 「T寶／馬賽克」按鈕：點了才展開貼圖列（隱藏切換）
   $('fxBtn').addEventListener('click', () => { const open = $('fxBar').hidden; $('fxBar').hidden = !open; $('fxBtn').setAttribute('aria-expanded', String(open)); if (open) editor.sync(); });
+  // 標題、貼文內容：最少 4 行，內容多就往下長（不出現框內捲軸）
+  const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`; };
   // 字數只算實際送出的內容（開頭留給小編文的空行沒填，送出時會拿掉）
-  const msgCount = () => { $('msgCount').textContent = `${[...stripLead($('msg').value)].length} 字`; };
+  const msgCount = () => { $('msgCount').textContent = `${[...stripLead($('msg').value)].length} 字`; if ($('msg').offsetParent) grow($('msg')); };
+  // 視窗原本隱藏量不到高度：打開（尺寸改變）時再算一次；程式填值走 msgCount／titleChanged
+  for (const id of ['title', 'msg']) { $(id).addEventListener('input', () => grow($(id))); new ResizeObserver(() => { if ($(id).offsetParent) grow($(id)); }).observe($(id)); }
   $('msg').addEventListener('input', msgCount); msgCount();
   const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); };
 
-  titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready, redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
+  titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready: () => st.mode !== 'text', redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
   // ---- 照片拖曳移動、滾輪縮放 ----
   let drag = null;
@@ -99,7 +116,6 @@ export function createComposer({ tb, assets }) {
     $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
     $('swatchBox').hidden = st.mode !== 'color';
     if (st.mode === 'color') requestAnimationFrame(showColor);
-    $('cvEmpty').textContent = '貼上文章網址自動帶入，或在這裡按 Ctrl+V 貼上照片';
     draw(); syncFx();
   }
   const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
@@ -151,6 +167,7 @@ export function createComposer({ tb, assets }) {
     const box = $('titleLines'); box.textContent = '';   // 每行右側字數（和圖上的行一致）
     c.widths.forEach((w) => { const d = document.createElement('div'); d.textContent = `${w}/${LINE_MAX}`; d.classList.toggle('bad', w > LINE_MAX); box.append(d); });
     alignTitleLines();
+    if ($('title').offsetParent) grow($('title'));
     draw(); loadTitleGlyphs($('title').value).then(draw);
   }
   $('title').addEventListener('input', titleChanged);
@@ -181,6 +198,26 @@ export function createComposer({ tb, assets }) {
       im.src = url;
     });
   }
+  // 沒照片時：連點兩下選照片、拖曳照片進來（點一下只聚焦預覽框，方便 Ctrl+V）
+  async function usePhoto(file, how) {
+    if (!file || !/^image\//.test(file.type)) { say('pullHint', '請選擇圖片檔', true); return; }
+    if (st.mode !== 'image') { st.mode = 'image'; setMode('image'); showMode(); }
+    if (await loadPhoto(file)) say('pullHint', how); else say('pullHint', '照片讀取失敗', true);
+  }
+  canvas.addEventListener('pointerdown', () => { if (!source()) $('cvWrap').focus({ preventScroll: true }); });
+  // 沒照片時連點兩下＝選照片（搶在標題編輯器的「點兩下改標題」之前）；點在標題上第一下已進入改標題，就不開
+  canvas.addEventListener('dblclick', (e) => { if (!source() && !titleEd.editing()) { e.stopImmediatePropagation(); $('photoFile').click(); } }, true);
+  $('cvWrap').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !source() && e.target === $('cvWrap')) { e.preventDefault(); $('photoFile').click(); } });
+  $('photoFile').addEventListener('change', () => { const f = $('photoFile').files[0]; $('photoFile').value = ''; if (f) usePhoto(f, '已選擇照片'); });
+  $('cvWrap').addEventListener('dragover', (e) => { if (st.mode === 'text') return; e.preventDefault(); $('cvWrap').classList.add('is-drop'); });
+  $('cvWrap').addEventListener('dragleave', () => $('cvWrap').classList.remove('is-drop'));
+  $('cvWrap').addEventListener('drop', (e) => {
+    $('cvWrap').classList.remove('is-drop');
+    const f = [...(e.dataTransfer?.files || [])].find((x) => /^image\//.test(x.type));
+    if (!f) return;
+    e.preventDefault(); usePhoto(f, '已放入照片');
+  });
+
   document.addEventListener('paste', async (e) => {
     if ($('postDlg').hidden) return;
     if ($('cfDlg').open) return;
