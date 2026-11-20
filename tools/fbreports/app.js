@@ -78,17 +78,43 @@ window.addEventListener('storage', (e) => { if (e.key === null || e.key === COMP
 
 // ===== 條件 =====
 function chip(name, value, checked, label, cls = '') {
-  return `<label class="chip ${cls}"><input type="checkbox" name="${name}" value="${esc(value)}" ${checked ? 'checked' : ''}>${esc(label)}</label>`;
+  return `<label class="opt ${cls}"><input type="checkbox" name="${name}" value="${esc(value)}" ${checked ? 'checked' : ''}>${esc(label)}</label>`;
+}
+// 下拉按鈕文字：1～2 個列名稱、3 個以上「X 等 N 個」、全選「全部…」、沒選「未選擇」
+export function pickText(names, total, allText) {
+  if (!names.length) return '未選擇';
+  if (total > 1 && names.length === total) return allText;
+  return names.length <= 2 ? names.join('、') : `${names[0]}等 ${names.length} 個`;
 }
 function renderPageChips() {
   const all = S.pages.length && S.pages.every((p) => S.selPages.has(p.id));
   $('pageChips').innerHTML = (S.pages.length > 1 ? chip('pageAll', '*', all, '全選', 'all') : '') + S.pages.map((p) => chip('page', p.id, S.selPages.has(p.id), p.short)).join('')
     || '<span class="hint">沒有可查詢的粉專</span>';
+  $('pageSum').textContent = S.pages.length ? pickText(S.pages.filter((p) => S.selPages.has(p.id)).map((p) => p.short), S.pages.length, '全部粉專') : '沒有粉專';
 }
 function renderTypeChips() {
   const all = S.selTypes.size === TYPES.length;
   $('typeChips').innerHTML = chip('typeAll', '*', all, '全部', 'all') + TYPES.map(([k, n]) => chip('type', k, S.selTypes.has(k), n)).join('');
+  $('typeSum').textContent = pickText(TYPES.filter(([k]) => S.selTypes.has(k)).map(([, n]) => n), TYPES.length, '全部類型');
 }
+// 下拉：同時只開一個；點外面、Esc 關閉（焦點回按鈕）；↑↓ 在選項間移動、空白鍵勾選
+const dds = [$('pageDd'), $('typeDd')];
+for (const d of dds) {
+  d.addEventListener('toggle', () => { if (d.open) { for (const o of dds) if (o !== d) o.open = false; } });
+  d.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && d.open) { e.preventDefault(); e.stopPropagation(); d.open = false; d.querySelector('summary').focus(); return; }
+    if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); return; }   // 選項上按 Enter 不送出查詢表單
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const ins = [...d.querySelectorAll('.dd-list input')];
+    if (!ins.length) return;
+    e.preventDefault();
+    if (!d.open) d.open = true;
+    const i = ins.indexOf(document.activeElement);
+    const j = i < 0 ? 0 : e.key === 'ArrowDown' ? Math.min(ins.length - 1, i + 1) : Math.max(0, i - 1);
+    ins[j].focus();
+  });
+}
+document.addEventListener('click', (e) => { for (const d of dds) if (d.open && !d.contains(e.target)) d.open = false; });
 renderTypeChips();
 $('pageChips').addEventListener('change', (e) => {
   const i = e.target;

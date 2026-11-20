@@ -65,6 +65,13 @@ async function newPage({ viewport = { width: 1280, height: 900 }, handler } = {}
   await page.waitForSelector('#app:not([hidden])');
   return { page, errors, calls, st };
 }
+// 下拉多選：打開 → 勾／取消 → 按 Esc 關閉
+async function pick(page, dd, sel, on = true) {
+  if (!(await page.locator('#' + dd).evaluate((d) => d.open))) await page.click(`#${dd} summary`);
+  const i = page.locator(`#${dd} ${sel}`);
+  if (on) await i.check(); else await i.uncheck();
+  await page.keyboard.press('Escape');
+}
 const kpi = async (page, name) => { const k = page.locator('.kpi', { hasText: name }); const v = await k.locator('strong').innerText(); const n = await k.locator('small').count() ? (await k.locator('small').innerText()).split('．')[0] : ''; return /篇有資料/.test(n) ? `${v}（${n}）` : v; };
 
 test('開啟只載入粉專、預設第一個粉專、按查詢才讀報表', async () => {
@@ -74,13 +81,32 @@ test('開啟只載入粉專、預設第一個粉專、按查詢才讀報表', as
   assert.equal(await page.locator('#pageChips input[value="222"]').isChecked(), false);
   assert.equal(await page.locator('#report').isHidden(), true);
   assert.equal(await page.locator('#probeBtn').isVisible(), true, '系統管理者看得到欄位檢查');
+  // 下拉：預設收起、按鈕顯示選了誰；打開後點外面關閉；Esc 關閉且焦點回按鈕；同時只開一個
+  assert.equal(await page.locator('#pageSum').innerText(), '新聞');
+  assert.equal(await page.locator('#typeSum').innerText(), '全部類型');
+  assert.equal(await page.locator('#pageChips').isVisible(), false);
+  await page.click('#pageDd summary');
+  assert.equal(await page.locator('#pageChips').isVisible(), true);
+  await page.click('#typeDd summary');
+  assert.equal(await page.locator('#pageChips').isVisible(), false, '開另一個時先關前一個');
+  await page.click('.rp-head h1');
+  assert.equal(await page.locator('#typeChips').isVisible(), false, '點外面關閉');
+  await page.focus('#pageDd summary'); await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('#pageChips').isVisible(), true, '↓ 打開並移到第一個選項');
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('Space');
+  assert.equal(await page.locator('#pageSum').innerText(), '未選擇');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#pageChips').isVisible(), false);
+  assert.equal(await page.evaluate(() => document.activeElement.tagName), 'SUMMARY');
   assert.deepEqual(errors, []);
   await page.close();
 });
 
 test('兩個粉專＋跨午夜：總覽七項、互動率口徑、續頁共用 asOf 與範圍代碼、明細與下鑽', async () => {
   const { page, errors, calls } = await newPage();
-  await page.locator('#pageChips input[value="pageAll"], #pageChips input[name="pageAll"]').check();
+  await pick(page, 'pageDd', 'input[name="pageAll"]');
+  assert.equal(await page.locator('#pageSum').innerText(), '全部粉專');
+  if (SHOT) { await page.click('#pageDd summary'); await page.screenshot({ path: path.join(SHOT, 'fbreports-dd-open.png'), clip: { x: 0, y: 0, width: 1280, height: 360 } }); await page.keyboard.press('Escape'); }
   await page.click('#queryBtn');
   await page.waitForFunction(() => /已完成 2 個粉專，共 5 篇/.test(document.getElementById('qsText').textContent));
   // 第一批 page＋日期；續頁只帶游標；第二個粉專帶回 asOf 與範圍代碼
@@ -99,10 +125,11 @@ test('兩個粉專＋跨午夜：總覽七項、互動率口徑、續頁共用 a
   assert.equal(t[1], '3');
   // 類型篩選只用已載入結果
   const n = calls.length;
-  await page.locator('#typeChips input[value="video"]').uncheck();
+  await pick(page, 'typeDd', 'input[value="video"]', false);
+  assert.equal(await page.locator('#typeSum').innerText(), '文字等 6 個');
   assert.equal(await kpi(page, '發文數'), '4');
   assert.equal(calls.length, n);
-  await page.locator('#typeChips input[value="video"]').check();
+  await pick(page, 'typeDd', 'input[value="video"]');
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbreports-overview.png'), fullPage: true });
   // 類型成效
   await page.click('#t-types');
@@ -164,8 +191,8 @@ test('舊查詢晚回不覆蓋畫面', async () => {
   });
   await page.click('#queryBtn');                                         // 第一次：111 卡住
   await page.waitForFunction(() => /讀取中/.test(document.getElementById('qsText').textContent));
-  await page.locator('#pageChips input[value="111"]').uncheck();
-  await page.locator('#pageChips input[value="222"]').check();
+  await pick(page, 'pageDd', 'input[value="111"]', false);
+  await pick(page, 'pageDd', 'input[value="222"]');
   await page.click('#queryBtn');                                         // 第二次：222
   await page.waitForFunction(() => /共 2 篇/.test(document.getElementById('qsText').textContent));
   release();
@@ -182,6 +209,7 @@ test('期間驗證、零篇、窄窗不撐寬', async () => {
   await page.click('#queryBtn');
   assert.match(await page.locator('#formErr').innerText(), /31 天/);
   await page.selectOption('#range', '7');
+  if (SHOT) { await page.click('#typeDd summary'); await page.screenshot({ path: path.join(SHOT, 'fbreports-dd-mobile.png') }); await page.keyboard.press('Escape'); }
   await page.click('#queryBtn');
   await page.waitForFunction(() => /共 0 篇/.test(document.getElementById('qsText').textContent));
   assert.equal(await kpi(page, '發文數'), '0');

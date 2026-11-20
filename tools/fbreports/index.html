@@ -42,15 +42,21 @@
 
   <!-- 查詢條件 -->
   <form class="box filters" id="form" aria-label="查詢條件">
-    <fieldset class="f-grp">
-      <legend>粉專</legend>
-      <div class="chips" id="pageChips"></div>
-    </fieldset>
-    <fieldset class="f-grp">
-      <legend>發文類型</legend>
-      <div class="chips" id="typeChips"></div>
-    </fieldset>
     <div class="f-row">
+      <div class="f-field">
+        <span class="f-lbl" aria-hidden="true">粉專</span>
+        <details class="dd" id="pageDd">
+          <summary><span class="sr">粉專：</span><span class="dd-val" id="pageSum">未選擇</span><i class="caret" aria-hidden="true"></i></summary>
+          <div class="dd-list" id="pageChips" role="group" aria-label="粉專"></div>
+        </details>
+      </div>
+      <div class="f-field">
+        <span class="f-lbl" aria-hidden="true">發文類型</span>
+        <details class="dd" id="typeDd">
+          <summary><span class="sr">發文類型：</span><span class="dd-val" id="typeSum">全部類型</span><i class="caret" aria-hidden="true"></i></summary>
+          <div class="dd-list" id="typeChips" role="group" aria-label="發文類型"></div>
+        </details>
+      </div>
       <label class="f-field">期間
         <select id="range">
           <option value="7">最近 7 天</option>
