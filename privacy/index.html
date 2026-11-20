@@ -30,6 +30,7 @@
         <tr><td><code>pages_show_list</code></td><td>列出授權的粉絲專頁，讓使用者選擇要發文到哪個粉專</td></tr>
         <tr><td><code>pages_manage_posts</code></td><td>在粉專發布、排程貼文，以及修改排程時間、刪除貼文</td></tr>
         <tr><td><code>pages_read_engagement</code></td><td>讀取粉專已排程與已發佈的貼文列表（文字、時間、圖片、連結）</td></tr>
+        <tr><td><code>read_insights</code></td><td>數據報表：讀取粉專貼文的成效數字（瀏覽、點擊、心情等）</td></tr>
         <tr><td><code>pages_manage_engagement</code></td><td>在粉專自己的貼文下發布留言（例如附上新聞連結）</td></tr>
         <tr><td><code>pages_read_user_content</code></td><td>發留言前讀取該貼文的留言，確認粉專是否已留過同一則，避免重複留言</td></tr>
       </tbody>
@@ -48,6 +49,7 @@
         <tr><td>授權名單（員工編號、姓名、權限組、分機或手機、最後登入時間；登入密碼只存加鹽雜湊（PBKDF2），不存原本的密碼；連續輸入錯誤次數）</td><td>Cloudflare D1</td><td>直到管理員將該員工移除</td></tr>
         <tr><td>排程發布操作紀錄（員工編號、姓名、動作、粉專 ID、貼文 ID、時間）</td><td>Cloudflare D1</td><td>90 天後自動刪除</td></tr>
         <tr><td>錯誤紀錄（工具名稱、錯誤代碼、版本、瀏覽器版本字串；不含貼文內容）</td><td>Cloudflare D1</td><td>30 天後自動刪除</td></tr>
+        <tr><td>數據報表查詢結果</td><td>貼文摘要（最多 80 字）、發布時間、原文連結與成效數字，只在後端短期快取供同條件重查，不寫入資料庫；畫面上的報表在重新整理、登出或權限變更時清除</td><td>快取最長 10 分鐘自動失效</td></tr>
         <tr><td>Meta Webhook 通知（如有設定）</td><td>只記錄最後一次收到的時間與事件種類（例如 page／feed），不保存通知內容</td><td>每次收到新通知即覆蓋；管理員可要求刪除</td></tr>
         <tr><td>留言管理（如有開啟）</td><td>粉專留言符合洗版規則時，保存該則留言的內容（最多 500 字）、留言者名稱與 ID、標註的帳號名稱、處理結果，用於判斷與隱藏洗版留言；未符合規則的留言不保存</td><td>30 天後自動刪除；管理員可要求刪除</td></tr>
         <tr><td>「排入 Rundown」寫入的內容（文章 ID、類型、SLUG）</td><td>由本工具轉送至團隊自己的 Google 試算表（Google Apps Script），本工具不另存</td><td>依團隊試算表自身的管理，由團隊內部刪除</td></tr>
@@ -97,6 +99,7 @@
         <tr><td><code>pages_show_list</code></td><td>List the authorized Pages so the user can choose where to post</td></tr>
         <tr><td><code>pages_manage_posts</code></td><td>Publish and schedule Page posts, change scheduled times, and delete posts</td></tr>
         <tr><td><code>pages_read_engagement</code></td><td>Read the Page's scheduled and published post lists (text, time, image, link)</td></tr>
+        <tr><td><code>read_insights</code></td><td>Data reports: read performance numbers of Page posts (views, clicks, reactions, etc.)</td></tr>
         <tr><td><code>pages_manage_engagement</code></td><td>Publish comments on the Page's own posts (e.g., a link to the full news article)</td></tr>
         <tr><td><code>pages_read_user_content</code></td><td>Before commenting, read a post's comments to check whether the Page has already posted the same comment, to avoid duplicates</td></tr>
       </tbody>
@@ -115,6 +118,7 @@
         <tr><td>Staff allowlist (employee ID, name, permission group, extension or mobile number, last sign-in time; sign-in passwords are stored only as salted PBKDF2 hashes, never in plain text; failed sign-in count)</td><td>Cloudflare D1</td><td>Until an administrator removes that employee</td></tr>
         <tr><td>Scheduling activity log (employee ID, name, action, Page ID, post ID, time)</td><td>Cloudflare D1</td><td>Deleted automatically after 90 days</td></tr>
         <tr><td>Error logs (tool name, error code, version, browser user-agent; no post content)</td><td>Cloudflare D1</td><td>Deleted automatically after 30 days</td></tr>
+        <tr><td>Data report query results</td><td>Post summaries (up to 80 characters), publish time, post link and performance numbers are only cached briefly on the backend for repeated queries with the same conditions and are not written to the database; the report on screen is cleared on reload, logout or permission change</td><td>Cache expires automatically within 10 minutes</td></tr>
         <tr><td>Meta Webhook notifications (if configured)</td><td>Only the time and event type of the most recent notification (e.g., page / feed) are recorded; notification content is not stored</td><td>Overwritten by each new notification; deleted on request by an administrator</td></tr>
         <tr><td>Comment guard (if enabled)</td><td>When a Page comment matches the spam rules, its text (up to 500 characters), commenter name and ID, tagged account names, and the action taken are stored to detect and hide spam; comments that do not match are not stored</td><td>Deleted automatically after 30 days; deleted on request by an administrator</td></tr>
         <tr><td>Content written by "Add to Rundown" (article ID, type, slug)</td><td>Forwarded by the Tool to the team's own Google Sheet (Google Apps Script); not otherwise stored by the Tool</td><td>Managed within the team's own spreadsheet; deleted internally by the team</td></tr>

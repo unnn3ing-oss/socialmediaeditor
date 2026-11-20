@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>數據報表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="../../ui/tokens.css">
+<link rel="stylesheet" href="fbreports.css">
+</head>
+<body>
+<!-- 開啟時先顯示骨架；確定能用換成內容，不能用顯示停用卡片（app.js） -->
+<main class="rp boot" id="bootSk" aria-busy="true" aria-label="載入中">
+  <div class="boot-row"><span class="sk" style="width:84px;height:22px"></span><span class="grow"></span><span class="sk" style="width:70px;height:22px"></span></div>
+  <div class="boot-row"><span class="sk" style="width:100%;height:96px;border-radius:18px"></span></div>
+  <div class="boot-row"><span class="sk" style="width:100%;height:240px;border-radius:18px"></span></div>
+</main>
+<main class="off" id="offMain" hidden>
+  <section class="off-box" role="status" aria-labelledby="offTitle">
+    <h1 id="offTitle">數據報表 功能停用</h1>
+    <p>這個工具目前沒有開放。</p>
+    <p id="offReason" class="off-reason" hidden></p>
+    <div id="needStaff" hidden>
+      <p class="off-reason">數據報表需要用員工編號登入</p>
+      <button type="button" class="btn btn-primary" id="needStaffBtn">用員工編號登入</button>
+    </div>
+  </section>
+</main>
+
+<main class="rp" id="app" hidden>
+  <header class="rp-head">
+    <h1>數據報表</h1>
+    <span class="pill">Facebook</span>
+    <span class="pill pill-warn test-pill">測試模式（僅管理員）</span>
+    <span class="grow"></span>
+    <span class="who" id="whoAmI" hidden></span>
+    <button type="button" class="btn btn-secondary btn-sm" id="probeBtn" hidden>欄位檢查</button>
+  </header>
+  <p class="tok-warn" id="tokWarn" role="alert" hidden></p>
+
+  <!-- 查詢條件 -->
+  <form class="box filters" id="form" aria-label="查詢條件">
+    <fieldset class="f-grp">
+      <legend>粉專</legend>
+      <div class="chips" id="pageChips"></div>
+    </fieldset>
+    <fieldset class="f-grp">
+      <legend>發文類型</legend>
+      <div class="chips" id="typeChips"></div>
+    </fieldset>
+    <div class="f-row">
+      <label class="f-field">期間
+        <select id="range">
+          <option value="7">最近 7 天</option>
+          <option value="14">最近 14 天</option>
+          <option value="30">最近 30 天</option>
+          <option value="custom">自訂</option>
+        </select>
+      </label>
+      <label class="f-field" id="fromL" hidden>起日 <input type="date" id="from"></label>
+      <label class="f-field" id="toL" hidden>迄日 <input type="date" id="to"></label>
+      <span class="grow"></span>
+      <button type="submit" class="btn btn-primary" id="queryBtn">查詢</button>
+    </div>
+    <p class="f-err" id="formErr" role="alert" hidden></p>
+  </form>
+
+  <!-- 查詢狀態 -->
+  <section class="qstate" id="qstate" aria-live="polite" hidden>
+    <div class="qs-line">
+      <span id="qsText"></span>
+      <span class="grow"></span>
+      <button type="button" class="btn btn-secondary btn-sm" id="stopBtn" hidden>停止</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="moreBtn" hidden>繼續讀取</button>
+    </div>
+    <p class="qs-meta" id="qsMeta"></p>
+    <p class="qs-warn" id="qsWarn" hidden></p>
+  </section>
+
+  <section id="report" hidden>
+    <div class="seg tabs" role="tablist" aria-label="報表分頁" id="tabs">
+      <button type="button" role="tab" aria-selected="true" class="is-on" data-tab="overview" id="t-overview" aria-controls="p-overview">總覽</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="traffic" id="t-traffic" aria-controls="p-traffic" tabindex="-1">流量分析</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="pages" id="t-pages" aria-controls="p-pages" tabindex="-1">粉專成效</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="types" id="t-types" aria-controls="p-types" tabindex="-1">類型成效</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="posts" id="t-posts" aria-controls="p-posts" tabindex="-1">貼文明細</button>
+    </div>
+
+    <section role="tabpanel" id="p-overview" aria-labelledby="t-overview" class="panel">
+      <div class="kpis" id="kpis"></div>
+      <div class="box">
+        <div class="c-head"><h2>每日趨勢</h2><span class="grow"></span>
+          <label class="f-inline">指標 <select id="trendMetric"></select></label></div>
+        <div id="trend"></div>
+      </div>
+      <div class="box">
+        <div class="c-head"><h2>貼文排行</h2><span class="grow"></span>
+          <label class="f-inline">依 <select id="rankMetric"></select></label>
+          <button type="button" class="btn btn-secondary btn-sm" id="rankMore">查看明細</button></div>
+        <ol class="rank" id="rank"></ol>
+      </div>
+    </section>
+
+    <section role="tabpanel" id="p-traffic" aria-labelledby="t-traffic" class="panel" hidden>
+      <div class="tri" id="trafficTrends"></div>
+      <div class="box"><div class="c-head"><h2>粉專比較</h2></div><div class="tbl-wrap" id="trafficPages"></div></div>
+      <div class="box"><div class="c-head"><h2>貼文點擊排行</h2></div><ol class="rank" id="clickRank"></ol></div>
+    </section>
+
+    <section role="tabpanel" id="p-pages" aria-labelledby="t-pages" class="panel" hidden>
+      <div class="box"><p class="hint">點表頭排序，點粉專名稱看該粉專的貼文。</p><div class="tbl-wrap" id="pageTable"></div></div>
+    </section>
+
+    <section role="tabpanel" id="p-types" aria-labelledby="t-types" class="panel" hidden>
+      <div class="box"><p class="hint">每篇只歸一類；平均值只算有資料的貼文（有效樣本）。</p><div class="tbl-wrap" id="typeTable"></div></div>
+    </section>
+
+    <section role="tabpanel" id="p-posts" aria-labelledby="t-posts" class="panel" hidden>
+      <div class="box">
+        <div class="c-head"><p class="drill" id="drill" hidden><span id="drillText"></span> <button type="button" class="link-btn" id="drillClear">清除</button></p><span class="grow"></span><span class="hint" id="postCount"></span></div>
+        <div class="tbl-wrap" id="postTable"></div>
+        <nav class="pager" aria-label="分頁" id="pager"></nav>
+      </div>
+    </section>
+  </section>
+
+  <dialog class="dlg" id="probeDlg" aria-labelledby="probeTitle">
+    <div class="dlg-head"><h2 id="probeTitle">欄位檢查</h2><span class="grow"></span><button type="button" class="x" id="probeClose" aria-label="關閉">×</button></div>
+    <p class="hint">用目前組別的粉專權杖實測 Graph 欄位（約 30 次呼叫）。結果不含貼文內容與 ID，可直接貼回給開發者。</p>
+    <div class="row"><select id="probePage" aria-label="粉專"></select><button type="button" class="btn btn-primary btn-sm" id="probeRun">開始檢查</button><button type="button" class="btn btn-secondary btn-sm" id="probeCopy" disabled>複製結果</button></div>
+    <pre class="probe-out" id="probeOut"></pre>
+  </dialog>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

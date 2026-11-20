@@ -172,6 +172,7 @@ npx wrangler deploy
    ```
 
    - token 需要的權限：`pages_show_list`、`pages_manage_posts`、`pages_read_engagement`、`pages_manage_engagement`、`pages_read_user_content`（管理頁「臉書連線」會列出缺少的）。
+   - 數據報表另需 `read_insights`，且授權者在粉專要有「分析」任務（ANALYZE）；缺少時報表的瀏覽／點擊顯示「—」（臉書回空資料不報錯）。系統管理者可在「數據報表」按「欄位檢查」確認。報表結果只在 KV 快取（清單 60 秒、批次最長 10 分鐘），不進 D1。
    - `RUNDOWN_URL`＝FB RUNDOWN 試算表 Apps Script 的 `/exec` 網址；`RUNDOWN_TOKEN`＝同一支 Apps Script 指令碼屬性 `TOKEN`（前後空白會自動去掉）。
 
    **建議改用管理頁換權杖＋自動延長**（2026-11-19 起）：主管在 Graph API Explorer 產生的短效權杖直接貼到管理頁「臉書連線」→「驗證並儲存」，後端會自動延長成長效、換好各粉專權杖（永不過期）加密存進 D1，之後 60 天到期也不影響發文。自動延長需要 **App 密鑰**：
