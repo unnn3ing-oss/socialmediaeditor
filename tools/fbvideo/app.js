@@ -36,18 +36,20 @@ function showTab(name) {
 $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
 
 // ===== 啟動：權限同排程發布 =====
+// 骨架收掉：ok＝能用（顯示內容），否則顯示停用卡片
+const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden = false; };
 (async () => {
   let st;
-  try { st = await tb.api.call('/auth/status'); } catch { return; }
-  if (!st || !st.company) return;
+  try { st = await tb.api.call('/auth/status'); } catch { booted(false); return; }
+  if (!st || !st.company) { booted(false); return; }
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
-    if (e && e.code === 'fb_need_staff') { $('needStaff').hidden = false; $('needStaffBtn').onclick = () => tb.company.login(); return; }
+    if (e && e.code === 'fb_need_staff') { $('needStaff').hidden = false; $('needStaffBtn').onclick = () => tb.company.login(); booted(false); return; }
     const why = e && e.code === 'fb_forbidden' ? ((e.detail && e.detail.reason) || '') : errText(e);
     if (why) { $('offReason').textContent = '原因：' + why; $('offReason').hidden = false; }
-    return;
+    booted(false); return;
   }
-  $('offMain').hidden = true;
+  booted(true);
   $('app').hidden = false;
   S.pages = [...pages].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
   $('pagesState').textContent = `已連線 ${S.pages.length} 個粉專`;

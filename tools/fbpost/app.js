@@ -21,21 +21,23 @@ $('tabs').addEventListener('click', (e) => {
 });
 
 // 啟動：有公司憑證才問 /fb/pages；開放／關閉由後端決定（管理頁切換，關閉＝只有管理員密碼能用），403 就維持停用並顯示關閉原因
+// 骨架收掉：ok＝能用（顯示列表），否則顯示停用卡片
+const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden = false; };
 (async () => {
   let st;
-  try { st = await tb.api.call('/auth/status'); } catch { return; }
-  if (!st || !st.company) return;
+  try { st = await tb.api.call('/auth/status'); } catch { booted(false); return; }
+  if (!st || !st.company) { booted(false); return; }
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
     // 關閉中：有填關閉原因才顯示；其他（token 過期、沒設定、沒有粉專）把錯誤原因顯示出來
     if (e && e.code === 'fb_need_staff') {   // 舊版憑證沒有員工編號：請重新用員工編號登入
       $('needStaff').hidden = false;
       $('needStaffBtn').onclick = () => tb.company.login();
-      return;
+      booted(false); return;
     }
     const why = e && e.code === 'fb_forbidden' ? ((e.detail && e.detail.reason) || '') : errText(e);
     if (why) { $('offReason').textContent = '原因：' + why; $('offReason').hidden = false; }
-    return;
+    booted(false); return;
   }
   // 已開放給公司帳號就不顯示「測試模式」標籤（讀不到維持顯示）
   tb.api.call('/fb/access').then((a) => {
@@ -52,7 +54,7 @@ $('tabs').addEventListener('click', (e) => {
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
     if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
   }).catch(() => {});
-  $('fbpostOff').closest('main').hidden = true;
+  booted(true);
   $('fbpostApp').hidden = false;
   // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
   let currentPages = pages, targets = null, loading = null;

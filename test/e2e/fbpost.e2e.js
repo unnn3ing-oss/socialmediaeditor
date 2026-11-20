@@ -947,3 +947,24 @@ test('外掛側邊欄：「＋ 新增發文」在已排程／已發佈右邊同�
   assert.equal(await c.page.$eval('#newBtn', (e) => e.parentElement.classList.contains('fp-head')), true, '網頁版不搬');
   await c.page.close();
 });
+
+test('開啟時先顯示骨架、不閃「功能停用」；能用換成內容，不能用才顯示停用（fbpost）', async () => {
+  for (const mode of ['admin', 'denied']) {
+    const { page, errors } = await newPage(mode);
+    let release; const gate = new Promise((r) => { release = r; });
+    await page.route(API_BASE + '/auth/status', async (r) => { await gate; return r.fallback(); });   // 後端慢：先擋住
+    await page.goto(srv.url + 'tools/fbpost/index.html');
+    await page.waitForSelector('#bootSk .sk');
+    await page.waitForTimeout(300);
+    assert.equal(await page.isVisible('#bootSk'), true, '先看到骨架');
+    assert.equal(await page.isVisible('#offMain'), false, '不閃停用畫面');
+    assert.equal(await page.isVisible('#fbpostApp'), false);
+    if (mode === 'admin' && SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-boot.png') });
+    release();
+    if (mode === 'admin') await page.waitForSelector('#fbpostApp:not([hidden])');
+    else await page.waitForSelector('#offMain:not([hidden])');
+    assert.equal(await page.isVisible('#bootSk'), false, '載完收掉骨架');
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+});

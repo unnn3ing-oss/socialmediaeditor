@@ -80,7 +80,7 @@
       },
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=41b2f05255"
+      "entry": "tools/fbpost/index.html?v=0ab29a84ee"
     },
     {
       "id": "fbvideo",
@@ -96,7 +96,7 @@
       },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=36d70cf56d"
+      "entry": "tools/fbvideo/index.html?v=a7a114596e"
     },
     {
       "id": "livereq",

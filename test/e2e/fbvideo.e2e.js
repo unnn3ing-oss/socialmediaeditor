@@ -364,3 +364,24 @@ test('發布方式：草稿＋多文發佈（跳選單選粉專）、RD 寫預�
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('開啟時先顯示骨架、不閃「功能停用」；能用換成內容，不能用才顯示停用（fbvideo）', async () => {
+  for (const mode of ['admin', 'denied']) {
+    const { page, errors } = await newPage(mode);
+    let release; const gate = new Promise((r) => { release = r; });
+    await page.route(API_BASE + '/auth/status', async (r) => { await gate; return r.fallback(); });   // 後端慢：先擋住
+    await page.goto(srv.url + 'tools/fbvideo/index.html');
+    await page.waitForSelector('#bootSk .sk');
+    await page.waitForTimeout(300);
+    assert.equal(await page.isVisible('#bootSk'), true, '先看到骨架');
+    assert.equal(await page.isVisible('#offMain'), false, '不閃停用畫面');
+    assert.equal(await page.isVisible('#app'), false);
+    if (mode === 'admin' && SHOT) await page.screenshot({ path: path.join(SHOT, 'fbvideo-boot.png') });
+    release();
+    if (mode === 'admin') await page.waitForSelector('#app:not([hidden])');
+    else await page.waitForSelector('#offMain:not([hidden])');
+    assert.equal(await page.isVisible('#bootSk'), false, '載完收掉骨架');
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+});

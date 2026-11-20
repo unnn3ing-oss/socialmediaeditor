@@ -449,3 +449,21 @@ body.no-scroll { overflow: hidden; }
 
 /* 標題、貼文內容：最少 4 行，內容多自動長高（compose.js grow） */
 #title, #msg { resize: none; overflow-y: hidden; }
+
+/* 開啟時的骨架（#bootSk）：版面接近列表頁，載完直接換成真的畫面 */
+.boot .grow { flex: 1; }
+.boot-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.boot .sk { display: block; flex: none; }
+.boot-card { display: grid; gap: 14px; margin-top: 4px; }
+.boot-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+.boot-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 14px; align-items: center; }
+.boot-thumb { width: 64px; height: 64px; border-radius: 8px; }
+.boot-lines { display: grid; gap: 8px; }
+.boot-lines .sk { flex: initial; }
+.boot-tabs { display: flex; align-items: center; gap: 8px; }
+.boot .boot-side { display: none; }
+.is-side .boot .boot-side { display: block; }
+.is-side .boot .boot-web { display: none; }
+.is-side .boot-tabs .sk:first-child { width: 140px !important; height: 40px !important; }
+.is-side .boot-row { grid-template-columns: 48px minmax(0, 1fr); }
+.is-side .boot-thumb { width: 48px; height: 48px; }

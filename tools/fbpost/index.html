@@ -23,7 +23,18 @@
 </style>
 </head>
 <body>
-<main class="off">
+<!-- 開啟時先顯示骨架；確定能用換成列表，不能用才顯示停用卡片（app.js） -->
+<main class="fp boot" id="bootSk" aria-busy="true" aria-label="載入中">
+  <div class="boot-head"><span class="sk" style="width:84px;height:22px"></span><span class="sk" style="width:120px;height:28px;border-radius:999px"></span><span class="grow"></span><span class="sk boot-web" style="width:116px;height:40px;border-radius:12px"></span></div>
+  <section class="card boot-card">
+    <div class="boot-tabs"><span class="sk" style="width:172px;height:44px;border-radius:16px"></span><span class="grow"></span><span class="sk boot-side" style="width:110px;height:40px;border-radius:12px"></span></div>
+    <div class="boot-bar"><span class="sk" style="width:140px;height:32px"></span><span class="sk" style="width:140px;height:32px"></span><span class="sk" style="width:64px;height:32px"></span></div>
+    <div class="boot-row"><span class="sk boot-thumb"></span><span class="boot-lines"><span class="sk" style="width:78%;height:14px"></span><span class="sk" style="width:42%;height:12px"></span></span></div>
+    <div class="boot-row"><span class="sk boot-thumb"></span><span class="boot-lines"><span class="sk" style="width:70%;height:14px"></span><span class="sk" style="width:36%;height:12px"></span></span></div>
+    <div class="boot-row"><span class="sk boot-thumb"></span><span class="boot-lines"><span class="sk" style="width:82%;height:14px"></span><span class="sk" style="width:48%;height:12px"></span></span></div>
+  </section>
+</main>
+<main class="off" id="offMain" hidden>
   <section class="off-box" id="fbpostOff" role="status" aria-labelledby="offTitle">
     <h1 id="offTitle">排程發布 功能停用</h1>
     <p>這個工具目前沒有開放。</p>
