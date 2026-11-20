@@ -78,7 +78,7 @@ export function classify(p) {
 }
 
 // ---- 成效 ----
-const num = (v) => (Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
+const num = (v) => { if (v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n) : null; };   // null／缺值＝未知，不當 0
 const insightValue = (list, name) => {
   const m = (list || []).find((x) => x && x.name === name);
   if (!m || !Array.isArray(m.values) || !m.values.length) return undefined;
@@ -89,13 +89,13 @@ export function metricsOf(p, insights, why) {
   const out = { views: null, reach: null, clicks: null, reactions: null, comments: null, shares: null };
   const miss = {};
   const ins = (key, name) => {
-    if (insights) { const v = num(Number(insightValue(insights, name))); if (v !== null) { out[key] = v; return; } miss[key] = 'no_data'; return; }
+    if (insights) { const v = num(insightValue(insights, name)); if (v !== null) { out[key] = v; return; } miss[key] = 'no_data'; return; }
     miss[key] = why || 'no_data';
   };
   ins('views', 'post_media_view');
   ins('clicks', 'post_clicks');
   if (REACH_METRIC) ins('reach', REACH_METRIC); else miss.reach = 'unverified';
-  const rt = p.reactions && p.reactions.summary ? num(Number(p.reactions.summary.total_count)) : null;
+  const rt = p.reactions && p.reactions.summary ? num(p.reactions.summary.total_count) : null;
   if (rt !== null) out.reactions = rt;
   else {   // 退而求其次：心情分項加總（要是物件且每項都是數字）
     const by = insights ? insightValue(insights, 'post_reactions_by_type_total') : undefined;
@@ -103,10 +103,10 @@ export function metricsOf(p, insights, why) {
     if (vals && vals.every((v) => Number.isFinite(v) && v >= 0)) out.reactions = vals.reduce((a, b) => a + b, 0);
     else miss.reactions = 'no_data';
   }
-  const ct = p.comments && p.comments.summary ? num(Number(p.comments.summary.total_count)) : null;
+  const ct = p.comments && p.comments.summary ? num(p.comments.summary.total_count) : null;
   if (ct !== null) out.comments = ct; else miss.comments = 'no_data';
   // shares：臉書 0 次分享時不回這個欄位（待實測），讀到貼文本身就當 0
-  if (p.shares && p.shares.count !== undefined) { const v = num(Number(p.shares.count)); if (v !== null) out.shares = v; else miss.shares = 'no_data'; }
+  if (p.shares && p.shares.count !== undefined) { const v = num(p.shares.count); if (v !== null) out.shares = v; else miss.shares = 'no_data'; }
   else out.shares = 0;
   return { ...out, missing: miss };
 }
@@ -173,7 +173,8 @@ export async function readBatch(env, page, token, win, after) {
     try { d = await call(env, budget, '/' + page + '/published_posts', listParams(BATCH, BASE_FIELDS + ',' + EXPAND), token); withIns = true; }
     catch (e) {
       if (e instanceof Throttled || isTokenError(e)) throw e;
-      noExpand.add(page); issues.add('expand_fallback'); d = null;
+      if (badParam(e)) noExpand.add(page);   // 臉書不接受欄位展開才記住；暫時錯誤只這批改逐篇
+      issues.add('expand_fallback'); d = null;
     }
   }
   if (!d) d = await call(env, budget, '/' + page + '/published_posts', listParams(BATCH_SPLIT, BASE_FIELDS), token);

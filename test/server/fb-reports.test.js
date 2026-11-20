@@ -71,6 +71,8 @@ test('成效：缺值區分；分享欄位不在＝0；心情缺總數時用分�
   assert.equal(n.reactions, 5);
   assert.equal(n.comments, null); assert.equal(n.missing.comments, 'no_data');
   assert.equal(n.views, null); assert.equal(n.missing.views, 'no_data');
+  const z = metricsOf({ reactions: { summary: { total_count: null } }, comments: { summary: { total_count: 0 } } }, [{ name: 'post_media_view', values: [{ value: null }] }], '');
+  assert.equal(z.views, null, 'null 是未知不是 0'); assert.equal(z.reactions, null); assert.equal(z.comments, 0);
   const o = metricsOf({}, null, 'no_permission');
   assert.equal(o.missing.views, 'no_permission');
 });
