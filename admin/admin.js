@@ -590,17 +590,28 @@ if (window.top !== window.self) {
     say($('gdMsg'), '已填入預設關鍵字，按「儲存設定」才會生效。');
   };
   $('gdCheck').onclick = function () { gdPages(true); };
+  // 紀錄一列＋展開列（點內容展開全文、標註、留言者 ID、連結）
+  var GD_DOT = { observe: 'y', hidden: 'g', manual: 'g', failed: 'r', unhidden: 'n' };
+  function gdShort(ms) { var t = fmtTime(ms); return t.replace(/^\d{4}-/, '').replace('-', '/'); }
   function gdItem(it) {
-    var li = document.createElement('li');
-    var head = document.createElement('div'); head.className = 'gd-head';
-    var act = document.createElement('span'); act.className = 'gd-act ' + it.action; act.textContent = GD_ACT[it.action] || it.action; head.appendChild(act);
-    [fmtTime(it.at), gdPageNames[it.page] || it.page, GD_RULE[it.rule] || '', it.edited ? '編輯過' : '', it.exempt ? '不再自動處理' : '', (it.uname || '') + (it.uid ? '（ID ' + it.uid + '）' : '')]
-      .forEach(function (t) { if (t) { var s = document.createElement('span'); s.textContent = t; head.appendChild(s); } });
-    li.appendChild(head);
-    var msg = document.createElement('p'); msg.className = 'gd-msg'; msg.textContent = it.msg; li.appendChild(msg);
-    if (it.tags.length) { var tg = document.createElement('p'); tg.className = 'gd-tags'; tg.textContent = '標註：' + it.tags.join('、'); li.appendChild(tg); }
-    var row = document.createElement('div'); row.className = 'row';
-    if (it.link) { var a = document.createElement('a'); a.href = it.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '在臉書開啟'; row.appendChild(a); }
+    var tr = document.createElement('tr'); tr.className = 'gd-row';
+    var td = function (cls, text) { var c = document.createElement('td'); c.className = cls; if (text != null) c.textContent = text; tr.appendChild(c); return c; };
+    var a = td('c-act'); var dot = document.createElement('span'); dot.className = 'gd-dot ' + (GD_DOT[it.action] || 'n'); dot.setAttribute('aria-hidden', 'true');
+    a.appendChild(dot); a.appendChild(document.createTextNode(GD_ACT[it.action] || it.action));
+    td('c-time', gdShort(it.at)); td('c-page', gdPageNames[it.page] || it.page);
+    td('c-rule', it.rule === 'r1' ? '規則1' : it.rule === 'r2' ? '規則2' : '');
+    td('c-user', it.uname || '');
+    var mc = td('c-msg'); var mb = document.createElement('button'); mb.type = 'button'; mb.className = 'gd-more';
+    mb.setAttribute('aria-expanded', 'false'); mb.title = '看全文'; mb.textContent = it.msg || '（沒有文字）'; mc.appendChild(mb);
+    var bc = td('c-btn');
+    var ex = document.createElement('tr'); ex.className = 'gd-exp'; ex.hidden = true;
+    var ec = document.createElement('td'); ec.colSpan = 7; ex.appendChild(ec);
+    var full = document.createElement('p'); full.className = 'gd-full'; full.textContent = it.msg; ec.appendChild(full);
+    var meta = document.createElement('p'); meta.className = 'gd-meta';
+    meta.textContent = [it.tags.length ? '標註：' + it.tags.join('、') : '', GD_RULE[it.rule] || '', it.uid ? '留言者 ID ' + it.uid : '', it.edited ? '編輯過' : '', it.exempt ? '不再自動處理' : '', fmtTime(it.at)].filter(Boolean).join('．');
+    ec.appendChild(meta);
+    if (it.link) { var lk = document.createElement('a'); lk.href = it.link; lk.target = '_blank'; lk.rel = 'noopener noreferrer'; lk.textContent = '在臉書開啟'; ec.appendChild(lk); }
+    mb.onclick = function () { ex.hidden = !ex.hidden; mb.setAttribute('aria-expanded', ex.hidden ? 'false' : 'true'); tr.classList.toggle('open', !ex.hidden); };
     var hidden = it.action === 'hidden' || it.action === 'manual';
     var b = document.createElement('button'); b.type = 'button'; b.textContent = hidden ? '取消隱藏' : '隱藏';
     b.onclick = function () {
@@ -608,11 +619,14 @@ if (window.top !== window.self) {
       b.disabled = true; say($('gdLogMsg'), hidden ? '取消隱藏中' : '隱藏中');
       api('/admin/fb/guard/log/' + it.cid + '/' + (hidden ? 'unhide' : 'hide'), { method: 'POST' }).then(function (res) {
         if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-        li.replaceWith(gdItem(res.data)); say($('gdLogMsg'), hidden ? '已取消隱藏。' : '已隱藏。', 'good');
+        var open = !ex.hidden, n = gdItem(res.data);
+        tr.replaceWith(n[0]); ex.replaceWith(n[1]);
+        if (open) n[0].querySelector('.gd-more').click();
+        say($('gdLogMsg'), hidden ? '已取消隱藏。' : '已隱藏。', 'good');
       }).catch(function (e) { b.disabled = false; say($('gdLogMsg'), '失敗：' + (e && e.message || ''), 'err'); });
     };
-    row.appendChild(b); li.appendChild(row);
-    return li;
+    bc.appendChild(b);
+    return [tr, ex];
   }
   function gdLog(more) {
     if (!more) { gdBefore = 0; $('gdLog').textContent = ''; }
@@ -623,9 +637,10 @@ if (window.top !== window.self) {
     say($('gdLogMsg'), '讀取中');
     return api('/admin/fb/guard/log' + (q.length ? '?' + q.join('&') : '')).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      res.data.items.forEach(function (it) { $('gdLog').appendChild(gdItem(it)); gdBefore = it.at; });
+      res.data.items.forEach(function (it) { var n = gdItem(it); $('gdLog').appendChild(n[0]); $('gdLog').appendChild(n[1]); gdBefore = it.at; });
       $('gdMore').hidden = !res.data.more;
       say($('gdLogMsg'), $('gdLog').children.length ? '' : '還沒有紀錄。');
+      $('gdLog').closest('.gd-wrap').hidden = !$('gdLog').children.length;
     }).catch(function (e) { say($('gdLogMsg'), '讀取紀錄失敗：' + (e && e.message || ''), 'err'); });
   }
   $('gdLogLoad').onclick = function () { gdLog(false); };
@@ -831,7 +846,7 @@ if (window.top !== window.self) {
       .then(function () { $('lvSave').disabled = false; });
   };
 
-  // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #fb 等記住目前分類
+  // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #post 等記住目前分類（舊的 #fb 等會轉到新分類）
 
   // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
   $('rdPing').onclick = function () {
@@ -1036,10 +1051,12 @@ if (window.top !== window.self) {
       .then(function () { $('auBtn').disabled = false; });
   };
 
-  var TABS = ['fb', 'staff', 'rd', 'assets', 'logs'];
+  var TABS = ['post', 'guard', 'people', 'conn', 'assets', 'rec'];
+  // 舊網址（分類改版前）轉到新分類
+  var OLD_TABS = { fb: 'post', staff: 'people', rd: 'conn', logs: 'rec' };
   var assetsLoaded = false;
   function visTabs() { return TABS.filter(function (t) { return !$('tab-' + t).hidden; }); }
-  function tabFromHash() { var t = location.hash.slice(1), v = visTabs(); return v.indexOf(t) >= 0 ? t : v[0]; }
+  function tabFromHash() { var t = location.hash.slice(1), v = visTabs(); t = OLD_TABS[t] || t; return v.indexOf(t) >= 0 ? t : v[0]; }
   function showTab(id, focus) {
     TABS.forEach(function (t) {
       var on = t === id, b = $('tab-' + t);
@@ -1048,10 +1065,11 @@ if (window.top !== window.self) {
     });
     if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
     if (focus) $('tab-' + id).focus();
-    if (id === 'fb' && !fbLoaded && token) fbLoad();
-    if (id === 'staff' && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
-    if (id === 'staff' && !lvLoaded && token && can('levels')) lvLoad();
-    if (id === 'rd' && !rdLoaded && token && can('rundown')) rdLoad();
+    // 臉書相關卡片（發文設定、留言守門、連線）共用一次讀取
+    if ((id === 'post' || id === 'guard' || id === 'conn') && !fbLoaded && token) fbLoad();
+    if (id === 'people' && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
+    if (id === 'people' && !lvLoaded && token && can('levels')) lvLoad();
+    if (id === 'conn' && !rdLoaded && token && can('rundown')) rdLoad();
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
   }
   TABS.forEach(function (t) {

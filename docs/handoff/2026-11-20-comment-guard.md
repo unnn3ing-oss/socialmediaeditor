@@ -35,6 +35,6 @@
 - 不做：只看文字直接隱藏（會誤判）、每粉專每小時上限（先觀察）
 
 ## 第三段：紀錄單行表格＋管理頁分 6 類（使用者選 紀錄 A、分類 A，回「開始」）
-- [ ] 紀錄改單行表格（色點：黃觀察／綠已隱藏／紅失敗；點列展開全文、標註、留言者 ID、連結；≤820px 兩行）
-- [ ] 管理頁分類：發文設定（access、pages、presets、video）／留言守門（guard）／人員與權限（staff、groups、levels）／連線（profiles、fbconn、webhook、usage、rundown）／素材／紀錄（audit、logs）；沒卡片的分類隱藏；舊 hash `#fb`→發文設定、`#staff`→人員與權限、`#rd`→連線、`#logs`→紀錄
+- [x] 紀錄改單行表格（色點：黃觀察／綠已隱藏／紅失敗；點列展開全文、標註、留言者 ID、連結；≤820px 兩行）
+- [x] 管理頁分類：發文設定（access、pages、presets、video）／留言守門（guard）／人員與權限（staff、groups、levels）／連線（profiles、fbconn、webhook、usage、rundown）／素材／紀錄（audit、logs）；沒卡片的分類隱藏；舊 hash `#fb`→發文設定、`#staff`→人員與權限、`#rd`→連線、`#logs`→紀錄
 - 只改 `admin/`＋e2e；後端不動

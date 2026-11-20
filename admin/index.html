@@ -36,12 +36,13 @@
 
 <div id="app" class="layout" hidden>
   <nav class="side" role="tablist" aria-label="後台分類">
-    <button type="button" role="tab" id="tab-fb" data-tab="fb" aria-controls="panel-fb">臉書發文</button>
-    <button type="button" role="tab" id="tab-staff" data-tab="staff" aria-controls="panel-staff">授權名單</button>
-    <button type="button" role="tab" id="tab-rd" data-tab="rd" aria-controls="panel-rd">Rundown</button>
+    <button type="button" role="tab" id="tab-post" data-tab="post" aria-controls="panel-post">發文設定</button>
+    <button type="button" role="tab" id="tab-guard" data-tab="guard" aria-controls="panel-guard">留言守門</button>
+    <button type="button" role="tab" id="tab-people" data-tab="people" aria-controls="panel-people">人員與權限</button>
+    <button type="button" role="tab" id="tab-conn" data-tab="conn" aria-controls="panel-conn">連線</button>
     <button type="button" role="tab" id="tab-assets" data-tab="assets" aria-controls="panel-assets">素材</button>
     <span class="sep" aria-hidden="true"></span>
-    <button type="button" role="tab" id="tab-logs" data-tab="logs" aria-controls="panel-logs">錯誤日誌</button>
+    <button type="button" role="tab" id="tab-rec" data-tab="rec" aria-controls="panel-rec">紀錄</button>
   </nav>
 
   <main>
@@ -55,10 +56,10 @@
       <p class="msg" id="unlockMsg" role="status"></p>
     </section>
 
-    <!-- 臉書發文 -->
-    <div class="panel" id="panel-fb" role="tabpanel" aria-labelledby="tab-fb" hidden>
-      <h1>臉書發文</h1>
-      <p>排程發布工具的臉書連線與粉專設定。</p>
+    <!-- 發文設定 -->
+    <div class="panel" id="panel-post" role="tabpanel" aria-labelledby="tab-post" hidden>
+      <h1>發文設定</h1>
+      <p>排程發布與影片發布的開放狀態、粉專與發文預設。</p>
 
       <section class="card" id="acCard" data-card="access">
         <h2>排程發布</h2>
@@ -71,81 +72,42 @@
         <p class="msg" id="acMsg" role="status"></p>
       </section>
 
-      <section class="card" id="tpCard" data-card="profiles">
-        <h2>權杖組別</h2>
-        <p>可以存好幾組臉書權杖（例如主管的、自己的），各自命名，選一組「使用中」給排程發布與影片發布用；切換後粉專清單換成那一組的粉專。已排程的留言、影片封面、改時間與刪除，使用中那組沒有該粉專時會改用其他組的權杖。最多 5 組。</p>
-        <ul class="tp-list" id="tpList"></ul>
-        <label for="tpName">新增一組（名稱最多 20 字）</label>
-        <div class="row tp-add"><input id="tpName" type="text" maxlength="20" placeholder="例如：主管權杖、鈞評測試"><button id="tpAdd" type="button">新增組別</button></div>
-        <p class="msg" id="tpMsg" role="status"></p>
-      </section>
-
-      <section class="card" id="fbCard" data-card="fbconn">
-        <h2>臉書連線</h2>
-        <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
-        <select id="tpPick"></select>
-        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
-        <p class="fb-state" id="fbState">狀態：尚未讀取</p>
-        <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
-        <ul class="fb-detail" id="fbDetail" hidden></ul>
-        <ul class="fb-missing" id="fbMissing" hidden></ul>
-        <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
-        <p class="msg" id="fbMsg" role="status"></p>
-        <div class="fb-tok">
-          <label for="fbTok">換權杖：貼上「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
-          <p class="fb-hint" id="fbTokHint"></p>
-          <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
-          <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
-          <p class="msg" id="fbTokMsg" role="status"></p>
+      <section class="card" id="pgCard" data-card="pages">
+        <h2>粉專設定</h2>
+        <p>簡稱只影響網頁上的顯示；UTM 只影響第 1 則留言裡的文章連結：「圖文」用在選套版、純文字圖，「文字」用在純文字貼文（空白就不加 UTM，發文時會提醒）。RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>
+        <p class="msg" id="pgMsg" role="status"></p>
+        <div id="pgWrap" hidden>
+          <div id="pgRows" class="pg-list"></div>
         </div>
-        <div class="fb-tok fb-app">
-          <p class="fb-sub">App 密鑰（由 App 管理員輸入一次，存了之後不再顯示；用來把剛產生的權杖自動延長）</p>
-          <p class="fb-state" id="appState">狀態：尚未讀取</p>
-          <label for="appId">App ID</label>
-          <input id="appId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="20" placeholder="應用程式設定 &gt; 基本資料 的「應用程式編號」">
-          <label for="appSecret">App Secret</label>
-          <input id="appSecret" type="password" autocomplete="off" spellcheck="false" maxlength="32" placeholder="同一頁的「應用程式密鑰」">
-          <div class="row"><button id="appSave" type="button">驗證並儲存</button><button id="appClear" type="button" hidden>清除</button></div>
-          <p class="msg" id="appMsg" role="status"></p>
-        </div>
+        <div class="row"><button id="pgSave" class="primary" type="button" hidden>儲存</button></div>
       </section>
 
-      <section class="card" id="usCard" data-card="usage">
-        <h2>速率限制</h2>
-        <p>臉書沒有查用量的 API，這裡顯示工具最近一次呼叫臉書時，回應附帶的用量（%）。App＝用使用者權杖的呼叫（1 小時內 200 × 使用者數）；粉專＝用粉專權杖的呼叫（24 小時內 4800 × 互動人數）。任一項到 100% 就會被臉書暫停一段時間。</p>
-        <p class="fb-state" id="usThrottle" hidden></p>
-        <ul class="us-list" id="usList"></ul>
-        <div class="row"><button id="usReload" type="button">重新整理</button><button id="usAsk" type="button">立即查詢</button></div>
-        <p class="fb-hint">「立即查詢」會對使用中組別的每個粉專各打一次最輕的查詢，會用掉一點額度。</p>
-        <p class="msg" id="usMsg" role="status"></p>
+      <section class="card" id="psCard" data-card="presets">
+      <h2>活動留言</h2>
+      <p>發文時第 2、3 則留言可以選這裡的內容帶入（例如活動宣傳），帶入後還能再改。最多 20 則。</p>
+      <p class="msg" id="psMsg" role="status"></p>
+      <div id="psRows"></div>
+      <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
       </section>
 
-      <section class="card" id="whCard" data-card="webhook">
-
-        <h2>Webhook</h2>
-
-        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。這裡只記錄最後收到的時間與事件種類；留言內容只有「留言守門」命中規則時才保存（30 天）。</p>
-
-        <dl class="wh-list">
-
-          <dt>回呼網址</dt><dd><code id="whUrl">尚未讀取</code><button id="whUrlCopy" type="button">複製</button></dd>
-
-          <dt>驗證權杖</dt><dd><code id="whTok">尚未讀取</code><button id="whTokCopy" type="button">複製</button></dd>
-
-          <dt>簽章檢查</dt><dd id="whSign">尚未讀取</dd>
-
-          <dt>最後收到</dt><dd id="whLast">尚未讀取</dd>
-
-        </dl>
-
-        <div class="row"><button id="whRefresh" type="button">重新整理</button></div>
-
-        <p class="msg" id="whMsg" role="status"></p>
-
+      <section class="card" id="vsCard" data-card="video">
+        <h2>影片設定（影片發布）</h2>
+        <p>影片檔名轉標題時要去掉的前綴／後綴（<code>Reels_</code>、<code>Shorts_</code> 一定會去掉，不用填），檔名開頭是 <code>Reels_</code> 時自動加的 hashtag，以及發文時可以按的 hashtag 按鈕。每行一個，各最多 20 個。</p>
+        <p class="msg" id="vsMsg" role="status"></p>
+        <label>要去掉的前綴（例：<code>1118_</code>）<textarea id="vsPre" rows="3"></textarea></label>
+        <label>要去掉的後綴（例：<code>_v2</code>）<textarea id="vsSuf" rows="3"></textarea></label>
+        <label>Reels 自動 hashtag（空白＝不加）<input type="text" id="vsReels" maxlength="100"></label>
+        <label>hashtag 按鈕（每行一個，例：<code>#國際</code>）<textarea id="vsTags" rows="4"></textarea></label>
+        <div class="row"><button id="vsSave" class="primary" type="button">儲存</button></div>
       </section>
+    </div>
+
+    <!-- 留言守門 -->
+    <div class="panel" id="panel-guard" role="tabpanel" aria-labelledby="tab-guard" hidden>
+      <h1>留言守門</h1>
 
       <section class="card" id="gdCard" data-card="guard">
-        <h2>留言守門</h2>
+        <h2>設定</h2>
         <p>粉專有新留言或留言被編輯時，自動檢查是否為洗版（例：標註「雙寶爸的理財週刊」這類假理財帳號）。先用「觀察」確認沒有誤判，再切「自動隱藏」。被隱藏的留言只有留言者和他的朋友看得到。</p>
         <p class="fb-hint">要先在 Meta 後台「Webhooks」的 Page 訂閱 <code>feed</code>（設定一次即可），並把下方粉專打開。</p>
         <div class="gd-grid">
@@ -175,52 +137,30 @@
         <div class="row"><button id="gdCheck" type="button">重新檢查訂閱</button></div>
         <p class="msg" id="gdPgMsg" role="status"></p>
 
-        <h3>紀錄（保存 30 天）</h3>
+      </section>
+
+      <section class="card" id="gdLogCard" data-card="guard">
+        <h2>紀錄</h2>
+        <p>命中規則的留言，保存 30 天。點一列看全文、標註帳號與留言者 ID。</p>
         <div class="row">
           <select id="gdFAct" aria-label="篩選動作"><option value="">全部動作</option><option value="observe">觀察（若開啟會隱藏）</option><option value="hidden">已隱藏</option><option value="failed">隱藏失敗</option><option value="manual">手動隱藏</option><option value="unhidden">已取消隱藏</option></select>
           <select id="gdFPage" aria-label="篩選粉專"><option value="">全部粉專</option></select>
           <button id="gdLogLoad" type="button">重新整理</button>
         </div>
-        <ul class="gd-log" id="gdLog"></ul>
+        <div class="gd-wrap"><table class="gd-log">
+          <thead><tr><th>動作</th><th>時間</th><th>粉專</th><th>規則</th><th>留言者</th><th>內容</th><th><span class="vh">操作</span></th></tr></thead>
+          <tbody id="gdLog"></tbody>
+        </table></div>
         <div class="row"><button id="gdMore" type="button" hidden>載入更多</button></div>
         <p class="msg" id="gdLogMsg" role="status"></p>
       </section>
-
-
-      <section class="card" id="pgCard" data-card="pages">
-        <h2>粉專設定</h2>
-        <p>簡稱只影響網頁上的顯示；UTM 只影響第 1 則留言裡的文章連結：「圖文」用在選套版、純文字圖，「文字」用在純文字貼文（空白就不加 UTM，發文時會提醒）。RD 區段決定排入 Rundown 寫到哪一區（選「不寫入」就不寫）。順序由上到下，用「上移」「下移」調整，按「儲存」才會生效。</p>
-        <p class="msg" id="pgMsg" role="status"></p>
-        <div id="pgWrap" hidden>
-          <div id="pgRows" class="pg-list"></div>
-        </div>
-        <div class="row"><button id="pgSave" class="primary" type="button" hidden>儲存</button></div>
-      </section>
-
-      <section class="card" id="psCard" data-card="presets">
-      <h2>活動留言</h2>
-      <p>發文時第 2、3 則留言可以選這裡的內容帶入（例如活動宣傳），帶入後還能再改。最多 20 則。</p>
-      <p class="msg" id="psMsg" role="status"></p>
-      <div id="psRows"></div>
-      <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
-      </section>
-
-<section class="card" id="vsCard" data-card="video">
-<h2>影片設定（影片發布）</h2>
-<p>影片檔名轉標題時要去掉的前綴／後綴（<code>Reels_</code>、<code>Shorts_</code> 一定會去掉，不用填），檔名開頭是 <code>Reels_</code> 時自動加的 hashtag，以及發文時可以按的 hashtag 按鈕。每行一個，各最多 20 個。</p>
-<p class="msg" id="vsMsg" role="status"></p>
-<label>要去掉的前綴（例：<code>1118_</code>）<textarea id="vsPre" rows="3"></textarea></label>
-<label>要去掉的後綴（例：<code>_v2</code>）<textarea id="vsSuf" rows="3"></textarea></label>
-<label>Reels 自動 hashtag（空白＝不加）<input type="text" id="vsReels" maxlength="100"></label>
-<label>hashtag 按鈕（每行一個，例：<code>#國際</code>）<textarea id="vsTags" rows="4"></textarea></label>
-<div class="row"><button id="vsSave" class="primary" type="button">儲存</button></div>
-</section>
     </div>
 
-    <!-- 授權名單 -->
-    <div class="panel" id="panel-staff" role="tabpanel" aria-labelledby="tab-staff" hidden>
-      <h1>授權名單</h1>
-      <p>誰能用員工編號登入排程發布、能做什麼，以及誰做過什麼。</p>
+    <!-- 人員與權限 -->
+    <div class="panel" id="panel-people" role="tabpanel" aria-labelledby="tab-people" hidden>
+      <h1>人員與權限</h1>
+      <p>誰能用員工編號登入、能做什麼，以及管理頁各層級看得到哪些卡片。</p>
+
       <section class="card" id="sfCard" data-card="staff">
         <h2>授權名單</h2>
         <p>只有名單內的人能用員工編號＋自己的密碼登入。新增或按「重置密碼」後會顯示一組 6 碼設定碼（24 小時內有效），請私下交給本人，他第一次登入時用它自己設密碼。停用、移除或重置後，對方下一次操作就會被擋。</p>
@@ -276,29 +216,86 @@
         <div class="row"><button class="primary" id="lvSave" type="button">儲存</button><button id="lvReset" type="button">還原預設</button></div>
         <p class="msg" id="lvMsg" role="status"></p>
       </section>
-
-      <section class="card" id="auCard" data-card="audit">
-        <h2>操作紀錄</h2>
-        <p>誰在什麼時候發布、排程、改時間或刪除了哪一則貼文，保存 90 天。</p>
-        <div class="sf-add">
-          <label class="sf-f">期間<select id="auDays"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select></label>
-          <label class="sf-f">員工編號（選填）<input id="auUid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-          <button id="auBtn" type="button">查詢</button>
-        </div>
-        <p class="msg" id="auMsg" role="status"></p>
-        <div class="scroll" id="auWrap" hidden>
-          <table>
-            <thead><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>動作</th><th>粉專 ID</th><th>貼文 ID</th></tr></thead>
-            <tbody id="auRows"></tbody>
-          </table>
-        </div>
-      </section>
     </div>
 
-    <!-- Rundown -->
-    <div class="panel" id="panel-rd" role="tabpanel" aria-labelledby="tab-rd" hidden>
-      <h1>Rundown</h1>
-      <p>排程發布工具「排入 Rundown」的連線檢查。</p>
+    <!-- 連線 -->
+    <div class="panel" id="panel-conn" role="tabpanel" aria-labelledby="tab-conn" hidden>
+      <h1>連線</h1>
+      <p>臉書權杖、Webhook、用量與 Rundown 的連線設定，多數只需設定一次。</p>
+
+      <section class="card" id="tpCard" data-card="profiles">
+        <h2>權杖組別</h2>
+        <p>可以存好幾組臉書權杖（例如主管的、自己的），各自命名，選一組「使用中」給排程發布與影片發布用；切換後粉專清單換成那一組的粉專。已排程的留言、影片封面、改時間與刪除，使用中那組沒有該粉專時會改用其他組的權杖。最多 5 組。</p>
+        <ul class="tp-list" id="tpList"></ul>
+        <label for="tpName">新增一組（名稱最多 20 字）</label>
+        <div class="row tp-add"><input id="tpName" type="text" maxlength="20" placeholder="例如：主管權杖、鈞評測試"><button id="tpAdd" type="button">新增組別</button></div>
+        <p class="msg" id="tpMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="fbCard" data-card="fbconn">
+        <h2>臉書連線</h2>
+        <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
+        <select id="tpPick"></select>
+        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
+        <p class="fb-state" id="fbState">狀態：尚未讀取</p>
+        <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
+        <ul class="fb-detail" id="fbDetail" hidden></ul>
+        <ul class="fb-missing" id="fbMissing" hidden></ul>
+        <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
+        <p class="msg" id="fbMsg" role="status"></p>
+        <div class="fb-tok">
+          <label for="fbTok">換權杖：貼上「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
+          <p class="fb-hint" id="fbTokHint"></p>
+          <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
+          <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
+          <p class="msg" id="fbTokMsg" role="status"></p>
+        </div>
+        <div class="fb-tok fb-app">
+          <p class="fb-sub">App 密鑰（由 App 管理員輸入一次，存了之後不再顯示；用來把剛產生的權杖自動延長）</p>
+          <p class="fb-state" id="appState">狀態：尚未讀取</p>
+          <label for="appId">App ID</label>
+          <input id="appId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="20" placeholder="應用程式設定 &gt; 基本資料 的「應用程式編號」">
+          <label for="appSecret">App Secret</label>
+          <input id="appSecret" type="password" autocomplete="off" spellcheck="false" maxlength="32" placeholder="同一頁的「應用程式密鑰」">
+          <div class="row"><button id="appSave" type="button">驗證並儲存</button><button id="appClear" type="button" hidden>清除</button></div>
+          <p class="msg" id="appMsg" role="status"></p>
+        </div>
+      </section>
+
+      <section class="card" id="whCard" data-card="webhook">
+
+        <h2>Webhook</h2>
+
+        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。這裡只記錄最後收到的時間與事件種類；留言內容只有「留言守門」命中規則時才保存（30 天）。</p>
+
+        <dl class="wh-list">
+
+          <dt>回呼網址</dt><dd><code id="whUrl">尚未讀取</code><button id="whUrlCopy" type="button">複製</button></dd>
+
+          <dt>驗證權杖</dt><dd><code id="whTok">尚未讀取</code><button id="whTokCopy" type="button">複製</button></dd>
+
+          <dt>簽章檢查</dt><dd id="whSign">尚未讀取</dd>
+
+          <dt>最後收到</dt><dd id="whLast">尚未讀取</dd>
+
+        </dl>
+
+        <div class="row"><button id="whRefresh" type="button">重新整理</button></div>
+
+        <p class="msg" id="whMsg" role="status"></p>
+
+      </section>
+
+      <section class="card" id="usCard" data-card="usage">
+        <h2>速率限制</h2>
+        <p>臉書沒有查用量的 API，這裡顯示工具最近一次呼叫臉書時，回應附帶的用量（%）。App＝用使用者權杖的呼叫（1 小時內 200 × 使用者數）；粉專＝用粉專權杖的呼叫（24 小時內 4800 × 互動人數）。任一項到 100% 就會被臉書暫停一段時間。</p>
+        <p class="fb-state" id="usThrottle" hidden></p>
+        <ul class="us-list" id="usList"></ul>
+        <div class="row"><button id="usReload" type="button">重新整理</button><button id="usAsk" type="button">立即查詢</button></div>
+        <p class="fb-hint">「立即查詢」會對使用中組別的每個粉專各打一次最輕的查詢，會用掉一點額度。</p>
+        <p class="msg" id="usMsg" role="status"></p>
+      </section>
+
       <section class="card" id="rdCard" data-card="rundown">
         <h2>Rundown 連線</h2>
         <p>Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。這裡只檢查有沒有設定與連不連得上，不顯示網址與金鑰。</p>
@@ -352,10 +349,27 @@
       </section>
     </div>
 
-    <!-- 錯誤日誌 -->
-    <div class="panel" id="panel-logs" role="tabpanel" aria-labelledby="tab-logs" hidden>
-      <h1>錯誤日誌</h1>
-      <p>各工具回報的錯誤。</p>
+    <!-- 紀錄 -->
+    <div class="panel" id="panel-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
+      <h1>紀錄</h1>
+
+      <section class="card" id="auCard" data-card="audit">
+        <h2>操作紀錄</h2>
+        <p>誰在什麼時候發布、排程、改時間或刪除了哪一則貼文，保存 90 天。</p>
+        <div class="sf-add">
+          <label class="sf-f">期間<select id="auDays"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select></label>
+          <label class="sf-f">員工編號（選填）<input id="auUid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+          <button id="auBtn" type="button">查詢</button>
+        </div>
+        <p class="msg" id="auMsg" role="status"></p>
+        <div class="scroll" id="auWrap" hidden>
+          <table>
+            <thead><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>動作</th><th>粉專 ID</th><th>貼文 ID</th></tr></thead>
+            <tbody id="auRows"></tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="card" data-card="logs">
         <h2>最近的紀錄</h2>
         <p>只記錄工具名稱、錯誤代碼、版本，不含任何內容，保留 30 天。</p>

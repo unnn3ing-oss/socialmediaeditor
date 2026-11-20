@@ -180,19 +180,19 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   await login(page);
 
   // 預設在臉書發文
-  assert.equal(await page.getAttribute('#tab-fb', 'aria-selected'), 'true');
-  assert.ok(page.url().endsWith('#fb'));
+  assert.equal(await page.getAttribute('#tab-post', 'aria-selected'), 'true');
+  assert.ok(page.url().endsWith('#post'));
   assert.equal(await page.isVisible('#logout'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/assets'), '沒進素材分類前不讀素材');
   // 5 個分類；沒有後端 API 的卡片（預設文字、嘗試次數）不出現
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['臉書發文', '授權名單', 'Rundown', '素材', '錯誤日誌']);
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['發文設定', '留言守門', '人員與權限', '連線', '素材', '紀錄']);
   await page.waitForSelector('#pgWrap:not([hidden])');
   await page.fill('.pg-short >> nth=0', '填到一半');
 
   // 切到素材再切回來，填到一半的內容還在
   await page.click('#tab-assets');
-  assert.equal(await page.isVisible('#panel-fb'), false);
-  await page.click('#tab-fb');
+  assert.equal(await page.isVisible('#panel-post'), false);
+  await page.click('#tab-post');
   assert.equal(await page.inputValue('.pg-short >> nth=0'), '填到一半');
 
   // 素材：第一次進來才讀
@@ -203,7 +203,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   // 方向鍵切換分類（Rundown → 素材 → 錯誤日誌）
   await page.focus('#tab-assets');
   await page.keyboard.press('ArrowDown');
-  assert.equal(await page.getAttribute('#tab-logs', 'aria-selected'), 'true');
+  assert.equal(await page.getAttribute('#tab-rec', 'aria-selected'), 'true');
   await page.click('#logBtn');
   await page.waitForFunction(() => /共 1 筆/.test(document.getElementById('logMsg').textContent));
 
@@ -224,8 +224,8 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
 test('網址帶分類時登入後直接打開；手機版分類不超出畫面', async () => {
   const { page } = await open({ width: 390, height: 800 }, '#logs');
   await login(page);
-  assert.equal(await page.getAttribute('#tab-logs', 'aria-selected'), 'true');
-  assert.equal(await page.isVisible('#panel-logs'), true);
+  assert.equal(await page.getAttribute('#tab-rec', 'aria-selected'), 'true');
+  assert.equal(await page.isVisible('#panel-rec'), true);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow <= 0, '頁面不能橫向捲動：' + overflow);
 });
@@ -238,9 +238,9 @@ test('頁面不用 emoji 或箭頭', async () => {
 });
 
 test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯示', async () => {
-  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#conn');
   await login(page);
-  await page.waitForSelector('#pgWrap:not([hidden])');
+  await page.waitForFunction(() => /可以發文/.test(document.getElementById('fbState').textContent));
   const st = await page.textContent('#fbState');
   assert.match(st, /可以發文/);
   assert.match(st, /粉專 3 個/);
@@ -253,6 +253,7 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   assert.match(await page.textContent('#fbTokHint'), /會自動延長/);
   if (SHOT) await page.locator('#fbState').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'admin-fb-token.png') });
   assert.match(await page.textContent('#fbMissing'), /缺少權限：pages_manage_posts/);
+  await page.click('#tab-post'); await page.waitForSelector('#pgWrap:not([hidden])');
   assert.equal(await page.locator('#pgRows .pg-card').count(), 3);
   assert.deepEqual(await page.$$eval('#pgRows .pg-card', (rs) => rs.map((r) => r.querySelector('.pg-no').textContent + r.querySelector('.pg-name').textContent)), ['1TVBS 新聞', '2TVBS 娛樂', '3TVBS 少康戰情室']);
   assert.equal(await page.inputValue('#pgRows .pg-card:nth-child(2) .pg-utm'), '?&utm_source=facebook');
@@ -267,6 +268,7 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   assert.deepEqual(fit, [true, true, true]);
   assert.ok(calls.filter((c) => c.key === 'GET /admin/fb/status' || c.key === 'GET /admin/fb/pages').every((c) => c.auth === 'Bearer T'));
   // 重新讀取粉專：先清快取再重讀
+  await page.click('#tab-conn');
   await page.click('#fbRefresh');
   await page.waitForFunction(() => document.getElementById('fbMsg').textContent === '已重新讀取。');
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/refresh'));
@@ -311,14 +313,14 @@ test('臉書發文與 Rundown：手機 390px 頁面不橫向捲動', async () =>
   await page.waitForSelector('#pgWrap:not([hidden])');
   const over = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok((await over()) <= 0, '臉書發文橫向捲動');
-  await page.click('#tab-rd');
+  await page.click('#tab-conn');
   assert.ok((await over()) <= 0, 'Rundown 橫向捲動');
 });
 
 test('Rundown 分類：測試連線打 /admin/rundown/ping 並顯示試算表名稱', async () => {
   const { page, calls } = await open({ width: 1280, height: 860 }, '#rd');
   await login(page);
-  assert.equal(await page.isVisible('#panel-rd'), true);
+  assert.equal(await page.isVisible('#panel-conn'), true);
   await page.waitForFunction(() => document.getElementById('rdState').textContent === '狀態：已設定');
   await page.click('#rdPing');
   await page.waitForFunction(() => /連線正常：FB RUNDOWN\(2026\)/.test(document.getElementById('rdMsg').textContent));
@@ -383,7 +385,7 @@ test('活動留言：手機 390px 不橫向捲動', async () => {
 });
 
 test('Webhook 卡片：顯示回呼網址、驗證權杖、簽章狀態、最後收到；複製', async () => {
-  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#conn');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page);
   await page.waitForFunction(() => /fbhook/.test(document.getElementById('whUrl').textContent));
@@ -404,7 +406,7 @@ test('Webhook 卡片：顯示回呼網址、驗證權杖、簽章狀態、最後
 
 test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成功清空、只顯示 App ID）、清除', async () => {
   APP = { configured: false, appId: '', source: null, savedAt: null };
-  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#conn');
   await login(page);
   await page.waitForFunction(() => /未設定/.test(document.getElementById('appState').textContent));
   assert.equal(await page.isVisible('#appClear'), false);
@@ -428,9 +430,9 @@ test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成�
 });
 
 test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後清空輸入框）；改回 Secret 打 DELETE', async () => {
-  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#conn');
   await login(page);
-  await page.waitForSelector('#pgWrap:not([hidden])');
+  await page.waitForFunction(() => /可以發文/.test(document.getElementById('fbState').textContent));
   assert.equal(await page.isVisible('#fbTokClear'), false, '來源不是管理頁時不顯示「改回 Secret」');
   await page.click('#fbTokSave');
   assert.match(await page.textContent('#fbTokMsg'), /請先貼上權杖/);
@@ -457,7 +459,7 @@ test('排程發布開放／關閉：讀取狀態與原因、關閉帶原因、�
   assert.deepEqual(await page.$$eval('#acCard .ac-row button', (bs) => bs.map((b) => b.textContent)), ['開放', '關閉']);
   assert.equal(await page.getAttribute('#acClose', 'aria-pressed'), 'true');
   assert.equal(await page.isVisible('#acReasonSave'), true, '關閉中可以只存原因');
-  const cards = await page.$$eval('#panel-fb section.card', (els) => els.map((e) => e.id));
+  const cards = await page.$$eval('#panel-post section.card', (els) => els.map((e) => e.id));
   assert.equal(cards[0], 'acCard', '放在臉書發文最上面');
   await page.fill('#acReason', '臉書權杖更換中');
   await page.click('#acReasonSave');
@@ -503,7 +505,7 @@ test('授權名單：切進分類才讀、顯示預設 3 組；新增、改權�
   const { page, calls } = await open({ width: 1280, height: 860 });
   await login(page);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/staff'), '沒進分類前不讀名單');
-  await page.click('#tab-staff');
+  await page.click('#tab-people');
   await page.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await page.$$eval('#sfRows tr', (r) => r.length), 3);
   assert.deepEqual(await page.$$eval('#sgRows .sg-row > input', (e) => e.map((i) => i.value)), ['唯讀', '小編', '主管']);
@@ -555,7 +557,7 @@ test('授權名單密碼：密碼欄狀態；新增與重置後顯示設定碼�
   const { page } = await open({ width: 1280, height: 860 });
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page);
-  await page.click('#tab-staff');
+  await page.click('#tab-people');
   await page.waitForSelector('#sfWrap:not([hidden])');
   const pwCol = await page.$$eval('#sfRows tr', (rows) => rows.map((r) => r.children[6].textContent));
   assert.deepEqual(pwCol, ['已設定', '未設定', '鎖定中', '已設定']);
@@ -611,6 +613,7 @@ test('操作紀錄：查詢帶期間與員工編號，顯示中文動作；沒�
   const { page } = await open({ width: 1280, height: 860 }, '#staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
+  await page.click('#tab-rec');
   await page.selectOption('#auDays', '30'); await page.fill('#auUid', 'a001');
   await page.click('#auBtn');
   await page.waitForSelector('#auWrap:not([hidden])');
@@ -624,9 +627,11 @@ test('授權名單：320px 頁面不橫向捲動（表格自己橫捲）', async
   const { page } = await open({ width: 320, height: 800 }, '#staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
-  await page.click('#auBtn'); await page.waitForSelector('#auWrap:not([hidden])');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   assert.equal(await page.evaluate(() => document.getElementById('sfWrap').scrollWidth > document.getElementById('sfWrap').clientWidth), true);
+  await page.click('#tab-rec');
+  await page.click('#auBtn'); await page.waitForSelector('#auWrap:not([hidden])');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
 });
 
 test('測試後端：頁首標「測試後端」且 API 打 dev；正式不顯示', async () => {
@@ -650,7 +655,7 @@ test('測試後端：頁首標「測試後端」且 API 打 dev；正式不顯�
 
 test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 ?p=）、切換使用中、空的組別不能切', async () => {
   TP = TP0();
-  const { page } = await open({ width: 1280, height: 900 }, '#fb');
+  const { page } = await open({ width: 1280, height: 900 }, '#conn');
   const urls = [];
   page.on('request', (r) => { if (/\/admin\/fb\/(status|app|token)/.test(r.url())) urls.push(r.url()); });
   await login(page);
@@ -677,7 +682,7 @@ test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 
 });
 
 test('速率限制：App 與各粉專三個 % 長條（≥75 黃、≥90 紅）、被暫停顯示恢復時間、最近一次限流；立即查詢', async () => {
-  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#conn');
   await login(page);
   await page.waitForSelector('#usList li .us-bars');
   assert.equal(await page.locator('#usList > li').count(), 3);
@@ -702,15 +707,16 @@ test('首頁員工（管理者）直接進入：只看到層級有的卡片與�
   assert.equal(await page.textContent('#whoTag'), '王小明・管理者');
   assert.equal(await page.isVisible('#logout'), false);
   assert.equal(await page.isVisible('#unlockBar'), false);
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['fb', 'staff', 'logs']);
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['post', 'people', 'rec']);
   assert.equal(await page.isVisible('#acCard'), true);
   for (const id of ['#tpCard', '#fbCard', '#whCard', '#usCard', '#pgCard']) assert.equal(await page.isVisible(id), false, id);
   // 沒有權限的卡片不打 API；帶的是首頁憑證
   assert.ok(!calls.some((c) => c.key && /\/admin\/fb\/(status|profiles|webhook|pages)$/.test(c.key)));
   assert.ok(calls.filter((c) => c.key && c.key.startsWith('GET /admin/')).every((c) => c.auth === 'Bearer F1'));
-  await page.click('#tab-staff');
+  await page.click('#tab-people');
   await page.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await page.isVisible('#sgCard'), false); assert.equal(await page.isVisible('#lvCard'), false);
+  await page.click('#tab-rec');
   assert.equal(await page.isVisible('#auCard'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/levels'));
 });
@@ -729,6 +735,8 @@ test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖�
   assert.equal(await page.isVisible('#unlockBar'), true);
   assert.equal(await page.isVisible('#tpCard'), false); assert.equal(await page.isVisible('#acCard'), true);
   assert.match(await page.textContent('#whoTag'), /系統管理者（敏感設定已鎖）/);
+  await page.click('#tab-conn');
+  assert.equal(await page.isVisible('#usCard'), true); assert.equal(await page.isVisible('#whCard'), false);
   await page.fill('#unlockPw', 'wrong'); await page.click('#unlockBtn');
   await page.waitForFunction(() => /密碼不正確/.test(document.getElementById('unlockMsg').textContent));
   await page.fill('#unlockPw', 'pw-123'); await page.click('#unlockBtn');
@@ -785,7 +793,7 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   await login(page);
   await page.waitForSelector('#lvRows tr'); await page.waitForSelector('#sfWrap:not([hidden])');
   await shot(page, 'admin-sys-staff.png');
-  await page.click('#tab-fb'); await page.waitForSelector('#tpList li');
+  await page.click('#tab-conn'); await page.waitForSelector('#tpList li');
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.screenshot({ path: path.join(SHOT, 'admin-sys-fb.png') });
   const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], name: '王小明', id: 'A001' };
@@ -800,9 +808,9 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
 
 test('留言守門卡片：打開不查權限、按了才查、儲存規則、開粉專、紀錄隱藏', async () => {
   GD_CHECKS.length = 0;
-  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#guard');
   await login(page);
-  await page.waitForFunction(() => document.querySelectorAll('#gdLog li').length === 1);
+  await page.waitForFunction(() => document.querySelectorAll('#gdLog tr.gd-row').length === 1);
   assert.equal(await page.inputValue('#gdProfile'), 'p1', '沒存過設定：預選發文使用中組別');
   assert.deepEqual(GD_CHECKS, [false], '打開卡片不查權限');
   assert.doesNotMatch(await page.textContent('#gdProfile option[value="p1"]'), /pages_manage_metadata/);
@@ -819,13 +827,21 @@ test('留言守門卡片：打開不查權限、按了才查、儲存規則、�
   assert.deepEqual(GD_SAVED, { mode: 'observe', profile: 'pabcdef12', rules: { names: ['寶爸', '寳爸'], leads: ['老師', '進群', '帶單'], allow: [], auto: { r1: true, r2: false } } });
   await page.check('#gdPg111');
   await page.waitForFunction(() => /已開啟/.test(document.getElementById('gdPgMsg').textContent));
-  assert.match(await page.textContent('#gdLog li'), /觀察.*編輯過.*Eliza Paredes/);
-  assert.match(await page.textContent('#gdLog li'), /標註：雙寶爸的財經新報/);
-  await page.click('#gdLog li button');
-  await page.waitForFunction(() => /手動隱藏/.test(document.querySelector('#gdLog li').textContent));
-  if (SHOT) await page.locator('#gdCard').screenshot({ path: path.join(SHOT, 'admin-guard.png') });
+  // 單行表格：一列一則，內容截一行；點內容展開全文、標註、留言者 ID
+  assert.match(await page.textContent('#gdLog tr.gd-row'), /觀察.*Eliza Paredes.*幸好一直看/);
+  assert.equal(await page.isVisible('#gdLog tr.gd-exp'), false);
+  const rowH = await page.$eval('#gdLog tr.gd-row', (r) => r.getBoundingClientRect().height);
+  assert.ok(rowH < 50, '一列高度 ' + rowH);
+  await page.click('#gdLog .gd-more');
+  assert.equal(await page.getAttribute('#gdLog .gd-more', 'aria-expanded'), 'true');
+  assert.match(await page.textContent('#gdLog tr.gd-exp'), /標註：雙寶爸的財經新報.*留言者 ID 777.*編輯過/);
+  await page.click('#gdLog td.c-btn button');
+  await page.waitForFunction(() => /手動隱藏/.test(document.querySelector('#gdLog tr.gd-row').textContent));
+  assert.equal(await page.isVisible('#gdLog tr.gd-exp'), true, '更新後保持展開');
+  if (SHOT) await page.locator('#panel-guard').screenshot({ path: path.join(SHOT, 'admin-guard.png') });
   await page.setViewportSize({ width: 375, height: 800 });
-  assert.equal(await page.$eval('#gdCard', (c) => c.scrollWidth > c.clientWidth + 1), false, '手機寬不超出');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, '手機寬不超出');
+  if (SHOT) await page.locator('#gdLogCard').screenshot({ path: path.join(SHOT, 'admin-guard-log-mobile.png') });
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/guard/log/9_1/hide'));
   assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });
