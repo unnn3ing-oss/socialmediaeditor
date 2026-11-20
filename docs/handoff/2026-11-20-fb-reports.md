@@ -1,0 +1,38 @@
+# 數據報表（tools/fbreports，第一版只做臉書）
+- 狀態：進行中　- 分支：claude/sleepy-albattani-xtbkpg　- 最後更新：2026-11-20
+- 使用者原始需求：「依 CLAUDE.md 與本規格開發『數據報表』。先核對目前分支、公司權限與 Graph 實際可回傳欄位，按第 4 節實作第一版。保留既有發文與單篇成效入口的行為。」
+- 規格：使用者上傳的 `2026-11-20-fb-reports-design.md`（基準 `d477b09`），已複製為 `docs/superpowers/specs/2026-11-20-fb-reports-design.md`。
+
+## 已定案的決定
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| 欄位實測 | 沙盒連不到 graph.facebook.com 與測試 Worker（代理 403），改做「欄位檢查」按鈕（只有系統管理者看得到）讓使用者在測試 Worker 一鍵實測 | 規格步驟 1 需要真實權杖 |
+| 觸及 | 後端常數 `REACH_METRIC = null`：觸及與互動率先顯示「—」；Meta 文件只說 `post_total_media_view_unique` 是「不重複觀看者」。實測與 Business Suite 對得上再改成該指標 | 規格：只能驗證不重複瀏覽時觸及顯示 — |
+| 期間 | 參數帶 since／until（文件沒寫），另外依 created_time 過濾，看到比起日早的貼文就停 | since／until 不被支援時仍正確 |
+| Insights | 先試清單欄位展開 `insights.metric(...)`；失敗記在執行個體記憶體，改逐篇 `/{post}/insights`（清單 4 篇＋4 次＝每批 ≤6 次） | 文件沒寫欄位展開 |
+| 分享 | Graph 沒回 `shares` 欄位＝0（Graph 0 分享時省略欄位，待實測） | |
+| 缺 read_insights | 文件：回空資料不報錯 → 該篇成效 `null`，原因 `no_data` | |
+
+## 做法（改哪裡）
+| 檔案 | 內容 | 狀態 |
+|---|---|---|
+| `server/fb/reports.js` | `GET /fb/reports/posts`、`GET /fb/reports/probe`、游標簽章、範圍代碼、分類、快取、用量暫停 | ⬜ |
+| `server/fb/usage.js` | 新增 `usageBusy`（guard 共用） | ⬜ |
+| `server/fb/index.js` | import reports.js（路由在 reports.js 用 `route` 登記） | ⬜ |
+| `tools/fbreports/` | 工具頁（index.html、app.js、calc.js、charts.js、fbreports.css、tool.json、icon、thumb） | ⬜ |
+| `tools/registry.json` | 加 `fbreports`（排在 fbvideo 後） | ⬜ |
+| 測試 | `test/server/fb-reports.test.js`、`test/fbreports-calc.test.js`、`test/e2e/fbreports.e2e.js` | ⬜ |
+| 文件 | `docs/deploy.md`、`privacy/` 中英補 read_insights | ⬜ |
+
+## 下一步
+- [ ] 後端 reports.js＋單元測試
+- [ ] 前端工具＋calc 單元測試＋e2e
+- [ ] build、全部測試、截圖、獨立審查
+- [ ] 使用者：部署測試 Worker → 系統管理者開「數據報表」按「欄位檢查」→ 回報結果 → 決定 REACH_METRIC
+
+## 測試
+`npm test`、`npm run e2e`、`node build.js --check`。
+
+## 注意事項
+- 不改 `/fb/published`、`manage.js`、排程發布與影片發布。
+- 成效回應 `Cache-Control: no-store`；KV 鍵含組別、範圍代碼、粉專、Graph 版本、資料版本。
