@@ -16,3 +16,20 @@ export function titleCheck(title) {
   if (lines.length > LINES_MAX) return { widths, ok: false, text: `${lines.length} 行，超過 ${LINES_MAX} 行（第 ${LINES_MAX + 1} 行起不會畫在圖上）` };
   return { widths, ok: true, text: `${RULE}・目前 ${widths.join('／')}` };
 }
+
+// 多行標題合併成一行：中文直接接；斷行兩邊都是英數時補一個空格（避免「iPhone\n17」變「iPhone17」）
+export function joinTitle(title) {
+  const lines = String(title || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  let out = '';
+  for (const l of lines) out += (out && /[A-Za-z0-9]$/.test(out) && /^[A-Za-z0-9]/.test(l) ? ' ' : '') + l;
+  return out;
+}
+
+// 標題改了：貼文內容第一個整行是【…】的那一行換成【新標題】；沒有那一行就原樣回傳（不補回）
+export function syncTitleLine(msg, title) {
+  const lines = String(msg || '').split('\n');
+  const i = lines.findIndex((l) => /^【.*】$/.test(l.trim()));
+  if (i < 0) return msg;
+  lines[i] = `【${joinTitle(title)}】`;
+  return lines.join('\n');
+}

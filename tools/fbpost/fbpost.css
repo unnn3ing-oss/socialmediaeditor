@@ -371,3 +371,56 @@ body.no-scroll { overflow: hidden; }
 /* 臉書權杖快到期／失效提醒（只有管理員看得到） */
 .tok-warn{margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#fffaeb;border:1px solid #fedf89;color:#93370d;font-weight:600;font-size:14px}
 .tok-warn.bad{background:#fef3f2;border-color:#fecdca;color:#b42318}
+
+/* 窄版：文章網址搬到預覽圖上面（dialog.js placeLink） */
+.post-body > .link-box { margin-bottom: 16px; }
+.link-box .lbl { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+
+/* ==== 外掛側邊欄（html.is-side，被 chrome-extension:// 嵌入）：按鈕對照 YT 下載縮小；網頁版不受影響 ==== */
+.is-side .fp { padding: 12px 12px 24px; }
+.is-side .new-btn, .is-side #pagesRefresh { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side .fp-head { gap: 8px; }
+.is-side .fp-head .pill { font-size: 12px; padding: 2px 10px; }
+.is-side .tabs button, .is-side .seg.tabs button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side .bar select { height: 32px; min-height: 32px; padding: 0 8px; font-size: 13px; }
+.is-side .bar .btn, .is-side .bar .btn-sm, .is-side #pubMore { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side .list .acts .btn, .is-side .list .acts button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side .list .edit input { min-height: 32px; font-size: 14px; }
+.is-side .list .edit .btn { height: 32px; min-height: 32px; }
+/* 新增發文：頂部 */
+.is-side .post-head { padding: 8px 12px; gap: 8px; }
+.is-side .xbtn { width: 32px; height: 32px; min-height: 32px; font-size: 18px; }
+.is-side .seg { padding: 4px; gap: 4px; border-radius: 14px; }
+.is-side .seg button { height: 32px; min-height: 32px; padding: 0 10px; border-radius: 10px; font-size: 13px; }
+/* 內容 */
+.is-side .post-body { padding: 12px; }
+.is-side .post-body > .link-box { margin-bottom: 12px; }
+.is-side .compose { gap: 12px; }
+.is-side .compose .lbl { margin: 10px 0 4px; }
+.is-side .post-body textarea, .is-side .post-body input, .is-side .post-body select { font-size: 14px; padding: 8px 10px; min-height: 40px; }
+.is-side .post-body input[type=url], .is-side .post-body input[type=text] { height: 40px; }
+.is-side .soft-btn, .is-side .add-comment { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.is-side .extra-del { min-height: 32px; }
+.is-side .shelf-nav { width: 32px; height: 32px; min-height: 32px; }
+.is-side .help { width: 32px; height: 32px; }
+.is-side .rd-copy { min-height: 32px; }
+/* 底列：粉專膠囊 36、RD 左開關右 SLUG 同一列、清空／送出 40 */
+.is-side .post-foot { padding: 8px 12px 10px; }
+.is-side .post-foot .chips { gap: 6px; max-height: 78px; }
+.is-side .post-foot .chip { height: 36px; }
+.is-side .chip button { min-height: 34px; font-size: 13px; padding: 0 10px; gap: 5px; }
+.is-side .chip .box { width: 14px; height: 14px; font-size: 11px; }
+.is-side .sendrow { flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.is-side .rd { flex: 1 1 100%; flex-wrap: nowrap; gap: 8px; }
+.is-side .rd-switch { gap: 6px; }
+.is-side .rd-switch .track { width: 40px; height: 24px; border-radius: 12px; }
+.is-side .rd-switch .track::after { left: 4px; top: 4px; width: 16px; height: 16px; }
+.is-side .rd-switch input:checked + .track::after { transform: translateX(16px); }
+.is-side .rd-lbl { font-size: 13px; }
+.is-side .rd #rdSlug { flex: 1 1 auto; height: 36px; min-height: 36px; font-size: 14px; padding: 0 10px; }
+.is-side .clear-btn { height: 40px; min-height: 40px; padding: 0 14px; font-size: 14px; }
+.is-side .send { height: 40px; min-height: 40px; font-size: 15px; }
+/* 排程時間選單與視窗 */
+.is-side .tp-menu button { height: 36px; min-height: 36px; font-size: 13px; }
+.is-side .tp-row input { height: 40px; font-size: 15px; }
+.is-side .tp-quick button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }

@@ -2,7 +2,7 @@
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：選套版 66px、純文字圖 76px。框的判斷用 rules.js。
 import { $, errText, say, confirmBox, segmented, stripLead } from './util.js';
 import { frameForUrl } from './rules.js';
-import { titleCheck, LINE_MAX } from './title.js';
+import { titleCheck, LINE_MAX, syncTitleLine } from './title.js';
 import { createTitleEditor } from './titleedit.js';
 import { autoLines } from '../../sdk/news-rules.js';
 import { parseArticle, formatCopy, mainCaption } from '../../sdk/news-article.js';
@@ -154,6 +154,11 @@ export function createComposer({ tb, assets }) {
     draw(); loadTitleGlyphs($('title').value).then(draw);
   }
   $('title').addEventListener('input', titleChanged);
+  // 使用者改標題（標題欄或預覽上直接改）→ 貼文內容的【標題】那一行跟著換；程式帶入時不經這裡
+  $('title').addEventListener('input', () => {
+    const m = $('msg'), next = syncTitleLine(m.value, $('title').value);
+    if (next !== m.value) { m.value = next; msgCount(); }
+  });
   // 右側字數和輸入框的行對齊：用輸入框實際的行高、上邊距，捲動也跟著走
   function alignTitleLines() {
     const ta = $('title'), box = $('titleLines'), cs = getComputedStyle(ta);

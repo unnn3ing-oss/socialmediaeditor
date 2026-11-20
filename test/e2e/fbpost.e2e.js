@@ -874,3 +874,42 @@ test('防重複：同一則再送沿用 sendId；結果不明先確認，確定�
   assert.equal(field(api.posts[2], 'retry'), null);
   await page.close();
 });
+
+test('外掛側邊欄（is-side，360px）：按鈕縮小、RD 開關與 SLUG 同列、文章網址在預覽上面且聚焦', async () => {
+  const { page, errors } = await newPage('admin', { width: 360, height: 760 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.evaluate(() => document.documentElement.classList.add('is-side'));   // 真的側邊欄由 ancestorOrigins 判斷，測試直接加
+  await openPost(page);
+  const h = (sel) => page.$eval(sel, (e) => Math.round(e.getBoundingClientRect().height));
+  assert.equal(await h('#dlgClose'), 32);
+  assert.equal(await h('#modeSeg button'), 32);
+  assert.equal(await h('#fxBtn'), 32);
+  assert.equal(await h('#link'), 40);
+  assert.equal(await h('#pages .chip'), 36);
+  assert.equal(await h('#rdSlug'), 36);
+  assert.equal(await h('#sendBtn'), 40);
+  assert.equal(await h('#clearBtn'), 40);
+  const sw = await page.$eval('.rd-switch .track', (e) => e.getBoundingClientRect());
+  const slug = await page.$eval('#rdSlug', (e) => e.getBoundingClientRect());
+  assert.ok(Math.abs((sw.top + sw.height / 2) - (slug.top + slug.height / 2)) < 4 && slug.left > sw.right, 'RD 開關在左、SLUG 在右同一列');
+  assert.equal(await page.$eval('.link-box', (e) => e.nextElementSibling.classList.contains('compose')), true, '網址在預覽上面');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'link');
+  assert.equal(await overflow(page), 0);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'side-360.png') });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('網頁版：窄版網址在最上面，電腦版回右欄最上面；按鈕維持原尺寸', async () => {
+  const { page, errors } = await newPage('admin', { width: 1280, height: 900 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  assert.equal(await page.$eval('.link-box', (e) => e.parentElement.classList.contains('right') && !e.previousElementSibling), true);
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForFunction(() => document.querySelector('.link-box').nextElementSibling?.classList.contains('compose'));
+  assert.equal(await page.$eval('#pages .chip', (e) => Math.round(e.getBoundingClientRect().height)), 44, '網頁版手機膠囊仍 44');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForFunction(() => document.querySelector('.link-box').parentElement.classList.contains('right'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});

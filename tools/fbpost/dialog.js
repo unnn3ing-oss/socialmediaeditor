@@ -8,13 +8,21 @@ export function createDialog({ beforeOpen } = {}) {
   const open = () => {
     veil.hidden = false; document.body.classList.add('no-scroll');
     for (const el of bg()) el.inert = true;
-    $('link').focus();
+    const link = $('link'); link.focus(); link.scrollIntoView({ block: 'nearest' });
   };
   const close = () => {
     veil.hidden = true; document.body.classList.remove('no-scroll');
     for (const el of bg()) el.inert = false;
     btn.focus();
   };
+  // 窄版（單欄）文章網址放最上面（預覽圖之前）；電腦版兩欄放回右欄最上面。搬移元素，內容不會不見
+  const mq = matchMedia('(max-width: 820px)');
+  const placeLink = () => {
+    const box = document.querySelector('.link-box'), compose = document.querySelector('.compose');
+    if (mq.matches) { if (box.nextElementSibling !== compose) compose.before(box); }
+    else if (box.parentElement !== compose.querySelector('.right')) compose.querySelector('.right').prepend(box);
+  };
+  placeLink(); mq.addEventListener('change', placeLink);
   let busy = false;
   btn.addEventListener('click', async () => {
     if (busy) return;

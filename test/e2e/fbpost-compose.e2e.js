@@ -426,3 +426,25 @@ test('標題右側每行字數和輸入框的行對齊；電腦版聚焦外框�
   }
   await page.close();
 });
+
+test('改標題同步貼文內容的【標題】：預覽上改、標題欄改都同步；刪掉【】行後不補回', async () => {
+  const { page, frame, errors } = await openFb();
+  await frame.fill('#link', 'https://news.tvbs.com.tw/world/4053093');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('pullHint').textContent));
+  await frame.fill('#msg', '小編文\n' + (await frame.inputValue('#msg')).replace(/^\n/, ''));
+  await frame.dblclick('#cv');
+  await frame.waitForSelector('#cvWrap .cv-title:not([hidden])');
+  await frame.fill('#cvWrap .cv-title', '預覽上改的\n新款 iPhone\n17 標題');
+  await frame.press('#cvWrap .cv-title', 'Escape');
+  let msg = await frame.inputValue('#msg');
+  assert.equal(msg.split('\n')[0], '小編文', '小編文不動');
+  assert.equal(msg.split('\n')[1], '【預覽上改的新款 iPhone 17 標題】');
+  assert.match(msg, /（圖／TVBS）/, '圖說不動');
+  await frame.fill('#title', '標題欄改的');
+  assert.equal((await frame.inputValue('#msg')).split('\n')[1], '【標題欄改的】');
+  await frame.fill('#msg', '只剩小編文');
+  await frame.fill('#title', '再改一次');
+  assert.equal(await frame.inputValue('#msg'), '只剩小編文', '沒有【】行不補回');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
