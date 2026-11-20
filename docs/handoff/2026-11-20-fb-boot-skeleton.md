@@ -12,9 +12,10 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/index.html`、`app.js`、`fbpost.css` | 骨架＋啟動流程收掉骨架 | ⬜ |
-| `tools/fbvideo/index.html`、`app.js`、`fbvideo.css` | 同上 | ⬜ |
-| `test/e2e/fbpost.e2e.js`、`fbvideo*.e2e.js` | 延遲回應時先看到骨架、沒有停用字樣 | ⬜ |
+| `tools/fbpost/index.html`、`app.js`、`fbpost.css` | 骨架＋啟動流程收掉骨架 | ✅ |
+| `tools/fbvideo/index.html`、`app.js`、`fbvideo.css` | 同上 | ✅ |
+| `test/e2e/fbpost.e2e.js`、`fbvideo*.e2e.js` | 延遲回應時先看到骨架、沒有停用字樣 | ✅ |
 
 ## 下一步
-- [ ] 實作、測試、審查、截圖，使用者說「推」才併 main
+- [x] 實作（側邊欄骨架另有一版：新增發文在分頁右邊）、fbpost＋fbvideo e2e 46、sidepanel 3、npm test、build --check、獨立審查通過
+- [ ] 使用者說「推」才併 main
