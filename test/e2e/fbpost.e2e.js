@@ -929,7 +929,7 @@ test('外掛側邊欄：「＋ 新增發文」在已排程／已發佈右邊同�
   assert.equal(await a.page.$eval('#newBtn', (e) => e.parentElement.id), 'tabsRow');
   const tabs = await a.page.$eval('#tabs', (e) => e.getBoundingClientRect()), nb = await a.page.$eval('#newBtn', (e) => e.getBoundingClientRect());
   assert.ok(nb.left > tabs.right && Math.abs((nb.top + nb.height / 2) - (tabs.top + tabs.height / 2)) < 4, '在分頁右邊同一列');
-  assert.equal(Math.round(nb.height), 32);
+  assert.equal(Math.round(nb.height), Math.round(tabs.height), '和分頁外框同高');
   assert.equal(await overflow(a.page), 0);
   if (SHOT) await a.page.screenshot({ path: path.join(SHOT, 'side-list.png') });
   await a.page.click('#newBtn');

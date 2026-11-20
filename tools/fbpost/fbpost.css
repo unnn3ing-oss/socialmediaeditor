@@ -430,3 +430,5 @@ body.no-scroll { overflow: hidden; }
 .tabs-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
 .tabs-row .tabs { margin: 0; }
 .tabs-row .new-btn { margin-left: auto; flex: none; }
+/* 和分頁外框同高（外框 40＝按鈕 32＋內距 4×2）；字級 15、左右內距不變 */
+.is-side .tabs-row .new-btn { height: 40px; min-height: 40px; font-size: 15px; }
