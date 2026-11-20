@@ -426,3 +426,7 @@ body.no-scroll { overflow: hidden; }
 .is-side .tp-quick button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
 /* 完成視窗、確認框、停用頁按鈕 */
 .is-side .dlg .btn, .is-side .done-dlg .btn, .is-side #needStaffBtn { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+/* 分頁列（外掛側邊欄時右邊放「＋ 新增發文」，dialog.js 搬動） */
+.tabs-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+.tabs-row .tabs { margin: 0; }
+.tabs-row .new-btn { margin-left: auto; flex: none; }

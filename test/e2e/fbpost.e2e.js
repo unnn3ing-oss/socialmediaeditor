@@ -913,3 +913,37 @@ test('網頁版：窄版網址在最上面，電腦版回右欄最上面；按�
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('外掛側邊欄：「＋ 新增發文」在已排程／已發佈右邊同一列；不能檢視時放回標題列；網頁版不搬', async () => {
+  const side = async (me) => {
+    const t = await newPage(me ? 'companyOpen' : 'admin', { width: 360, height: 760 }, me ? { me } : {});
+    await t.page.route('**/tools/fbpost/index.html', async (r) => {   // 模擬被外掛嵌入：一開始就是 is-side
+      const res = await r.fetch(); r.fulfill({ response: res, body: (await res.text()).replace('<html lang="zh-Hant-TW">', '<html lang="zh-Hant-TW" class="is-side">') });
+    });
+    await t.page.goto(srv.url + 'tools/fbpost/index.html');
+    await t.page.waitForSelector('#fbpostApp:not([hidden])');
+    return t;
+  };
+  const a = await side();
+  await a.page.waitForTimeout(300);
+  assert.equal(await a.page.$eval('#newBtn', (e) => e.parentElement.id), 'tabsRow');
+  const tabs = await a.page.$eval('#tabs', (e) => e.getBoundingClientRect()), nb = await a.page.$eval('#newBtn', (e) => e.getBoundingClientRect());
+  assert.ok(nb.left > tabs.right && Math.abs((nb.top + nb.height / 2) - (tabs.top + tabs.height / 2)) < 4, '在分頁右邊同一列');
+  assert.equal(Math.round(nb.height), 32);
+  assert.equal(await overflow(a.page), 0);
+  if (SHOT) await a.page.screenshot({ path: path.join(SHOT, 'side-list.png') });
+  await a.page.click('#newBtn');
+  await a.page.waitForSelector('#postDlg:not([hidden])');
+  assert.deepEqual(a.errors, []);
+  await a.page.close();
+  const b = await side({ admin: false, id: 'A2', name: '乙', group: '只發文', perms: ['post'], mode: 'company' });
+  await b.page.waitForFunction(() => document.getElementById('fbpostApp').classList.contains('no-view'));
+  await b.page.waitForFunction(() => document.getElementById('newBtn').parentElement.classList.contains('fp-head'));
+  assert.equal(await b.page.isVisible('#newBtn'), true, '不能檢視時新增發文仍看得到');
+  await b.page.close();
+  const c = await newPage('admin');
+  await c.page.goto(srv.url + 'tools/fbpost/index.html');
+  await c.page.waitForSelector('#fbpostApp:not([hidden])');
+  assert.equal(await c.page.$eval('#newBtn', (e) => e.parentElement.classList.contains('fp-head')), true, '網頁版不搬');
+  await c.page.close();
+});

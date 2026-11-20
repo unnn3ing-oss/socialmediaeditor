@@ -22,6 +22,7 @@
 - [x] npm test 717、fbpost＋fbpost-compose e2e 52、build --check 通過；全部 e2e 236 中 admin「臉書連線」偶發 1 項，單獨重跑 31 項全過
 - [x] 360px 改前／改後截圖給使用者
 - [x] 獨立審查通過；Minor 已修：第 1 行（小編文）不同步、標題清空不動、跨 820px 搬動網址欄保留焦點、對話框按鈕縮小
+- [x] 追加：外掛側邊欄「＋ 新增發文」搬到已排程／已發佈右邊（`.tabs-row`，dialog.js `placeNew`；no-view 時放回標題列；網頁版不搬）。fbpost e2e 36 通過
 - [ ] 等使用者看截圖／外掛實測，說「推」才併入 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 已知限制

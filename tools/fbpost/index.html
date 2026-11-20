@@ -50,9 +50,11 @@
 
   <p class="noview" id="noView" role="status" hidden>你的權限組不能檢視列表</p>
   <section class="card" id="listCard">
-    <div class="seg tabs" role="tablist" aria-label="分頁" id="tabs">
-      <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
-      <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
+    <div class="tabs-row" id="tabsRow">
+      <div class="seg tabs" role="tablist" aria-label="分頁" id="tabs">
+        <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
+        <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
+      </div>
     </div>
 
     <div id="tab-sched">

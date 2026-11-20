@@ -25,6 +25,16 @@ export function createDialog({ beforeOpen } = {}) {
     if (hadFocus && document.activeElement !== $('link')) $('link').focus();
   };
   placeLink(); mq.addEventListener('change', placeLink);
+  // 外掛側邊欄：「＋ 新增發文」搬到「已排程／已發佈」右邊；不能檢視列表（卡片隱藏）時放回標題列
+  if (document.documentElement.classList.contains('is-side')) {
+    const app = $('fbpostApp'), row = $('tabsRow'), head = document.querySelector('.fp-head');
+    const placeNew = () => {
+      const want = app.classList.contains('no-view') ? head : row;
+      if (btn.parentElement !== want) want.append(btn);
+    };
+    placeNew();
+    new MutationObserver(placeNew).observe(app, { attributes: true, attributeFilter: ['class'] });
+  }
   let busy = false;
   btn.addEventListener('click', async () => {
     if (busy) return;
