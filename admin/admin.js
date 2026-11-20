@@ -1083,6 +1083,8 @@ if (window.top !== window.self) {
     });
     if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
     if (focus) $('tab-' + id).focus();
+    // 手機版分類列會橫向捲動：把目前分類捲進畫面
+    var tb = $('tab-' + id); if (tb.scrollIntoView && window.matchMedia && window.matchMedia('(max-width:820px)').matches) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // 臉書相關卡片（發文設定、留言管理、連接狀態、進階設定）共用一次讀取
     if ((id === 'post' || id === 'guard' || id === 'conn' || id === 'adv') && !fbLoaded && token) fbLoad();
     if ((id === 'people' || id === 'adv') && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
