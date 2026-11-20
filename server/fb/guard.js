@@ -55,10 +55,12 @@ export function cleanRules(raw) {
 }
 const has = (text, list) => list.some((w) => { const n = normText(w); return n && text.includes(n); });
 
-// 預篩：留言文字含任一名稱關鍵字或引導詞
+// 不同引導詞出現幾個
+const leadCount = (t, leads) => new Set(leads.map(normText).filter((w) => w && t.includes(w))).size;
+// 預篩（與規則一致，不會漏抓）：文字含名稱關鍵字（被標註的名稱會出現在文字裡），或含 ≥2 個不同引導詞
 export function prefilter(message, rules) {
   const t = normText(message);
-  return !!t && (has(t, rules.names) || has(t, rules.leads));
+  return !!t && (has(t, rules.names) || leadCount(t, rules.leads) >= 2);
 }
 
 // 判斷一則留言（Graph 讀回來的 { message, message_tags, from }）
@@ -71,9 +73,7 @@ export function judge(c, rules, pageId) {
   if (from && rules.allow.includes(from)) return miss;
   if (!tags.length) return miss;
   if (names.some((n) => has(normText(n), rules.names))) return { hit: true, rule: 'r1', tags: names };
-  const t = normText(c.message);
-  const leadHits = new Set(rules.leads.map(normText).filter((w) => w && t.includes(w)));
-  if (leadHits.size >= 2) return { hit: true, rule: 'r2', tags: names };
+  if (leadCount(normText(c.message), rules.leads) >= 2) return { hit: true, rule: 'r2', tags: names };
   return miss;
 }
 
@@ -182,6 +182,10 @@ async function handleChange(env, cfg, page, c) {
   if (typeof v.message !== 'string') { await bump(env, 'noText'); return; }   // 沒附文字：不讀（避免大量呼叫）
   const prev = await getLog(env, cid);
   if (prev && prev.exempt) return;                                // 手動取消隱藏過
+  if (prev && (prev.action === 'hidden' || prev.action === 'manual')) {   // 已經隱藏：再編輯也不必再讀
+    if (v.verb === 'edited' && !prev.edited) await env.DB.prepare('UPDATE fb_guard_log SET edited = 1 WHERE cid = ?').bind(cid).run();
+    return;
+  }
   if (!prefilter(v.message, cfg.rules)) {
     if (prev && v.verb === 'edited') await env.DB.prepare('UPDATE fb_guard_log SET edited = 1 WHERE cid = ?').bind(cid).run();
     return;
@@ -248,7 +252,11 @@ export async function adminGuard(request, env, path, who) {
   try {
     if (path === '/admin/fb/guard' && request.method === 'GET') {
       const cfg = await readGuard(env);
-      const profiles = await profileInfo(env);
+      // 組別權限（debug_token）只在 ?check=1 時查，打開卡片不花呼叫次數
+      const check = new URL(request.url).searchParams.get('check') === '1';
+      let profiles;
+      if (check) profiles = await profileInfo(env);
+      else { const st = await readProfiles(env); profiles = st.list.map((p) => ({ id: p.id, name: p.name, active: p.id === st.active, meta: null })); }
       const suggest = cfg.profile || (profiles.find((p) => p.meta) || profiles.find((p) => p.active) || {}).id || '';
       return ok(request, env, { ...cfg, profiles, suggest, stats: await readStats(env), defaults: DEFAULT_RULES });
     }

@@ -119,3 +119,4 @@ textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line
 .gd-log li{border:1px solid var(--edge);border-radius:12px;padding:10px 12px;display:grid;gap:4px}.gd-log .gd-head{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font-size:14px;color:var(--mute)}.gd-log .gd-act{font-weight:700;color:var(--ink,#1f2328)}.gd-log .gd-act.hidden,.gd-log .gd-act.manual{color:#166534}.gd-log .gd-act.failed{color:var(--danger)}.gd-log .gd-act.observe{color:#b54708}
 .gd-log .gd-msg{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}.gd-log .gd-tags{font-size:14px;margin:0}.gd-log .row{margin-top:4px}
 #gdCard .row select{width:auto;flex:0 1 220px;margin:0}
+.gd-prof{display:flex;gap:8px;align-items:center;min-width:0}.gd-prof select{flex:1 1 auto;min-width:0}.gd-prof button{flex:0 0 auto}

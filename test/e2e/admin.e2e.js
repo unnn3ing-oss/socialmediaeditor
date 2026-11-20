@@ -14,6 +14,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 
 let PG_SAVED = null;
 let GD_SAVED = null;
+const GD_CHECKS = [];
 let PS_SAVED = null;
 let VS_SAVED = null;
 let TOK_SAVED = null;
@@ -59,9 +60,11 @@ const DATA = {
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
   'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP', extended: true }; },
-  'GET /admin/fb/guard': { mode: 'off', profile: '', pages: [], suggest: 'pabcdef12', stats: { since: 0 },
-    rules: { names: ['寶爸', '寳爸'], leads: ['老師', '進群'], allow: [], auto: { r1: true, r2: false } }, defaults: { names: ['寶爸', '寳爸'], leads: ['老師', '進群'], allow: [], auto: { r1: true, r2: false } },
-    profiles: [{ id: 'p1', name: '主管權杖', active: true, meta: false }, { id: 'pabcdef12', name: '鈞評測試', active: false, meta: true }] },
+  // 打開卡片不查權限（meta:null、預選使用中組別）；?check=1 才回 meta
+  'GET /admin/fb/guard': (b, u) => { const chk = u.searchParams.get('check') === '1'; GD_CHECKS.push(chk);
+    return { mode: 'off', profile: '', pages: [], suggest: 'p1', stats: { since: 0 },
+      rules: { names: ['寶爸', '寳爸'], leads: ['老師', '進群'], allow: [], auto: { r1: true, r2: false } }, defaults: { names: ['寶爸', '寳爸'], leads: ['老師', '進群'], allow: [], auto: { r1: true, r2: false } },
+      profiles: [{ id: 'p1', name: '主管權杖', active: true, meta: chk ? false : null }, { id: 'pabcdef12', name: '鈞評測試', active: false, meta: chk ? true : null }] }; },
   'POST /admin/fb/guard': (b) => { GD_SAVED = b; return { ...b, pages: [], stats: { since: 0 } }; },
   'GET /admin/fb/guard/pages': { profile: 'pabcdef12', pages: [{ id: '111', name: 'TVBS 新聞', on: false, sub: null }] },
   'POST /admin/fb/guard/pages/111': (b) => ({ id: '111', on: b.on, sub: b.on }),
@@ -153,7 +156,7 @@ async function open(viewport, hash = '', front = null) {
     }
     const sf = staffRoute(req, u, key);
     if (sf) return r.fulfill({ json: sf });
-    if (typeof DATA[key] === 'function') return r.fulfill({ json: { ok: true, data: DATA[key](req.postData() ? JSON.parse(req.postData()) : null) } });
+    if (typeof DATA[key] === 'function') return r.fulfill({ json: { ok: true, data: DATA[key](req.postData() ? JSON.parse(req.postData()) : null, u) } });
     if (key in DATA) return r.fulfill({ json: { ok: true, data: DATA[key] } });
     return r.fulfill({ json: { ok: false, code: 'not_found', error: '找不到' } });
   });
@@ -795,12 +798,19 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
 });
 
-test('留言守門卡片：預選有權限的組別、儲存規則、開粉專、紀錄隱藏', async () => {
+test('留言守門卡片：打開不查權限、按了才查、儲存規則、開粉專、紀錄隱藏', async () => {
+  GD_CHECKS.length = 0;
   const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
   await login(page);
   await page.waitForFunction(() => document.querySelectorAll('#gdLog li').length === 1);
-  assert.equal(await page.inputValue('#gdProfile'), 'pabcdef12', '預選有 pages_manage_metadata 的組別');
+  assert.equal(await page.inputValue('#gdProfile'), 'p1', '沒存過設定：預選發文使用中組別');
+  assert.deepEqual(GD_CHECKS, [false], '打開卡片不查權限');
+  assert.doesNotMatch(await page.textContent('#gdProfile option[value="p1"]'), /pages_manage_metadata/);
+  await page.click('#gdPerm');
+  await page.waitForFunction(() => /有 pages_manage_metadata 的組別：鈞評測試/.test(document.getElementById('gdMsg').textContent));
   assert.match(await page.textContent('#gdProfile option[value="p1"]'), /缺 pages_manage_metadata/);
+  assert.equal(await page.inputValue('#gdProfile'), 'p1', '檢查後保留原本選的組別');
+  await page.selectOption('#gdProfile', 'pabcdef12');
   assert.equal(await page.isChecked('#gdR1'), true); assert.equal(await page.isChecked('#gdR2'), false);
   await page.selectOption('#gdMode', 'observe');
   await page.fill('#gdLeads', '老師\n進群\n 帶單 \n');

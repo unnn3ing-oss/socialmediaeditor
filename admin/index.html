@@ -152,7 +152,7 @@
           <label for="gdMode">模式</label>
           <select id="gdMode"><option value="off">關閉</option><option value="observe">觀察（只記錄，不隱藏）</option><option value="hide">自動隱藏</option></select>
           <label for="gdProfile">守門用組別</label>
-          <select id="gdProfile"></select>
+          <div class="gd-prof"><select id="gdProfile"></select><button id="gdPerm" type="button">檢查權限</button></div>
         </div>
         <p class="fb-hint">守門用組別要有 <code>pages_manage_metadata</code> 權限；換組別後粉專開關會清空，要重新打開。</p>
         <fieldset class="gd-auto">

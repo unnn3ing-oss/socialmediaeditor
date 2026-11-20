@@ -32,6 +32,8 @@ test('規則：預設、預篩（全半形／空白）、r1／r2、白名單、�
   const R = g.DEFAULT_RULES;
   assert.ok(g.prefilter('幸 好 一 直 看 雙寶爸', R));
   assert.ok(g.prefilter('進群跟老師學', R));
+  assert.ok(!g.prefilter('持續追蹤這則新聞', R), '只有 1 個引導詞不讀');
+  assert.ok(!g.prefilter('老師老師老師', R), '同一個引導詞重複不算 2 個');
   assert.ok(!g.prefilter('新聞報導很清楚', R));
   assert.equal(g.judge(SPAM, R, '111').rule, 'r1');
   assert.equal(g.judge({ ...SPAM, message_tags: [{ id: '5', name: '三寳爸飆股日記' }] }, R, '111').rule, 'r1', '異體字寳');
@@ -105,7 +107,10 @@ test('管理路由：設定存讀、粉專開關訂閱、紀錄列表、取消�
   }); t.after(f.restore);
   const env = fbEnv(); const h = await adminH(env); const g = await guard();
   let d = (await (await call(env, '/admin/fb/guard', { headers: h })).json()).data;
-  assert.equal(d.mode, 'off'); assert.equal(d.suggest, 'p1'); assert.equal(d.profiles[0].meta, true);
+  assert.equal(d.mode, 'off'); assert.equal(d.suggest, 'p1'); assert.equal(d.profiles[0].meta, null);
+  assert.ok(!f.calls.some((c) => c.path === '/debug_token'), '打開卡片不查權限');
+  d = (await (await call(env, '/admin/fb/guard?check=1', { headers: h })).json()).data;
+  assert.equal(d.profiles[0].meta, true);
   const bad = await call(env, '/admin/fb/guard', { method: 'POST', headers: h, body: JSON.stringify({ mode: 'hide', profile: 'p1', rules: { names: [], leads: [], allow: ['x'] } }) });
   assert.equal(bad.status, 400);
   const r = await call(env, '/admin/fb/guard', { method: 'POST', headers: h, body: JSON.stringify({ mode: 'hide', profile: 'p1', rules: d.rules }) });
@@ -131,4 +136,16 @@ test('管理路由：設定存讀、粉專開關訂閱、紀錄列表、取消�
   await g.cleanupGuard(env, Date.now() + 31 * 86400000);
   assert.equal((await logRows(env)).length, 0);
   assert.equal((await call(env, '/admin/fb/guard', { headers: { origin: ORIGIN } })).status, 401);
+});
+
+test('已隱藏的留言再被編輯：不再讀、不再隱藏，只標編輯過', async (t) => {
+  const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS, 'GET /9_1': () => SPAM, 'POST /9_1': () => ({ success: true }) }); t.after(f.restore);
+  const env = fbEnv(); const g = await guard();
+  await setup(env, 'hide');
+  await g.guardEvent(env, ev({ verb: 'add', comment_id: '9_1', message: SPAM.message, from: { id: '777' } }));
+  const n = f.calls.length;
+  await g.guardEvent(env, ev({ verb: 'edited', comment_id: '9_1', message: SPAM.message + '!!', from: { id: '777' } }));
+  assert.equal(f.calls.length, n, '不打 API');
+  const r = (await logRows(env))[0];
+  assert.equal(r.action, 'hidden'); assert.equal(r.edited, 1);
 });

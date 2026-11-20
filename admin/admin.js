@@ -505,21 +505,36 @@ if (window.top !== window.self) {
     $('gdStats').textContent = '自 ' + fmtTime(st.since) + ' 起：檢查 ' + st.checked + ' 則、觀察 ' + st.observe + '、隱藏 ' + st.hidden + '、失敗 ' + st.failed +
       '、用量高先略過 ' + st.skipped + '、通知沒附文字 ' + st.noText;
   }
+  function gdProfiles(list, value) {
+    var sel = $('gdProfile'); sel.textContent = '';
+    list.forEach(function (p) {
+      var o = document.createElement('option'); o.value = p.id;
+      o.textContent = p.name + (p.active ? '（發文使用中）' : '') + (p.meta === true ? '．有 pages_manage_metadata' : p.meta === false ? '．缺 pages_manage_metadata' : '');
+      sel.appendChild(o);
+    });
+    sel.value = value;
+  }
+  // 檢查各組別權杖有沒有 pages_manage_metadata（每組打一次 debug_token，按了才查）
+  $('gdPerm').onclick = function () {
+    var keep = $('gdProfile').value;
+    $('gdPerm').disabled = true; say($('gdMsg'), '向臉書查詢權限');
+    api('/admin/fb/guard?check=1').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      gdProfiles(res.data.profiles, keep);
+      var ok = res.data.profiles.filter(function (p) { return p.meta; }).map(function (p) { return p.name; });
+      say($('gdMsg'), ok.length ? '有 pages_manage_metadata 的組別：' + ok.join('、') : '沒有任何組別有 pages_manage_metadata。', ok.length ? 'good' : 'err');
+    }).catch(function (e) { say($('gdMsg'), '查詢失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('gdPerm').disabled = false; });
+  };
   function gdLoad() {
     say($('gdMsg'), '讀取中');
     return api('/admin/fb/guard').then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var d = res.data; gdDefaults = d.defaults;
       $('gdMode').value = d.mode;
-      var sel = $('gdProfile'); sel.textContent = '';
-      d.profiles.forEach(function (p) {
-        var o = document.createElement('option'); o.value = p.id;
-        o.textContent = p.name + (p.active ? '（發文使用中）' : '') + (p.meta === true ? '．有 pages_manage_metadata' : p.meta === false ? '．缺 pages_manage_metadata' : '');
-        sel.appendChild(o);
-      });
-      sel.value = d.profile || d.suggest; sel.dataset.saved = d.profile;
+      gdProfiles(d.profiles, d.profile || d.suggest); $('gdProfile').dataset.saved = d.profile;
       gdFill(d.rules); gdStats(d.stats);
-      say($('gdMsg'), d.profile ? '' : '還沒儲存過設定：已預選有權限的組別，按「儲存設定」生效。');
+      say($('gdMsg'), d.profile ? '' : '還沒儲存過設定：已預選發文使用中的組別，可按「檢查權限」確認哪一組有 pages_manage_metadata，再按「儲存設定」。');
       return Promise.all([gdPages(false), gdLog(false)]);
     }).catch(function (e) { say($('gdMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
   }
