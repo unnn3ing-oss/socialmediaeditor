@@ -27,7 +27,7 @@
 ## 下一步
 - [x] 後端 reports.js＋單元測試
 - [x] 前端工具＋calc 單元測試＋e2e
-- [ ] 全部 e2e、獨立審查（進行中）
+- [x] 全部 e2e（251 項：249 過，admin「臉書連線」與 fbpost-compose「圖完全相同」兩項在全體並跑時逾時，單獨重跑皆過，相關檔案未改）、npm test 741、build --check、獨立審查（無 Critical／Major，2 個 Minor 已修）
 - [ ] 使用者：部署測試 Worker → 系統管理者開「數據報表」按「欄位檢查」→ 回報結果 → 決定 REACH_METRIC
 
 ## 測試
