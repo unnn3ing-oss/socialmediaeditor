@@ -1,5 +1,5 @@
 # 數據報表（tools/fbreports，第一版只做臉書）
-- 狀態：進行中　- 分支：claude/sleepy-albattani-xtbkpg　- 最後更新：2026-11-20
+- 狀態：已完成（已併入 main）　- 分支：claude/sleepy-albattani-xtbkpg　- 最後更新：2026-11-20
 - 使用者原始需求：「依 CLAUDE.md 與本規格開發『數據報表』。先核對目前分支、公司權限與 Graph 實際可回傳欄位，按第 4 節實作第一版。保留既有發文與單篇成效入口的行為。」
 - 規格：使用者上傳的 `2026-11-20-fb-reports-design.md`（基準 `d477b09`），已複製為 `docs/superpowers/specs/2026-11-20-fb-reports-design.md`。
 
