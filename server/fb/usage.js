@@ -4,6 +4,7 @@
 //     X-Business-Use-Case-Usage：粉專權杖的呼叫，{ <粉專ID>: [{ type, call_count, total_cputime, total_time, estimated_time_to_regain_access(分鐘) }] }
 //   graph() 每次回應都交給 noteUsage；被限流（4／17／32／613／80001）交給 noteThrottle
 //   存 D1 fb_settings k='rate_usage'：{ app, pages:{ id: {...} }, throttle }；每個執行個體最多每 60 秒寫一次，被限流或 ≥75% 立即寫
+import { ensureSettings } from '../core/once.js';
 const KEY = 'rate_usage';
 const WRITE_GAP = 60 * 1000;
 const URGENT_GAP = 10 * 1000;   // 高用量時也至少隔 10 秒才寫（限流紀錄與立即查詢除外）
@@ -58,7 +59,7 @@ async function flush(env, now) {
   const pend = { app: s.app, pages: s.pages, throttle: s.throttle };
   s.app = null; s.pages = {}; s.throttle = null;
   try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
+    await ensureSettings(env);
     const cur = await readRow(env);
     if (pend.app) cur.app = pend.app;
     Object.assign(cur.pages, pend.pages);

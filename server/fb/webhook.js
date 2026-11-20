@@ -5,6 +5,7 @@
 import { readBody } from '../core/http.js';
 import { allAppCreds } from './tokenstore.js';
 import { guardEvent } from './guard.js';
+import { ensureSettings, cached } from '../core/once.js';
 
 export const HOOK_PATH = '/fbhook';
 const LAST_KEY = 'webhook_last';
@@ -32,9 +33,16 @@ export async function verifyToken(env) {
 const text = (body, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
 const CHALLENGE_RE = /^[A-Za-z0-9_-]{1,200}$/;
 
+// 每個執行個體每 60 秒最多寫一次（原本每則推送寫一次，D1 寫入量太大）；管理頁「最後收到」最多慢 1 分鐘
+export const LAST_EVERY_MS = 60 * 1000;
+export const CREDS_CACHE_MS = 60 * 1000;
+const lastSaved = new WeakMap();   // D1 綁定 → 上次寫入時間
 async function saveLast(env, rec) {
   if (!env.DB) return;
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
+  const prev = lastSaved.get(env.DB);
+  if (prev && rec.at - prev < LAST_EVERY_MS) return;
+  lastSaved.set(env.DB, rec.at);
+  await ensureSettings(env);
   await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
     .bind(LAST_KEY, JSON.stringify(rec), Date.now()).run();
 }
@@ -70,7 +78,7 @@ export async function handleFbHook(request, env, path, ctx) {
     const buf = await readBody(request, MAX_BODY);
     if (!buf) return text('too large', 413);
     // 權杖組別各自的 App 密鑰：任一組驗得過就算（不同 App 各自訂閱 Webhook）
-    const creds = await allAppCreds(env);
+    const creds = await cached(env.DB, 'appCreds', CREDS_CACHE_MS, () => allAppCreds(env));
     const sig = request.headers.get('x-hub-signature-256') || '';
     let okSig = false;
     if (sig.startsWith('sha256=')) for (const c of creds) if (sameText(sig.slice(7).toLowerCase(), await hmacHex(c.secret, buf))) { okSig = true; break; }

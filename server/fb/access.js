@@ -4,12 +4,13 @@
 //   讀不到或值壞掉＝關閉（保守）；reason＝關閉原因（選填，≤100 字，開放後保留）
 import { bearer } from '../core/auth.js';
 import { fail } from '../core/http.js';
+import { ensureSettings } from '../core/once.js';
 
 const KEY = 'access';
 export const ACCESS_MODES = ['admin', 'company'];
 
 async function ensureTable(env) {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
+  await ensureSettings(env);
 }
 
 export const MAX_REASON = 100;
