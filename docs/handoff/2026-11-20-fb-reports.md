@@ -16,18 +16,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/reports.js` | `GET /fb/reports/posts`、`GET /fb/reports/probe`、游標簽章、範圍代碼、分類、快取、用量暫停 | ⬜ |
-| `server/fb/usage.js` | 新增 `usageBusy`（guard 共用） | ⬜ |
-| `server/fb/index.js` | import reports.js（路由在 reports.js 用 `route` 登記） | ⬜ |
-| `tools/fbreports/` | 工具頁（index.html、app.js、calc.js、charts.js、fbreports.css、tool.json、icon、thumb） | ⬜ |
-| `tools/registry.json` | 加 `fbreports`（排在 fbvideo 後） | ⬜ |
-| 測試 | `test/server/fb-reports.test.js`、`test/fbreports-calc.test.js`、`test/e2e/fbreports.e2e.js` | ⬜ |
-| 文件 | `docs/deploy.md`、`privacy/` 中英補 read_insights | ⬜ |
+| `server/fb/reports.js` | `GET /fb/reports/posts`、`GET /fb/reports/probe`、游標簽章、範圍代碼、分類、快取、用量暫停 | ✅ |
+| `server/fb/usage.js` | 新增 `usageBusy`（guard.js 沒改，仍用自己的那份） | ✅ |
+| `server/fb/index.js`、`pages.js`、`core/http.js`、`core/token.js` | `registerReports(route)`；`listPages({withToken})`；錯誤碼 `report_scope`（409）；匯出 `b64urlDecode` | ✅ |
+| `tools/fbreports/` | 工具頁（index.html、app.js、calc.js、fbreports.css、tool.json、TOOL.md、icon、thumb） | ✅ |
+| `tools/registry.json` | 加 `fbreports`（排在 fbvideo 後）、`node build.js` | ✅ |
+| 測試 | `test/server/fb-reports.test.js`（9）、`test/fbreports-calc.test.js`（4）、`test/e2e/fbreports.e2e.js`（6） | ✅ |
+| 文件 | `docs/deploy.md`、`privacy/` 中英補 read_insights 與報表快取 | ✅ |
 
 ## 下一步
-- [ ] 後端 reports.js＋單元測試
-- [ ] 前端工具＋calc 單元測試＋e2e
-- [ ] build、全部測試、截圖、獨立審查
+- [x] 後端 reports.js＋單元測試
+- [x] 前端工具＋calc 單元測試＋e2e
+- [ ] 全部 e2e、獨立審查（進行中）
 - [ ] 使用者：部署測試 Worker → 系統管理者開「數據報表」按「欄位檢查」→ 回報結果 → 決定 REACH_METRIC
 
 ## 測試
@@ -36,3 +36,8 @@
 ## 注意事項
 - 不改 `/fb/published`、`manage.js`、排程發布與影片發布。
 - 成效回應 `Cache-Control: no-store`；KV 鍵含組別、範圍代碼、粉專、Graph 版本、資料版本。
+
+## 已知限制（第一版）
+- 批次部分失敗（逐篇成效讀取錯誤）時，該批結果照樣顯示但不快取；前端不會自動回頭補那幾篇，要重新查詢。
+- 欄位檢查約 30 次 Graph 呼叫（只有系統管理者、手動按）。
+- 分類規則（Reels 用 permalink `/reel/` 或附件 type 含 reel）未經實測。
