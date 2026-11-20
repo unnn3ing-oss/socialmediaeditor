@@ -151,3 +151,7 @@ textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line
   button{min-height:40px}
   .card{padding:14px}
 }
+/* 進階設定分類：紅框提醒 */
+nav.side #tab-adv{border:1px solid #f04438;color:#b42318}
+nav.side #tab-adv:hover:not(:disabled){border-color:#d92d20;background:#fef3f2;color:#b42318}
+nav.side #tab-adv[aria-selected=true]{border-color:#d92d20;background:#fef3f2;color:#b42318;box-shadow:none}
