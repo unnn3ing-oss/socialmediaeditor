@@ -15,6 +15,7 @@ export const ROUTES = [
   [/^\/admin\/fb\/profiles(\/p[0-9a-f]{1,8}(\/activate)?)?$/, 'profiles'],
   [/^\/admin\/fb\/(status|token|app|refresh)$/, 'fbconn'],
   [/^\/admin\/fb\/webhook$/, 'webhook'],
+  [/^\/admin\/fb\/conn$/, 'fbstate'],
   [/^\/admin\/fb\/guard(\/pages(\/\d{1,30})?|\/log(\/\d{1,30}(_\d{1,30})?\/(hide|unhide))?)?$/, 'guard'],
   [/^\/admin\/fb\/usage(\/refresh)?$/, 'usage'],
   [/^\/admin\/fb\/pages$/, 'pages'],

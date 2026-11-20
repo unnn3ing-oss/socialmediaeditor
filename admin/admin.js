@@ -54,9 +54,11 @@ if (window.top !== window.self) {
       var vis = Array.prototype.some.call($('panel-' + t).querySelectorAll('[data-card]'), function (el) { return !el.hidden; });
       $('tab-' + t).hidden = !vis;
     });
+    // 進階設定：只有系統管理者看得到；沒解鎖時分類內只顯示密碼輸入
+    $('tab-adv').hidden = me.role !== 'sys';
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
     $('whoTag').hidden = false;
-    $('whoTag').textContent = (me.role === 'sys' ? '' : me.name + '・') + me.roleName + (me.role === 'sys' && !me.unlocked ? '（敏感設定已鎖）' : '');
+    $('whoTag').textContent = (me.role === 'sys' ? '' : me.name + '・') + me.roleName + (me.role === 'sys' && !me.unlocked ? '（進階設定已鎖）' : '');
     // 首頁憑證進來且沒解鎖：不顯示（「回工具箱」就是離開）；解鎖過＝鎖定；管理密碼登入＝登出
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
@@ -307,6 +309,7 @@ if (window.top !== window.self) {
     if (can('webhook')) jobs.push(whLoad());
     if (can('guard')) jobs.push(gdLoad());
     if (can('usage')) jobs.push(usLoad());
+    if (can('fbstate')) jobs.push(fsLoad());
     return Promise.all(jobs);
   }
   // ---- 權杖組別（/admin/fb/profiles）：命名、切換使用中；設定中的組別（tpCur）給臉書連線與 App 密鑰用 ----
@@ -494,7 +497,22 @@ if (window.top !== window.self) {
   $('whUrlCopy').onclick = function () { whCopy('whUrl', '回呼網址'); };
   $('whTokCopy').onclick = function () { whCopy('whTok', '驗證權杖'); };
   $('whRefresh').onclick = function () { say($('whMsg'), ''); whLoad(); };
-  // ---- 留言守門（/admin/fb/guard*）：模式、守門用組別、規則、粉專訂閱、紀錄 ----
+  // ---- 臉書粉專連線狀態（/admin/fb/conn，不打臉書）：使用中組別、粉專、權杖提醒 ----
+  function fsLoad() {
+    say($('fsMsg'), '');
+    return api('/admin/fb/conn').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data, st = $('fsState'), ul = $('fsList');
+      ul.textContent = '';
+      var bad = d.broken || !d.pages.length || (d.warn && d.warn.level === 'bad');
+      st.className = 'fb-state ' + (bad ? 'off' : 'on');
+      st.textContent = d.error ? d.error : (bad ? '有問題：' : '正常：') + '使用中組別「' + d.profile + '」，' + d.pages.length + ' 個粉專' + (d.broken ? '，粉專權杖已失效' : '');
+      d.pages.forEach(function (p) { var li = document.createElement('li'); li.textContent = p.name; li.className = d.broken ? 'bad' : ''; ul.appendChild(li); });
+      if (d.warn) say($('fsMsg'), d.warn.text, d.warn.level === 'bad' ? 'err' : '');
+    }).catch(function (e) { say($('fsMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('fsReload').onclick = function () { fsLoad(); };
+  // ---- 留言管理（/admin/fb/guard*）：模式、守門用組別、規則、粉專訂閱、紀錄 ----
   var GD_ACT = { observe: '觀察（若開啟會隱藏）', hidden: '已隱藏', failed: '隱藏失敗', manual: '手動隱藏', unhidden: '已取消隱藏' };
   var GD_RULE = { r1: '規則 1（標註名稱）', r2: '規則 2（引導詞）' };
   var gdDefaults = null, gdPageNames = {}, gdBefore = 0;
@@ -783,7 +801,7 @@ if (window.top !== window.self) {
     if (frontToken && token !== frontToken) { token = frontToken; say($('unlockMsg'), ''); enter($('loginMsg')); return; }
     signOut(); say($('loginMsg'), ''); $('pw').focus();
   };
-  // 解鎖敏感設定：輸入管理員密碼換 admin 憑證（只放記憶體）
+  // 解鎖進階設定：輸入管理員密碼換 admin 憑證（只放記憶體）
   $('unlockForm').onsubmit = function (e) {
     e.preventDefault();
     $('unlockBtn').disabled = true; say($('unlockMsg'), '解鎖中');
@@ -872,7 +890,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { reset: '重置密碼', add: '新增人員', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言守門模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };
@@ -1051,7 +1069,7 @@ if (window.top !== window.self) {
       .then(function () { $('auBtn').disabled = false; });
   };
 
-  var TABS = ['post', 'guard', 'people', 'conn', 'assets', 'rec'];
+  var TABS = ['post', 'guard', 'people', 'conn', 'assets', 'rec', 'adv'];
   // 舊網址（分類改版前）轉到新分類
   var OLD_TABS = { fb: 'post', staff: 'people', rd: 'conn', logs: 'rec' };
   var assetsLoaded = false;
@@ -1065,10 +1083,10 @@ if (window.top !== window.self) {
     });
     if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
     if (focus) $('tab-' + id).focus();
-    // 臉書相關卡片（發文設定、留言守門、連線）共用一次讀取
-    if ((id === 'post' || id === 'guard' || id === 'conn') && !fbLoaded && token) fbLoad();
-    if (id === 'people' && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
-    if (id === 'people' && !lvLoaded && token && can('levels')) lvLoad();
+    // 臉書相關卡片（發文設定、留言管理、連接狀態、進階設定）共用一次讀取
+    if ((id === 'post' || id === 'guard' || id === 'conn' || id === 'adv') && !fbLoaded && token) fbLoad();
+    if ((id === 'people' || id === 'adv') && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
+    if (id === 'adv' && !lvLoaded && token && can('levels')) lvLoad();
     if (id === 'conn' && !rdLoaded && token && can('rundown')) rdLoad();
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
   }

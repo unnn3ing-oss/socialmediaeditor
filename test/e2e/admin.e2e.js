@@ -70,6 +70,7 @@ const DATA = {
   'POST /admin/fb/guard/pages/111': (b) => ({ id: '111', on: b.on, sub: b.on }),
   'GET /admin/fb/guard/log': { more: false, items: [{ cid: '9_1', page: '111', post: '111_9', uid: '777', uname: 'Eliza Paredes', msg: '幸好一直看 雙寶爸的財經新報 超讚！', tags: ['雙寶爸的財經新報'], rule: 'r1', action: 'observe', edited: true, exempt: false, at: Date.UTC(2026, 10, 20, 5, 8), link: 'https://www.facebook.com/x' }] },
   'POST /admin/fb/guard/log/9_1/hide': { cid: '9_1', page: '111', post: '111_9', uid: '777', uname: 'Eliza Paredes', msg: '幸好一直看 雙寶爸的財經新報 超讚！', tags: ['雙寶爸的財經新報'], rule: 'r1', action: 'manual', edited: true, exempt: false, at: Date.UTC(2026, 10, 20, 5, 8), link: 'https://www.facebook.com/x' },
+  'GET /admin/fb/conn': { profile: '主管權杖', pages: [{ id: '111', name: 'TVBS 新聞' }, { id: '222', name: 'TVBS 少康戰情室' }], broken: false, warn: null, error: '' },
   'GET /admin/fb/webhook': { url: 'https://api.example/fbhook', verifyToken: '0123456789abcdef0123456789abcdef', signReady: false, last: { at: Date.UTC(2026, 10, 20, 2, 31), object: 'page', fields: ['feed'] } },
   'GET /admin/fb/app': () => APP,
   'POST /admin/fb/app': (b) => { APP_SAVED = b; APP = { configured: true, appId: b.appId, source: 'admin', savedAt: Date.UTC(2026, 10, 20, 2, 30) }; return APP; },
@@ -124,11 +125,11 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'usage', 'pages', 'presets', 'video', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 let LV_SAVED = null;
 const LV = { levels: { mgr: ['access', 'staff', 'logs'], user: [] }, defaults: { mgr: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], user: [] },
-  cards: ALL_CARDS.map((k) => ({ key: k, name: k, sensitive: ['profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k), locked: k === 'levels' })) };
+  cards: ALL_CARDS.map((k) => ({ key: k, name: k, sensitive: ['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k), locked: k === 'levels' })) };
 DATA['GET /admin/levels'] = () => LV;
 DATA['POST /admin/levels'] = (b) => { LV_SAVED = b; return { ...LV, levels: b }; };
 
@@ -185,7 +186,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   assert.equal(await page.isVisible('#logout'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/assets'), '沒進素材分類前不讀素材');
   // 5 個分類；沒有後端 API 的卡片（預設文字、嘗試次數）不出現
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['發文設定', '留言守門', '人員與權限', '連線', '素材', '紀錄']);
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['發文設定', '留言管理', '人員與權限', '連接狀態', '素材', '使用紀錄', '進階設定']);
   await page.waitForSelector('#pgWrap:not([hidden])');
   await page.fill('.pg-short >> nth=0', '填到一半');
 
@@ -238,7 +239,7 @@ test('頁面不用 emoji 或箭頭', async () => {
 });
 
 test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯示', async () => {
-  const { page, calls } = await open({ width: 1280, height: 860 }, '#conn');
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
   await page.waitForFunction(() => /可以發文/.test(document.getElementById('fbState').textContent));
   const st = await page.textContent('#fbState');
@@ -268,7 +269,7 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   assert.deepEqual(fit, [true, true, true]);
   assert.ok(calls.filter((c) => c.key === 'GET /admin/fb/status' || c.key === 'GET /admin/fb/pages').every((c) => c.auth === 'Bearer T'));
   // 重新讀取粉專：先清快取再重讀
-  await page.click('#tab-conn');
+  await page.click('#tab-adv');
   await page.click('#fbRefresh');
   await page.waitForFunction(() => document.getElementById('fbMsg').textContent === '已重新讀取。');
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/refresh'));
@@ -385,7 +386,7 @@ test('活動留言：手機 390px 不橫向捲動', async () => {
 });
 
 test('Webhook 卡片：顯示回呼網址、驗證權杖、簽章狀態、最後收到；複製', async () => {
-  const { page, calls } = await open({ width: 1280, height: 900 }, '#conn');
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#adv');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page);
   await page.waitForFunction(() => /fbhook/.test(document.getElementById('whUrl').textContent));
@@ -406,7 +407,7 @@ test('Webhook 卡片：顯示回呼網址、驗證權杖、簽章狀態、最後
 
 test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成功清空、只顯示 App ID）、清除', async () => {
   APP = { configured: false, appId: '', source: null, savedAt: null };
-  const { page, calls } = await open({ width: 1280, height: 900 }, '#conn');
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#adv');
   await login(page);
   await page.waitForFunction(() => /未設定/.test(document.getElementById('appState').textContent));
   assert.equal(await page.isVisible('#appClear'), false);
@@ -430,7 +431,7 @@ test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成�
 });
 
 test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後清空輸入框）；改回 Secret 打 DELETE', async () => {
-  const { page, calls } = await open({ width: 1280, height: 860 }, '#conn');
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
   await page.waitForFunction(() => /可以發文/.test(document.getElementById('fbState').textContent));
   assert.equal(await page.isVisible('#fbTokClear'), false, '來源不是管理頁時不顯示「改回 Secret」');
@@ -453,14 +454,14 @@ test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後
 
 test('排程發布開放／關閉：讀取狀態與原因、關閉帶原因、開放保留原因、只改原因', async () => {
   AC = { mode: 'admin', reason: '' };
-  const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
+  const { page, calls } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
   await page.waitForFunction(() => document.getElementById('acState').textContent === '狀態：關閉');
   assert.deepEqual(await page.$$eval('#acCard .ac-row button', (bs) => bs.map((b) => b.textContent)), ['開放', '關閉']);
   assert.equal(await page.getAttribute('#acClose', 'aria-pressed'), 'true');
   assert.equal(await page.isVisible('#acReasonSave'), true, '關閉中可以只存原因');
-  const cards = await page.$$eval('#panel-post section.card', (els) => els.map((e) => e.id));
-  assert.equal(cards[0], 'acCard', '放在臉書發文最上面');
+  const cards = await page.$$eval('#panel-adv section.card:not(.unlock)', (els) => els.map((e) => e.id));
+  assert.equal(cards[0], 'acCard', '放在進階設定最上面');
   await page.fill('#acReason', '臉書權杖更換中');
   await page.click('#acReasonSave');
   await page.waitForFunction(() => document.getElementById('acMsg').textContent === '已儲存原因');
@@ -594,7 +595,7 @@ test('授權名單密碼：密碼欄狀態；新增與重置後顯示設定碼�
 
 test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增一組', async () => {
   resetStaff();
-  const { page } = await open({ width: 1280, height: 860 }, '#staff');
+  const { page } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
   await page.waitForSelector('#sgRows .sg-row');
   const del = await page.$$eval('#sgRows .sg-row', (rs) => rs.map((r) => [r.querySelector('.danger').disabled, r.querySelector('.danger').title]));
@@ -655,7 +656,7 @@ test('測試後端：頁首標「測試後端」且 API 打 dev；正式不顯�
 
 test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 ?p=）、切換使用中、空的組別不能切', async () => {
   TP = TP0();
-  const { page } = await open({ width: 1280, height: 900 }, '#conn');
+  const { page } = await open({ width: 1280, height: 900 }, '#adv');
   const urls = [];
   page.on('request', (r) => { if (/\/admin\/fb\/(status|app|token)/.test(r.url())) urls.push(r.url()); });
   await login(page);
@@ -700,18 +701,18 @@ test('速率限制：App 與各粉專三個 % 長條（≥75 黃、≥90 紅）�
 
 test('首頁員工（管理者）直接進入：只看到層級有的卡片與分類，沒有解鎖區、不顯示登出鈕', async () => {
   resetStaff();
-  const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['access', 'staff', 'audit', 'logs'], name: '王小明', id: 'A001' };
+  const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['pages', 'staff', 'audit', 'logs'], name: '王小明', id: 'A001' };
   const { page, calls } = await open({ width: 1280, height: 860 }, '', { token: 'F1', me });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#login'), false);
   assert.equal(await page.textContent('#whoTag'), '王小明・管理者');
   assert.equal(await page.isVisible('#logout'), false);
   assert.equal(await page.isVisible('#unlockBar'), false);
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['post', 'people', 'rec']);
-  assert.equal(await page.isVisible('#acCard'), true);
-  for (const id of ['#tpCard', '#fbCard', '#whCard', '#usCard', '#pgCard']) assert.equal(await page.isVisible(id), false, id);
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['post', 'people', 'rec'], '管理者看不到進階設定');
+  assert.equal(await page.isVisible('#pgCard'), true);
+  for (const id of ['#acCard', '#tpCard', '#fbCard', '#whCard', '#usCard', '#psCard']) assert.equal(await page.isVisible(id), false, id);
   // 沒有權限的卡片不打 API；帶的是首頁憑證
-  assert.ok(!calls.some((c) => c.key && /\/admin\/fb\/(status|profiles|webhook|pages)$/.test(c.key)));
+  assert.ok(!calls.some((c) => c.key && /\/admin\/fb\/(status|profiles|webhook)$/.test(c.key)));
   assert.ok(calls.filter((c) => c.key && c.key.startsWith('GET /admin/')).every((c) => c.auth === 'Bearer F1'));
   await page.click('#tab-people');
   await page.waitForSelector('#sfWrap:not([hidden])');
@@ -729,18 +730,21 @@ test('首頁員工沒有任何卡片：顯示密碼登入與原因', async () =>
 });
 
 test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖區；輸入密碼解鎖後出現，按「鎖定」回到未解鎖', async () => {
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
   const { page } = await open({ width: 1280, height: 860 }, '', { token: 'F3', me: locked });
   await page.waitForSelector('#app:not([hidden])');
+  assert.equal(await page.isVisible('#unlockBar'), false, '其他分類不顯示解鎖區');
+  assert.equal(await page.isVisible('#pgCard'), true);
+  assert.equal(await page.isVisible('#tab-adv'), true);
+  await page.click('#tab-adv');
   assert.equal(await page.isVisible('#unlockBar'), true);
-  assert.equal(await page.isVisible('#tpCard'), false); assert.equal(await page.isVisible('#acCard'), true);
-  assert.match(await page.textContent('#whoTag'), /系統管理者（敏感設定已鎖）/);
-  await page.click('#tab-conn');
-  assert.equal(await page.isVisible('#usCard'), true); assert.equal(await page.isVisible('#whCard'), false);
+  assert.equal(await page.isVisible('#tpCard'), false); assert.equal(await page.isVisible('#acCard'), false);
+  assert.match(await page.textContent('#whoTag'), /系統管理者（進階設定已鎖）/);
   await page.fill('#unlockPw', 'wrong'); await page.click('#unlockBtn');
   await page.waitForFunction(() => /密碼不正確/.test(document.getElementById('unlockMsg').textContent));
   await page.fill('#unlockPw', 'pw-123'); await page.click('#unlockBtn');
   await page.waitForSelector('#tpCard:not([hidden])');
+  assert.equal(await page.isVisible('#acCard'), true);
   assert.equal(await page.isVisible('#unlockBar'), false);
   assert.equal(await page.textContent('#logout'), '鎖定');
   await page.click('#logout');
@@ -750,7 +754,7 @@ test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖�
 
 test('層級權限：⚠ 卡片勾選要確認、普通勾了管理者跟著勾、還原預設、儲存 body', async () => {
   resetStaff(); LV_SAVED = null;
-  const { page } = await open({ width: 1280, height: 860 }, '#staff');
+  const { page } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
   await page.waitForSelector('#lvRows tr');
   assert.match(await page.textContent('#lvRows tr:last-child'), /只有系統管理者/);
@@ -791,19 +795,26 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   const shot = async (page, name) => { await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOT, name), fullPage: true }); };
   const { page } = await open({ width: 1280, height: 860 }, '#staff');
   await login(page);
-  await page.waitForSelector('#lvRows tr'); await page.waitForSelector('#sfWrap:not([hidden])');
+  await page.waitForSelector('#sfWrap:not([hidden])');
   await shot(page, 'admin-sys-staff.png');
-  await page.click('#tab-conn'); await page.waitForSelector('#tpList li');
+  await page.click('#tab-adv'); await page.waitForSelector('#tpList li');
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.screenshot({ path: path.join(SHOT, 'admin-sys-fb.png') });
+  await page.click('#tab-conn'); await page.waitForSelector('#fsList li');
+  await shot(page, 'admin-conn.png');
+  await page.click('#tab-guard'); await page.waitForSelector('#gdLog tr.gd-row');
+  await shot(page, 'admin-guard-page.png');
   const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], name: '王小明', id: 'A001' };
   const { page: p2 } = await open({ width: 1280, height: 860 }, '#fb', { token: 'F9', me });
   await p2.waitForSelector('#app:not([hidden])'); await p2.waitForTimeout(500);
   await p2.screenshot({ path: path.join(SHOT, 'admin-mgr-fb.png') });
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
-  const { page: p3 } = await open({ width: 390, height: 844 }, '#fb', { token: 'F8', me: locked });
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
+  const { page: p3 } = await open({ width: 390, height: 844 }, '#adv', { token: 'F8', me: locked });
   await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
+  const { page: p4 } = await open({ width: 1280, height: 860 }, '#adv', { token: 'F7', me: locked });
+  await p4.waitForSelector('#unlockBar:not([hidden])'); await p4.waitForTimeout(300);
+  await p4.screenshot({ path: path.join(SHOT, 'admin-adv-locked.png') });
 });
 
 test('留言守門卡片：打開不查權限、按了才查、儲存規則、開粉專、紀錄隱藏', async () => {

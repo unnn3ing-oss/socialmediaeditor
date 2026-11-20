@@ -37,40 +37,21 @@
 <div id="app" class="layout" hidden>
   <nav class="side" role="tablist" aria-label="後台分類">
     <button type="button" role="tab" id="tab-post" data-tab="post" aria-controls="panel-post">發文設定</button>
-    <button type="button" role="tab" id="tab-guard" data-tab="guard" aria-controls="panel-guard">留言守門</button>
+    <button type="button" role="tab" id="tab-guard" data-tab="guard" aria-controls="panel-guard">留言管理</button>
     <button type="button" role="tab" id="tab-people" data-tab="people" aria-controls="panel-people">人員與權限</button>
-    <button type="button" role="tab" id="tab-conn" data-tab="conn" aria-controls="panel-conn">連線</button>
+    <button type="button" role="tab" id="tab-conn" data-tab="conn" aria-controls="panel-conn">連接狀態</button>
     <button type="button" role="tab" id="tab-assets" data-tab="assets" aria-controls="panel-assets">素材</button>
+    <button type="button" role="tab" id="tab-rec" data-tab="rec" aria-controls="panel-rec">使用紀錄</button>
     <span class="sep" aria-hidden="true"></span>
-    <button type="button" role="tab" id="tab-rec" data-tab="rec" aria-controls="panel-rec">紀錄</button>
+    <button type="button" role="tab" id="tab-adv" data-tab="adv" aria-controls="panel-adv">進階設定</button>
   </nav>
 
   <main>
-    <section class="card unlock" id="unlockBar" hidden>
-      <h2>敏感設定已鎖住</h2>
-      <p>權杖組別、臉書連線、Webhook、權限組、層級權限與名單的層級，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
-      <form id="unlockForm" class="sf-add">
-        <label class="sf-f">管理員密碼<input id="unlockPw" type="password" autocomplete="current-password" required></label>
-        <button class="primary" type="submit" id="unlockBtn">解鎖</button>
-      </form>
-      <p class="msg" id="unlockMsg" role="status"></p>
-    </section>
 
     <!-- 發文設定 -->
     <div class="panel" id="panel-post" role="tabpanel" aria-labelledby="tab-post" hidden>
       <h1>發文設定</h1>
       <p>排程發布與影片發布的開放狀態、粉專與發文預設。</p>
-
-      <section class="card" id="acCard" data-card="access">
-        <h2>排程發布</h2>
-        <p>開放時，授權名單內的人依權限組使用；關閉時，只有系統管理者與權限組勾了「關閉時仍可使用」的人能用，其他人會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
-        <p class="fb-state" id="acState">狀態：尚未讀取</p>
-        <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
-        <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>
-        <input id="acReason" type="text" maxlength="100" placeholder="例如：臉書權杖更換中">
-        <div class="row" id="acReasonRow" hidden><button id="acReasonSave" type="button">儲存原因</button></div>
-        <p class="msg" id="acMsg" role="status"></p>
-      </section>
 
       <section class="card" id="pgCard" data-card="pages">
         <h2>粉專設定</h2>
@@ -102,9 +83,9 @@
       </section>
     </div>
 
-    <!-- 留言守門 -->
+    <!-- 留言管理 -->
     <div class="panel" id="panel-guard" role="tabpanel" aria-labelledby="tab-guard" hidden>
-      <h1>留言守門</h1>
+      <h1>留言管理</h1>
 
       <section class="card" id="gdCard" data-card="guard">
         <h2>設定</h2>
@@ -195,95 +176,19 @@
           <div class="row"><button class="primary" type="button" id="sfCodeOk">完成</button></div>
         </dialog>
       </section>
-
-      <section class="card" id="sgCard" data-card="groups">
-        <h2>權限組</h2>
-        <p>每個人屬於一個權限組，權限組決定能做哪些事。改完按該組的「儲存」才會生效。</p>
-        <div id="sgRows"></div>
-        <div class="row"><button id="sgNew" type="button">＋ 新增權限組</button></div>
-        <p class="msg" id="sgMsg" role="status"></p>
-      </section>
-
-      <section class="card" id="lvCard" data-card="levels">
-        <h2>層級權限</h2>
-        <p>決定「管理者」與「普通」在管理頁能用哪些卡片。普通勾的卡片，管理者一定也有。標 ⚠ 的卡片含權杖或權限設定，勾給員工後對方不用輸入管理員密碼就能用。系統管理者一律全部可用（敏感卡片要先輸入管理員密碼解鎖）。</p>
-        <div class="scroll">
-          <table class="lv-table">
-            <thead><tr><th>卡片</th><th>管理者</th><th>普通</th></tr></thead>
-            <tbody id="lvRows"></tbody>
-          </table>
-        </div>
-        <div class="row"><button class="primary" id="lvSave" type="button">儲存</button><button id="lvReset" type="button">還原預設</button></div>
-        <p class="msg" id="lvMsg" role="status"></p>
-      </section>
     </div>
 
-    <!-- 連線 -->
+    <!-- 連接狀態 -->
     <div class="panel" id="panel-conn" role="tabpanel" aria-labelledby="tab-conn" hidden>
-      <h1>連線</h1>
-      <p>臉書權杖、Webhook、用量與 Rundown 的連線設定，多數只需設定一次。</p>
+      <h1>連接狀態</h1>
+      <p>臉書粉專、用量與 Rundown 的連接情形。</p>
 
-      <section class="card" id="tpCard" data-card="profiles">
-        <h2>權杖組別</h2>
-        <p>可以存好幾組臉書權杖（例如主管的、自己的），各自命名，選一組「使用中」給排程發布與影片發布用；切換後粉專清單換成那一組的粉專。已排程的留言、影片封面、改時間與刪除，使用中那組沒有該粉專時會改用其他組的權杖。最多 5 組。</p>
-        <ul class="tp-list" id="tpList"></ul>
-        <label for="tpName">新增一組（名稱最多 20 字）</label>
-        <div class="row tp-add"><input id="tpName" type="text" maxlength="20" placeholder="例如：主管權杖、鈞評測試"><button id="tpAdd" type="button">新增組別</button></div>
-        <p class="msg" id="tpMsg" role="status"></p>
-      </section>
-
-      <section class="card" id="fbCard" data-card="fbconn">
-        <h2>臉書連線</h2>
-        <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
-        <select id="tpPick"></select>
-        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
-        <p class="fb-state" id="fbState">狀態：尚未讀取</p>
-        <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
-        <ul class="fb-detail" id="fbDetail" hidden></ul>
-        <ul class="fb-missing" id="fbMissing" hidden></ul>
-        <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
-        <p class="msg" id="fbMsg" role="status"></p>
-        <div class="fb-tok">
-          <label for="fbTok">換權杖：貼上「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
-          <p class="fb-hint" id="fbTokHint"></p>
-          <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
-          <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
-          <p class="msg" id="fbTokMsg" role="status"></p>
-        </div>
-        <div class="fb-tok fb-app">
-          <p class="fb-sub">App 密鑰（由 App 管理員輸入一次，存了之後不再顯示；用來把剛產生的權杖自動延長）</p>
-          <p class="fb-state" id="appState">狀態：尚未讀取</p>
-          <label for="appId">App ID</label>
-          <input id="appId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="20" placeholder="應用程式設定 &gt; 基本資料 的「應用程式編號」">
-          <label for="appSecret">App Secret</label>
-          <input id="appSecret" type="password" autocomplete="off" spellcheck="false" maxlength="32" placeholder="同一頁的「應用程式密鑰」">
-          <div class="row"><button id="appSave" type="button">驗證並儲存</button><button id="appClear" type="button" hidden>清除</button></div>
-          <p class="msg" id="appMsg" role="status"></p>
-        </div>
-      </section>
-
-      <section class="card" id="whCard" data-card="webhook">
-
-        <h2>Webhook</h2>
-
-        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。這裡只記錄最後收到的時間與事件種類；留言內容只有「留言守門」命中規則時才保存（30 天）。</p>
-
-        <dl class="wh-list">
-
-          <dt>回呼網址</dt><dd><code id="whUrl">尚未讀取</code><button id="whUrlCopy" type="button">複製</button></dd>
-
-          <dt>驗證權杖</dt><dd><code id="whTok">尚未讀取</code><button id="whTokCopy" type="button">複製</button></dd>
-
-          <dt>簽章檢查</dt><dd id="whSign">尚未讀取</dd>
-
-          <dt>最後收到</dt><dd id="whLast">尚未讀取</dd>
-
-        </dl>
-
-        <div class="row"><button id="whRefresh" type="button">重新整理</button></div>
-
-        <p class="msg" id="whMsg" role="status"></p>
-
+      <section class="card" id="fsCard" data-card="fbstate">
+        <h2>臉書粉專連線狀態</h2>
+        <p class="fb-state" id="fsState">讀取中</p>
+        <ul class="fs-list" id="fsList"></ul>
+        <div class="row"><button id="fsReload" type="button">重新整理</button></div>
+        <p class="msg" id="fsMsg" role="status"></p>
       </section>
 
       <section class="card" id="usCard" data-card="usage">
@@ -349,9 +254,9 @@
       </section>
     </div>
 
-    <!-- 紀錄 -->
+    <!-- 使用紀錄 -->
     <div class="panel" id="panel-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
-      <h1>紀錄</h1>
+      <h1>使用紀錄</h1>
 
       <section class="card" id="auCard" data-card="audit">
         <h2>操作紀錄</h2>
@@ -378,6 +283,114 @@
         <div class="scroll" id="logWrap" hidden>
           <table><thead><tr><th>時間</th><th>工具</th><th>代碼</th><th>版本</th></tr></thead><tbody id="logRows"></tbody></table>
         </div>
+      </section>
+    </div>
+    <!-- 進階設定（只有系統管理者；要解鎖） -->
+    <div class="panel" id="panel-adv" role="tabpanel" aria-labelledby="tab-adv" hidden>
+      <h1>進階設定</h1>
+      <p>只有系統管理者能用，要先輸入管理員密碼解鎖。</p>
+      <section class="card unlock" id="unlockBar" hidden>
+        <h2>進階設定已鎖住</h2>
+        <p>排程發布開關、權杖組別、臉書連線、Webhook、權限組、層級權限與名單的層級，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
+        <form id="unlockForm" class="sf-add">
+          <label class="sf-f">管理員密碼<input id="unlockPw" type="password" autocomplete="current-password" required></label>
+          <button class="primary" type="submit" id="unlockBtn">解鎖</button>
+        </form>
+        <p class="msg" id="unlockMsg" role="status"></p>
+      </section>
+      <section class="card" id="acCard" data-card="access">
+        <h2>排程發布</h2>
+        <p>開放時，授權名單內的人依權限組使用；關閉時，只有系統管理者與權限組勾了「關閉時仍可使用」的人能用，其他人會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <p class="fb-state" id="acState">狀態：尚未讀取</p>
+        <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
+        <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>
+        <input id="acReason" type="text" maxlength="100" placeholder="例如：臉書權杖更換中">
+        <div class="row" id="acReasonRow" hidden><button id="acReasonSave" type="button">儲存原因</button></div>
+        <p class="msg" id="acMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="tpCard" data-card="profiles">
+        <h2>權杖組別</h2>
+        <p>可以存好幾組臉書權杖（例如主管的、自己的），各自命名，選一組「使用中」給排程發布與影片發布用；切換後粉專清單換成那一組的粉專。已排程的留言、影片封面、改時間與刪除，使用中那組沒有該粉專時會改用其他組的權杖。最多 5 組。</p>
+        <ul class="tp-list" id="tpList"></ul>
+        <label for="tpName">新增一組（名稱最多 20 字）</label>
+        <div class="row tp-add"><input id="tpName" type="text" maxlength="20" placeholder="例如：主管權杖、鈞評測試"><button id="tpAdd" type="button">新增組別</button></div>
+        <p class="msg" id="tpMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="fbCard" data-card="fbconn">
+        <h2>臉書連線</h2>
+        <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
+        <select id="tpPick"></select>
+        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
+        <p class="fb-state" id="fbState">狀態：尚未讀取</p>
+        <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
+        <ul class="fb-detail" id="fbDetail" hidden></ul>
+        <ul class="fb-missing" id="fbMissing" hidden></ul>
+        <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
+        <p class="msg" id="fbMsg" role="status"></p>
+        <div class="fb-tok">
+          <label for="fbTok">換權杖：貼上「使用者權杖」，向臉書驗證並換好各粉專權杖（永不過期）才存；加密存放，不會再顯示</label>
+          <p class="fb-hint" id="fbTokHint"></p>
+          <input id="fbTok" type="password" autocomplete="off" spellcheck="false" placeholder="EAA…">
+          <div class="row"><button id="fbTokSave" type="button">驗證並儲存</button><button id="fbTokClear" type="button" hidden>改回 Secret</button></div>
+          <p class="msg" id="fbTokMsg" role="status"></p>
+        </div>
+        <div class="fb-tok fb-app">
+          <p class="fb-sub">App 密鑰（由 App 管理員輸入一次，存了之後不再顯示；用來把剛產生的權杖自動延長）</p>
+          <p class="fb-state" id="appState">狀態：尚未讀取</p>
+          <label for="appId">App ID</label>
+          <input id="appId" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="20" placeholder="應用程式設定 &gt; 基本資料 的「應用程式編號」">
+          <label for="appSecret">App Secret</label>
+          <input id="appSecret" type="password" autocomplete="off" spellcheck="false" maxlength="32" placeholder="同一頁的「應用程式密鑰」">
+          <div class="row"><button id="appSave" type="button">驗證並儲存</button><button id="appClear" type="button" hidden>清除</button></div>
+          <p class="msg" id="appMsg" role="status"></p>
+        </div>
+      </section>
+
+      <section class="card" id="whCard" data-card="webhook">
+
+        <h2>Webhook</h2>
+
+        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。這裡只記錄最後收到的時間與事件種類；留言內容只有「留言管理」命中規則時才保存（30 天）。</p>
+
+        <dl class="wh-list">
+
+          <dt>回呼網址</dt><dd><code id="whUrl">尚未讀取</code><button id="whUrlCopy" type="button">複製</button></dd>
+
+          <dt>驗證權杖</dt><dd><code id="whTok">尚未讀取</code><button id="whTokCopy" type="button">複製</button></dd>
+
+          <dt>簽章檢查</dt><dd id="whSign">尚未讀取</dd>
+
+          <dt>最後收到</dt><dd id="whLast">尚未讀取</dd>
+
+        </dl>
+
+        <div class="row"><button id="whRefresh" type="button">重新整理</button></div>
+
+        <p class="msg" id="whMsg" role="status"></p>
+
+      </section>
+
+      <section class="card" id="sgCard" data-card="groups">
+        <h2>權限組</h2>
+        <p>每個人屬於一個權限組，權限組決定能做哪些事。改完按該組的「儲存」才會生效。</p>
+        <div id="sgRows"></div>
+        <div class="row"><button id="sgNew" type="button">＋ 新增權限組</button></div>
+        <p class="msg" id="sgMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="lvCard" data-card="levels">
+        <h2>層級權限</h2>
+        <p>決定「管理者」與「普通」在管理頁能用哪些卡片。普通勾的卡片，管理者一定也有。標 ⚠ 的卡片含權杖或權限設定，勾給員工後對方不用輸入管理員密碼就能用。系統管理者一律全部可用（敏感卡片要先輸入管理員密碼解鎖）。</p>
+        <div class="scroll">
+          <table class="lv-table">
+            <thead><tr><th>卡片</th><th>管理者</th><th>普通</th></tr></thead>
+            <tbody id="lvRows"></tbody>
+          </table>
+        </div>
+        <div class="row"><button class="primary" id="lvSave" type="button">儲存</button><button id="lvReset" type="button">還原預設</button></div>
+        <p class="msg" id="lvMsg" role="status"></p>
       </section>
     </div>
   </main>

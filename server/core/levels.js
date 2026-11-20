@@ -2,11 +2,12 @@
 //   卡片清單、敏感卡片、預設分配；勾選表存 D1 fb_settings k='admin_levels'（{ mgr:[], user:[] }），讀不到或壞掉用預設。
 //   不變式（存與讀都強制）：不含 'levels'；普通 ⊆ 管理者。
 export const CARDS = [
-  { key: 'access', name: '排程發布 開放／關閉' },
+  { key: 'access', name: '排程發布 開放／關閉', sensitive: true, locked: true },
   { key: 'profiles', name: '權杖組別', sensitive: true },
   { key: 'fbconn', name: '臉書連線（含 App 密鑰、重新讀取粉專）', sensitive: true },
   { key: 'webhook', name: 'Webhook', sensitive: true },
-  { key: 'guard', name: '留言守門' },
+  { key: 'guard', name: '留言管理' },
+  { key: 'fbstate', name: '臉書粉專連線狀態' },
   { key: 'usage', name: '速率限制' },
   { key: 'pages', name: '粉專設定' },
   { key: 'presets', name: '活動留言' },
@@ -26,7 +27,7 @@ export const GRANTABLE = CARDS.filter((c) => !c.locked).map((c) => c.key);
 export const LEVELS = ['user', 'mgr'];
 export const LEVEL_NAMES = { sys: '系統管理者', mgr: '管理者', user: '普通' };
 export const DEFAULT_LEVELS = {
-  mgr: ['access', 'guard', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'],
+  mgr: ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'],
   user: []
 };
 const KEY = 'admin_levels';

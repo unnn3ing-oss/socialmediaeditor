@@ -206,6 +206,15 @@ adminRoute('POST', /^\/admin\/fb\/app$/, async (request, env) => {
   return ok(request, env, await appState(env));
 });
 adminRoute('DELETE', /^\/admin\/fb\/app$/, async (request, env) => { await clearAppCred(env); return ok(request, env, await appState(env)); });
+// 臉書粉專連線狀態（連接狀態分類；不打臉書：用存好的粉專權杖或 KV 快取）
+adminRoute('GET', /^\/admin\/fb\/conn$/, async (request, env) => {
+  const st = await readProfiles(env);
+  const profile = (st.list.find((p) => p.id === st.active) || {}).name || st.active;
+  let pages = [], error = '';
+  try { pages = [...(await activePageTokens(env)).values()].map((p) => ({ id: p.id, name: p.name })); }
+  catch (e) { if (!(e instanceof FbSetupError)) throw e; error = e.code === 'fb_off' ? '使用中組別還沒有設定權杖。' : e.code === 'fb_no_pages' ? '使用中組別讀不到任何粉專。' : '使用中組別的權杖已失效。'; }
+  return ok(request, env, { profile, pages, broken: !!(await brokenAt(env)), warn: await quickWarn(env).catch(() => null), error });
+});
 adminRoute('GET', /^\/admin\/fb\/webhook$/, async (request, env) => ok(request, env, await webhookState(request, env)));
 adminRoute('GET', /^\/admin\/fb\/video-settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)));
 adminRoute('POST', /^\/admin\/fb\/video-settings$/, async (request, env) => {

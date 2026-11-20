@@ -54,7 +54,7 @@ test('身分：admin 憑證全開；adm:1 擋敏感卡片；公司密碼憑證 4
   assert.equal(me.role, 'sys'); assert.equal(me.unlocked, true); assert.ok(me.cards.includes('levels'));
   const am = (await call(env, '/admin/me', { headers: adm })).body.data;
   assert.equal(am.role, 'sys'); assert.equal(am.unlocked, false);
-  for (const k of ['profiles', 'fbconn', 'webhook', 'groups', 'levels']) assert.ok(!am.cards.includes(k), k);
+  for (const k of ['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels']) assert.ok(!am.cards.includes(k), k);
   for (const p of ['/admin/fb/token', '/admin/fb/status', '/admin/fb/profiles', '/admin/fb/webhook', '/admin/staff-groups', '/admin/levels']) assert.equal((await call(env, p, { headers: adm })).status, 403, p);
   assert.equal((await call(env, '/admin/fb/somethingnew', { headers: adm })).status, 403, '未對應路徑只給已解鎖');
   assert.equal((await call(env, '/admin/fb/somethingnew', { headers: sys })).status, 404);
@@ -63,8 +63,11 @@ test('身分：admin 憑證全開；adm:1 擋敏感卡片；公司密碼憑證 4
   assert.equal((await call(env, '/admin/logs', { headers: co })).status, 401);
   const mm = (await call(env, '/admin/me', { headers: m1 })).body.data;
   assert.equal(mm.role, 'mgr'); assert.equal(mm.id, 'M1');
-  assert.deepEqual(mm.cards, ['access', 'guard', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs']);
+  assert.deepEqual(mm.cards, ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs']);
   assert.equal((await call(env, '/admin/fb/token', { headers: m1 })).status, 403);
+  assert.equal((await call(env, '/admin/fb/access', { headers: m1 })).status, 403, '排程發布開關只有系統管理者');
+  assert.equal((await call(env, '/admin/fb/access', { headers: adm })).status, 403, '系統管理者也要解鎖');
+  assert.equal((await call(env, '/admin/fb/conn', { headers: m1 })).status, 200, '管理者看得到粉專連線狀態');
   assert.equal((await call(env, '/admin/logs', { headers: m1 })).status, 200);
   assert.equal((await call(env, '/admin/me', { headers: u1 })).status, 403);
   assert.equal((await call(env, '/admin/logs', { headers: u1 })).status, 403);
