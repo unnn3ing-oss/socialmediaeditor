@@ -19,8 +19,10 @@ export function createDialog({ beforeOpen } = {}) {
   const mq = matchMedia('(max-width: 820px)');
   const placeLink = () => {
     const box = document.querySelector('.link-box'), compose = document.querySelector('.compose');
+    const hadFocus = document.activeElement === $('link');   // 搬動 DOM 會失焦，搬完補回
     if (mq.matches) { if (box.nextElementSibling !== compose) compose.before(box); }
     else if (box.parentElement !== compose.querySelector('.right')) compose.querySelector('.right').prepend(box);
+    if (hadFocus && document.activeElement !== $('link')) $('link').focus();
   };
   placeLink(); mq.addEventListener('change', placeLink);
   let busy = false;

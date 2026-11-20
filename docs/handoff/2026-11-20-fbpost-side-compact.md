@@ -12,16 +12,21 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/index.html` | 早期 script 加 is-side；網址區塊 | ⬜ |
-| `tools/fbpost/fbpost.css` | `.is-side` 縮小規則（按鈕 32／膠囊 36／輸入 40／送出 40、RD 同列）；窄版網址置頂 | ⬜ |
-| `tools/fbpost/compose.js` | `titleChanged` 同步 `【】`；開視窗聚焦並捲到網址 | ⬜ |
-| `test/e2e/fbpost*.e2e.js` | 側邊欄尺寸、RD 同列、網址置頂聚焦、標題同步兩項 | ⬜ |
+| `tools/fbpost/index.html` | 早期 script 加 is-side；網址區塊 | ✅ |
+| `tools/fbpost/fbpost.css` | `.is-side` 縮小規則（按鈕 32／膠囊 36／輸入 40／送出 40、RD 同列）；窄版網址置頂 | ✅ |
+| `tools/fbpost/compose.js` | `titleChanged` 同步 `【】`；開視窗聚焦並捲到網址 | ✅ |
+| `test/e2e/fbpost*.e2e.js` | 側邊欄尺寸、RD 同列、網址置頂聚焦、標題同步兩項 | ✅ |
 
 ## 下一步
-- [ ] 實作上表
-- [ ] npm test、fbpost e2e、build --check
-- [ ] 360px 改前／改後截圖給使用者
-- [ ] 獨立審查
+- [x] 實作上表（另含：列表頁標題列／分頁／下拉／刷新、完成視窗與確認框按鈕在 is-side 縮 32）
+- [x] npm test 717、fbpost＋fbpost-compose e2e 52、build --check 通過；全部 e2e 236 中 admin「臉書連線」偶發 1 項，單獨重跑 31 項全過
+- [x] 360px 改前／改後截圖給使用者
+- [x] 獨立審查通過；Minor 已修：第 1 行（小編文）不同步、標題清空不動、跨 820px 搬動網址欄保留焦點、對話框按鈕縮小
+- [ ] 等使用者看截圖／外掛實測，說「推」才併入 main（同 commit 更新 CLAUDE.md 目前進度）
+
+## 已知限制
+- 測試無法模擬 ancestorOrigins，e2e 直接加 is-side；真實側邊欄需使用者實測。
+- 同步直接設貼文內容框的值，該框的復原（Ctrl+Z）紀錄會中斷。
 
 ## 注意事項
 - 網頁版（非 is-side）外觀不能變（除了窄版網址位置）。

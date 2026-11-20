@@ -27,4 +27,6 @@ test('標題同步貼文內容：只換第一個【…】行、沒有就不補�
   assert.equal(syncTitleLine('小編\n【A】\n【B】', 'C'), '小編\n【C】\n【B】');
   assert.equal(syncTitleLine('小編文\n圖說', '新標題'), '小編文\n圖說');
   assert.equal(syncTitleLine('句中【不是整行】喔', 'X'), '句中【不是整行】喔');
+  assert.equal(syncTitleLine('【重大】\n【舊】', '新'), '【重大】\n【新】', '第 1 行小編文不換');
+  assert.equal(syncTitleLine('\n【舊】', '  \n'), '\n【舊】', '標題清空不動');
 });

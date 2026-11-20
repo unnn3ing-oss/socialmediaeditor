@@ -26,10 +26,13 @@ export function joinTitle(title) {
 }
 
 // 標題改了：貼文內容第一個整行是【…】的那一行換成【新標題】；沒有那一行就原樣回傳（不補回）
+// 第 1 行是小編文（使用者可能自己寫【…】），不換；標題清空時不動
 export function syncTitleLine(msg, title) {
+  const t = joinTitle(title);
+  if (!t) return msg;
   const lines = String(msg || '').split('\n');
-  const i = lines.findIndex((l) => /^【.*】$/.test(l.trim()));
+  const i = lines.findIndex((l, k) => k > 0 && /^【.*】$/.test(l.trim()));
   if (i < 0) return msg;
-  lines[i] = `【${joinTitle(title)}】`;
+  lines[i] = `【${t}】`;
   return lines.join('\n');
 }
