@@ -6,6 +6,7 @@
 //   k='profiles'：權杖組別（明文 JSON，不含權杖）{ active, list:[{ id, name, created }] }；沒有＝只有 p1「預設」
 //     p1 沿用上面原本的 key（舊資料不用搬）；其他組別的 key 加 '@<id>'（例 user_token@pab12cd34）
 //     Secrets FB_USER_TOKEN／FB_APP_ID／FB_APP_SECRET 只當 p1 的後備
+import { ensureSettings, forget } from '../core/once.js';
 const KEY = 'user_token';
 const PAGES_KEY = 'page_tokens';
 const BROKEN_KEY = 'token_broken';
@@ -25,7 +26,7 @@ export const PROFILE_ID_RE = /^p(1|[0-9a-f]{8})$/;
 const kOf = (base, pid) => (pid === DEFAULT_PROFILE ? base : base + '@' + pid);
 
 async function ensureTable(env) {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
+  await ensureSettings(env);
 }
 async function aesKey(env) {
   if (typeof env.SESSION_SECRET !== 'string' || !env.SESSION_SECRET) throw new Error('no secret');
@@ -52,10 +53,12 @@ async function writeRow(env, k, v) {
   await ensureTable(env);
   await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
     .bind(k, v, Date.now()).run();
+  forget(env.DB, 'appCreds');   // Webhook 簽章用的 App 密鑰快取（webhook.js）
 }
 async function deleteRow(env, k) {
   await ensureTable(env);
   await env.DB.prepare('DELETE FROM fb_settings WHERE k = ?').bind(k).run();
+  forget(env.DB, 'appCreds');
 }
 
 // ---- 權杖組別 ----

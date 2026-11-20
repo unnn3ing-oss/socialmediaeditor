@@ -9,6 +9,7 @@ import { activePageTokens, FbSetupError } from './pages.js';
 import { forProfile, readProfiles, userToken, appCred, PROFILE_ID_RE } from './tokenstore.js';
 import { readUsage } from './usage.js';
 import { audit } from '../core/staff.js';
+import { ensureSettings, ensureOnce, cached, forget } from '../core/once.js';
 
 const KEY = 'guard';
 const STATS_KEY = 'guard_stats';
@@ -78,9 +79,6 @@ export function judge(c, rules, pageId) {
 }
 
 // ---- 設定 ----
-async function ensureSettings(env) {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
-}
 async function readRow(env, k) {
   try { const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(k).first(); return r ? JSON.parse(r.v) : null; } catch { return null; }
 }
@@ -100,7 +98,10 @@ export async function readGuard(env) {
     rules
   };
 }
-export async function saveGuard(env, cfg) { await writeRow(env, KEY, cfg); }
+export async function saveGuard(env, cfg) { await writeRow(env, KEY, cfg); forget(env.DB, 'guardCfg'); }
+// Webhook 每則推送都要讀設定：快取 60 秒（同一執行個體存檔立即生效，其他最多慢 60 秒）
+export const CFG_CACHE_MS = 60 * 1000;
+const readGuardCached = (env) => cached(env.DB, 'guardCfg', CFG_CACHE_MS, () => readGuard(env));
 
 const STAT_KEYS = ['noText', 'skipped', 'checked', 'observe', 'hidden', 'failed'];
 export async function readStats(env) {
@@ -119,9 +120,8 @@ async function bump(env, key) {
 }
 
 // ---- 紀錄表 ----
-async function ensureLog(env) {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_guard_log (cid TEXT PRIMARY KEY, page TEXT NOT NULL, post TEXT, uid TEXT, uname TEXT, msg TEXT, tags TEXT, rule TEXT, action TEXT NOT NULL, edited INTEGER NOT NULL DEFAULT 0, exempt INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, link TEXT)').run();
-}
+const LOG_SQL = 'CREATE TABLE IF NOT EXISTS fb_guard_log (cid TEXT PRIMARY KEY, page TEXT NOT NULL, post TEXT, uid TEXT, uname TEXT, msg TEXT, tags TEXT, rule TEXT, action TEXT NOT NULL, edited INTEGER NOT NULL DEFAULT 0, exempt INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, link TEXT)';
+async function ensureLog(env) { await ensureOnce(env.DB, LOG_SQL); }
 async function getLog(env, cid) {
   await ensureLog(env);
   return env.DB.prepare('SELECT * FROM fb_guard_log WHERE cid = ?').bind(cid).first();
@@ -162,7 +162,7 @@ async function busy(env, page, now = Date.now()) {
 export async function guardEvent(env, body) {
   if (!env.DB || !body || body.object !== 'page' || !Array.isArray(body.entry)) return;
   let cfg;
-  try { cfg = await readGuard(env); } catch { return; }
+  try { cfg = await readGuardCached(env); } catch { return; }
   if (cfg.mode === 'off') return;
   for (const e of body.entry.slice(0, 50)) {
     const page = String(e && e.id || '');
@@ -180,13 +180,15 @@ async function handleChange(env, cfg, page, c) {
   if (!CID_RE.test(cid)) return;
   if (v.from && v.from.id && String(v.from.id) === page) return;   // 粉專自己
   if (typeof v.message !== 'string') { await bump(env, 'noText'); return; }   // 沒附文字：不讀（避免大量呼叫）
+  const pf = prefilter(v.message, cfg.rules);
+  if (!pf && v.verb === 'add') return;                            // 新留言沒命中：不必讀紀錄表（結果相同）
   const prev = await getLog(env, cid);
   if (prev && prev.exempt) return;                                // 手動取消隱藏過
   if (prev && (prev.action === 'hidden' || prev.action === 'manual')) {   // 已經隱藏：再編輯也不必再讀
     if (v.verb === 'edited' && !prev.edited) await env.DB.prepare('UPDATE fb_guard_log SET edited = 1 WHERE cid = ?').bind(cid).run();
     return;
   }
-  if (!prefilter(v.message, cfg.rules)) {
+  if (!pf) {
     if (prev && v.verb === 'edited') await env.DB.prepare('UPDATE fb_guard_log SET edited = 1 WHERE cid = ?').bind(cid).run();
     return;
   }

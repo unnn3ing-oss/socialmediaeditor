@@ -1,5 +1,6 @@
 // 影片發布的設定（管理頁「影片設定」）：標題要去掉的前綴／後綴、Reels 自動 hashtag、hashtag 按鈕
 // 存在 D1 fb_settings 一列（k='video'，v＝JSON）；讀不到或壞掉用預設
+import { ensureSettings } from '../core/once.js';
 const KEY = 'video';
 export const DEFAULT_REELS_TAG = '#焦點新聞影音都在TVBS';
 export const LIMITS = { affixes: 20, affixLen: 30, tags: 20, tagLen: 50, reelsTagLen: 100 };
@@ -38,7 +39,7 @@ export async function getVideoSettings(env) {
 }
 
 export async function saveVideoSettings(env, s) {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
+  await ensureSettings(env);
   await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
     .bind(KEY, JSON.stringify(s), Date.now()).run();
 }

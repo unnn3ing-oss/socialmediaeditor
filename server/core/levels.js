@@ -1,6 +1,7 @@
 // 管理頁層級：系統管理者（管理員密碼）／管理者（mgr）／普通（user）。
 //   卡片清單、敏感卡片、預設分配；勾選表存 D1 fb_settings k='admin_levels'（{ mgr:[], user:[] }），讀不到或壞掉用預設。
 //   不變式（存與讀都強制）：不含 'levels'；普通 ⊆ 管理者。
+import { ensureSettings } from './once.js';
 export const CARDS = [
   { key: 'access', name: '排程發布 開放／關閉', sensitive: true, locked: true },
   { key: 'profiles', name: '權杖組別', sensitive: true },
@@ -56,7 +57,7 @@ export async function saveLevels(env, body) {
   const mgr = clean(body && body.mgr), user = clean(body && body.user);
   if (!mgr || !user) return null;
   const v = normLevels({ mgr: GRANTABLE.filter((k) => mgr.includes(k) || user.includes(k)), user });
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS fb_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL, updated INTEGER NOT NULL)').run();
+  await ensureSettings(env);
   await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
     .bind(KEY, JSON.stringify(v), Date.now()).run();
   return v;

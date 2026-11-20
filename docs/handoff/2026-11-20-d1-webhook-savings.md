@@ -14,16 +14,16 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/once.js`（新） | `ensureOnce(db, sql)`、`ensureSettings(env)`、`cached(db,key,ms,load)`、`forget(db,key)` | ⬜ |
-| `server/fb/webhook.js` | `saveLast` 60 秒節流；`allAppCreds` 走快取 | ⬜ |
-| `server/fb/tokenstore.js` | 建表用 `ensureSettings`；寫入／刪除後 `forget` App 密鑰快取 | ⬜ |
-| `server/fb/guard.js` | 建表用 `ensureOnce`；`guardEvent` 讀設定走快取、`saveGuard` 清快取；add 預篩先做 | ⬜ |
-| `access.js`、`videoset.js`、`usage.js`、`levels.js` | fb_settings 建表改 `ensureSettings` | ⬜ |
-| `test/server/` | 加節流、快取、建表一次的測試 | ⬜ |
+| `server/core/once.js`（新） | `ensureOnce(db, sql)`、`ensureSettings(env)`、`cached(db,key,ms,load)`、`forget(db,key)` | ✅ |
+| `server/fb/webhook.js` | `saveLast` 60 秒節流；`allAppCreds` 走快取 | ✅ |
+| `server/fb/tokenstore.js` | 建表用 `ensureSettings`；寫入／刪除後 `forget` App 密鑰快取 | ✅ |
+| `server/fb/guard.js` | 建表用 `ensureOnce`；`guardEvent` 讀設定走快取、`saveGuard` 清快取；add 預篩先做 | ✅ |
+| `access.js`、`videoset.js`、`usage.js`、`levels.js` | fb_settings 建表改 `ensureSettings` | ✅ |
+| `test/server/` | 加節流、快取、建表一次的測試 | ✅ |
 
 ## 下一步
-- [ ] 寫 once.js 與各檔替換
-- [ ] npm test、build --check
+- [x] 寫 once.js 與各檔替換（新測試 `test/server/d1-savings.test.js`）
+- [x] npm test 727、build --check 通過
 - [ ] 獨立審查
 - [ ] 給使用者看結果，等「推」
 
