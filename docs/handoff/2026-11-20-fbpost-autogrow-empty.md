@@ -14,10 +14,12 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/index.html` | msg rows 4、`#cvEmpty` 兩行、隱藏 file input、cvWrap tabindex | ⬜ |
-| `tools/fbpost/compose.js` | autogrow、空白預覽畫法、dblclick 選檔、drop | ⬜ |
-| `tools/fbpost/fbpost.css` | 空白預覽樣式、聚焦框 | ⬜ |
-| `test/e2e/fbpost*.e2e.js` | 4 行＋長高、空白提示、選檔、拖曳 | ⬜ |
+| `tools/fbpost/index.html` | msg rows 4、`#cvEmpty` 兩行、隱藏 file input、cvWrap tabindex | ✅ |
+| `tools/fbpost/compose.js` | autogrow、空白預覽畫法、dblclick 選檔、drop | ✅ |
+| `tools/fbpost/fbpost.css` | 空白預覽樣式、聚焦框 | ✅ |
+| `test/e2e/fbpost*.e2e.js` | 4 行＋長高、空白提示、選檔、拖曳 | ✅ |
 
 ## 下一步
-- [ ] 實作、測試、截圖、審查，使用者說「推」才併 main
+- [x] 實作（追加：沒照片也能在預覽點標題直接改，titleEd ready 改成非純文字即可）
+- [x] npm test 717、fbpost e2e 36、fbpost-compose e2e 20、build --check；獨立審查通過（修：拖入非圖片也攔下 drop，避免頁面被換成該檔）
+- [ ] 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）

@@ -213,9 +213,11 @@ export function createComposer({ tb, assets }) {
   $('cvWrap').addEventListener('dragleave', () => $('cvWrap').classList.remove('is-drop'));
   $('cvWrap').addEventListener('drop', (e) => {
     $('cvWrap').classList.remove('is-drop');
+    if (st.mode === 'text') return;
+    e.preventDefault();   // 不論是不是圖片都攔下，免得瀏覽器把頁面換成那個檔案
     const f = [...(e.dataTransfer?.files || [])].find((x) => /^image\//.test(x.type));
-    if (!f) return;
-    e.preventDefault(); usePhoto(f, '已放入照片');
+    if (!f) { say('pullHint', '請拖曳圖片檔', true); return; }
+    usePhoto(f, '已放入照片');
   });
 
   document.addEventListener('paste', async (e) => {
