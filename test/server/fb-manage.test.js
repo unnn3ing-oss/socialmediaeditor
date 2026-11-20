@@ -17,7 +17,8 @@ async function setup(t, handlers) {
   let env;
   env = mkEnv({ FB_USER_TOKEN: 'U', FB_TIMER: fakeNamespace(FbCommentTimer, () => env) });
   const { signToken } = await tok();
-  const headers = { origin: ORIGIN, authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true)) };
+  env.SYS_STAFF_ID = 'SYS1';
+  const headers = { origin: ORIGIN, authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1)) };
   const w = await load();
   const call = async (path, init = {}) => {
     const r = await w.fetch(new Request('https://api.test' + path, { ...init, headers: { ...headers, 'content-type': 'application/json' } }), env, { waitUntil() {} });
@@ -65,7 +66,7 @@ test('改時間：範圍外 400 不呼叫臉書；成功後計時器跟著改', 
   assert.equal(f.calls.find((c) => c.path === '/111_1' && c.method === 'POST').body.scheduled_publish_time, String(at2));
   assert.equal((await timerStatus(env, '111_1')).at, at2);
   const log = env.DB.raw.prepare('SELECT uid, name, action, page, post FROM fb_audit').all().map((r) => ({ ...r }));
-  assert.deepEqual(log, [{ uid: 'ADMIN', name: '管理員', action: 'reschedule', page: '111', post: '111_1' }], '操作紀錄只記成功的改時間');
+  assert.deepEqual(log, [{ uid: 'SYS1', name: '系統管理者', action: 'reschedule', page: '111', post: '111_1' }], '操作紀錄只記成功的改時間');
 });
 
 test('取消、刪除：DELETE 且計時器取消；沒有計時器也能刪', async (t) => {

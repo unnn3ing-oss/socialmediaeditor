@@ -68,7 +68,7 @@ const DATA = {
 };
 
 // 授權名單的假後端：記錄收到的 body／query，回整份最新狀態
-const SF = { bodies: [], audit: [] };
+const SF = { bodies: [], audit: [], withCode: false };
 const PERMS = [{ key: 'view', label: '檢視已排程／已發佈' }, { key: 'post', label: '新增發文（含排入 Rundown）' }, { key: 'edit', label: '改排程時間' }, { key: 'delete', label: '刪除貼文' }, { key: 'bypass', label: '關閉時仍可使用' }];
 let STAFF = [];
 const GROUPS = [
@@ -91,7 +91,9 @@ function staffRoute(req, u, key) {
     { id: 2, at: Date.UTC(2026, 10, 17, 2, 5), uid: 'A001', name: '王小明', action: 'schedule', page: '111', post: '111_222', detail: '' },
     { id: 1, at: Date.UTC(2026, 10, 16, 2, 5), uid: 'ADMIN', name: '', action: 'delete', page: '111', post: '111_333', detail: '' }] }; }
   if (key === 'GET /admin/staff') return { ok: true, data: sfState() };
-  if (key === 'POST /admin/staff') { STAFF.push({ ...body, enabled: true, created: 1, lastLogin: null }); return { ok: true, data: sfState() }; }
+  if (key === 'POST /admin/staff') { STAFF.push({ ...body, enabled: true, created: 1, lastLogin: null, pw: 'setup', setupExp: Date.now() + 86400000 }); return { ok: true, data: { ...sfState(), ...(SF.withCode ? { setup: { id: body.id, code: '482913', exp: Date.now() + 86400000 } } : {}) } }; }
+  const rm = p.match(/^\/admin\/staff\/(.+)\/reset$/);
+  if (rm && req.method() === 'POST') { Object.assign(STAFF.find((s) => s.id === rm[1]), { pw: 'setup', setupExp: Date.now() + 86400000, locked: false }); return { ok: true, data: { ...sfState(), setup: { id: rm[1], code: '135790', exp: Date.now() + 86400000 } } }; }
   if (key === 'POST /admin/staff-groups') {
     const g = GROUPS.find((x) => x.id === body.id);
     if (g) Object.assign(g, { name: body.name, perms: body.perms }); else GROUPS.push({ id: 'g' + GROUPS.length, name: body.name, perms: body.perms });
@@ -103,11 +105,11 @@ function staffRoute(req, u, key) {
   return { ok: false, error: '不明的請求' };
 }
 function resetStaff() {
-  SF.bodies = []; SF.audit = [];
+  SF.bodies = []; SF.audit = []; SF.withCode = false;
   STAFF = [
-    { id: 'A001', name: '王小明', group: 'editor', enabled: true, created: 1, lastLogin: Date.UTC(2026, 10, 17, 2, 5) },
-    { id: 'A002', name: '陳大華', group: 'viewer', enabled: true, created: 1, lastLogin: null },
-    { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null }];
+    { id: 'A001', name: '王小明', group: 'editor', enabled: true, created: 1, lastLogin: Date.UTC(2026, 10, 17, 2, 5), pw: 'set' },
+    { id: 'A002', name: '陳大華', group: 'viewer', enabled: true, created: 1, lastLogin: null, pw: 'none' },
+    { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
 const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'usage', 'pages', 'presets', 'video', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
@@ -532,6 +534,48 @@ test('授權名單：切進分類才讀、顯示預設 3 組；新增、改權�
   await page.waitForFunction(() => document.querySelectorAll('#sfRows tr').length === 3);
   assert.deepEqual(SF.bodies.pop(), { key: 'DELETE /admin/staff/A001', body: null });
   assert.equal(await page.isVisible('#sfConfirm'), false);
+});
+
+test('授權名單密碼：密碼欄狀態；新增與重置後顯示設定碼（可複製、關掉清空）；系統管理者列不能停用或移除', async () => {
+  resetStaff();
+  SF.withCode = true;
+  STAFF.push({ id: '13082605', name: '莊鈞評', group: 'lead', level: 'sys', enabled: true, created: 1, lastLogin: null, pw: 'set' });
+  const { page } = await open({ width: 1280, height: 860 });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await login(page);
+  await page.click('#tab-staff');
+  await page.waitForSelector('#sfWrap:not([hidden])');
+  const pwCol = await page.$$eval('#sfRows tr', (rows) => rows.map((r) => r.children[6].textContent));
+  assert.deepEqual(pwCol, ['已設定', '未設定', '鎖定中', '已設定']);
+  // 系統管理者列
+  const sys = '#sfRows tr:nth-child(4)';
+  assert.match(await page.textContent(sys), /系統管理者/);
+  assert.equal(await page.isDisabled(sys + ' button:text("停用")'), true);
+  assert.equal(await page.isDisabled(sys + ' button:text("移除")'), true);
+  // 新增 → 設定碼視窗
+  await page.fill('#sfId', 'B010'); await page.fill('#sfName', '新同仁'); await page.selectOption('#sfGroup', 'editor');
+  await page.click('#sfAdd');
+  await page.waitForSelector('#sfCode[open]');
+  assert.equal(await page.textContent('#sfCodeVal'), '482913');
+  assert.match(await page.textContent('#sfCodeTitle'), /新同仁（B010）/);
+  await page.click('#sfCodeCopy');
+  await page.waitForFunction(() => document.getElementById('sfCodeCopy').textContent === '已複製');
+  await page.click('#sfCodeOk');
+  assert.equal(await page.isVisible('#sfCode'), false);
+  await page.waitForFunction(() => document.getElementById('sfCodeVal').textContent === '');
+  assert.match(await page.textContent('#sfRows tr:nth-child(5)'), /等待設定/);
+  // 重置密碼（要確認）
+  page.once('dialog', (d) => d.dismiss());
+  await page.click('#sfRows tr:nth-child(1) button:text("重置密碼")');
+  assert.ok(!SF.bodies.some((b) => /reset/.test(b.key)), '取消就不送');
+  page.once('dialog', (d) => d.accept());
+  await page.click('#sfRows tr:nth-child(1) button:text("重置密碼")');
+  await page.waitForSelector('#sfCode[open]');
+  assert.equal(await page.textContent('#sfCodeVal'), '135790');
+  assert.deepEqual(SF.bodies.pop(), { key: 'POST /admin/staff/A001/reset', body: null });
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/admin-code.png' });
+  await page.keyboard.press('Escape');
+  assert.match(await page.textContent('#sfRows tr:nth-child(1)'), /等待設定/);
 });
 
 test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增一組', async () => {

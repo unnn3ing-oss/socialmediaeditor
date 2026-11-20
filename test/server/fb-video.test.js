@@ -22,7 +22,8 @@ async function setup(t, handlers) {
   env = mkEnv({ FB_USER_TOKEN: 'U', FB_TIMER: fakeNamespace(RecTimer, () => env) });
   RecTimer.log = [];
   const { signToken } = await tok();
-  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, true)) };
+  env.SYS_STAFF_ID = 'SYS1';
+  const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1)) };
   return { f, env, headers };
 }
 async function call(env, headers, path, body, raw) {

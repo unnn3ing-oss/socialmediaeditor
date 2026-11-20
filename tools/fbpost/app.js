@@ -28,7 +28,7 @@ $('tabs').addEventListener('click', (e) => {
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
     // 關閉中：有填關閉原因才顯示；其他（token 過期、沒設定、沒有粉專）把錯誤原因顯示出來
-    if (e && e.code === 'fb_need_staff') {   // 公司密碼登入不能用：請改用員工編號
+    if (e && e.code === 'fb_need_staff') {   // 舊版憑證沒有員工編號：請重新用員工編號登入
       $('needStaff').hidden = false;
       $('needStaffBtn').onclick = () => tb.company.login();
       return;

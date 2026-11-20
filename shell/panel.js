@@ -46,9 +46,9 @@ function setLocked(id, locked) {
     lock = document.createElement('div');
     lock.className = 'panel-lock';
     const p = document.createElement('p');
-    p.textContent = '公司密碼已過期，重新輸入後即可繼續';
+    p.textContent = '登入已過期，重新登入後即可繼續';
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = '重新輸入';
+    b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = '重新登入';
     b.addEventListener('click', () => window.dispatchEvent(new CustomEvent('tbx:company-login')));
     lock.append(p, b);
     $('panel').appendChild(lock);
@@ -95,14 +95,14 @@ async function runChecks() {
   } catch { out.push(item('api', '後端連線', 'warn', '連不上伺服器')); }
 
   const cred = readCompany(window.localStorage);
-  if (!cred) out.push(item('company', '公司憑證', 'warn', '尚未輸入公司密碼'));
+  if (!cred) out.push(item('company', '公司憑證', 'warn', '尚未登入'));
   else {
     try {
       await api.call('/auth/status');
       const now = readCompany(window.localStorage) || cred;
       const days = Math.max(0, Math.ceil((now.exp * 1000 - Date.now()) / 86400000));
       out.push(item('company', '公司憑證', 'ok', `有效，剩 ${days} 天`));
-    } catch (e) { out.push(item('company', '公司憑證', 'warn', e && e.code === 'unauthorized' ? '已過期，請重新輸入' : '無法確認')); }
+    } catch (e) { out.push(item('company', '公司憑證', 'warn', e && e.code === 'unauthorized' ? '已過期，請重新登入' : '無法確認')); }
   }
 
   try { const r = await ext.call('ping', {}); out.push(item('ext', '外掛橋接', 'ok', `正常（v${r.version}）`)); }
@@ -126,7 +126,7 @@ async function start() {
     return;
   }
   document.title = `${tool.name}｜小編工具箱`;
-  await initCompany({ shell: window.tbxShell, button: $('company-btn') });
+  await initCompany({ shell: window.tbxShell, button: $('company-btn'), account: false });
   render();
   toSidepanel({ type: 'company', unlocked: companyState.unlocked, exp: companyState.exp });
 }

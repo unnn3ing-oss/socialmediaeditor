@@ -45,7 +45,7 @@ document.getElementById('extVer2').textContent = VER;
     if (m.unlocked) {
       const d = new Date(m.exp * 1000).toLocaleString('zh-TW', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
       companyEl.textContent = `已解鎖（到 ${d}）`; companyEl.className = 'status ok';
-    } else { companyEl.textContent = '尚未解鎖：在「發文」分頁輸入公司密碼'; companyEl.className = 'status warn'; }
+    } else { companyEl.textContent = '尚未登入：在「發文」分頁用員工編號登入'; companyEl.className = 'status warn'; }
   }
   function renderRows(items) {
     listEl.replaceChildren(...items.map((r) => {

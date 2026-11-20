@@ -71,14 +71,14 @@ npx wrangler d1 execute toolbox --remote --file schema.sql
 
 ---
 
-## 步驟 3：設定三組密碼（Secrets）
+## 步驟 3：設定 Secrets
 
 要設三個，每個指令執行後，終端機會請你貼上值，貼完按 Enter（貼上時畫面不會顯示字，這是正常的）。
 
 | 名稱 | 用途 | 怎麼決定 |
 |---|---|---|
-| `COMPANY_PASSWORD` | 同事在工具箱「公司素材」輸入的密碼 | 自己決定，至少 8 個字 |
-| `ADMIN_PASSWORD` | 管理頁的密碼，只有你知道 | 自己決定，**要和上面不同** |
+| `SYS_STAFF_ID` | 系統管理者的員工編號（你自己的），不寫進 repo | 你的員工編號 |
+| `ADMIN_PASSWORD` | 管理頁解鎖敏感卡片的密碼，只有你知道；系統管理者第一次設密碼時也可以用它代替設定碼 | 自己決定，至少 8 個字 |
 | `SESSION_SECRET` | 簽發登入憑證用的金鑰，不用記 | 用下面的指令產生一組 |
 
 先產生金鑰（Mac 或 Linux；Windows 請用 Git Bash）：
@@ -92,7 +92,7 @@ openssl rand -hex 32
 然後依序執行：
 
 ```
-npx wrangler secret put COMPANY_PASSWORD
+npx wrangler secret put SYS_STAFF_ID
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put SESSION_SECRET
 ```
@@ -103,7 +103,11 @@ npx wrangler secret put SESSION_SECRET
 
 **成功的樣子：** 每個指令都印出 `Success! Uploaded secret ...`。
 
-> 想讓所有人的公司登入立刻失效：重新執行 `npx wrangler secret put COMPANY_PASSWORD`（換密碼）或 `SESSION_SECRET`（換金鑰）。
+> 同事登入＝員工編號＋自己的密碼（管理頁「授權名單」新增人員或按「重置密碼」時給 6 碼設定碼，本人第一次登入時自己設密碼）。
+> 想讓所有人的登入立刻失效：重新執行 `npx wrangler secret put SESSION_SECRET`（換金鑰）。單一個人：管理頁按「重置密碼」或停用。
+> 舊版的 `COMPANY_PASSWORD` 已不再使用，可以刪掉：`npx wrangler secret delete COMPANY_PASSWORD`。
+>
+> **部署後第一件事**：到首頁用 `SYS_STAFF_ID` 那個員工編號登入 →「設定碼」欄輸入 `ADMIN_PASSWORD` → 設定自己的密碼。名單裡沒有這個人會自動建立（姓名「系統管理者」，可在管理頁改）。
 
 ---
 
@@ -224,7 +228,7 @@ npx wrangler deploy
 3. **Secrets**（第一次會問要不要建立 `toolbox-api-dev`，輸入 `y`）。三組都要和正式**不同**：
 
    ```bash
-   npx wrangler secret put COMPANY_PASSWORD --env dev
+   npx wrangler secret put SYS_STAFF_ID --env dev
    ```
 
    ```bash
@@ -280,6 +284,6 @@ npx wrangler deploy
 | 看到什麼 | 可能原因 | 怎麼辦 |
 |---|---|---|
 | 工具箱顯示公司素材載不到、瀏覽器主控台有 CORS 錯誤 | 網站網址和 `ALLOWED_ORIGIN` 不一致 | 檢查 `wrangler.toml` 的 `ALLOWED_ORIGIN`（不要結尾斜線），重新部署 |
-| 輸入公司密碼一直失敗 | 密碼設錯，或 Secrets 沒設 | 重新執行步驟 3 對應的指令 |
+| 登入一直失敗 | 密碼打錯（連錯 5 次鎖 15 分鐘），或設定碼過期 | 管理頁「授權名單」按「重置密碼」給新的設定碼 |
 | `/assets/manifest` 出現 `misconfigured` | `SESSION_SECRET` 少於 32 字，或密碼沒設 | 重新產生金鑰並重設 |
 | 步驟 2 說找不到資料庫 | `database_id` 填錯 | 回步驟 1 檢查 `wrangler.toml` |

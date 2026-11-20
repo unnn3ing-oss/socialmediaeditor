@@ -30,11 +30,11 @@ export function createPanes(root) {
       lock = document.createElement('div');
       lock.className = 'pane-lock';
       const msg = document.createElement('p');
-      msg.textContent = '公司密碼已過期，重新輸入後即可繼續';
+      msg.textContent = '登入已過期，重新登入後即可繼續';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn btn-primary';
-      btn.textContent = '重新輸入';
+      btn.textContent = '重新登入';
       btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('tbx:company-login')));
       lock.append(msg, btn);
       p.pane.appendChild(lock);

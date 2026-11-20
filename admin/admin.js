@@ -1,5 +1,5 @@
 // 管理後台（admin/index.html）。
-//   進入方式：首頁登入的公司憑證（localStorage，員工編號或管理員密碼）直接進；或在這裡輸入管理員密碼（admin 憑證只放記憶體）。
+//   進入方式：首頁登入的公司憑證（localStorage，員工編號＋密碼）直接進；或在這裡輸入管理員密碼（admin 憑證只放記憶體）。
 //   可見卡片依 GET /admin/me 的 cards（層級權限見 server/core/adminperm.js）；敏感卡片要輸入管理員密碼解鎖。
 import { API_BASE, API_ENV } from '../shell/config.js';
 import { companyKey } from '../sdk/api.js';
@@ -719,18 +719,44 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };
     if (body) { o.headers = { 'Content-Type': 'application/json' }; o.body = JSON.stringify(body); }
     return api(path, o).then(function (res) {
-      if (res.ok) { sfState = res.data; sfRender(); if (done) say(msgEl, done, 'good'); return true; }
+      if (res.ok) {
+        var setup = res.data && res.data.setup; if (setup) delete res.data.setup;
+        sfState = res.data; sfRender(); if (done) say(msgEl, done, 'good');
+        if (setup) sfShowCode(setup);
+        return true;
+      }
       if (res.code === 'unauthorized') { expired(); return false; }
       say(msgEl, res.error || '操作失敗。', 'err'); return false;
     }).catch(function () { say(msgEl, '連不上後端，請稍後再試。', 'err'); return false; });
   }
-  var LV_NAME = { mgr: '管理者', user: '普通' };
+  var LV_NAME = { sys: '系統管理者', mgr: '管理者', user: '普通' };
+  // 新增或重置後顯示設定碼（只顯示這一次）
+  function sfShowCode(setup) {
+    var s = (sfState && sfState.staff || []).filter(function (x) { return x.id === setup.id; })[0];
+    $('sfCodeTitle').textContent = (s ? s.name + '（' + s.id + '）' : setup.id) + '的設定碼';
+    $('sfCodeVal').textContent = setup.code;
+    $('sfCodeCopy').textContent = '複製';
+    var d = $('sfCode'); if (!d.open) d.showModal();
+    $('sfCodeCopy').focus();
+  }
+  $('sfCodeCopy').onclick = function () {
+    var v = $('sfCodeVal').textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function () { $('sfCodeCopy').textContent = '已複製'; }, function () { $('sfCodeCopy').textContent = '請手動複製'; });
+  };
+  $('sfCodeOk').onclick = function () { $('sfCode').close(); };
+  $('sfCode').addEventListener('close', function () { $('sfCodeVal').textContent = ''; });
+  function sfPwTag(s) {
+    if (s.locked) return sfEl('span', 'tag bad', '鎖定中');
+    if (s.pw === 'set') return sfEl('span', 'tag company', '已設定');
+    if (s.pw === 'setup') { var t = sfEl('span', 'tag warn', '等待設定'); t.title = '設定碼有效到 ' + fmtTime(s.setupExp); return t; }
+    return sfEl('span', 'tag', '未設定');
+  }
   function sfGroupSelect(cur, label) {
     var s = document.createElement('select'); s.setAttribute('aria-label', label);
     sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; if (g.assignable === false && g.id !== cur) o.disabled = true; s.appendChild(o); });
@@ -748,8 +774,9 @@ if (window.top !== window.self) {
     sfState.staff.forEach(function (s) {
       var tr = document.createElement('tr');
       tr.appendChild(sfEl('td', '', s.id)); tr.appendChild(sfEl('td', '', s.name));
-      var tl = document.createElement('td');
-      if (meSt.canLevel) {
+      var tl = document.createElement('td'), isSysRow = s.level === 'sys';
+      if (isSysRow) tl.textContent = LV_NAME.sys;
+      else if (meSt.canLevel) {
         var ls = document.createElement('select'); ls.setAttribute('aria-label', s.name + ' 的層級');
         ['user', 'mgr'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = LV_NAME[k]; ls.appendChild(o); });
         ls.value = s.level;
@@ -766,13 +793,22 @@ if (window.top !== window.self) {
       ct.onchange = function () { ct.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { contact: ct.value.trim() }, $('sfMsg'), '已更新「' + s.name + '」的分機／手機。').then(function (ok) { if (!ok) { ct.disabled = false; ct.focus(); } }); };
       tc.appendChild(ct); tr.appendChild(tc);
       var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
+      var tp = sfEl('td'); tp.appendChild(sfPwTag(s)); tr.appendChild(tp);
       tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
       var ac = sfEl('td', 'sf-ops');
       var tgl = sfEl('button', '', s.enabled ? '停用' : '啟用'); tgl.type = 'button';
       tgl.onclick = function () { tgl.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { enabled: !s.enabled }, $('sfMsg'), s.enabled ? '已停用「' + s.name + '」。' : '已啟用「' + s.name + '」。'); };
       var del = sfEl('button', 'danger', '移除'); del.type = 'button';
       del.onclick = function () { sfPending = s.id; $('sfCfText').textContent = s.name + '（' + s.id + '）會從名單移除，對方下一次操作就會被擋。'; $('sfConfirm').hidden = false; $('sfCfYes').focus(); };
-      ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
+      var rst = sfEl('button', '', '重置密碼'); rst.type = 'button';
+      rst.onclick = function () {
+        if (!window.confirm('重置「' + s.name + '」的密碼？\n對方所有裝置會登出，要用新的設定碼重新設密碼。')) return;
+        rst.disabled = true;
+        sfCall('/admin/staff/' + encodeURIComponent(s.id) + '/reset', 'POST', null, $('sfMsg'), '已重置「' + s.name + '」的密碼。').then(function (ok) { if (!ok) rst.disabled = false; });
+      };
+      ac.appendChild(rst); ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
+      // 系統管理者不能停用、移除
+      if (isSysRow) { tgl.disabled = true; del.disabled = true; tgl.title = del.title = '系統管理者不能停用或移除'; }
       // 不能動的列（層級不比自己低、或是自己）：全部唯讀
       if (s.canEdit === false) Array.prototype.forEach.call(tr.querySelectorAll('select, input, button'), function (el) { if (!(meSt.canLevel && el.getAttribute('aria-label') === s.name + ' 的層級')) { el.disabled = true; el.title = '只能修改層級比你低的人'; } });
       tb.appendChild(tr);
@@ -893,7 +929,7 @@ if (window.top !== window.self) {
     };
   });
   window.addEventListener('hashchange', function () { if (me) showTab(tabFromHash()); });
-  // 首頁已登入（員工編號或管理員密碼）就直接進；否則顯示密碼登入
+  // 首頁已登入（員工編號）就直接進；否則顯示密碼登入
   frontToken = readFront();
   if (frontToken) {
     token = frontToken;
