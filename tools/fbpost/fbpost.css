@@ -397,7 +397,7 @@ body.no-scroll { overflow: hidden; }
 .is-side .post-body > .link-box { margin-bottom: 12px; }
 .is-side .compose { gap: 12px; }
 .is-side .compose .lbl { margin: 10px 0 4px; }
-.is-side .post-body textarea, .is-side .post-body input, .is-side .post-body select { font-size: 14px; padding: 8px 10px; min-height: 40px; }
+.is-side .post-body textarea:not(.cv-title), .is-side .post-body input, .is-side .post-body select { font-size: 14px; padding: 8px 10px; min-height: 40px; }
 .is-side .post-body input[type=url], .is-side .post-body input[type=text] { height: 40px; }
 .is-side .soft-btn, .is-side .add-comment { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
 .is-side .extra-del { min-height: 32px; }

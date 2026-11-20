@@ -518,3 +518,19 @@ test('沒照片時也能在預覽上點標題直接改（不開選檔）', async
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('外掛側邊欄（is-side）預覽上改標題：編輯框不被側邊欄輸入框樣式撐小，最後一行不被切掉', async () => {
+  const { page, frame, errors } = await openFb();
+  await page.setViewportSize({ width: 360, height: 900 });
+  await frame.evaluate(() => document.documentElement.classList.add('is-side'));
+  await frame.evaluate((b64) => { const u8 = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); const dt = new DataTransfer(); dt.items.add(new File([u8], 'x.png', { type: 'image/png' })); document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true })); }, PHOTO.toString('base64'));
+  await frame.waitForFunction(() => document.getElementById('cvEmpty').hidden);
+  await frame.fill('#title', '蔣萬安靠老師加分？\n老同學翻往事全說了\n嘆「對手像恐怖情人」');
+  await frame.dblclick('#cv');
+  await frame.waitForSelector('#cvWrap .cv-title:not([hidden])');
+  const b = await frame.$eval('#cvWrap .cv-title', (e) => { const cs = getComputedStyle(e); return { h: e.clientHeight, sh: e.scrollHeight, pt: cs.paddingTop, pb: cs.paddingBottom }; });
+  assert.equal(b.pt, '0px'); assert.equal(b.pb, '0px');
+  assert.ok(b.sh <= b.h + 1, `內容沒超出編輯框：${b.sh}／${b.h}`);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
