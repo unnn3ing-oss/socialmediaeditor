@@ -6,6 +6,7 @@ export const CARDS = [
   { key: 'profiles', name: '權杖組別', sensitive: true },
   { key: 'fbconn', name: '臉書連線（含 App 密鑰、重新讀取粉專）', sensitive: true },
   { key: 'webhook', name: 'Webhook', sensitive: true },
+  { key: 'guard', name: '留言守門' },
   { key: 'usage', name: '速率限制' },
   { key: 'pages', name: '粉專設定' },
   { key: 'presets', name: '活動留言' },
@@ -25,7 +26,7 @@ export const GRANTABLE = CARDS.filter((c) => !c.locked).map((c) => c.key);
 export const LEVELS = ['user', 'mgr'];
 export const LEVEL_NAMES = { sys: '系統管理者', mgr: '管理者', user: '普通' };
 export const DEFAULT_LEVELS = {
-  mgr: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'],
+  mgr: ['access', 'guard', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'],
   user: []
 };
 const KEY = 'admin_levels';

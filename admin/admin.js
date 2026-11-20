@@ -305,6 +305,7 @@ if (window.top !== window.self) {
     if (can('presets')) jobs.push(psLoad());
     if (can('video')) jobs.push(vsLoad());
     if (can('webhook')) jobs.push(whLoad());
+    if (can('guard')) jobs.push(gdLoad());
     if (can('usage')) jobs.push(usLoad());
     return Promise.all(jobs);
   }
@@ -493,6 +494,128 @@ if (window.top !== window.self) {
   $('whUrlCopy').onclick = function () { whCopy('whUrl', '回呼網址'); };
   $('whTokCopy').onclick = function () { whCopy('whTok', '驗證權杖'); };
   $('whRefresh').onclick = function () { say($('whMsg'), ''); whLoad(); };
+  // ---- 留言守門（/admin/fb/guard*）：模式、守門用組別、規則、粉專訂閱、紀錄 ----
+  var GD_ACT = { observe: '觀察（若開啟會隱藏）', hidden: '已隱藏', failed: '隱藏失敗', manual: '手動隱藏', unhidden: '已取消隱藏' };
+  var GD_RULE = { r1: '規則 1（標註名稱）', r2: '規則 2（引導詞）' };
+  var gdDefaults = null, gdPageNames = {}, gdBefore = 0;
+  function gdLines(id) { return $(id).value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); }
+  function gdFill(r) { $('gdNames').value = r.names.join('\n'); $('gdLeads').value = r.leads.join('\n'); $('gdAllow').value = r.allow.join('\n'); $('gdR1').checked = !!r.auto.r1; $('gdR2').checked = !!r.auto.r2; }
+  function gdStats(st) {
+    if (!st || !st.since) { $('gdStats').textContent = '統計：還沒有處理過留言'; return; }
+    $('gdStats').textContent = '自 ' + fmtTime(st.since) + ' 起：檢查 ' + st.checked + ' 則、觀察 ' + st.observe + '、隱藏 ' + st.hidden + '、失敗 ' + st.failed +
+      '、用量高先略過 ' + st.skipped + '、通知沒附文字 ' + st.noText;
+  }
+  function gdLoad() {
+    say($('gdMsg'), '讀取中');
+    return api('/admin/fb/guard').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var d = res.data; gdDefaults = d.defaults;
+      $('gdMode').value = d.mode;
+      var sel = $('gdProfile'); sel.textContent = '';
+      d.profiles.forEach(function (p) {
+        var o = document.createElement('option'); o.value = p.id;
+        o.textContent = p.name + (p.active ? '（發文使用中）' : '') + (p.meta === true ? '．有 pages_manage_metadata' : p.meta === false ? '．缺 pages_manage_metadata' : '');
+        sel.appendChild(o);
+      });
+      sel.value = d.profile || d.suggest; sel.dataset.saved = d.profile;
+      gdFill(d.rules); gdStats(d.stats);
+      say($('gdMsg'), d.profile ? '' : '還沒儲存過設定：已預選有權限的組別，按「儲存設定」生效。');
+      return Promise.all([gdPages(false), gdLog(false)]);
+    }).catch(function (e) { say($('gdMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function gdPages(check) {
+    say($('gdPgMsg'), check ? '向臉書查詢訂閱狀態' : '');
+    return api('/admin/fb/guard/pages' + (check ? '?check=1' : '')).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      var ul = $('gdPages'); ul.textContent = '';
+      var fp = $('gdFPage'), keep = fp.value; fp.length = 1;
+      gdPageNames = {};
+      res.data.pages.forEach(function (p) {
+        gdPageNames[p.id] = p.name;
+        var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; fp.appendChild(o);
+        var li = document.createElement('li');
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = p.on; cb.id = 'gdPg' + p.id;
+        var lb = document.createElement('label'); lb.htmlFor = cb.id; lb.className = 'gd-name'; lb.textContent = p.name;
+        var sm = document.createElement('small');
+        sm.textContent = p.sub === true ? '已訂閱留言通知' : p.sub === false ? '臉書端未訂閱' : p.on ? '已開啟' : '未開啟';
+        cb.onchange = function () { gdToggle(p.id, cb, sm); };
+        li.appendChild(cb); li.appendChild(lb); li.appendChild(sm); ul.appendChild(li);
+      });
+      fp.value = keep in gdPageNames ? keep : '';
+      if (!res.data.pages.length) say($('gdPgMsg'), '守門用組別沒有任何粉專（先在「臉書連線」設定這一組的權杖）。', 'err');
+      else if (check) say($('gdPgMsg'), '已更新訂閱狀態。', 'good');
+    }).catch(function (e) { say($('gdPgMsg'), '讀取粉專失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function gdToggle(id, cb, sm) {
+    cb.disabled = true; say($('gdPgMsg'), cb.checked ? '開啟中' : '關閉中');
+    api('/admin/fb/guard/pages/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: cb.checked }) }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      sm.textContent = res.data.on ? '已訂閱留言通知' : '未開啟';
+      say($('gdPgMsg'), (gdPageNames[id] || id) + (res.data.on ? ' 已開啟。' : ' 已關閉。'), 'good');
+    }).catch(function (e) { cb.checked = !cb.checked; say($('gdPgMsg'), '失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { cb.disabled = false; });
+  }
+  $('gdSave').onclick = function () {
+    var mode = $('gdMode').value, prof = $('gdProfile').value, saved = $('gdProfile').dataset.saved;
+    if (saved && prof !== saved && !confirm('換守門用組別後，所有粉專開關會清空，要重新打開。確定要換嗎？')) return;
+    if (mode === 'hide' && !$('gdR1').checked && !$('gdR2').checked && !confirm('兩條規則都沒勾自動隱藏，等於只觀察。仍要儲存嗎？')) return;
+    var body = { mode: mode, profile: prof, rules: { names: gdLines('gdNames'), leads: gdLines('gdLeads'), allow: gdLines('gdAllow'), auto: { r1: $('gdR1').checked, r2: $('gdR2').checked } } };
+    $('gdSave').disabled = true; say($('gdMsg'), '儲存中');
+    api('/admin/fb/guard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      $('gdProfile').dataset.saved = res.data.profile; gdFill(res.data.rules); gdStats(res.data.stats);
+      say($('gdMsg'), '已儲存。', 'good');
+      if (saved !== res.data.profile) return gdPages(false);
+    }).catch(function (e) { say($('gdMsg'), '儲存失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { $('gdSave').disabled = false; });
+  };
+  $('gdDefault').onclick = function () {
+    if (!gdDefaults) return;
+    gdFill({ names: gdDefaults.names, leads: gdDefaults.leads, allow: gdLines('gdAllow'), auto: { r1: $('gdR1').checked, r2: $('gdR2').checked } });
+    say($('gdMsg'), '已填入預設關鍵字，按「儲存設定」才會生效。');
+  };
+  $('gdCheck').onclick = function () { gdPages(true); };
+  function gdItem(it) {
+    var li = document.createElement('li');
+    var head = document.createElement('div'); head.className = 'gd-head';
+    var act = document.createElement('span'); act.className = 'gd-act ' + it.action; act.textContent = GD_ACT[it.action] || it.action; head.appendChild(act);
+    [fmtTime(it.at), gdPageNames[it.page] || it.page, GD_RULE[it.rule] || '', it.edited ? '編輯過' : '', it.exempt ? '不再自動處理' : '', (it.uname || '') + (it.uid ? '（ID ' + it.uid + '）' : '')]
+      .forEach(function (t) { if (t) { var s = document.createElement('span'); s.textContent = t; head.appendChild(s); } });
+    li.appendChild(head);
+    var msg = document.createElement('p'); msg.className = 'gd-msg'; msg.textContent = it.msg; li.appendChild(msg);
+    if (it.tags.length) { var tg = document.createElement('p'); tg.className = 'gd-tags'; tg.textContent = '標註：' + it.tags.join('、'); li.appendChild(tg); }
+    var row = document.createElement('div'); row.className = 'row';
+    if (it.link) { var a = document.createElement('a'); a.href = it.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '在臉書開啟'; row.appendChild(a); }
+    var hidden = it.action === 'hidden' || it.action === 'manual';
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = hidden ? '取消隱藏' : '隱藏';
+    b.onclick = function () {
+      if (hidden && !confirm('取消隱藏後，這則留言之後再被編輯也不會自動隱藏。確定嗎？')) return;
+      b.disabled = true; say($('gdLogMsg'), hidden ? '取消隱藏中' : '隱藏中');
+      api('/admin/fb/guard/log/' + it.cid + '/' + (hidden ? 'unhide' : 'hide'), { method: 'POST' }).then(function (res) {
+        if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+        li.replaceWith(gdItem(res.data)); say($('gdLogMsg'), hidden ? '已取消隱藏。' : '已隱藏。', 'good');
+      }).catch(function (e) { b.disabled = false; say($('gdLogMsg'), '失敗：' + (e && e.message || ''), 'err'); });
+    };
+    row.appendChild(b); li.appendChild(row);
+    return li;
+  }
+  function gdLog(more) {
+    if (!more) { gdBefore = 0; $('gdLog').textContent = ''; }
+    var q = [];
+    if ($('gdFAct').value) q.push('action=' + $('gdFAct').value);
+    if ($('gdFPage').value) q.push('page=' + $('gdFPage').value);
+    if (gdBefore) q.push('before=' + gdBefore);
+    say($('gdLogMsg'), '讀取中');
+    return api('/admin/fb/guard/log' + (q.length ? '?' + q.join('&') : '')).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      res.data.items.forEach(function (it) { $('gdLog').appendChild(gdItem(it)); gdBefore = it.at; });
+      $('gdMore').hidden = !res.data.more;
+      say($('gdLogMsg'), $('gdLog').children.length ? '' : '還沒有紀錄。');
+    }).catch(function (e) { say($('gdLogMsg'), '讀取紀錄失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('gdLogLoad').onclick = function () { gdLog(false); };
+  $('gdFAct').onchange = $('gdFPage').onchange = function () { gdLog(false); };
+  $('gdMore').onclick = function () { gdLog(true); };
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
     if (!v) { say($('fbTokMsg'), '請先貼上權杖。', 'err'); return; }
@@ -719,7 +842,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { reset: '重置密碼', add: '新增人員', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言守門模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };

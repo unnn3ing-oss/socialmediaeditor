@@ -124,7 +124,7 @@
 
         <h2>Webhook</h2>
 
-        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。目前只記錄收到的時間與事件種類，不保存內容。</p>
+        <p>給 Meta 後台「Webhooks」用的回呼網址與驗證權杖。這裡只記錄最後收到的時間與事件種類；留言內容只有「留言守門」命中規則時才保存（30 天）。</p>
 
         <dl class="wh-list">
 
@@ -142,6 +142,48 @@
 
         <p class="msg" id="whMsg" role="status"></p>
 
+      </section>
+
+      <section class="card" id="gdCard" data-card="guard">
+        <h2>留言守門</h2>
+        <p>粉專有新留言或留言被編輯時，自動檢查是否為洗版（例：標註「雙寶爸的理財週刊」這類假理財帳號）。先用「觀察」確認沒有誤判，再切「自動隱藏」。被隱藏的留言只有留言者和他的朋友看得到。</p>
+        <p class="fb-hint">要先在 Meta 後台「Webhooks」的 Page 訂閱 <code>feed</code>（設定一次即可），並把下方粉專打開。</p>
+        <div class="gd-grid">
+          <label for="gdMode">模式</label>
+          <select id="gdMode"><option value="off">關閉</option><option value="observe">觀察（只記錄，不隱藏）</option><option value="hide">自動隱藏</option></select>
+          <label for="gdProfile">守門用組別</label>
+          <select id="gdProfile"></select>
+        </div>
+        <p class="fb-hint">守門用組別要有 <code>pages_manage_metadata</code> 權限；換組別後粉專開關會清空，要重新打開。</p>
+        <fieldset class="gd-auto">
+          <legend>自動隱藏時，哪些規則要真的隱藏</legend>
+          <label><input type="checkbox" id="gdR1"> 規則 1：標註的帳號名稱含「名稱關鍵字」</label>
+          <label><input type="checkbox" id="gdR2"> 規則 2：有標註帳號，且留言含 2 個以上不同「引導詞」</label>
+        </fieldset>
+        <label for="gdNames">名稱關鍵字（一行一個，最多 50 個、每個 20 字內）</label>
+        <textarea id="gdNames" rows="3" spellcheck="false"></textarea>
+        <label for="gdLeads">引導詞（一行一個）</label>
+        <textarea id="gdLeads" rows="4" spellcheck="false"></textarea>
+        <label for="gdAllow">白名單留言者 ID（一行一個，只能數字；紀錄裡可看到留言者 ID）</label>
+        <textarea id="gdAllow" rows="2" spellcheck="false" inputmode="numeric"></textarea>
+        <div class="row"><button id="gdSave" type="button">儲存設定</button><button id="gdDefault" type="button">填入預設關鍵字</button></div>
+        <p class="msg" id="gdMsg" role="status"></p>
+        <p class="fb-state" id="gdStats"></p>
+
+        <h3>粉專</h3>
+        <ul class="gd-pages" id="gdPages"></ul>
+        <div class="row"><button id="gdCheck" type="button">重新檢查訂閱</button></div>
+        <p class="msg" id="gdPgMsg" role="status"></p>
+
+        <h3>紀錄（保存 30 天）</h3>
+        <div class="row">
+          <select id="gdFAct" aria-label="篩選動作"><option value="">全部動作</option><option value="observe">觀察（若開啟會隱藏）</option><option value="hidden">已隱藏</option><option value="failed">隱藏失敗</option><option value="manual">手動隱藏</option><option value="unhidden">已取消隱藏</option></select>
+          <select id="gdFPage" aria-label="篩選粉專"><option value="">全部粉專</option></select>
+          <button id="gdLogLoad" type="button">重新整理</button>
+        </div>
+        <ul class="gd-log" id="gdLog"></ul>
+        <div class="row"><button id="gdMore" type="button" hidden>載入更多</button></div>
+        <p class="msg" id="gdLogMsg" role="status"></p>
       </section>
 
 

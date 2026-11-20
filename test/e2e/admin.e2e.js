@@ -13,6 +13,7 @@ test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
 
 let PG_SAVED = null;
+let GD_SAVED = null;
 let PS_SAVED = null;
 let VS_SAVED = null;
 let TOK_SAVED = null;
@@ -58,6 +59,14 @@ const DATA = {
   'GET /admin/fb/access': () => AC,
   'POST /admin/fb/access': (b) => { AC = { mode: b.mode, reason: b.reason.trim() }; return AC; },
   'POST /admin/fb/token': (b) => { TOK_SAVED = b; return { configured: true, valid: true, expires: 0, missing: [], pages: 6, source: 'admin', app: 'NEW-APP', extended: true }; },
+  'GET /admin/fb/guard': { mode: 'off', profile: '', pages: [], suggest: 'pabcdef12', stats: { since: 0 },
+    rules: { names: ['寶爸', '寳爸'], leads: ['老師', '進群'], allow: [], auto: { r1: true, r2: false } }, defaults: { names: ['寶爸', '寳爸'], leads: ['老師', '進群'], allow: [], auto: { r1: true, r2: false } },
+    profiles: [{ id: 'p1', name: '主管權杖', active: true, meta: false }, { id: 'pabcdef12', name: '鈞評測試', active: false, meta: true }] },
+  'POST /admin/fb/guard': (b) => { GD_SAVED = b; return { ...b, pages: [], stats: { since: 0 } }; },
+  'GET /admin/fb/guard/pages': { profile: 'pabcdef12', pages: [{ id: '111', name: 'TVBS 新聞', on: false, sub: null }] },
+  'POST /admin/fb/guard/pages/111': (b) => ({ id: '111', on: b.on, sub: b.on }),
+  'GET /admin/fb/guard/log': { more: false, items: [{ cid: '9_1', page: '111', post: '111_9', uid: '777', uname: 'Eliza Paredes', msg: '幸好一直看 雙寶爸的財經新報 超讚！', tags: ['雙寶爸的財經新報'], rule: 'r1', action: 'observe', edited: true, exempt: false, at: Date.UTC(2026, 10, 20, 5, 8), link: 'https://www.facebook.com/x' }] },
+  'POST /admin/fb/guard/log/9_1/hide': { cid: '9_1', page: '111', post: '111_9', uid: '777', uname: 'Eliza Paredes', msg: '幸好一直看 雙寶爸的財經新報 超讚！', tags: ['雙寶爸的財經新報'], rule: 'r1', action: 'manual', edited: true, exempt: false, at: Date.UTC(2026, 10, 20, 5, 8), link: 'https://www.facebook.com/x' },
   'GET /admin/fb/webhook': { url: 'https://api.example/fbhook', verifyToken: '0123456789abcdef0123456789abcdef', signReady: false, last: { at: Date.UTC(2026, 10, 20, 2, 31), object: 'page', fields: ['feed'] } },
   'GET /admin/fb/app': () => APP,
   'POST /admin/fb/app': (b) => { APP_SAVED = b; APP = { configured: true, appId: b.appId, source: 'admin', savedAt: Date.UTC(2026, 10, 20, 2, 30) }; return APP; },
@@ -112,7 +121,7 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'usage', 'pages', 'presets', 'video', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'usage', 'pages', 'presets', 'video', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 let LV_SAVED = null;
 const LV = { levels: { mgr: ['access', 'staff', 'logs'], user: [] }, defaults: { mgr: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], user: [] },
@@ -784,4 +793,29 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   const { page: p3 } = await open({ width: 390, height: 844 }, '#fb', { token: 'F8', me: locked });
   await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
+});
+
+test('留言守門卡片：預選有權限的組別、儲存規則、開粉專、紀錄隱藏', async () => {
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#fb');
+  await login(page);
+  await page.waitForFunction(() => document.querySelectorAll('#gdLog li').length === 1);
+  assert.equal(await page.inputValue('#gdProfile'), 'pabcdef12', '預選有 pages_manage_metadata 的組別');
+  assert.match(await page.textContent('#gdProfile option[value="p1"]'), /缺 pages_manage_metadata/);
+  assert.equal(await page.isChecked('#gdR1'), true); assert.equal(await page.isChecked('#gdR2'), false);
+  await page.selectOption('#gdMode', 'observe');
+  await page.fill('#gdLeads', '老師\n進群\n 帶單 \n');
+  await page.click('#gdSave');
+  await page.waitForFunction(() => /已儲存/.test(document.getElementById('gdMsg').textContent));
+  assert.deepEqual(GD_SAVED, { mode: 'observe', profile: 'pabcdef12', rules: { names: ['寶爸', '寳爸'], leads: ['老師', '進群', '帶單'], allow: [], auto: { r1: true, r2: false } } });
+  await page.check('#gdPg111');
+  await page.waitForFunction(() => /已開啟/.test(document.getElementById('gdPgMsg').textContent));
+  assert.match(await page.textContent('#gdLog li'), /觀察.*編輯過.*Eliza Paredes/);
+  assert.match(await page.textContent('#gdLog li'), /標註：雙寶爸的財經新報/);
+  await page.click('#gdLog li button');
+  await page.waitForFunction(() => /手動隱藏/.test(document.querySelector('#gdLog li').textContent));
+  if (SHOT) await page.locator('#gdCard').screenshot({ path: path.join(SHOT, 'admin-guard.png') });
+  await page.setViewportSize({ width: 375, height: 800 });
+  assert.equal(await page.$eval('#gdCard', (c) => c.scrollWidth > c.clientWidth + 1), false, '手機寬不超出');
+  assert.ok(calls.some((c) => c.key === 'POST /admin/fb/guard/log/9_1/hide'));
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });

@@ -8,10 +8,11 @@ import { handleLogs, adminLogs, cleanup } from './core/logs.js';
 import { handleFetch } from './core/fetch.js';
 import { handleFb, adminFb } from './fb/index.js';
 import { handleFbHook } from './fb/webhook.js';
+import { adminGuard, cleanupGuard } from './fb/guard.js';
 import { cleanupSends } from './fb/sends.js';
 import { adminStaff, cleanupAudit } from './core/staff.js';
 
-adminExtras.push(adminLogs, adminFb, adminStaff);
+adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -21,7 +22,7 @@ const modules = [
   (req, env, ctx, path) => handleAssets(req, env, path),
   (req, env, ctx, path) => handleLogs(req, env, path),
   (req, env, ctx, path) => handleFetch(req, env, path),
-  (req, env, ctx, path) => handleFbHook(req, env, path),
+  (req, env, ctx, path) => handleFbHook(req, env, path, ctx),
   (req, env, ctx, path) => handleFb(req, env, ctx, path),
   (req, env, ctx, path) => handleAdmin(req, env, path)
 ];
@@ -50,8 +51,8 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 每天 03:17（UTC 19:17）清理日誌與排程發布操作紀錄（90 天）、防重複發文紀錄（7 天）
-    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now()), cleanupSends(env, Date.now())]));
+    // 每天 03:17（UTC 19:17）清理日誌與排程發布操作紀錄（90 天）、防重複發文紀錄（7 天）、留言守門紀錄（30 天）
+    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now()), cleanupSends(env, Date.now()), cleanupGuard(env, Date.now())]));
   }
 };
 export { FbCommentTimer } from './fb/timer.js';

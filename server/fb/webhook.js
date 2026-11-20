@@ -4,6 +4,7 @@
 //   驗證權杖由 SESSION_SECRET 衍生，不另存
 import { readBody } from '../core/http.js';
 import { allAppCreds } from './tokenstore.js';
+import { guardEvent } from './guard.js';
 
 export const HOOK_PATH = '/fbhook';
 const LAST_KEY = 'webhook_last';
@@ -56,7 +57,7 @@ function kinds(body) {
   return { object, fields: [...set].slice(0, 5) };
 }
 
-export async function handleFbHook(request, env, path) {
+export async function handleFbHook(request, env, path, ctx) {
   if (path !== HOOK_PATH) return null;
   if (request.method === 'GET') {
     const q = new URL(request.url).searchParams;
@@ -78,6 +79,9 @@ export async function handleFbHook(request, env, path) {
     try { body = JSON.parse(new TextDecoder().decode(buf)); } catch { return text('bad request', 400); }
     if (!body || typeof body !== 'object') return text('bad request', 400);
     try { await saveLast(env, { at: Date.now(), ...kinds(body) }); } catch { /* 記不了也回 200，免得臉書一直重送 */ }
+    // 留言守門：先回 200，背景處理（guard.js）
+    const work = guardEvent(env, body).catch(() => {});
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(work); else await work;
     return text('EVENT_RECEIVED');
   }
   return text('method not allowed', 405);

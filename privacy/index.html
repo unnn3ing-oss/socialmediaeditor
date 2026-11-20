@@ -49,6 +49,7 @@
         <tr><td>排程發布操作紀錄（員工編號、姓名、動作、粉專 ID、貼文 ID、時間）</td><td>Cloudflare D1</td><td>90 天後自動刪除</td></tr>
         <tr><td>錯誤紀錄（工具名稱、錯誤代碼、版本、瀏覽器版本字串；不含貼文內容）</td><td>Cloudflare D1</td><td>30 天後自動刪除</td></tr>
         <tr><td>Meta Webhook 通知（如有設定）</td><td>只記錄最後一次收到的時間與事件種類（例如 page／feed），不保存通知內容</td><td>每次收到新通知即覆蓋；管理員可要求刪除</td></tr>
+        <tr><td>留言守門（如有開啟）</td><td>粉專留言符合洗版規則時，保存該則留言的內容（最多 500 字）、留言者名稱與 ID、標註的帳號名稱、處理結果，用於判斷與隱藏洗版留言；未符合規則的留言不保存</td><td>30 天後自動刪除；管理員可要求刪除</td></tr>
         <tr><td>「排入 Rundown」寫入的內容（文章 ID、類型、SLUG）</td><td>由本工具轉送至團隊自己的 Google 試算表（Google Apps Script），本工具不另存</td><td>依團隊試算表自身的管理，由團隊內部刪除</td></tr>
         <tr><td>工具偏好設定（例如「排入 Rundown」開關）與登入憑證</td><td>使用者自己的瀏覽器（localStorage）</td><td>登入憑證到期後失效；使用者可隨時清除瀏覽器資料</td></tr>
       </tbody>
@@ -115,6 +116,7 @@
         <tr><td>Scheduling activity log (employee ID, name, action, Page ID, post ID, time)</td><td>Cloudflare D1</td><td>Deleted automatically after 90 days</td></tr>
         <tr><td>Error logs (tool name, error code, version, browser user-agent; no post content)</td><td>Cloudflare D1</td><td>Deleted automatically after 30 days</td></tr>
         <tr><td>Meta Webhook notifications (if configured)</td><td>Only the time and event type of the most recent notification (e.g., page / feed) are recorded; notification content is not stored</td><td>Overwritten by each new notification; deleted on request by an administrator</td></tr>
+        <tr><td>Comment guard (if enabled)</td><td>When a Page comment matches the spam rules, its text (up to 500 characters), commenter name and ID, tagged account names, and the action taken are stored to detect and hide spam; comments that do not match are not stored</td><td>Deleted automatically after 30 days; deleted on request by an administrator</td></tr>
         <tr><td>Content written by "Add to Rundown" (article ID, type, slug)</td><td>Forwarded by the Tool to the team's own Google Sheet (Google Apps Script); not otherwise stored by the Tool</td><td>Managed within the team's own spreadsheet; deleted internally by the team</td></tr>
         <tr><td>Tool preferences (e.g., the "Add to Rundown" switch) and sign-in credential</td><td>The user's own browser (localStorage)</td><td>The credential expires automatically; users may clear their browser data at any time</td></tr>
       </tbody>

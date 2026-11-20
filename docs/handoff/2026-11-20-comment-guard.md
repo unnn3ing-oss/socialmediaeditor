@@ -8,15 +8,15 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/guard.js`（新） | 規則、設定、紀錄表、事件處理、管理路由 | ⬜ |
-| `server/fb/webhook.js`、`server/index.js` | 掛點、ctx、cron 清除 | ⬜ |
-| `server/fb/index.js`、`server/core/adminperm.js`、`server/core/levels.js` | 路由與卡片 `guard` | ⬜ |
-| `admin/index.html`、`admin/admin.js` | 「留言守門」卡片 | ⬜ |
-| `privacy/index.html` | 留言內容保存 30 天 | ⬜ |
-| 測試 | `test/server/fb-guard.test.js`、admin e2e | ⬜ |
+| `server/fb/guard.js`（新） | 規則、設定、紀錄表、事件處理、管理路由 | ✅ |
+| `server/fb/webhook.js`、`server/index.js` | 掛點、ctx、cron 清除 | ✅ |
+| `server/fb/index.js`、`server/core/adminperm.js`、`server/core/levels.js` | 路由與卡片 `guard` | ✅ |
+| `admin/index.html`、`admin/admin.js` | 「留言守門」卡片 | ✅ |
+| `privacy/index.html` | 留言內容保存 30 天 | ✅ |
+| 測試 | `test/server/fb-guard.test.js`、admin e2e | ✅ |
 
 ## 下一步
-- [ ] Task 1～4（計畫 `docs/superpowers/plans/2026-11-20-comment-guard.md`）
+- [x] Task 1～4（計畫 `docs/superpowers/plans/2026-11-20-comment-guard.md`）
 - [ ] 獨立審查 → 給使用者看 →「推」才併 main（同 commit 更新 CLAUDE.md）
 
 ## 測試
@@ -24,3 +24,6 @@
 
 ## 注意事項
 - 後端需重新部署（正式＋測試），外掛不升版號。部署後主管在 Meta 後台 Webhooks 的 Page 訂閱 `feed`。
+
+## 進度紀錄
+- 2026-11-20：Task 1～4 完成（npm test 722、admin e2e 32、legal 6、build --check 通過）。已部署且 D1 已存「層級權限」的環境，管理者預設看不到新卡片 `guard`，要系統管理者在「層級權限」勾給管理者（沒存過的環境預設就有）。
