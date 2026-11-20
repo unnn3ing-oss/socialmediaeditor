@@ -191,6 +191,14 @@
         <p class="msg" id="fsMsg" role="status"></p>
       </section>
 
+      <section class="card" id="rdCard" data-card="rundown">
+        <h2>Rundown 連線</h2>
+        <p>Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。這裡只檢查有沒有設定與連不連得上，不顯示網址與金鑰。</p>
+        <p class="fb-state" id="rdState">狀態：尚未讀取</p>
+        <div class="row"><button id="rdPing" type="button">測試連線</button></div>
+        <p class="msg" id="rdMsg" role="status"></p>
+      </section>
+
       <section class="card" id="usCard" data-card="usage">
         <h2>速率限制</h2>
         <p>臉書沒有查用量的 API，這裡顯示工具最近一次呼叫臉書時，回應附帶的用量（%）。App＝用使用者權杖的呼叫（1 小時內 200 × 使用者數）；粉專＝用粉專權杖的呼叫（24 小時內 4800 × 互動人數）。任一項到 100% 就會被臉書暫停一段時間。</p>
@@ -199,14 +207,6 @@
         <div class="row"><button id="usReload" type="button">重新整理</button><button id="usAsk" type="button">立即查詢</button></div>
         <p class="fb-hint">「立即查詢」會對使用中組別的每個粉專各打一次最輕的查詢，會用掉一點額度。</p>
         <p class="msg" id="usMsg" role="status"></p>
-      </section>
-
-      <section class="card" id="rdCard" data-card="rundown">
-        <h2>Rundown 連線</h2>
-        <p>Apps Script 網址與金鑰放在後端 Secrets（<code>RUNDOWN_URL</code>、<code>RUNDOWN_TOKEN</code>）。這裡只檢查有沒有設定與連不連得上，不顯示網址與金鑰。</p>
-        <p class="fb-state" id="rdState">狀態：尚未讀取</p>
-        <div class="row"><button id="rdPing" type="button">測試連線</button></div>
-        <p class="msg" id="rdMsg" role="status"></p>
       </section>
     </div>
 
