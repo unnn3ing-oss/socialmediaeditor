@@ -24,7 +24,7 @@
 ## 下一步
 - [x] 寫 once.js 與各檔替換（新測試 `test/server/d1-savings.test.js`）
 - [x] npm test 727、build --check 通過
-- [ ] 獨立審查
+- [x] 獨立審查通過（Minor：saveLast 寫入失敗 60 秒內不重試；noText 統計仍每則寫一次，量大再節流）
 - [ ] 給使用者看結果，等「推」
 
 ## 測試
