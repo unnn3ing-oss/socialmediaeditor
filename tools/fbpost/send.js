@@ -10,10 +10,12 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
   let sendId = newSendId(), sentLink = null;
   const unknown = new Set();   // 上次結果不明（可能已發出）的粉專
   function updateButton() {
-    const n = targets.count();
+    const n = targets.count(), noPhoto = composer.needsPhoto();
     $('sendBtn').textContent = `全部送出（${n} 個粉專）`;
-    $('sendBtn').disabled = n === 0;
-    if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = n ? '' : '請先勾選要發的粉專'; $('sendErr').dataset.auto = n ? '' : '1'; }
+    $('sendBtn').disabled = n === 0 || noPhoto;
+    // 自動提示（沒勾粉專、選套版沒照片）：使用者送出時的錯誤訊息不蓋掉
+    const auto = !n ? '請先勾選要發的粉專' : noPhoto ? '選套版需要照片，請貼上或選一張照片，或改用純文字' : '';
+    if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = auto; $('sendErr').dataset.auto = auto ? '1' : ''; }
   }
 
   function renderResults(ul, rs, rdLines) {
@@ -58,6 +60,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
     if (extra.error) { err.textContent = extra.error; return; }
     if (!/^https?:\/\/\S+$/i.test($('link').value.trim())) { err.textContent = '請貼上文章網址（第 1 則留言和排入 RD 都要用到）。'; return; }
     if (!c.targets.length) return;
+    if (composer.needsPhoto()) { err.textContent = '選套版需要照片，請貼上或選一張照片，或改用純文字'; return; }
     const btn = $('sendBtn'); btn.disabled = true; btn.textContent = '送出中…';
     try {
       const image = await composer.image();

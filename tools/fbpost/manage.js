@@ -107,7 +107,8 @@ export function createManage({ tb, history = null, onResend = null }) {
     skelStart($('schedList'), false);
     try {
       const [raw, idx] = await Promise.all([tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page)), recIndex()]);
-      const items = raw.slice();
+      // 只顯示晚於現在的排程；已過時間的不列（沒有時間的照列，免得漏看）
+      const items = raw.filter((it) => !(Number(it.at) > 0) || it.at * 1000 > Date.now());
       if (my !== schedSeq) return;
       items.sort((a, b) => byAt(a.at, b.at, $('schedSort').value));
       const ul = $('schedList'); skelEnd(ul, false); ul.textContent = '';
@@ -176,6 +177,13 @@ export function createManage({ tb, history = null, onResend = null }) {
     } catch (e) { if (my === pubSeq) { skelEnd($('pubList'), true); $('pubMore').hidden = !pubNext; say('pubHint', errText(e), true); } }
   }
 
+  // 畫面開著時，時間到了的排程每分鐘拿掉（不重查臉書）
+  function pruneSched() {
+    const ul = $('schedList'); let gone = 0;
+    for (const li of [...ul.children]) { const at = Number(li.dataset.at); if (at > 0 && at * 1000 <= Date.now()) { li.remove(); gone++; } }
+    if (gone) { const n = ul.children.length; say('schedHint', n ? `共 ${n} 則` : '沒有排程貼文'); }
+  }
+  setInterval(pruneSched, 60 * 1000);
   $('schedReload').onclick = loadSched;
   // 排序只重排畫面上的列，不重查臉書
   $('schedSort').onchange = sortSched;

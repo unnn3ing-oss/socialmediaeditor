@@ -17,7 +17,7 @@ export const BG_FONT = { max: 30, min: 14 };          // 文字背景預覽字�
 export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級（只用在排程發布）
 const ARTICLE_RE = /^https?:\/\/\S+\/\d{6,9}\/?(?:[?#]\S*)?$/i;   // 打完一個新聞網址（結尾是文章編號）就自動帶入
 
-export function createComposer({ tb, assets }) {
+export function createComposer({ tb, assets, onState = () => {} }) {   // onState：模式／照片改變（送出鈕要重算能不能送）
   const renderer = createRenderer(assets);
   const kit = createFxKit({ stickerUrls: assets.stickers });
   const canvas = $('cv');
@@ -209,7 +209,7 @@ export function createComposer({ tb, assets }) {
   // 視窗原本隱藏量不到高度：打開（尺寸改變）時再算一次；程式填值走 msgCount／titleChanged
   for (const id of ['title', 'msg']) { $(id).addEventListener('input', () => grow($(id))); new ResizeObserver(() => { if ($(id).offsetParent) grow($(id)); }).observe($(id)); }
   $('msg').addEventListener('input', msgCount); msgCount();
-  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); };
+  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); onState(); };
 
   titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready: () => st.mode !== 'text', redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
@@ -458,6 +458,7 @@ export function createComposer({ tb, assets }) {
       say('pullHint', '已帶回上次送出的網址、標題' + (rec.photo ? (photoOk ? '、照片' : '（照片讀取失敗）') : '') + '；貼文內容請重新填寫');
     },
     mode: () => st.mode,
+    needsPhoto: () => st.mode === 'image' && !st.photo,   // 選套版沒有照片：不能送出
     text: postText,   // 送出用的貼文內容
     bg: bgOn   // 送出用的文字背景代號（只有純文字模式；沒選＝''）
   };
