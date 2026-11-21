@@ -27,7 +27,7 @@ Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `b
 | 測試 | `test/server/fb-post.test.js`、`test/e2e/fbpost-compose.e2e.js` | ✅ |
 
 ## 下一步
-- [ ] 第 1 階段：`bgpresets.data.js`＋`bgpresets.js` 改讀資料（回 id、name、type、css、text）、前端套文字色與分組、擷取腳本放 `docs/fb-text-backgrounds/`、測試
+- [x] 第 1 階段（`47bb649`，npm test 745、fbpost e2e 60、build --check、獨立審查通過）：`bgpresets.data.js`＋`bgpresets.js` 改讀資料（回 id、name、type、css、text）、前端套文字色與分組、擷取腳本放 `docs/fb-text-backgrounds/`、測試
 - [x] 後端＋單元測試
 - [x] 前端＋e2e、截圖（npm test 743、fbpost e2e 60、build --check 通過）
 - [x] 獨立審查（修正後通過：後端計字 CRLF 修正 `2b65ccc`）
