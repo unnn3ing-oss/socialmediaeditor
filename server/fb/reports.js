@@ -12,7 +12,7 @@ import { listPages, FbSetupError } from './pages.js';
 import { profileId, userToken } from './tokenstore.js';
 import { usageBusy } from './usage.js';
 
-export const DATA_VERSION = 'r1';
+export const DATA_VERSION = 'r2';   // r2：續頁改用 paging.next 的翻頁參數
 export const GRAPH_VERSION = GRAPH.split('/').pop();
 export const MAX_DAYS = 31;
 export const BATCH = 5;              // 欄位展開可用時每批 5 篇（1 次呼叫）
@@ -134,16 +134,39 @@ export async function signCursor(env, o) {
   return body + '.' + (await mac(env, 'cursor', body));
 }
 export async function readCursor(env, c) {
-  if (typeof c !== 'string' || c.length > 1500 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$/.test(c)) return null;
+  if (typeof c !== 'string' || c.length > 3000 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$/.test(c)) return null;
   const [body, sig] = c.split('.');
   if (sig !== (await mac(env, 'cursor', body))) return null;
   try {
     const o = JSON.parse(new TextDecoder().decode(b64urlDecode(body)));
-    if (!o || o.v !== 1 || !/^\d{1,30}$/.test(o.p) || !DATE_RE.test(o.f) || !DATE_RE.test(o.t) || !Number.isInteger(o.a) || typeof o.s !== 'string') return null;
-    if (o.c !== null && (typeof o.c !== 'string' || o.c.length > 600)) return null;
+    if (!o || o.v !== 2 || !/^\d{1,30}$/.test(o.p) || !DATE_RE.test(o.f) || !DATE_RE.test(o.t) || !Number.isInteger(o.a) || typeof o.s !== 'string') return null;
+    if (o.c !== null && (typeof o.c !== 'string' || !readPaging(o.c))) return null;
     if (!Number.isInteger(o.k) || o.k < 1 || o.k > 10000) return null;
     return o;
   } catch { return null; }
+}
+
+// ---- 翻頁參數 ----
+// 帶 since／until 查時，臉書用時間翻頁：下一頁要照 paging.next 裡的 until／__paging_token（不能自己混 after）
+// 只從 paging.next 抽白名單參數（不含權杖），存成查詢字串放進 Worker 游標；完整網址不外流
+const PAGING_KEYS = ['after', 'until', 'since', '__paging_token'];
+const PAGING_VAL = { after: /^[A-Za-z0-9_\-=%.]{1,800}$/, __paging_token: /^[A-Za-z0-9_\-=%.]{1,800}$/, until: /^\d{1,12}$/, since: /^\d{1,12}$/ };
+export function pagingFrom(d) {
+  const pg = d && d.paging;
+  if (!pg || typeof pg.next !== 'string') return null;
+  let u;
+  try { u = new URL(pg.next); } catch { u = null; }
+  const out = new URLSearchParams();
+  if (u) for (const k of PAGING_KEYS) { const v = u.searchParams.get(k); if (v !== null && PAGING_VAL[k].test(v)) out.set(k, v); }
+  if (!out.has('after') && !out.has('__paging_token') && pg.cursors && typeof pg.cursors.after === 'string' && PAGING_VAL.after.test(pg.cursors.after)) out.set('after', pg.cursors.after);
+  return out.has('after') || out.has('__paging_token') || out.has('until') ? out.toString() : null;
+}
+// 游標裡的翻頁參數 → 物件；格式不對回 null
+export function readPaging(c) {
+  if (typeof c !== 'string' || !c || c.length > 2000) return null;
+  const q = new URLSearchParams(c), out = {};
+  for (const [k, v] of q) { if (!PAGING_KEYS.includes(k) || !PAGING_VAL[k].test(v) || k in out) return null; out[k] = v; }
+  return Object.keys(out).length ? out : null;
 }
 
 // ---- 讀一批 ----
@@ -163,12 +186,14 @@ async function call(env, budget, path, params, token) {
   }
 }
 
-// 回 { items, after(下一頁 Graph 游標或 null), issues, complete(可快取) }
+// after＝翻頁參數查詢字串（第一批 null）；回 { items, after(下一頁翻頁參數或 null), issues, complete(可快取) }
 export async function readBatch(env, page, token, win, after) {
   const budget = { used: 0 };
   const issues = new Set();
   let d = null, withIns = false;
-  const listParams = (limit, fields) => ({ fields, limit, since: win.since, until: win.until, after: after || undefined });
+  // 第一批帶期間；續頁只照臉書給的翻頁參數（另外仍用 created_time 過濾、看到比起日早就停）
+  const pgp = after ? readPaging(after) : null;
+  const listParams = (limit, fields) => (pgp ? { fields, limit, ...pgp } : { fields, limit, since: win.since, until: win.until });
   if (!noExpand.has(page)) {
     try { d = await call(env, budget, '/' + page + '/published_posts', listParams(BATCH, BASE_FIELDS + ',' + EXPAND), token); withIns = true; }
     catch (e) {
@@ -188,7 +213,7 @@ export async function readBatch(env, page, token, win, after) {
     if (t >= win.until) continue;
     let insights = null, why = '';
     if (withIns) {
-      if (p.insights && Array.isArray(p.insights.data)) insights = p.insights.data; else why = 'no_data';
+      if (p.insights && Array.isArray(p.insights.data)) insights = p.insights.data; else { why = 'no_data'; issues.add('insights_empty'); }   // 缺 read_insights 時臉書可能整個不回
     } else if (budget.used < MAX_CALLS) {
       try { insights = ((await call(env, budget, '/' + p.id + '/insights', { metric: INSIGHT_METRICS.join(',') }, token)) || {}).data || []; }
       catch (e) {
@@ -202,7 +227,7 @@ export async function readBatch(env, page, token, win, after) {
     const m = metricsOf(p, insights, why);
     items.push({ page, id: p.id, time: new Date(t * 1000).toISOString(), type: classify(p), text: summary(p.message), url: safeUrl(p.permalink_url), ...m });
   }
-  const next = !older && d && d.paging && d.paging.next && d.paging.cursors && typeof d.paging.cursors.after === 'string' ? d.paging.cursors.after.slice(0, 600) : null;
+  const next = !older ? pagingFrom(d) : null;
   return { items, after: next, issues: [...issues], complete, calls: budget.used };
 }
 
@@ -249,9 +274,11 @@ export async function reportPosts(request, env, me) {
   if (win.error) return fail(request, env, 'bad_request', win.error);
   if (win.since >= win.until) return ok(request, env, { items: [], next: null, status: 'ok', issues: [], asOf, scope: r.scope, page: r.page }, NOSTORE);
 
-  const retry = await signCursor(env, { v: 1, p: r.page, f: from, t: to, a: asOf, s: r.scope, c: after, k: seq });
+  const retry = await signCursor(env, { v: 2, p: r.page, f: from, t: to, a: asOf, s: r.scope, c: after, k: seq });
   const base = { asOf, scope: r.scope, page: r.page, seq };
-  const key = ['rep', DATA_VERSION, GRAPH_VERSION, 'b', r.pid, r.scope, r.page, from, to, asOf, after || '-'].join(':');
+  // 翻頁參數可能很長（KV key 上限 512 bytes）→ 放雜湊
+  const ah = after ? b64urlEncode(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(after)))).slice(0, 22) : '-';
+  const key = ['rep', DATA_VERSION, GRAPH_VERSION, 'b', r.pid, r.scope, r.page, from, to, asOf, ah].join(':');
   const hit = await kvGet(env, key);
   let res = hit;
   if (!res) {
@@ -269,7 +296,7 @@ export async function reportPosts(request, env, me) {
     }
     if (res.complete) await kvPut(env, key, res, BATCH_TTL);
   }
-  const next = res.after ? await signCursor(env, { v: 1, p: r.page, f: from, t: to, a: asOf, s: r.scope, c: res.after, k: seq + 1 }) : null;
+  const next = res.after ? await signCursor(env, { v: 2, p: r.page, f: from, t: to, a: asOf, s: r.scope, c: res.after, k: seq + 1 }) : null;
   return ok(request, env, { ...base, items: res.items, next, status: 'ok', issues: res.issues, cached: !!hit, retry: res.complete ? null : retry }, NOSTORE);
 }
 
@@ -279,7 +306,7 @@ export async function reportProbe(request, env, me) {
   if (!me.admin) return fail(request, env, 'fb_no_perm');
   const r = await resolve(request, env, me, new URL(request.url).searchParams.get('page'));
   if (r instanceof Response) return r;
-  const out = { graph: GRAPH_VERSION, permissions: null, expand: null, sinceUntil: null, posts: [], calls: 0 };
+  const out = { graph: GRAPH_VERSION, permissions: null, expand: null, sinceUntil: null, paging: null, posts: [], calls: 0 };
   const g = async (path, params, token = r.token) => { out.calls++; try { return { d: await graph(env, 'GET', path, params, token) }; } catch (e) { return { e: e instanceof GraphError ? { code: e.code, message: String(e.message).slice(0, 160) } : { code: -1, message: 'error' } }; } };
   const { token: ut } = await userToken(env);
   if (ut) {
@@ -296,9 +323,22 @@ export async function reportProbe(request, env, me) {
     const su = await g('/' + r.page + '/published_posts', { fields: 'id,created_time', limit: 5, since: t });
     out.sinceUntil = su.e ? { ok: false, error: su.e } : { ok: true, honored: (su.d.data || []).every((x) => Date.parse(x.created_time) / 1000 >= t), returned: (su.d.data || []).length };
   }
-  for (const [i, p] of posts.slice(0, 3).entries()) {
+  // 翻第 2 頁：照 paging.next 的翻頁參數續讀（和報表同一套）
+  const p1 = await g('/' + r.page + '/published_posts', { fields: 'id,created_time', limit: 2, since: Math.floor(Date.now() / 1000) - 30 * 86400, until: Math.floor(Date.now() / 1000) });
+  if (p1.e) out.paging = { ok: false, error: p1.e };
+  else {
+    const pc = pagingFrom(p1.d);
+    if (!pc) out.paging = { ok: true, page2: false, note: '30 天內不到 3 篇，沒有第 2 頁' };
+    else {
+      const p2 = await g('/' + r.page + '/published_posts', { fields: 'id,created_time', limit: 2, ...readPaging(pc) });
+      out.paging = p2.e ? { ok: false, params: Object.keys(readPaging(pc)), error: p2.e } : { ok: true, page2: true, params: Object.keys(readPaging(pc)), returned: (p2.d.data || []).length };
+    }
+  }
+  // 前 3 篇逐項測指標；第 4～6 篇只看分類（省呼叫）
+  for (const [i, p] of posts.slice(0, 6).entries()) {
     const row = { n: i + 1, type: classify(p), statusType: p.status_type || null, attachments: ((p.attachments && p.attachments.data) || []).map((a) => ({ media_type: a.media_type || null, type: a.type || null, sub: ((a.subattachments && a.subattachments.data) || []).length })),
       hasReactions: !!(p.reactions && p.reactions.summary), hasComments: !!(p.comments && p.comments.summary), hasShares: p.shares !== undefined, reelUrl: /\/reel\//.test(String(p.permalink_url || '')), metrics: {} };
+    if (i >= 3) { delete row.metrics; out.posts.push(row); continue; }
     for (const m of PROBE_METRICS) {
       const x = await g('/' + p.id + '/insights', { metric: m });
       row.metrics[m] = x.e ? { error: x.e.code } : (() => { const v = insightValue(x.d.data, m); return v === undefined ? { empty: true } : { value: v }; })();
