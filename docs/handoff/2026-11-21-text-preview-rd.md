@@ -16,13 +16,20 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| admin/index.html、server/core/levels.js、docs/deploy.md、test/e2e/admin.e2e.js | 改名 | ⬜ |
-| tools/fbpost/compose.js、index.html、fbpost.css、title.js | 預覽編輯、字級、11 字、隨機背景 | ⬜ |
-| tools/fbpost/slug.js、rd.js、send 呼叫處 | RD 文字 | ⬜ |
-| docs/rundown-gs-video-style.md、docs/rundown-gs/rdslot.js | 置中補丁 | ⬜ |
+| admin/index.html、server/core/levels.js、docs/deploy.md、test/e2e/admin.e2e.js | 改名 | ✅ |
+| tools/fbpost/compose.js、index.html、fbpost.css、title.js | 預覽編輯、字級、11 字、隨機背景 | ✅ |
+| tools/fbpost/slug.js、rd.js、send 呼叫處 | RD 文字 | ✅ |
+| docs/rundown-gs-video-style.md、docs/rundown-gs/rdslot.js | 置中補丁 | ✅ |
 
 ## 下一步
-- [ ] 改名 → 預覽 → RD → 補丁 → 測試 → 截圖給使用者 → 審查
+- [x] 改名 → 預覽 → RD → 補丁 → 測試（npm test 754、fbpost＋compose＋admin e2e 100）
+- [ ] 全部 e2e、獨立審查、給使用者截圖
+
+## 實作細節
+- 預覽 `#bgText` contenteditable plaintext-only；結尾換行瀏覽器會多放一個 \n，讀回時去掉一個、寫入時補一個
+- `fitBg()`：white-space: pre，從 30 往下找塞得進 bgPrev 內框的字級（最小 14）
+- `textCheck`（title.js）依 split('\n') 逐行，不去頭尾空行（和輸入框行對齊）
+- 隨機背景 `randomBg()`：載入清單後、reset；snapshot 多存 bg，restore 帶回
 
 ## 測試
 npm test、`npx playwright test` 相關：admin、fbpost、fbpost-compose；`node build.js --check`。

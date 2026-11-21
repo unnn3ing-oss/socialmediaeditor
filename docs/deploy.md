@@ -141,7 +141,7 @@ npx wrangler deploy
 
 1. 用瀏覽器打開管理後台 `https://unnn3ing-oss.github.io/socialmediaeditor/admin/`（舊網址 `後端網址/admin` 會自動轉過來，後端已不內建管理頁）。
    **成功的樣子：** 看到「管理登入」。
-2. 輸入 `ADMIN_PASSWORD` 按「登入」，再點左側「素材」。
+2. 輸入 `ADMIN_PASSWORD` 按「登入」，再點左側「素材設定」。
    **成功的樣子：** 出現「上傳或替換素材」和「目前的素材」。密碼打錯會顯示「密碼不正確。」
 3. 填「素材名稱」（小寫英文、數字、點、底線、減號，例如 `logo-white.png`），等級選 `company`，選檔案，按「上傳」。
    **成功的樣子：** 顯示「已上傳「logo-white.png」。」，下方清單多一列。
@@ -273,7 +273,7 @@ npx wrangler deploy
 
 | 想做的事 | 怎麼做 |
 |---|---|
-| 換 Logo、版型 | 管理後台「素材」上傳同名檔案 |
+| 換 Logo、版型 | 管理後台「素材設定」上傳同名檔案 |
 | 看有沒有人回報錯誤 | 登入管理後台，點「錯誤日誌」按「查看最近 7 天」（日誌只保留 30 天，不含任何內容） |
 | 更新後端程式 | 先 `git pull --autostash origin main` 抓最新程式（做法見根目錄 `README.md`），再在 `server` 資料夾執行 `npx wrangler deploy`。`server/wrangler.toml` 的 `crons` 只要 `"17 19 * * *"`（每日清理）；要有 `FB_TIMER` 綁定與 migration `v3`（步驟 6-2） |
 | 網站網址改了 | 修改 `wrangler.toml` 的 `ALLOWED_ORIGIN`，再部署一次 |

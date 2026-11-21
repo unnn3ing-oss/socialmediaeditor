@@ -203,7 +203,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   assert.equal(await page.isVisible('#logout'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/assets'), '沒進素材分類前不讀素材');
   // 5 個分類；沒有後端 API 的卡片（預設文字、嘗試次數）不出現
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['發文設定', '留言管理', '人員與權限', '連接狀態', '素材', '使用紀錄', '進階設定']);
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['發文設定', '留言管理', '人員與權限', '連接狀態', '素材設定', '使用紀錄', '進階設定']);
   await page.waitForSelector('#pgWrap:not([hidden])');
   await page.fill('.pg-short >> nth=0', '填到一半');
 

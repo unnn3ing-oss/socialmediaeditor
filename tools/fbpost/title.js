@@ -36,3 +36,12 @@ export function syncTitleLine(msg, title) {
   lines[i] = `【${t}】`;
   return lines.join('\n');
 }
+
+// 純文字＋文字背景（純函式）：依 Enter 分出的每一行（不去頭尾空行，和輸入框的行一一對齊），每行 11 字。只提醒，不擋送出。
+export const TEXT_LINE_MAX = 11;
+export function textCheck(text) {
+  const lines = String(text || '').split('\n');
+  const widths = lines.map((l) => charWidth(l));
+  const over = widths.findIndex((w) => w > TEXT_LINE_MAX);
+  return { widths, over, text: over >= 0 ? `第 ${over + 1} 行 ${widths[over]} 字，超過 ${TEXT_LINE_MAX} 字（仍可送出）` : '' };
+}

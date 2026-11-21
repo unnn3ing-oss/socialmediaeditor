@@ -2,7 +2,7 @@
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：選套版 66px、純文字圖 76px。框的判斷用 rules.js。
 import { $, errText, say, confirmBox, segmented, stripLead } from './util.js';
 import { frameForUrl } from './rules.js';
-import { titleCheck, LINE_MAX, syncTitleLine } from './title.js';
+import { titleCheck, LINE_MAX, syncTitleLine, textCheck, TEXT_LINE_MAX } from './title.js';
 import { createTitleEditor } from './titleedit.js';
 import { autoLines } from '../../sdk/news-rules.js';
 import { parseArticle, formatCopy, mainCaption } from '../../sdk/news-article.js';
@@ -13,6 +13,7 @@ import { createFxKit } from '../../ui/compose/fx.js';
 
 const MAX_IMAGES = 3;
 export const BG_MAX = 130;                          // 臉書文字背景貼文字數上限
+export const BG_FONT = { max: 30, min: 14 };          // 文字背景預覽字級：塞得下的最大字級（不自動換行）
 export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級（只用在排程發布）
 const ARTICLE_RE = /^https?:\/\/\S+\/\d{6,9}\/?(?:[?#]\S*)?$/i;   // 打完一個新聞網址（結尾是文章編號）就自動帶入
 
@@ -81,17 +82,30 @@ export function createComposer({ tb, assets }) {
   const bgImgUrl = {};   // 圖樣代號 → 已載入的圖片網址（ObjectURL）
   st.bg = '';
   const bgOn = () => (st.mode === 'text' && bgs.some((b) => b.id === st.bg) ? st.bg : '');
+  // 預設背景：純色或漸層隨機一個（圖樣要點開才載入，不選）；「無」仍可手動選
+  const randomBg = () => { const l = bgs.filter((b) => b.type !== 'image'); return l.length ? l[Math.floor(Math.random() * l.length)].id : ''; };
+  // 字級自適應：不自動換行，最長那行與總行數都塞得進預覽框的最大字級
+  function fitBg() {
+    const box = $('bgPrev'), p = $('bgText');
+    if (box.hidden || !box.offsetParent) return;
+    const cs = getComputedStyle(box);
+    const w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    let s = BG_FONT.max;
+    for (; s > BG_FONT.min; s--) { p.style.fontSize = s + 'px'; if (p.scrollWidth <= w + 0.5 && p.scrollHeight <= h + 0.5) break; }
+    p.style.fontSize = s + 'px';
+  }
   function bgShow() {
     const b = bgs.find((x) => x.id === st.bg);
     $('bgPrev').hidden = !b; $('noImgTxt').hidden = !!b;
     $('bgName').textContent = b ? b.name : '無';
     if (b) {
-      const t = postText().trim(), n = [...t].length;
       $('bgPrev').style.background = b.css;
       if (bgImgUrl[b.id]) $('bgPrev').style.background = `${b.css} url("${bgImgUrl[b.id]}") center / cover no-repeat`;
       $('bgPrev').style.color = b.text || '#fff';
-      $('bgText').textContent = t || '貼文內容會顯示在這裡';
-      $('bgText').style.fontSize = n <= 40 ? '30px' : n <= 85 ? '24px' : '19px';
+      const ed = $('bgText'), v = $('title').value + ($('title').value.endsWith('\n') ? '\n' : '');   // 預覽上編輯中不覆蓋（游標會跑掉）
+      if (document.activeElement !== ed && ed.textContent !== v) ed.textContent = v;
+      fitBg();
     }
     for (const el of $('bgBox').querySelectorAll('.sw')) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
     const more = $('bgSws').querySelector('.bg-more');
@@ -103,6 +117,14 @@ export function createComposer({ tb, assets }) {
     if (css) el.style.background = css;
     return el;
   }
+  // 預覽上直接編輯：和標題（貼文內容）框雙向同步
+  $('bgText').addEventListener('input', () => {
+    const v = $('bgText').textContent.replace(/\n$/, '');   // 結尾換行時瀏覽器會多放一個 \n 才顯示得出空行
+    if ($('title').value === v) return;
+    $('title').value = v; $('title').dispatchEvent(new Event('input'));
+  });
+  $('bgText').addEventListener('blur', () => bgShow());
+  new ResizeObserver(fitBg).observe($('bgPrev'));
   const bgPick = (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); };
   $('bgSws').addEventListener('click', bgPick);
   $('bgImgs').addEventListener('click', bgPick);
@@ -154,6 +176,7 @@ export function createComposer({ tb, assets }) {
       els.push(sep(), more);
     }
     $('bgSws').append(...els);
+    if (!st.bg) st.bg = randomBg();
     $('bgBox').hidden = false; msgCount();
   }).catch(() => {});
 
@@ -162,8 +185,20 @@ export function createComposer({ tb, assets }) {
   const msgCount = () => {
     const n = [...postText()].length, bg = bgOn();
     const el = st.mode === 'text' ? $('titleCount') : $('msgCount');
-    el.textContent = bg ? `${n}／${BG_MAX} 字（文字背景）` : `${n} 字`;
-    el.classList.toggle('bad', !!bg && n > BG_MAX);
+    let warn = '';
+    if (st.mode === 'text') {
+      // 有背景：不自動換行，右側每行 N/11（和輸入框的行對齊）；選「無」：自動換行、不顯示
+      const ta = $('title'), box = $('titleLines');
+      ta.setAttribute('wrap', bg ? 'off' : 'soft');
+      box.hidden = !bg; box.textContent = '';
+      if (bg) {
+        const c = textCheck(ta.value); warn = c.text;
+        c.widths.forEach((w) => { const d = document.createElement('div'); d.textContent = w ? `${w}/${TEXT_LINE_MAX}` : ''; d.classList.toggle('bad', w > TEXT_LINE_MAX); box.append(d); });
+        alignTitleLines();
+      }
+    }
+    el.textContent = warn ? `${warn}・${n}／${BG_MAX} 字` : bg ? `${n}／${BG_MAX} 字（文字背景）` : `${n} 字`;
+    el.classList.toggle('bad', (!!bg && n > BG_MAX) || !!warn);
     bgShow();
     if ($('msg').offsetParent) grow($('msg'));
   };
@@ -208,9 +243,9 @@ export function createComposer({ tb, assets }) {
     $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
     $('swatchBox').hidden = st.mode !== 'color';
     const text = st.mode === 'text';
-    $('msg').hidden = text; $('msgLbl').hidden = text; $('titleLines').hidden = text;
+    $('msg').hidden = text; $('msgLbl').hidden = text;
     $('titleName').textContent = text ? '標題（貼文內容）' : '標題';
-    $('title').setAttribute('wrap', text ? 'soft' : 'off');
+    if (!text) { $('titleLines').hidden = false; $('title').setAttribute('wrap', 'off'); }   // 純文字的換行與每行字數由 msgCount 依有無背景設定
     $('title').placeholder = text ? '純文字貼文只發這一欄的內容' : '帶入時自動換行';
     if (!text) $('msgCount').classList.remove('bad');
     titleChanged();
@@ -260,8 +295,7 @@ export function createComposer({ tb, assets }) {
 
   // ---- 標題：改了先畫，缺的字型段載好再重畫；旁邊顯示每行字數（超過只提醒） ----
   function titleChanged() {
-    if (st.mode === 'text') {   // 純文字：沒有圖上的標題，不顯示每行字數
-      $('titleLines').textContent = '';
+    if (st.mode === 'text') {   // 純文字：沒有圖上的標題；每行字數（有背景時 N/11）在 msgCount
       msgCount();
       if ($('title').offsetParent) grow($('title'));
       return;
@@ -408,7 +442,7 @@ export function createComposer({ tb, assets }) {
     reset() {
       if (titleEd) titleEd.end();
       $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = ''; msgCount();
-      st.photo = null; st.photoBlob = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = '';
+      st.photo = null; st.photoBlob = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = randomBg();
       say('pullHint', '');
       titleChanged(); showMode();
     },
@@ -423,7 +457,7 @@ export function createComposer({ tb, assets }) {
       return new File([blob], 'fbpost.png', { type: 'image/png' });
     },
     // 送出記錄用（再發一次）：文章網址、發出時的標題、模式、框、底色、原始照片
-    snapshot: () => ({ link: $('link').value.trim(), title: $('title').value, mode: st.mode, frame: st.frame, color: st.color, photo: st.photo ? st.photoBlob || null : null }),
+    snapshot: () => ({ link: $('link').value.trim(), title: $('title').value, mode: st.mode, frame: st.frame, color: st.color, bg: st.bg, photo: st.photo ? st.photoBlob || null : null }),
     // 再發一次：清空後帶回（不自動重新帶入文章、不帶貼文內容）
     async restore(rec) {
       this.reset();
@@ -432,6 +466,7 @@ export function createComposer({ tb, assets }) {
       if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; setColor(rec.color); }
       $('link').value = rec.link || ''; lastPulled = $('link').value.trim();
       $('title').value = rec.title || '';
+      if (typeof rec.bg === 'string' && (rec.bg === '' || bgs.some((b) => b.id === rec.bg))) st.bg = rec.bg;   // 文字背景用當時的（含「無」）
       showMode();
       let photoOk = true;
       if (rec.photo instanceof Blob) photoOk = await loadPhoto(rec.photo);

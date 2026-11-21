@@ -100,7 +100,7 @@ function rdSlotAdd(ss, names, en) {
   if (x < 0) return { ok: false, page: en.page, error: name + ' 找不到 ' + rdPad(mo) + rdPad(d) + ' 欄' };
   var p = rdSlotPlan(V, x, en.page, rdStr(en.time), en.slot, en.kind === 'reel' ? 'reel' : 'video');
   if (p.error) return { ok: false, page: en.page, error: p.error };
-  sh.getRange(p.row + 1, p.col + 1).setValue(text);   // 只換文字，保留預留格原本的格式
+  sh.getRange(p.row + 1, p.col + 1).setValue(text).setHorizontalAlignment('center');   // 換文字並置中，其他格式保留預留格原本的
   return { ok: true, page: en.page, status: 'slot', cell: name + '!' + rdA1(p.row, p.col), time: rdStr(en.time) };
 }
 
