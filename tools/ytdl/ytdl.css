@@ -121,6 +121,7 @@
 .queue-empty { padding: 32px 16px; text-align: center; color: var(--muted); }
 .yt-card .qlist { padding: 6px 8px 8px; }
 .yt-card .qrow { padding: 10px; gap: 14px; }
+.yt-card .qask { top: 10px; bottom: 10px; right: 10px; left: calc(10px + var(--cover-w) + 14px); }
 .yt-card > .clear-ask { margin: 8px 12px 4px; }
 .no-ext { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .no-ext[hidden] { display: none; }

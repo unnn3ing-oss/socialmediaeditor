@@ -1,7 +1,7 @@
 /* The download list rows, shared by the side panel and the web page. The page defines the colour tokens
    (--surface-2, --line, --accent, --ok, --warn, --err, --muted, --ink, --font, --mono, ...) and may set --cover-w. */
 .qlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.qrow { display: grid; grid-template-columns: var(--cover-w, 88px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border-radius: 10px; }
+.qrow { position: relative; display: grid; grid-template-columns: var(--cover-w, 88px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border-radius: 10px; }
 .qrow:hover { background: var(--surface-2); }
 .qcover { position: relative; display: block; width: var(--cover-w, 88px); aspect-ratio: 16 / 9; padding: 0; border: 0; border-radius: 7px; overflow: hidden; cursor: pointer; background: transparent; }
 .qcover:disabled { cursor: default; }
@@ -22,20 +22,29 @@
 .qcover[data-state="busy"] .qdl { opacity: 1; }
 
 .qmain { display: grid; gap: 4px; min-width: 0; }
-.qhead { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.qhead { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
 .qno { flex: none; font: 700 10.5px var(--mono); color: var(--muted); background: var(--surface-2); border-radius: 5px; padding: 1px 5px; }
-.qtitle { min-width: 0; font-size: 13px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.qtitle { min-width: 0; flex: 1; min-height: calc(2 * 1.35em); font-size: 13px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .qbar { height: 6px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
 .qbar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .2s linear; }
-.qline { display: flex; align-items: baseline; gap: 6px 8px; flex-wrap: wrap; min-width: 0; }
+.qline { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-height: 22px; min-width: 0; }
 .qpill { flex: none; font: 700 11px var(--mono); padding: 1px 8px; border-radius: var(--radius-control); background: var(--surface-2); color: var(--muted); white-space: nowrap; }
-.qsub { font: 11.5px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
-.qsub:empty { display: none; }
-/* the question that 從清單移除 opens inside the row: it takes the place of the text and the buttons */
-.qask { grid-column: 2 / -1; display: grid; gap: 8px; min-width: 0; }
+.qsub { flex: 1; min-width: 0; font: 11.5px/1.4 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qsub[data-state="ok"] { color: var(--ok); }
+.qsub[data-state="err"] { color: var(--err); }
+/* 失敗時才出現的小「重試」鈕（在狀態列，右側按鈕固定只有複製、移除） */
+.qline .qretry { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 700 11.5px/1 var(--font); cursor: pointer; }
+.qline .qretry svg { width: 12px; height: 12px; }
+.qline .qretry:hover { background: var(--surface-2); }
+.qline .qretry[hidden] { display: none; }
+/* the question that 從清單移除 opens: laid over the same row (the cover stays), so the row keeps its height */
+.qask { position: absolute; top: 6px; bottom: 6px; right: 6px; left: calc(6px + var(--cover-w, 88px) + 10px); display: flex; align-items: center; gap: 6px; min-width: 0; border-radius: 8px; background: var(--err-soft); padding: 0 6px; z-index: 2; }
 .qask[hidden] { display: none; }
-.qrow.asking .qmain, .qrow.asking .qacts { display: none; }
+.qrow.asking .qmain, .qrow.asking .qacts { visibility: hidden; }
 .qrow.asking { background: var(--err-soft); }
+.qask .qask-t { font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: 1; display: block; overflow: hidden; }
+.qask .qask-b { flex: none; gap: 6px; }
+.qask .qask-b button { flex: none; padding: 4px 8px; font-size: 12px; }
 .qask-t { font-size: 13px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .qask-b { display: flex; gap: 8px; }
 /* 清除全部's question (when failed videos would be lost) uses the same text and buttons */
@@ -47,13 +56,10 @@
 .qtext { grid-column: 2 / -1; width: 100%; box-sizing: border-box; min-height: 5.5em; resize: vertical; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px/1.55 var(--font); }
 .qtext[hidden] { display: none; }
 .qtext::placeholder { color: var(--muted); }
-.qhint { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
-.qhint:empty { display: none; }
-.qflash { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
-/* an empty live region stays in the page (so screen readers announce what is put into it) but takes no room */
-.qflash:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.qflash[data-state="ok"] { color: var(--ok); }
-.qflash[data-state="err"] { color: var(--err); }
+.qhint { flex: none; max-width: 45%; padding: 1px 6px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); font: 700 10.5px/1.3 var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qhint[hidden] { display: none; }
+/* the live region stays in the page (so screen readers announce what is put into it) but is off screen: the text is shown in place of the status text */
+.qflash { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .qrow[data-kind="downloading"] { background: var(--accent-soft); }
 .qrow[data-kind="downloading"] .qpill { background: var(--accent); color: var(--accent-ink); }
@@ -64,8 +70,8 @@
 .qrow[data-kind="failed"] .qsub { color: var(--err); font-family: var(--font); }
 .qrow[data-kind="duplicate"] .qpill { background: var(--warn-soft); color: var(--warn); }
 .qrow[data-kind="duplicate"] .qtitle, .qrow[data-kind="duplicate"] .qcover { opacity: .6; }
-.qrow[data-kind="duplicate"] .qbar, .qrow[data-kind="fetching"] .qbar, .qrow[data-kind="waiting-host"] .qbar, .qrow[data-kind="failed"] .qbar { display: none; }
-.qrow[data-kind="fetching"] .qtitle, .qrow[data-kind="waiting-host"] .qtitle { min-height: 17px; flex: 1; border-radius: 6px; background: var(--surface-2); }
+.qrow[data-kind="duplicate"] .qbar, .qrow[data-kind="fetching"] .qbar, .qrow[data-kind="waiting-host"] .qbar, .qrow[data-kind="failed"] .qbar, .qbar[hidden] { display: block; visibility: hidden; }
+.qrow[data-kind="fetching"] .qtitle, .qrow[data-kind="waiting-host"] .qtitle { border-radius: 6px; background: var(--surface-2); }
 .qrow[data-kind="fetching"] .qtitle { background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 35%) 50%, transparent 70%) 0 0 / 200% 100%, var(--surface-2); animation: shimmer 1.1s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 

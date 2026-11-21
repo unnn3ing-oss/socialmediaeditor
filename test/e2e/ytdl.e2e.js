@@ -365,3 +365,88 @@ test('外掛側邊欄：有「YT 下載」分頁；目前分頁是 YouTube 時�
   await yt.close();
   await sp.close();
 });
+
+test('YT 下載清單卡片：任何狀態、按複製出現訊息、按 × 跳移除確認，列高都相同（網頁／側邊欄）', async () => {
+  const { serve } = require('../helpers/serve.js');
+  const { launch } = require('../helpers/browser.js');
+  const srv = await serve(ROOT);
+  const browser = await launch();
+  try {
+    for (const side of [false, true]) {
+      const page = await (await browser.newContext({ viewport: { width: side ? 380 : 1280, height: 900 }, deviceScaleFactor: 1 })).newPage();
+      await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+      await page.goto(srv.url + 'tools/ytdl/index.html' + (side ? '?embed=side' : ''));
+      await page.waitForSelector('#no-extension:not([hidden])', { timeout: 10000 });
+      const r = await page.evaluate(async (isSide) => {
+        const { renderQueue, flash } = await import('./web/queue-view.js');
+        for (const id of ['work', 'side', 'queue-card']) { const n = document.getElementById(id); if (n) n.hidden = false; }
+        const ul = document.getElementById('queue-list'), noop = () => {};
+        const h = { cover: noop, copy: noop, retry: noop, remove: noop, askBeforeRemove: isSide };
+        const yt = (id) => `https://www.youtube.com/watch?v=${id}`;
+        const now = Date.now();
+        const base = (uid, f) => ({ uid, id: `v${uid}`, url: yt(`v${uid}`), title: `影片標題 ${uid}`, status: 'waiting', dupOf: null, tags: null, ...f });
+        const items = [
+          { uid: 1, status: 'fetching', url: yt('abc'), title: '', dupOf: null },
+          base(2, { title: '很短' }),
+          base(3, { title: '這是一支標題非常非常長的影片，長到會跑到第三行以上，用來確認標題區固定兩行高而不會把整列撐高，後面還有更多字字字字字字字字字字' }),
+          base(4, { status: 'downloading', percent: 40, speed: 1e6, eta: 30 }),
+          base(5, { status: 'done', percent: 100, tags: ['#a'] }),
+          base(6, { status: 'failed', error: '網路連線失敗，這段失敗原因很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長' }),
+          base(7, { status: 'failed', error: '網路連線失敗', retryAt: now + 9000 }),
+          base(8, { id: 'v2', title: '很短', dupOf: 2 }),
+          base(9, { title: '很短' }),
+        ];
+        const state = { items, hostConnected: true, running: true, cooldown: { until: now + 9000, nextId: 'v3' }, settings: { cooldownSec: 10 } };
+        renderQueue(ul, state, now, h, { showText: !isSide });
+        window.__shotRender = () => { for (const id of ['work', 'side', 'queue-card']) document.getElementById(id).hidden = false; renderQueue(ul, state, now, h, { showText: !isSide }); };
+        const rows = [...ul.querySelectorAll('.qrow')];
+        const heights = () => rows.map((row) => Math.round(row.getBoundingClientRect().height));
+        const out = { kinds: rows.map((row) => row.dataset.kind), base: heights() };
+        out.retryVisible = rows.map((row) => !row.querySelector('.qretry').hidden);
+        out.hint = rows[8].querySelector('.qhint').textContent;
+        out.textBoxes = rows.map((row) => !row.querySelector('.qtext').hidden);
+        out.rightButtons = rows.map((row) => row.querySelectorAll('.qacts button').length);
+        // 按複製：訊息取代狀態文字
+        const copy = rows[1].querySelector('.qcopy');
+        flash(copy, 'ok', '已複製');
+        out.flashText = rows[1].querySelector('.qsub').textContent;
+        out.flashLive = rows[1].querySelector('.qflash').textContent;
+        out.afterFlash = heights();
+        // 按 ×：側邊欄跳確認（疊在同一列）；網頁直接移除，不測
+        if (isSide) {
+          for (const row of rows) row.querySelector('.qx').click();
+          out.afterAsk = heights();
+          const ask = rows[5].querySelector('.qask').getBoundingClientRect(), cover = rows[5].querySelector('.qcover').getBoundingClientRect();
+          out.askBesideCover = ask.left >= cover.right;
+        }
+        return out;
+      }, side);
+      const label = side ? '側邊欄' : '網頁';
+      assert.deepEqual(r.kinds.slice(0, 8), ['fetching', 'waiting', 'cooling', 'downloading', 'done', 'failed', 'cooling', 'duplicate']);
+      assert.ok(r.base[0] > 60, `${label}列高太小（可能被隱藏）${r.base}`);
+      assert.equal(new Set(r.base).size, 1, `${label}各狀態列高不同 ${r.base}`);
+      assert.deepEqual(r.afterFlash, r.base, `${label}按複製後列高改變`);
+      if (side) assert.deepEqual(r.afterAsk, r.base, '側邊欄移除確認時列高改變');
+      assert.equal(r.flashText, '已複製');
+      assert.equal(r.flashLive, '已複製');
+      assert.ok(r.rightButtons.every((n) => n === 2), '右側固定只有複製、移除');
+      assert.deepEqual(r.retryVisible.map(Boolean), [false, false, false, false, false, true, false, false, false], '只有失敗那列有重試鈕（等自動重試時不顯示）');
+      assert.equal(r.hint, '同標題');
+      if (!side) assert.ok(r.textBoxes.slice(0, 5).every(Boolean), '網頁內文框一加入（含抓取中）就在');
+      else assert.ok(r.textBoxes.every((v) => !v), '側邊欄沒有內文框');
+      if (side) assert.ok(r.askBesideCover, '確認框不蓋封面');
+      const shot = process.env.E2E_SHOTS;
+      if (shot) {
+        if (side) {
+          await page.evaluate(() => { document.querySelectorAll('.qask').forEach((a) => { a.hidden = true; }); document.querySelectorAll('.qrow').forEach((x) => x.classList.remove('asking')); document.querySelectorAll('.qrow')[5].querySelector('.qx').click(); });
+          await page.screenshot({ path: path.join(shot, 'ytdl-side-failed-ask.png'), fullPage: true });
+        } else {
+          await page.addStyleTag({ content: '#work[hidden], #side[hidden] { display: block !important; }' });
+          await page.evaluate(() => window.__shotRender());
+          await page.screenshot({ path: path.join(shot, 'ytdl-web-rows.png'), fullPage: true });
+        }
+      }
+      await page.close();
+    }
+  } finally { await browser.close(); await srv.close(); }
+});
