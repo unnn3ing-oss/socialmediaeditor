@@ -1,6 +1,6 @@
 // 管理後台（admin/index.html）。
 //   進入方式：首頁登入的公司憑證（localStorage，員工編號＋密碼）直接進；或在這裡輸入管理員密碼（admin 憑證只放記憶體）。
-//   可見卡片依 GET /admin/me 的 cards（層級權限見 server/core/adminperm.js）；敏感卡片要輸入管理員密碼解鎖。
+//   可見卡片依 GET /admin/me 的 cards（卡片由權限組決定，見 server/core/adminperm.js）；敏感卡片要輸入管理員密碼解鎖。
 import { API_BASE, API_ENV } from '../shell/config.js';
 import { companyKey } from '../sdk/api.js';
 
@@ -63,12 +63,12 @@ if (window.top !== window.self) {
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
-  function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; lvLoaded = false; sfState = null; }
+  function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; }
   // 用目前的 token 讀身分；成功就進入管理頁
   function enter(msgEl) {
     return api('/admin/me').then(function (res) {
       if (!res.ok) {
-        if (res.code === 'forbidden') { say(msgEl, '你的層級在管理頁沒有任何可用的功能。', 'err'); return false; }
+        if (res.code === 'forbidden') { say(msgEl, '你的權限組在管理頁沒有任何可用的卡片。', 'err'); return false; }
         if (res.code === 'unauthorized') return false;
         say(msgEl, res.error || '讀取身分失敗。', 'err'); return false;
       }
@@ -932,57 +932,6 @@ if (window.top !== window.self) {
       .then(function () { $('unlockBtn').disabled = false; });
   };
 
-  // ---- 層級權限（/admin/levels，只有已解鎖的系統管理者）----
-  var lvLoaded = false, lvData = null;
-  function lvRender(levels) {
-    var tb = $('lvRows'); tb.textContent = '';
-    lvData.cards.forEach(function (c) {
-      var tr = document.createElement('tr');
-      var th = document.createElement('td'); th.textContent = c.name + (c.sensitive && !c.locked ? ' ⚠' : ''); tr.appendChild(th);
-      ['mgr', 'user'].forEach(function (lv) {
-        var td = document.createElement('td');
-        if (c.locked) { td.textContent = '只有系統管理者'; td.className = 'lv-lock'; }
-        else {
-          var cb = document.createElement('input'); cb.type = 'checkbox'; cb.dataset.lv = lv; cb.dataset.key = c.key;
-          cb.checked = levels[lv].indexOf(c.key) >= 0;
-          cb.setAttribute('aria-label', (lv === 'mgr' ? '管理者' : '普通') + '：' + c.name);
-          cb.onchange = function () {
-            if (cb.checked && c.sensitive && !window.confirm('「' + c.name + '」含權杖或權限設定，勾給' + (lv === 'mgr' ? '管理者' : '普通') + '後，對方不用輸入管理員密碼就能使用。確定要勾嗎？')) { cb.checked = false; return; }
-            // 普通 ⊆ 管理者：普通勾了，管理者跟著勾；管理者取消，普通跟著取消
-            var other = tb.querySelector('input[data-key="' + c.key + '"][data-lv="' + (lv === 'mgr' ? 'user' : 'mgr') + '"]');
-            if (lv === 'user' && cb.checked) other.checked = true;
-            if (lv === 'mgr' && !cb.checked) other.checked = false;
-          };
-          td.appendChild(cb);
-        }
-        tr.appendChild(td);
-      });
-      tb.appendChild(tr);
-    });
-  }
-  function lvPick() {
-    var r = { mgr: [], user: [] };
-    Array.prototype.forEach.call($('lvRows').querySelectorAll('input[type=checkbox]'), function (cb) { if (cb.checked) r[cb.dataset.lv].push(cb.dataset.key); });
-    return r;
-  }
-  function lvLoad() {
-    lvLoaded = true; say($('lvMsg'), '讀取中');
-    return api('/admin/levels').then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      lvData = res.data; lvRender(lvData.levels); say($('lvMsg'), '');
-    }).catch(function (e) { lvLoaded = false; say($('lvMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
-  }
-  $('lvReset').onclick = function () { if (lvData) { lvRender(lvData.defaults); say($('lvMsg'), '已還原成預設，按「儲存」才會生效。'); } };
-  $('lvSave').onclick = function () {
-    $('lvSave').disabled = true; say($('lvMsg'), '儲存中');
-    api('/admin/levels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lvPick()) }).then(function (res) {
-      if (res.ok) { lvData = res.data; lvRender(lvData.levels); say($('lvMsg'), '已儲存，對方下一次操作就會套用。', 'good'); }
-      else if (res.code === 'unauthorized') expired();
-      else say($('lvMsg'), res.error || '儲存失敗。', 'err');
-    }).catch(function () { say($('lvMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('lvSave').disabled = false; });
-  };
-
   // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #post 等記住目前分類（舊的 #fb 等會轉到新分類）
 
   // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
@@ -1009,7 +958,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { reset: '重置密碼', add: '新增人員', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };
@@ -1025,7 +974,6 @@ if (window.top !== window.self) {
       say(msgEl, res.error || '操作失敗。', 'err'); return false;
     }).catch(function () { say(msgEl, '連不上後端，請稍後再試。', 'err'); return false; });
   }
-  var LV_NAME = { sys: '系統管理者', mgr: '管理者', user: '普通' };
   // 新增或重置後顯示設定碼（只顯示這一次）
   function sfShowCode(setup) {
     var s = (sfState && sfState.staff || []).filter(function (x) { return x.id === setup.id; })[0];
@@ -1063,17 +1011,20 @@ if (window.top !== window.self) {
     var tb = $('sfRows'); tb.textContent = '';
     sfState.staff.forEach(function (s) {
       var tr = document.createElement('tr');
-      tr.appendChild(sfEl('td', '', s.id)); tr.appendChild(sfEl('td', '', s.name));
-      var tl = document.createElement('td'), isSysRow = s.level === 'sys';
-      if (isSysRow) tl.textContent = LV_NAME.sys;
-      else if (meSt.canLevel) {
-        var ls = document.createElement('select'); ls.setAttribute('aria-label', s.name + ' 的層級');
-        ['user', 'mgr'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = LV_NAME[k]; ls.appendChild(o); });
-        ls.value = s.level;
-        ls.onchange = function () { ls.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { level: ls.value }, $('sfMsg'), '已把「' + s.name + '」改成' + LV_NAME[ls.value] + '。').then(function (ok) { if (!ok) sfRender(); }); };
-        tl.appendChild(ls);
-      } else tl.textContent = LV_NAME[s.level] || '普通';
-      tr.appendChild(tl);
+      tr.appendChild(sfEl('td', '', s.id));
+      // 姓名：只有系統管理者能改（Enter／離開欄位存，失敗還原）；其他人唯讀
+      var isSysRow = !!s.sys, tn = document.createElement('td');
+      if (meSt.canRename) {
+        var nt = document.createElement('input'); nt.type = 'text'; nt.className = 'sf-name'; nt.maxLength = 20; nt.value = s.name; nt.setAttribute('aria-label', s.id + ' 的姓名');
+        nt.onchange = function () {
+          var v = nt.value.trim();
+          if (!v) { nt.value = s.name; say($('sfMsg'), '姓名不能空白。', 'err'); return; }
+          nt.disabled = true;
+          sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { name: v }, $('sfMsg'), '已把「' + s.name + '」的姓名改成「' + v + '」。').then(function (ok) { if (!ok) { nt.disabled = false; nt.value = s.name; nt.focus(); } });
+        };
+        tn.appendChild(nt);
+      } else tn.textContent = s.name;
+      tr.appendChild(tn);
       var tg = document.createElement('td'), sel = sfGroupSelect(s.group, s.name + ' 的權限組');
       sel.onchange = function () { sel.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { group: sel.value }, $('sfMsg'), '已更新「' + s.name + '」的權限組。').then(function (ok) { if (!ok) sfRender(); }); };
       tg.appendChild(sel); tr.appendChild(tg);
@@ -1099,8 +1050,8 @@ if (window.top !== window.self) {
       ac.appendChild(rst); ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
       // 系統管理者不能停用、移除
       if (isSysRow) { tgl.disabled = true; del.disabled = true; tgl.title = del.title = '系統管理者不能停用或移除'; }
-      // 不能動的列（層級不比自己低、或是自己）：全部唯讀
-      if (s.canEdit === false) Array.prototype.forEach.call(tr.querySelectorAll('select, input, button'), function (el) { if (!(meSt.canLevel && el.getAttribute('aria-label') === s.name + ' 的層級')) { el.disabled = true; el.title = '只能修改層級比你低的人'; } });
+      // 不能動的列（權限不是你的真子集、或是自己）：全部唯讀（系統管理者仍可改姓名）
+      if (s.canEdit === false) Array.prototype.forEach.call(tr.querySelectorAll('select, input, button'), function (el) { el.disabled = true; el.title = '只能修改權限比你少的人'; });
       tb.appendChild(tr);
     });
     $('sfWrap').hidden = !sfState.staff.length; $('sfEmpty').hidden = !!sfState.staff.length;
@@ -1110,10 +1061,17 @@ if (window.top !== window.self) {
     var row = sfEl('div', 'pg-card sg-row');
     var name = document.createElement('input'); name.type = 'text'; name.maxLength = 20; name.value = g.name; name.setAttribute('aria-label', '權限組名稱'); name.placeholder = '權限組名稱';
     row.appendChild(name);
-    var boxes = sfEl('div', 'sg-perms');
-    sfState.perms.forEach(function (p) {
-      var l = sfEl('label', 'sg-perm'), c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key; c.checked = g.perms.indexOf(p.key) >= 0;
-      l.appendChild(c); l.appendChild(document.createTextNode(p.label)); boxes.appendChild(l);
+    var boxes = sfEl('div', 'sg-sections');
+    // 依分區顯示（排程發布／影片發布／數據報表／共用／管理頁各分類）
+    var label = {}; sfState.perms.forEach(function (p) { label[p.key] = p.label; });
+    (sfState.sections || []).forEach(function (sec) {
+      var box = sfEl('div', 'sg-sec'); box.appendChild(sfEl('h3', 'sg-sec-h', sec.name));
+      var list = sfEl('div', 'sg-perms');
+      sec.keys.forEach(function (k) {
+        var l = sfEl('label', 'sg-perm'), c = document.createElement('input'); c.type = 'checkbox'; c.value = k; c.checked = g.perms.indexOf(k) >= 0;
+        l.appendChild(c); l.appendChild(document.createTextNode(label[k] || k)); list.appendChild(l);
+      });
+      box.appendChild(list); boxes.appendChild(box);
     });
     row.appendChild(boxes);
     var act = sfEl('div', 'row');
@@ -1207,7 +1165,6 @@ if (window.top !== window.self) {
     // 臉書相關卡片（發文設定、留言管理、連接狀態、進階設定）共用一次讀取
     if ((id === 'post' || id === 'guard' || id === 'conn' || id === 'adv') && !fbLoaded && token) fbLoad();
     if ((id === 'people' || id === 'adv') && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
-    if (id === 'adv' && !lvLoaded && token && can('levels')) lvLoad();
     if (id === 'conn' && !rdLoaded && token && can('rundown')) rdLoad();
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
   }

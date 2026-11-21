@@ -2,18 +2,48 @@
 //   staff：名單；staff_groups：權限組（預設 管理／發文／檢視，可自訂）；fb_audit：發文、改時間、刪除的紀錄（90 天）
 //   登入＝員工編號＋自己的密碼（auth.js）；第一次或被重置後用管理頁給的 6 碼設定碼自己設密碼（password.js）。
 //   憑證帶 uid 與 pv（密碼版本），每次請求由 bearer() 用 findStaff() 確認還在名單、還啟用、pv 相符；移除／停用／改密碼／重置立即生效。
-//   系統管理者＝後端設定 SYS_STAFF_ID 的那一位：名單沒有就自動建立，不能停用、刪除、改層級。
+//   系統管理者＝後端設定 SYS_STAFF_ID 的那一位：名單沒有就自動建立，不能停用、刪除；只有系統管理者能改姓名。
+//   權限只看權限組（沒有層級）：功能權限＋管理頁卡片（card:<key>）都在 perms 裡。
 import { ok, fail, readBody } from './http.js';
 import { all, first, run } from './db.js';
 import { newSetupCode, codeHash, SETUP_MS } from './password.js';
+import { CARDS, GRANTABLE, readOldLevels } from './levels.js';
+import { ensureSettings } from './once.js';
 
-export const PERMS = ['view', 'post', 'edit', 'delete', 'bypass'];
-export const PERM_LABELS = { view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文', bypass: '關閉時仍可使用' };
-export const DEFAULT_GROUPS = [
-  { name: '管理', perms: ['view', 'post', 'edit', 'delete', 'bypass'] },
-  { name: '發文', perms: ['view', 'post', 'edit', 'delete'] },
-  { name: '檢視', perms: ['view'] }
+// 權限 key：排程發布 view／post／edit／delete；影片發布 vview／vpost（vpost 含改時間、刪除）；數據報表 report；
+//   共用 bypass（關閉時仍可使用）；管理頁卡片 card:<key>（只有非敏感卡片能勾，敏感卡片只有系統管理者）
+export const BASE_PERMS = ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report', 'bypass'];
+export const CARD_PREFIX = 'card:';
+// 卡片權限依管理頁分類順序排列（和 PERM_SECTIONS 一致）
+const CARD_ORDER = ['pages', 'presets', 'video', 'bg', 'guard', 'staff', 'fbstate', 'rundown', 'usage', 'assets', 'audit', 'logs'];
+export const CARD_PERMS = CARD_ORDER.filter((k) => GRANTABLE.includes(k)).map((k) => CARD_PREFIX + k);
+export const PERMS = [...BASE_PERMS, ...CARD_PERMS];
+const CARD_NAME = Object.fromEntries(CARDS.map((c) => [c.key, c.name]));
+export const PERM_LABELS = {
+  view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文',
+  vview: '檢視影片發布', vpost: '上傳發布影片（含改時間、刪除）', report: '檢視數據報表', bypass: '關閉時仍可使用排程發布／影片發布',
+  ...Object.fromEntries(GRANTABLE.map((k) => [CARD_PREFIX + k, CARD_NAME[k]]))
+};
+// 權限組卡片的分區（管理頁依此分組顯示）
+export const PERM_SECTIONS = [
+  { name: '排程發布', keys: ['view', 'post', 'edit', 'delete'] },
+  { name: '影片發布', keys: ['vview', 'vpost'] },
+  { name: '數據報表', keys: ['report'] },
+  { name: '共用', keys: ['bypass'] },
+  { name: '管理頁：發文設定', keys: ['card:pages', 'card:presets', 'card:video', 'card:bg'] },
+  { name: '管理頁：留言管理', keys: ['card:guard'] },
+  { name: '管理頁：人員與權限', keys: ['card:staff'] },
+  { name: '管理頁：連接狀態', keys: ['card:fbstate', 'card:rundown', 'card:usage'] },
+  { name: '管理頁：素材設定', keys: ['card:assets'] },
+  { name: '管理頁：使用紀錄', keys: ['card:audit', 'card:logs'] }
 ];
+export const DEFAULT_GROUPS = [
+  { name: '管理', perms: PERMS.slice() },
+  { name: '發文', perms: ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report'] },
+  { name: '檢視', perms: ['view', 'vview', 'report'] }
+];
+// 權限（陣列）裡的管理頁卡片 key
+export const cardsOf = (perms) => (perms || []).filter((p) => p.startsWith(CARD_PREFIX)).map((p) => p.slice(CARD_PREFIX.length));
 export const STAFF_ID_RE = /^[A-Za-z0-9_-]{1,20}$/;
 export const MAX_NAME = 20;
 export const MAX_CONTACT = 30;
@@ -51,11 +81,38 @@ export async function ensureStaff(env) {
     try { await first(env, 'SELECT ' + col + ' FROM staff LIMIT 1'); } catch { try { await run(env, 'ALTER TABLE staff ADD COLUMN ' + col + ' ' + type); } catch { /* 同上 */ } }
   }
   const n = await first(env, 'SELECT COUNT(*) AS n FROM staff_groups');
-  if (!n || !n.n) {
+  const seeded = !n || !n.n;
+  if (seeded) {
     const now = Date.now();
     await env.DB.batch(DEFAULT_GROUPS.map((g, i) => env.DB.prepare('INSERT OR IGNORE INTO staff_groups (name, perms, ord, updated) VALUES (?, ?, ?, ?)').bind(g.name, JSON.stringify(g.perms), i, now)));
   }
+  try { await migratePerms(env, seeded); } catch { /* 搬移失敗不擋登入；下次重啟再試 */ }
   ready.add(env.DB);
+}
+
+// 舊資料搬移（第一次讀取權限組時做一次，標記 fb_settings k='perms_v2'）：
+//   每組：有 post → 補 vpost；有 view → 補 vview、report；
+//   組內有任一成員是舊「管理者」層級（staff.level='mgr'）→ 補舊 admin_levels.mgr 的卡片，否則補舊 admin_levels.user 的卡片。
+//   全新安裝（剛放入預設組）只寫標記。可重複執行（只會補、不會刪）。
+export const MIGRATE_KEY = 'perms_v2';
+async function migratePerms(env, seeded) {
+  await ensureSettings(env);
+  if (await first(env, 'SELECT k FROM fb_settings WHERE k = ?', MIGRATE_KEY)) return;
+  if (!seeded) {
+    const old = await readOldLevels(env);
+    const groups = await all(env, 'SELECT id, perms FROM staff_groups');
+    const mgrGroups = new Set((await all(env, "SELECT DISTINCT grp FROM staff WHERE level = 'mgr'")).map((r) => r.grp));
+    const now = Date.now();
+    const stmts = groups.map((g) => {
+      const set = new Set(parsePerms(g.perms));
+      if (set.has('post')) set.add('vpost');
+      if (set.has('view')) { set.add('vview'); set.add('report'); }
+      for (const k of (mgrGroups.has(g.id) ? old.mgr : old.user)) set.add(CARD_PREFIX + k);
+      return env.DB.prepare('UPDATE staff_groups SET perms = ?, updated = ? WHERE id = ?').bind(JSON.stringify(PERMS.filter((p) => set.has(p))), now, g.id);
+    });
+    if (stmts.length) await env.DB.batch(stmts);
+  }
+  await run(env, 'INSERT OR IGNORE INTO fb_settings (k, v, updated) VALUES (?, ?, ?)', MIGRATE_KEY, '1', Date.now());
 }
 
 // 密碼相關欄位：雜湊、鹽、密碼版本、設定碼（HMAC）與到期、連錯次數、鎖到何時
@@ -63,7 +120,8 @@ const PW_COLS = [['pw_hash', 'TEXT'], ['pw_salt', 'TEXT'], ['pw_ver', 'INTEGER N
 
 // 系統管理者的員工編號（後端設定 SYS_STAFF_ID；沒設＝沒有）
 export const sysId = (env) => normId(env && env.SYS_STAFF_ID);
-const levelOf = (env, r) => (r.id === sysId(env) ? 'sys' : r.level === 'mgr' ? 'mgr' : 'user');
+// 沒有層級了：只分系統管理者（sys）和一般員工（staff）；一般員工的權限全看權限組
+const levelOf = (env, r) => (r.id === sysId(env) ? 'sys' : 'staff');
 
 // 系統管理者不在名單就建一筆（姓名「系統管理者」、權限組＝有 bypass 的第一組）；已在名單就確保啟用
 async function ensureSys(env) {
@@ -78,7 +136,7 @@ async function ensureSys(env) {
   await run(env, 'INSERT OR IGNORE INTO staff (id, name, grp, contact, level, enabled, created, updated) VALUES (?, ?, ?, \'\', \'user\', 1, ?, ?)', id, '系統管理者', g.id, now, now);
 }
 
-// 名單內且啟用 → { id, name, group, groupName, perms, level（sys／mgr／user）, pwVer }；系統管理者的 perms 一律全部；否則 null（讀不到資料庫也是 null＝擋下）
+// 名單內且啟用 → { id, name, group, groupName, perms, level（sys／staff）, pwVer }；系統管理者的 perms 一律全部；否則 null（讀不到資料庫也是 null＝擋下）
 export async function findStaff(env, id) {
   const uid = normId(id);
   if (!uid || !env.DB) return null;
@@ -167,9 +225,9 @@ export async function cleanupAudit(env, nowMs) {
 }
 
 // ---- 管理 API（已通過 admin 驗證，掛在 core/admin.js 的 adminExtras）----
-// 系統管理者那一列不能停用、改層級（看本文，不消耗原本的 request）
+// 系統管理者那一列不能停用（看本文，不消耗原本的 request）；姓名可以由系統管理者改
 async function isProtectedEdit(request) {
-  try { const b = await request.clone().json(); return !!b && (b.enabled !== undefined || b.level !== undefined); } catch { return false; }
+  try { const b = await request.clone().json(); return !!b && b.enabled !== undefined; } catch { return false; }
 }
 async function readJson(request, max = 16384) {
   const buf = await readBody(request, max);
@@ -185,24 +243,22 @@ async function listStaff(env) {
   await ensureSys(env);
   const now = Date.now();
   const rows = await all(env, 'SELECT id, name, grp, contact, level, enabled, created, last_login, pw_hash, setup_exp, lock_until FROM staff ORDER BY id');
-  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, contact: s.contact || '', level: levelOf(env, s), enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null,
+  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, contact: s.contact || '', sys: levelOf(env, s) === 'sys', enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null,
     pw: s.pw_hash ? 'set' : (s.setup_exp && s.setup_exp > now ? 'setup' : 'none'), setupExp: !s.pw_hash && s.setup_exp > now ? s.setup_exp : null, locked: !!(s.lock_until && s.lock_until > now) }));
 }
 
-// ---- 名單的部分權限（管理頁層級，見 adminperm.js）----
-//   系統管理者：全部；改層級要已解鎖（管理頁輸入管理員密碼）。
-//   其他人（有授權名單卡片）：只能動層級比自己低、且不是自己的人；新增一律普通；
-//   權限組只能指派「權限都在自己權限組裡」的組，換組時原本的組也要在範圍內。
-const RANK = { user: 0, mgr: 1, sys: 2 };
-export const LEVEL_VALUES = ['user', 'mgr'];
+// ---- 名單的部分權限（只看權限組，沒有層級）----
+//   系統管理者（SYS_STAFF_ID，未解鎖也可）：全部，只有他能改姓名。
+//   其他人（有 card:staff）：只能動「權限組的權限是自己權限的子集、且不完全相同」的人，不能動自己、不能動系統管理者；
+//   指派權限組只能指派「權限都在自己權限裡」的組（新增同規則）。
 const isSys = (who) => !!who && who.role === 'sys';
-const canLevel = (who) => isSys(who) && !!who.unlocked;
 const subsetOf = (perms, own) => perms.every((p) => own.includes(p));
-//   系統管理者那一列（SYS_STAFF_ID）：只有系統管理者能動，而且不能停用、刪除、改層級（見 adminStaff）。
-function canTouch(who, row, env) {
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+export function canManage(who, rowId, targetPerms, env) {
   if (isSys(who)) return true;
-  if (!who) return false;
-  return row.id !== who.uid && RANK[levelOf(env, row)] < RANK[who.role];
+  if (!who || rowId === who.uid || rowId === sysId(env)) return false;
+  const own = (who.staff && who.staff.perms) || [];
+  return subsetOf(targetPerms, own) && !sameSet(targetPerms, own);
 }
 function canAssign(who, g) {
   if (isSys(who)) return true;
@@ -211,11 +267,13 @@ function canAssign(who, g) {
 }
 const state = async (env, who) => {
   const staff = await listStaff(env), groups = await listGroups(env);
+  const gp = new Map(groups.map((g) => [g.id, g.perms]));
   return {
-    staff: staff.map((s) => ({ ...s, canEdit: canTouch(who, s, env) })),
+    staff: staff.map((s) => ({ ...s, canEdit: canManage(who, s.id, gp.get(s.group) || [], env) })),
     groups: groups.map((g) => ({ ...g, assignable: canAssign(who, g) })),
     perms: PERMS.map((k) => ({ key: k, label: PERM_LABELS[k] })),
-    me: { role: who ? who.role : '', canLevel: canLevel(who), canAdd: isSys(who) || (!!who && who.role === 'mgr'), id: who && who.uid ? who.uid : '' }
+    sections: PERM_SECTIONS,
+    me: { role: who ? who.role : '', canRename: isSys(who), canAdd: !!who, id: who && who.uid ? who.uid : '' }
   };
 };
 const groupExists = async (env, id) => Number.isInteger(id) && !!(await first(env, 'SELECT id FROM staff_groups WHERE id = ?', id));
@@ -242,21 +300,14 @@ export async function adminStaff(request, env, path, who) {
     if (!id) return bad(request, env, '員工編號只能是英數字、- 或 _，最多 20 字。');
     if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。');
     if (!(await groupExists(env, group))) return bad(request, env, '請選擇權限組。');
-    if (!isSys(who) && who.role !== 'mgr') return forbid(request, env, '你的層級不能新增人員。');
     await ensureSys(env);
     if (id === sysId(env)) return bad(request, env, '員工編號 ' + id + ' 是系統管理者，已在名單內。');
-    let level = 'user';
-    if (b.level !== undefined) {
-      if (!canLevel(who)) return forbid(request, env, '只有系統管理者（輸入管理員密碼解鎖）能設定層級。');
-      if (!LEVEL_VALUES.includes(b.level)) return bad(request, env);
-      level = b.level;
-    }
     if (!canAssign(who, await groupById(env, group))) return forbid(request, env, '不能指派權限比你多的權限組。');
     if (await first(env, 'SELECT id FROM staff WHERE id = ?', id)) return bad(request, env, '員工編號 ' + id + ' 已在名單內。');
     const n = await first(env, 'SELECT COUNT(*) AS n FROM staff');
     if (n && n.n >= MAX_STAFF) return bad(request, env, '名單最多 ' + MAX_STAFF + ' 人。');
     const now = Date.now();
-    await run(env, 'INSERT INTO staff (id, name, grp, contact, level, enabled, created, updated) VALUES (?, ?, ?, ?, ?, 1, ?, ?)', id, name, group, contact, level, now, now);
+    await run(env, 'INSERT INTO staff (id, name, grp, contact, level, enabled, created, updated) VALUES (?, ?, ?, ?, \'user\', 1, ?, ?)', id, name, group, contact, now, now);
     // 新增就發設定碼（只回這一次），本人第一次登入時用它設密碼
     const setup = await resetPassword(env, id, false);
     await audit(env, auditWho(who), 'add', '', '', id);
@@ -269,19 +320,18 @@ export async function adminStaff(request, env, path, who) {
     const id = normId(raw);
     const row = id ? await first(env, 'SELECT id, grp, level FROM staff WHERE id = ?', id) : null;
     if (!row) return fail(request, env, 'not_found', '名單裡沒有這個員工編號。');
-    if (!canTouch(who, row, env)) return forbid(request, env, '只能修改層級比你低的人，也不能修改自己。');
+    const rowGroup = await groupById(env, row.grp);
+    if (!canManage(who, row.id, rowGroup ? rowGroup.perms : [], env)) return forbid(request, env, '只能修改權限比你少的人，也不能修改自己。');
     const sysRow = row.id === sysId(env);
     // 重置密碼：回新的設定碼（只回這一次）
     if (sm[2]) {
       if (method !== 'POST') return fail(request, env, 'not_found');
-      if (!canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能重置權限比你多的人。');
       const setup = await resetPassword(env, id);
       await audit(env, auditWho(who), 'reset', '', '', id);
       return ok(request, env, { ...(await state(env, who)), setup });
     }
-    if (sysRow && (method === 'DELETE' || (method === 'POST' && await isProtectedEdit(request)))) return forbid(request, env, '系統管理者不能刪除、停用或改層級。');
+    if (sysRow && (method === 'DELETE' || (method === 'POST' && await isProtectedEdit(request)))) return forbid(request, env, '系統管理者不能刪除或停用。');
     if (method === 'DELETE') {
-      if (!canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能刪除權限比你多的人。');
       await run(env, 'DELETE FROM staff WHERE id = ?', id);
       return ok(request, env, await state(env, who));
     }
@@ -289,25 +339,27 @@ export async function adminStaff(request, env, path, who) {
     if (method === 'POST') {
       const b = await readJson(request);
       if (!b || typeof b !== 'object') return bad(request, env);
-      if (b.enabled !== undefined && !canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能停用權限比你多的人。');
       const sets = [], args = [];
-      if (b.name !== undefined) { const name = cleanName(b.name); if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。'); sets.push('name = ?'); args.push(name); }
+      let renamed = null;
+      if (b.name !== undefined) {
+        if (!isSys(who)) return forbid(request, env, '只有系統管理者能修改姓名。');
+        const name = cleanName(b.name); if (!name || [...name].length > MAX_NAME) return bad(request, env, '姓名必填，最多 ' + MAX_NAME + ' 字。');
+        const old = await first(env, 'SELECT name FROM staff WHERE id = ?', id);
+        if (old && old.name !== name) renamed = { from: old.name, to: name };
+        sets.push('name = ?'); args.push(name);
+      }
       if (b.group !== undefined) {
         const g = Number(b.group);
         if (!(await groupExists(env, g))) return bad(request, env, '請選擇權限組。');
-        if (!canAssign(who, await groupById(env, g)) || !canAssign(who, await groupById(env, row.grp))) return forbid(request, env, '不能指派或變更權限比你多的權限組。');
+        if (!canAssign(who, await groupById(env, g))) return forbid(request, env, '不能指派權限比你多的權限組。');
         sets.push('grp = ?'); args.push(g);
-      }
-      if (b.level !== undefined) {
-        if (!canLevel(who)) return forbid(request, env, '只有系統管理者（輸入管理員密碼解鎖）能設定層級。');
-        if (!LEVEL_VALUES.includes(b.level)) return bad(request, env);
-        sets.push('level = ?'); args.push(b.level);
       }
       if (b.contact !== undefined) { const c = cleanContact(b.contact); if (c === null) return bad(request, env, CONTACT_MSG); sets.push('contact = ?'); args.push(c); }
       if (b.enabled !== undefined) { if (typeof b.enabled !== 'boolean') return bad(request, env); sets.push('enabled = ?'); args.push(b.enabled ? 1 : 0); }
       if (!sets.length) return bad(request, env);
       sets.push('updated = ?'); args.push(Date.now());
       await run(env, 'UPDATE staff SET ' + sets.join(', ') + ' WHERE id = ?', ...args, id);
+      if (renamed) await audit(env, auditWho(who), 'staff_rename', '', id, renamed.from + '→' + renamed.to);
       return ok(request, env, await state(env, who));
     }
   }

@@ -33,7 +33,8 @@ const PINK_HUE_START = 320;
 const redFamilyHue = hue => (hue >= PINK_HUE_START ? hue - 360 : hue);
 export const PRESET_COLORS = [
   '#c80000','#ff3916','#5fa646','#4c8b74','#ff9900','#1c6294','#cb6ce6','#d84040','#ff7ead','#004aad',
-  '#000000','#48413f','#a6a6a6','#5CAFCC','#FFDD30','#7261C9','#D13885','#3667A8','#3F8C59'
+  '#000000','#48413f','#a6a6a6','#5CAFCC','#FFDD30','#7261C9','#D13885','#3667A8','#3F8C59',
+  '#e60012','#e6007e','#8e24aa','#0a1f44','#0b5345','#ff6d00','#00a3c4','#ffe600'   // 醒目底色（2026-11-21 加）
 ].sort((a, b) => {
   const ha = hexToHSB(a), hb = hexToHSB(b);
   const aNeutral = ha.saturation < NEUTRAL_SATURATION, bNeutral = hb.saturation < NEUTRAL_SATURATION;

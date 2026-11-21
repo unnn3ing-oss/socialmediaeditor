@@ -30,7 +30,7 @@ export async function readJsonBody(request, max = 65536) {
   try { return JSON.parse(new TextDecoder().decode(buf)); } catch { return null; }
 }
 
-// [method, RegExp, handler(request, env, ctx, match, me), need]；need＝需要的權限（null＝名單內即可），me＝fbAccess 的結果
+// [method, RegExp, handler(request, env, ctx, match, me), need]；need＝需要的權限（null＝名單內即可；陣列＝任一個即可），me＝fbAccess 的結果
 const routes = [];
 export function route(method, re, handler, need = null) { routes.push([method, re, handler, need]); }
 
@@ -112,12 +112,12 @@ route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete
 
 // 影片發布（tools/fbvideo，見 video.js）
 const vout = (request, env, r) => (r.error ? fail(request, env, r.error, r.message) : ok(request, env, r));
-route('GET', /^\/fb\/video\/settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)), 'view');
+route('GET', /^\/fb\/video\/settings$/, async (request, env) => ok(request, env, await getVideoSettings(env)), 'vview');
 route('POST', /^\/fb\/video\/start$/, async (request, env, ctx, m, me) => {
   const form = parseStart(await readJsonBody(request, 8192));
   if (!form) return fail(request, env, 'bad_request');
   return vout(request, env, await startUpload(env, form, me.who));
-}, 'post');
+}, 'vpost');
 route('POST', /^\/fb\/video\/chunk$/, async (request, env) => {
   const q = new URL(request.url).searchParams;
   const u = q.get('u') || '', start = Number(q.get('start'));
@@ -126,7 +126,7 @@ route('POST', /^\/fb\/video\/chunk$/, async (request, env) => {
   if (!buf) return fail(request, env, 'too_large');
   if (!buf.length) return fail(request, env, 'bad_request');
   return vout(request, env, await receiveChunk(env, u, start, buf));
-}, 'post');
+}, 'vpost');
 route('POST', /^\/fb\/video\/cover$/, async (request, env) => {
   const u = new URL(request.url).searchParams.get('u') || '';
   if (!validUploadId(u)) return fail(request, env, 'bad_request');
@@ -134,28 +134,28 @@ route('POST', /^\/fb\/video\/cover$/, async (request, env) => {
   if (!buf) return fail(request, env, 'too_large');
   if (buf.length < 4) return fail(request, env, 'bad_request');
   return vout(request, env, await saveCover(env, u, buf));
-}, 'post');
+}, 'vpost');
 route('POST', /^\/fb\/video\/publish$/, async (request, env, ctx, m, me) => {
   const form = parsePublish(await readJsonBody(request, 300000));
   if (!form) return fail(request, env, 'bad_request');
   return vout(request, env, await publish(env, form, me.who));
-}, 'post');
+}, 'vpost');
 route('POST', /^\/fb\/video\/(stop|drop)$/, async (request, env, ctx, m) => {
   const b = await readJsonBody(request, 4096);
   if (!b || !validUploadId(b.uploadId) || (m[1] === 'drop' && !/^\d{1,30}$/.test(String(b.page || '')))) return fail(request, env, 'bad_request');
   return vout(request, env, await stopUpload(env, b.uploadId, m[1] === 'drop' ? String(b.page) : null));
-}, 'post');
+}, 'vpost');
 route('GET', /^\/fb\/video\/status$/, async (request, env) => {
   const u = new URL(request.url).searchParams.get('u') || '';
   if (!validUploadId(u)) return fail(request, env, 'bad_request');
   return vout(request, env, await refreshStatus(env, u));
-}, 'view');
-route('GET', /^\/fb\/video\/jobs$/, async (request, env) => ok(request, env, await listJobs(env)), 'view');
+}, 'vview');
+route('GET', /^\/fb\/video\/jobs$/, async (request, env) => ok(request, env, await listJobs(env)), 'vview');
 
 // 數據報表（tools/fbreports，見 reports.js）：唯讀
 registerReports(route);
 
-route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)), 'post');
+route('POST', /^\/rundown$/, async (request, env) => rundownAdd(request, env, await readJsonBody(request, 16384)), ['post', 'vpost']);
 
 export async function handleFb(request, env, ctx, path) {
   if (!path.startsWith('/fb/') && path !== '/rundown') return null;

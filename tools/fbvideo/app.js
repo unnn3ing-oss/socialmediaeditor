@@ -49,6 +49,14 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     if (why) { $('offReason').textContent = '原因：' + why; $('offReason').hidden = false; }
     booted(false); return;
   }
+  // 權限：影片發布用 vview（檢視）／vpost（上傳發布）；系統管理者（me.admin）＝全部；/fb/me 讀不到先放行，後端仍會擋
+  let me0 = null;
+  try { me0 = await tb.api.call('/fb/me'); } catch { me0 = null; }
+  const perms0 = me0 ? (me0.admin ? ['vview', 'vpost'] : (me0.perms || [])) : null;
+  if (perms0 && !perms0.includes('vview')) {
+    $('offTitle').textContent = '影片發布 沒有權限'; $('offDesc').textContent = '你的權限組沒有「檢視影片發布」，請找管理者。';
+    booted(false); return;
+  }
   booted(true);
   $('app').hidden = false;
   S.pages = [...pages].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
@@ -57,8 +65,8 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   tb.api.call('/fb/access').then((a) => { if (a && a.mode === 'company') for (const el of document.querySelectorAll('.test-pill')) el.hidden = true; }).catch(() => {});
   tb.api.call('/fb/me').then((me) => {
     if (!me) return;
-    const perms = me.admin ? ['view', 'post'] : (me.perms || []);
-    S.canPost = perms.includes('post');
+    const perms = me.admin ? ['vview', 'vpost'] : (me.perms || []);
+    S.canPost = perms.includes('vpost');
     $('sendBtn').hidden = !S.canPost;
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }

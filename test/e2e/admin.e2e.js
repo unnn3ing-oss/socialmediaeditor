@@ -98,18 +98,22 @@ const DATA = {
 
 // 授權名單的假後端：記錄收到的 body／query，回整份最新狀態
 const SF = { bodies: [], audit: [], withCode: false };
-const PERMS = [{ key: 'view', label: '檢視已排程／已發佈' }, { key: 'post', label: '新增發文（含排入 Rundown）' }, { key: 'edit', label: '改排程時間' }, { key: 'delete', label: '刪除貼文' }, { key: 'bypass', label: '關閉時仍可使用' }];
+const PERMS = [{ key: 'view', label: '檢視已排程／已發佈' }, { key: 'post', label: '新增發文（含排入 Rundown）' }, { key: 'edit', label: '改排程時間' }, { key: 'delete', label: '刪除貼文' },
+  { key: 'vview', label: '檢視影片發布' }, { key: 'vpost', label: '上傳發布影片（含改時間、刪除）' }, { key: 'report', label: '檢視數據報表' }, { key: 'bypass', label: '關閉時仍可使用排程發布／影片發布' },
+  { key: 'card:pages', label: '粉專設定' }, { key: 'card:guard', label: '留言管理' }, { key: 'card:staff', label: '授權名單' }];
+const SECTIONS = [{ name: '排程發布', keys: ['view', 'post', 'edit', 'delete'] }, { name: '影片發布', keys: ['vview', 'vpost'] }, { name: '數據報表', keys: ['report'] }, { name: '共用', keys: ['bypass'] },
+  { name: '管理頁：發文設定', keys: ['card:pages'] }, { name: '管理頁：留言管理', keys: ['card:guard'] }, { name: '管理頁：人員與權限', keys: ['card:staff'] }];
 let STAFF = [];
 const GROUPS = [
   { id: 'viewer', name: '唯讀', perms: ['view'] },
   { id: 'editor', name: '小編', perms: ['view', 'post', 'edit'] },
-  { id: 'lead', name: '主管', perms: ['view', 'post', 'edit', 'delete', 'bypass'] }];
+  { id: 'lead', name: '主管', perms: ['view', 'post', 'edit', 'delete', 'bypass', 'card:staff'] }];
 // STAFF_AS：設了就模擬「非系統管理者」看到的名單（canEdit／assignable／me）
 let STAFF_AS = null;
 function sfState() {
-  const base = { staff: STAFF, groups: GROUPS.map((g) => ({ ...g, used: STAFF.filter((s) => s.group === g.id).length })), perms: PERMS };
+  const base = { staff: STAFF, groups: GROUPS.map((g) => ({ ...g, used: STAFF.filter((s) => s.group === g.id).length })), perms: PERMS, sections: SECTIONS, me: { role: 'sys', canRename: true, canAdd: true, id: '' } };
   if (!STAFF_AS) return base;
-  return { ...base, staff: STAFF.map((s) => ({ ...s, canEdit: s.id !== STAFF_AS.id })), groups: base.groups.map((g) => ({ ...g, assignable: g.id !== 'lead' })), me: { role: 'mgr', canLevel: false, canAdd: true, id: STAFF_AS.id } };
+  return { ...base, staff: STAFF.map((s) => ({ ...s, canEdit: s.id !== STAFF_AS.id })), groups: base.groups.map((g) => ({ ...g, assignable: g.id !== 'lead' })), me: { role: 'staff', canRename: false, canAdd: true, id: STAFF_AS.id } };
 }
 function staffRoute(req, u, key) {
   const p = u.pathname;
@@ -141,14 +145,8 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
-let LV_SAVED = null;
-const LV = { levels: { mgr: ['access', 'staff', 'logs'], user: [] }, defaults: { mgr: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], user: [] },
-  cards: ALL_CARDS.map((k) => ({ key: k, name: k, sensitive: ['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k), locked: k === 'levels' })) };
-DATA['GET /admin/levels'] = () => LV;
-DATA['POST /admin/levels'] = (b) => { LV_SAVED = b; return { ...LV, levels: b }; };
-
 // front：首頁登入存在 localStorage 的憑證（{ token, me }），/admin/me 依 Authorization 回身分；'T'＝管理頁密碼登入（系統管理者已解鎖）
 async function open(viewport, hash = '', front = null) {
   const ctx = await browser.newContext({ viewport });
@@ -571,17 +569,17 @@ test('授權名單：切進分類才讀、顯示預設 3 組；新增、改權�
 test('授權名單密碼：密碼欄狀態；新增與重置後顯示設定碼（可複製、關掉清空）；系統管理者列不能停用或移除', async () => {
   resetStaff();
   SF.withCode = true;
-  STAFF.push({ id: '13082605', name: '莊鈞評', group: 'lead', level: 'sys', enabled: true, created: 1, lastLogin: null, pw: 'set' });
+  STAFF.push({ id: '13082605', name: '莊鈞評', group: 'lead', sys: true, enabled: true, created: 1, lastLogin: null, pw: 'set' });
   const { page } = await open({ width: 1280, height: 860 });
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page);
   await page.click('#tab-people');
   await page.waitForSelector('#sfWrap:not([hidden])');
-  const pwCol = await page.$$eval('#sfRows tr', (rows) => rows.map((r) => r.children[6].textContent));
+  const pwCol = await page.$$eval('#sfRows tr', (rows) => rows.map((r) => r.children[5].textContent));
   assert.deepEqual(pwCol, ['已設定', '未設定', '鎖定中', '已設定']);
   // 系統管理者列
   const sys = '#sfRows tr:nth-child(4)';
-  assert.match(await page.textContent(sys), /系統管理者/);
+  assert.equal(await page.inputValue(sys + ' input.sf-name'), '莊鈞評');
   assert.equal(await page.isDisabled(sys + ' button:text("停用")'), true);
   assert.equal(await page.isDisabled(sys + ' button:text("移除")'), true);
   // 新增 → 設定碼視窗
@@ -617,11 +615,15 @@ test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增�
   await page.waitForSelector('#sgRows .sg-row');
   const del = await page.$$eval('#sgRows .sg-row', (rs) => rs.map((r) => [r.querySelector('.danger').disabled, r.querySelector('.danger').title]));
   assert.deepEqual(del, [[true, '還有 1 人使用'], [true, '還有 1 人使用'], [true, '還有 1 人使用']]);
-  assert.equal(await page.$$eval('#sgRows .sg-row:nth-child(1) input[type=checkbox]', (c) => c.length), 5);
+  assert.equal(await page.$$eval('#sgRows .sg-row:nth-child(1) input[type=checkbox]', (c) => c.length), 11);
   await page.check('#sgRows .sg-row:nth-child(1) input[value=post]');
   await page.click('#sgRows .sg-row:nth-child(1) button.primary');
   await page.waitForFunction(() => /已儲存/.test(document.getElementById('sgMsg').textContent));
   assert.deepEqual(SF.bodies.pop().body, { id: 'viewer', name: '唯讀', perms: ['view', 'post'] });
+  // 勾選依分區顯示
+  assert.deepEqual(await page.$$eval('#sgRows .sg-row:nth-child(1) .sg-sec-h', (h) => h.map((x) => x.textContent)), ['排程發布', '影片發布', '數據報表', '共用', '管理頁：發文設定', '管理頁：留言管理', '管理頁：人員與權限']);
+  assert.equal(await page.textContent('#sgRows .sg-row:nth-child(1) .sg-sec:nth-child(2) label:nth-child(2)'), '上傳發布影片（含改時間、刪除）');
+  if (process.env.SHOT_DIR) await page.locator('#sgCard').screenshot({ path: process.env.SHOT_DIR + '/admin-groups.png' });
   await page.click('#sgNew');
   assert.equal(await page.$$eval('#sgRows .sg-row', (r) => r.length), 4);
 });
@@ -716,13 +718,13 @@ test('速率限制：App 與各粉專三個 % 長條（≥75 黃、≥90 紅）�
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/usage/refresh' && c.auth === 'Bearer T'));
 });
 
-test('首頁員工（管理者）直接進入：只看到層級有的卡片與分類，沒有解鎖區、不顯示登出鈕', async () => {
+test('首頁員工（管理者）直接進入：只看到權限組有的卡片與分類，沒有解鎖區、不顯示登出鈕', async () => {
   resetStaff();
-  const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['pages', 'staff', 'audit', 'logs'], name: '王小明', id: 'A001' };
+  const me = { role: 'staff', roleName: '主管組', unlocked: false, cards: ['pages', 'staff', 'audit', 'logs'], name: '王小明', id: 'A001' };
   const { page, calls } = await open({ width: 1280, height: 860 }, '', { token: 'F1', me });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#login'), false);
-  assert.equal(await page.textContent('#whoTag'), '王小明・管理者');
+  assert.equal(await page.textContent('#whoTag'), '王小明・主管組');
   assert.equal(await page.isVisible('#logout'), false);
   assert.equal(await page.isVisible('#unlockBar'), false);
   assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['post', 'people', 'rec'], '管理者看不到進階設定');
@@ -733,21 +735,22 @@ test('首頁員工（管理者）直接進入：只看到層級有的卡片與�
   assert.ok(calls.filter((c) => c.key && c.key.startsWith('GET /admin/')).every((c) => c.auth === 'Bearer F1'));
   await page.click('#tab-people');
   await page.waitForSelector('#sfWrap:not([hidden])');
-  assert.equal(await page.isVisible('#sgCard'), false); assert.equal(await page.isVisible('#lvCard'), false);
+  assert.equal(await page.isVisible('#sgCard'), false);
   await page.click('#tab-rec');
   assert.equal(await page.isVisible('#auCard'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/levels'));
+  assert.equal(await page.locator('#lvCard').count(), 0, '層級權限卡片已刪除');
 });
 
 test('首頁員工沒有任何卡片：顯示密碼登入與原因', async () => {
   const { page } = await open({ width: 1280, height: 860 }, '', { token: 'F2', me: null });
   await page.waitForSelector('#login:not([hidden])');
-  assert.match(await page.textContent('#loginMsg'), /沒有任何可用的功能/);
+  assert.match(await page.textContent('#loginMsg'), /沒有任何可用的卡片/);
   assert.equal(await page.isVisible('#app'), false);
 });
 
 test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖區；輸入密碼解鎖後出現，按「鎖定」回到未解鎖', async () => {
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups'].includes(k)) };
   const { page } = await open({ width: 1280, height: 860 }, '', { token: 'F3', me: locked });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#unlockBar'), false, '其他分類不顯示解鎖區');
@@ -769,36 +772,42 @@ test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖�
   assert.equal(await page.isVisible('#tpCard'), false);
 });
 
-test('層級權限：⚠ 卡片勾選要確認、普通勾了管理者跟著勾、還原預設、儲存 body', async () => {
-  resetStaff(); LV_SAVED = null;
-  const { page } = await open({ width: 1280, height: 860 }, '#adv');
+test('姓名：系統管理者看到輸入框（Enter／離開欄位存、失敗還原）；其他人唯讀', async () => {
+  resetStaff();
+  const { page } = await open({ width: 1280, height: 860 }, '#people');
   await login(page);
-  await page.waitForSelector('#lvRows tr');
-  assert.match(await page.textContent('#lvRows tr:last-child'), /只有系統管理者/);
-  let asked = 0;
-  page.on('dialog', (d) => { asked++; d.dismiss(); });
-  await page.click('#lvRows input[data-key=fbconn][data-lv=mgr]');
-  assert.equal(asked, 1); assert.equal(await page.isChecked('#lvRows input[data-key=fbconn][data-lv=mgr]'), false, '取消確認就不勾');
-  await page.click('#lvRows input[data-key=assets][data-lv=user]');
-  assert.equal(await page.isChecked('#lvRows input[data-key=assets][data-lv=mgr]'), true);
-  await page.click('#lvRows input[data-key=staff][data-lv=mgr]');
-  await page.click('#lvSave');
-  await page.waitForFunction(() => /已儲存/.test(document.getElementById('lvMsg').textContent));
-  assert.deepEqual(LV_SAVED, { mgr: ['access', 'assets', 'logs'], user: ['assets'] });
-  await page.click('#lvReset');
-  assert.equal(await page.isChecked('#lvRows input[data-key=rundown][data-lv=mgr]'), true);
+  await page.waitForSelector('#sfWrap:not([hidden])');
+  assert.equal(await page.inputValue('#sfRows tr:nth-child(1) input.sf-name'), '王小明');
+  await page.fill('#sfRows tr:nth-child(1) input.sf-name', '王大明');
+  await page.press('#sfRows tr:nth-child(1) input.sf-name', 'Enter');
+  await page.waitForFunction(() => /姓名改成「王大明」/.test(document.getElementById('sfMsg').textContent));
+  assert.deepEqual(SF.bodies.pop(), { key: 'POST /admin/staff/A001', body: { name: '王大明' } });
+  assert.equal(await page.inputValue('#sfRows tr:nth-child(1) input.sf-name'), '王大明');
+  // 空白：還原、不送
+  const n = SF.bodies.length;
+  await page.fill('#sfRows tr:nth-child(2) input.sf-name', '   ');
+  await page.press('#sfRows tr:nth-child(2) input.sf-name', 'Enter');
+  assert.equal(await page.inputValue('#sfRows tr:nth-child(2) input.sf-name'), '陳大華'); assert.equal(SF.bodies.length, n);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/admin-staff-sys.png', fullPage: true });
+  // 非系統管理者：唯讀
+  STAFF_AS = { id: 'A001' };
+  const me = { role: 'staff', roleName: '主管組', unlocked: false, cards: ['staff'], name: '王小明', id: 'A001' };
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people', { token: 'F4', me });
+  await p2.waitForSelector('#sfWrap:not([hidden])');
+  assert.equal(await p2.locator('input.sf-name').count(), 0);
+  assert.equal(await p2.textContent('#sfRows tr:nth-child(2) td:nth-child(2)'), '陳大華');
+  STAFF_AS = null;
 });
 
-test('授權名單（管理者）：不能動的列唯讀、層級只顯示文字、新增區只列可指派的權限組', async () => {
+test('授權名單（有授權名單卡片的員工）：不能動的列唯讀、沒有層級欄、新增區只列可指派的權限組', async () => {
   resetStaff();
-  STAFF[0].level = 'mgr'; STAFF[1].level = 'user'; STAFF[2].level = 'user';
-  const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['staff'], name: '王小明', id: 'A001' };
+  const me = { role: 'staff', roleName: '主管組', unlocked: false, cards: ['staff'], name: '王小明', id: 'A001' };
   STAFF_AS = { id: 'A001' };
   const { page } = await open({ width: 1280, height: 860 }, '#staff', { token: 'F4', me });
   await page.waitForSelector('#sfWrap:not([hidden])');
   const row0 = await page.$$eval('#sfRows tr:first-child select, #sfRows tr:first-child button, #sfRows tr:first-child input', (els) => els.map((e) => e.disabled));
   assert.ok(row0.every(Boolean), '自己那列全部停用');
-  assert.equal(await page.$eval('#sfRows tr:nth-child(2) td:nth-child(3)', (td) => td.textContent), '普通');
+  assert.equal(await page.locator('table.sf-table thead th', { hasText: '層級' }).count(), 0, '沒有層級欄');
   assert.equal(await page.$eval('#sfRows tr:nth-child(2) button', (b) => b.disabled), false);
   assert.deepEqual(await page.$$eval('#sfGroup option', (o) => o.map((x) => x.value)), ['viewer', 'editor']);
   STAFF_AS = null;
@@ -808,7 +817,6 @@ test('授權名單（管理者）：不能動的列唯讀、層級只顯示文�
 test('截圖：電腦版（系統管理者、管理者）與手機版', async () => {
   if (!SHOT) return;
   resetStaff();
-  STAFF[0].level = 'mgr';
   const shot = async (page, name) => { await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOT, name), fullPage: true }); };
   const { page } = await open({ width: 1280, height: 860 }, '#staff');
   await login(page);
@@ -821,11 +829,11 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   await shot(page, 'admin-conn.png');
   await page.click('#tab-guard'); await page.waitForSelector('#gdLog tr.gd-row');
   await shot(page, 'admin-guard-page.png');
-  const me = { role: 'mgr', roleName: '管理者', unlocked: false, cards: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], name: '王小明', id: 'A001' };
+  const me = { role: 'staff', roleName: '主管組', unlocked: false, cards: ['usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], name: '王小明', id: 'A001' };
   const { page: p2 } = await open({ width: 1280, height: 860 }, '#fb', { token: 'F9', me });
   await p2.waitForSelector('#app:not([hidden])'); await p2.waitForTimeout(500);
   await p2.screenshot({ path: path.join(SHOT, 'admin-mgr-fb.png') });
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'levels'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups'].includes(k)) };
   const { page: p3 } = await open({ width: 390, height: 844 }, '#adv', { token: 'F8', me: locked });
   await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });

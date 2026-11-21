@@ -5,7 +5,7 @@
 - 網站：https://unnn3ing-oss.github.io/socialmediaeditor/（併入 main 並開啟 GitHub Pages 後生效）
 - 後端：`toolbox-api`（Cloudflare Worker），網址 https://toolbox-api.19jpz-3.workers.dev ，部署方式見 `docs/deploy.md`
 - 管理後台：https://unnn3ing-oss.github.io/socialmediaeditor/admin/
-- （只有網站版；後端網址 `/admin` 會轉過來。兩種進入方式：首頁用員工編號＋密碼登入後，在右上角帳號選單按「管理頁」（系統管理者＝Secret `SYS_STAFF_ID` 那位，或層級有卡片的人才看得到）；或在管理頁直接輸入 `ADMIN_PASSWORD`。權杖、App 密鑰、Webhook、權限組、層級權限要在管理頁輸入管理員密碼解鎖；管理者能用哪些卡片在「授權名單」→「層級權限」設定）
+- （只有網站版；後端網址 `/admin` 會轉過來。兩種進入方式：首頁用員工編號＋密碼登入後，在右上角帳號選單按「管理頁」（系統管理者＝Secret `SYS_STAFF_ID` 那位，或權限組有管理頁卡片的人才看得到）；或在管理頁直接輸入 `ADMIN_PASSWORD`。權杖、App 密鑰、Webhook、權限組要在管理頁輸入管理員密碼解鎖；其他人能用哪些卡片，由「進階設定」→「權限組」勾選）
 
 - 隱私權政策：https://unnn3ing-oss.github.io/socialmediaeditor/privacy/
 - 資料刪除說明：https://unnn3ing-oss.github.io/socialmediaeditor/data-deletion/

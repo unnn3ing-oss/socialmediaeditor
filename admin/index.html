@@ -159,7 +159,7 @@
     <!-- 人員與權限 -->
     <div class="panel" id="panel-people" role="tabpanel" aria-labelledby="tab-people" hidden>
       <h1>人員與權限</h1>
-      <p>誰能用員工編號登入、能做什麼，以及管理頁各層級看得到哪些卡片。</p>
+      <p>誰能用員工編號登入、屬於哪個權限組。權限組決定能用哪些功能，以及管理頁能看到哪些卡片。</p>
 
       <section class="card" id="sfCard" data-card="staff">
         <h2>授權名單</h2>
@@ -173,7 +173,7 @@
         </form>
         <div class="scroll" id="sfWrap" hidden>
           <table class="sf-table">
-            <thead><tr><th>員工編號</th><th>姓名</th><th>層級</th><th>權限組</th><th>分機／手機</th><th>狀態</th><th>密碼</th><th>最後登入</th><th>操作</th></tr></thead>
+            <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>分機／手機</th><th>狀態</th><th>密碼</th><th>最後登入</th><th>操作</th></tr></thead>
             <tbody id="sfRows"></tbody>
           </table>
         </div>
@@ -310,7 +310,7 @@
       <p>只有系統管理者能用，要先輸入管理員密碼解鎖。</p>
       <section class="card unlock" id="unlockBar" hidden>
         <h2>進階設定已鎖住</h2>
-        <p>排程發布開關、權杖組別、臉書連線、Webhook、權限組、層級權限與名單的層級，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
+        <p>排程發布開關、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
         <form id="unlockForm" class="sf-add">
           <label class="sf-f">管理員密碼<input id="unlockPw" type="password" autocomplete="current-password" required></label>
           <button class="primary" type="submit" id="unlockBtn">解鎖</button>
@@ -393,23 +393,10 @@
 
       <section class="card" id="sgCard" data-card="groups">
         <h2>權限組</h2>
-        <p>每個人屬於一個權限組，權限組決定能做哪些事。改完按該組的「儲存」才會生效。</p>
+        <p>每個人屬於一個權限組，權限組決定能做哪些事（排程發布、影片發布、數據報表，以及管理頁的哪些卡片）。管理頁的敏感卡片（權杖、Webhook、權限組等）只有系統管理者能用，不能勾給員工。改完按該組的「儲存」才會生效，對方下一次操作就套用。</p>
         <div id="sgRows"></div>
         <div class="row"><button id="sgNew" type="button">＋ 新增權限組</button></div>
         <p class="msg" id="sgMsg" role="status"></p>
-      </section>
-
-      <section class="card" id="lvCard" data-card="levels">
-        <h2>層級權限</h2>
-        <p>決定「管理者」與「普通」在管理頁能用哪些卡片。普通勾的卡片，管理者一定也有。標 ⚠ 的卡片含權杖或權限設定，勾給員工後對方不用輸入管理員密碼就能用。系統管理者一律全部可用（敏感卡片要先輸入管理員密碼解鎖）。</p>
-        <div class="scroll">
-          <table class="lv-table">
-            <thead><tr><th>卡片</th><th>管理者</th><th>普通</th></tr></thead>
-            <tbody id="lvRows"></tbody>
-          </table>
-        </div>
-        <div class="row"><button class="primary" id="lvSave" type="button">儲存</button><button id="lvReset" type="button">還原預設</button></div>
-        <p class="msg" id="lvMsg" role="status"></p>
       </section>
     </div>
   </main>

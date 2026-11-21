@@ -165,6 +165,13 @@ test('網站首頁不用登入就看得到排程發布卡片，點進去顯示�
 
 const p2 = (n) => String(n).padStart(2, '0');
 const hm = (ms) => { const d = new Date(ms); return p2(d.getHours()) + p2(d.getMinutes()); };
+// 選套版沒照片不能送出：送出前若還在選套版又沒照片，貼一張假圖
+async function withPhoto(page) {
+  const img = await page.getAttribute('#modeSeg [data-mode=image]', 'aria-pressed');
+  if (img !== 'true' || await page.isHidden('#cvEmpty')) return;
+  await pasteImage(page, fakeAsset());
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+}
 async function openPost(page) {
   await page.waitForSelector('#fbpostApp:not([hidden])');
   await page.click('#newBtn');   // 第一次開啟才載入做圖模組，按鈕先顯示「載入中…」
@@ -338,6 +345,7 @@ test('管理員：排程時間超出範圍顯示紅字、不送出', async () =>
   assert.match(await page.textContent('#tpHint'), /至少要晚 10 分鐘/);
   assert.match(await page.getAttribute(chip(111) + ' .chip-r', 'class'), /\bbad\b/);
   await page.keyboard.press('Escape');
+  await withPhoto(page);
   await page.click('#sendBtn');
   assert.match(await page.textContent('#sendErr'), /新聞：排程至少要晚 10 分鐘/);
   assert.equal(api.posts.length, 0);
@@ -380,9 +388,8 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(333) + ' .chip-l');
   const before = Date.now();
-  await page.click('#sendBtn');
-  await page.waitForSelector('#cfDlg[open]');   // 沒附圖、國際沒設定文字 UTM → 先提醒
-  await page.click('#cfYes');
+  await withPhoto(page);
+  await page.click('#sendBtn');   // 有附圖 → 用圖文 UTM，不提醒文字 UTM
   await page.waitForSelector('#doneDlg[open]');
   await page.waitForFunction(() => /RD 主粉/.test(document.getElementById('doneList').textContent));
   assert.equal(await page.isHidden('#doneRd'), true, 'RD 寫入成功不顯示提醒');
@@ -400,6 +407,7 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.fill('#msg', 'm');
   await page.click(chip(111) + ' .chip-l');
   await page.fill('#rdSlug', '秋冬 衣櫃！');
+  await withPhoto(page);
   await page.click('#sendBtn');
   for (let i = 0; i < 50 && api.rundown.length < 2; i++) await page.waitForTimeout(100);
   assert.equal(api.rundown[1].entries[0].text, '4051394/圖文/秋冬衣櫃');
@@ -411,6 +419,7 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.fill('#title', '純文字貼文');
   await page.click(chip(111) + ' .chip-l');
   await page.fill('#rdSlug', '純文字');
+  await withPhoto(page);
   await page.click('#sendBtn');
   for (let i = 0; i < 50 && api.rundown.length < 3; i++) await page.waitForTimeout(100);
   assert.equal(api.rundown[2].entries[0].text, '4051394/文字/純文字');
@@ -519,6 +528,7 @@ test('第 2、3 則留言：新增、選活動留言帶入可改、距上一則�
   assert.match(await page.textContent(b2 + ' .extra-title'), /第 3 則留言/);
   await page.selectOption(b2 + ' select.delay', '10');
   // 空白不能送
+  await withPhoto(page);
   await page.click('#sendBtn');
   assert.match(await page.textContent('#sendErr'), /第 3 則留言沒有內容/);
   assert.equal(api.posts.length, 0);
@@ -528,6 +538,7 @@ test('第 2、3 則留言：新增、選活動留言帶入可改、距上一則�
   assert.equal(await page.locator('#extras .extra').count(), 1);
   assert.match(await page.textContent(b1 + ' .extra-title'), /第 2 則留言/);
   assert.equal(await page.isDisabled('#addComment'), false);
+  await withPhoto(page);
   await page.click('#sendBtn');
   await page.waitForSelector('#doneList li');
   const body = api.posts[0];
@@ -546,6 +557,7 @@ test('全部成功：跳送出完成，再發一則清空並留在視窗；返�
     await page.click(chip(111) + ' .chip-l');
   };
   await fill('第一則');
+  await withPhoto(page);
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.match(await page.textContent('#doneList'), /新聞：發布成功；已留言/);
@@ -565,6 +577,7 @@ test('全部成功：跳送出完成，再發一則清空並留在視窗；返�
   assert.equal(await page.isVisible('#postDlg'), true, '再發一則：留在新增發文');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'link');
   await fill('第二則');
+  await withPhoto(page);
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(api.posts.length, 2);
@@ -592,6 +605,7 @@ test('RD 寫入失敗：仍跳完成視窗，提醒並可一鍵複製 RD 格式'
   await page.fill('#link', 'https://news.tvbs.com.tw/life/4320000');
   await page.fill('#msg', 'm');
   await page.click(chip(111) + ' .chip-l');
+  await withPhoto(page);
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(await page.isVisible('#doneRd'), true);
@@ -616,6 +630,7 @@ test('RD 沒有文章 ID：完成視窗只顯示原因、沒有複製按鈕', as
   await page.fill('#link', 'https://example.com/abc');
   await page.fill('#msg', 'm');
   await page.click(chip(111) + ' .chip-l');
+  await withPhoto(page);
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
   assert.match(await page.textContent('#doneRdMsg'), /沒有文章 ID/);
@@ -630,9 +645,26 @@ test('文章網址必填：沒填按送出會提示、不送出', async () => {
   assert.match(await page.textContent('label[for=link]'), /必填/);
   await page.fill('#msg', 'm');
   await page.click(chip(111) + ' .chip-l');
+  await withPhoto(page);
   await page.click('#sendBtn');
   assert.match(await page.textContent('#sendErr'), /請貼上文章網址/);
   assert.equal(api.posts.length, 0);
+  await page.close();
+});
+
+test('粉專膠囊一列左右滑：不換行、滾輪左右捲、右邊淡出提示還有', async () => {
+  const { page } = await newPage('admin', { width: 300, height: 760 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.$eval('#pages', (el) => { el.style.maxWidth = '160px'; });   // 測試只有 3 個粉專，縮窄才放不下
+  const r = await page.$eval('#pages', (el) => ({ rows: new Set([...el.children].map((c) => c.offsetTop)).size, over: el.scrollWidth > el.clientWidth, wrap: getComputedStyle(el).flexWrap }));
+  assert.equal(r.rows, 1, '只有一排');
+  assert.equal(r.wrap, 'nowrap');
+  assert.ok(r.over, '放不下時可以左右滑');
+  await page.waitForFunction(() => document.getElementById('pages').classList.contains('fade-r'));
+  await page.hover('#pages');
+  await page.mouse.wheel(0, 300);
+  await page.waitForFunction(() => { const el = document.getElementById('pages'); return el.scrollLeft > 20 && el.classList.contains('fade-l'); });
   await page.close();
 });
 
@@ -730,6 +762,7 @@ test('送出提示不佔位：平常隱藏，游標移到送出鈕才浮出；�
   await page.mouse.move(5, 5);
   await page.fill('#msg', 'm');
   await page.click(chip(111) + ' .chip-l');
+  await withPhoto(page);
   await page.click('#sendBtn');
   assert.match(await page.textContent('#sendErr'), /請貼上文章網址/);
   assert.equal(await foot(), h0, '提示不撐高底列');
@@ -1136,5 +1169,41 @@ test('再發一次：純色底色帶回時色塊亮起；值班視窗開著按 E
   await page.evaluate(() => document.getElementById('dutyDlg').showModal());
   await page.keyboard.press('Escape');
   assert.equal(await page.isVisible('#postDlg'), true);
+  await page.close();
+});
+
+test('已排程只顯示晚於現在的貼文：已過時間的不列，沒有時間的照列', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { page, errors } = await newPage('admin', undefined, { sched: [
+    { id: '111_1', message: '過去', at: now - 600, comment: 'none' },
+    { id: '111_2', message: '未來', at: now + 7200, comment: 'none' },
+    { id: '111_3', message: '沒時間', comment: 'none' },
+  ] });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.click('#schedReload');
+  await page.waitForFunction(() => /共 2 則/.test(document.getElementById('schedHint').textContent));
+  const txt = await page.textContent('#schedList');
+  assert.ok(!txt.includes('過去'), '過去的排程不顯示');
+  assert.ok(txt.includes('未來') && txt.includes('沒時間'));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('選套版沒照片：送出鈕停用並說明原因；改純文字就能送', async () => {
+  const { page } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.fill('#title', '標題');
+  await page.click(chip(111) + ' .chip-l');
+  assert.equal(await page.locator('#sendBtn').isDisabled(), true);
+  assert.equal(await page.textContent('#sendErr'), '選套版需要照片，請貼上或選一張照片，或改用純文字');
+  await page.click('#modeSeg [data-mode=text]');
+  assert.equal(await page.locator('#sendBtn').isDisabled(), false);
+  assert.equal(await page.textContent('#sendErr'), '');
+  await page.click('#modeSeg [data-mode=image]');
+  await withPhoto(page);
+  assert.equal(await page.locator('#sendBtn').isDisabled(), false, '有照片就能送');
   await page.close();
 });
