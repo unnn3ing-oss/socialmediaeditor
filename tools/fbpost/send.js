@@ -5,7 +5,7 @@ import { BG_MAX } from './compose.js';
 
 const newSendId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
-export function createSender({ tb, composer, targets, rd, comments, onBack }) {
+export function createSender({ tb, composer, targets, rd, comments, onBack, history }) {
   // 防重複發文：同一則（同一個文章網址、還沒清空）沿用同一組 sendId，後端會跳過已成功的粉專
   let sendId = newSendId(), sentLink = null;
   const unknown = new Set();   // 上次結果不明（可能已發出）的粉專
@@ -88,8 +88,10 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
       if (bg) fd.append('bg', bg);
       fd.append('targets', JSON.stringify(c.targets));
       const sentAt = Date.now();
+      const snap = composer.snapshot();   // 再發一次用（送出完成會清空，要先記下）
       const data = await tb.api.call('/fb/post', { method: 'POST', body: fd });
       const results = data.results || [];
+      if (history) history.save(snap, results.filter((r) => r.ok && r.postId).map((r) => String(r.postId)));
       for (const r of results) { if (r.unknown) unknown.add(r.page); else unknown.delete(r.page); }
       const rdOut = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
       if (results.length && results.every((r) => r.ok)) { clearAll(); showDone(results, rdOut); return; }
@@ -139,5 +141,5 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
     copyTimer = setTimeout(() => { b.classList.remove('copied'); $('doneRdText').textContent = b.dataset.text; }, 1500);
   });
 
-  return { updateButton };
+  return { updateButton, clearAll };
 }

@@ -19,11 +19,12 @@
 |---|---|---|
 | `tools/fbpost/compose.js`（`postText`、showMode）／`send.js`（`composer.text()`）／`index.html`（`#titleName`、`#msgLbl`） | 純文字只用標題框 | ✅ |
 | `tools/fbpost/duty.js`（新，`shiftOf`／`readDuty`／`createDuty`）＋ app（`canPost` 後 `duty.check()`）／targets（`defaults`、`applyDefaults`）＋ `#dutyDlg`、`#dutyBtn` | 值班粉專 | ✅ |
-| `tools/fbpost/history.js`（新）＋ send／manage／compose | 送出記錄、再發一次 | ⬜ |
-| 測試 | fbpost e2e、單元 | ⬜ |
+| `tools/fbpost/history.js`（新，IndexedDB `tbx-fbpost`／`sends`，index `posts`）＋ send（`snapshot` 存成功 postId）／manage（`.act-resend`，`postKey` 比對）／compose（`snapshot`、`restore`）／app（`resend` 先問覆蓋） | 送出記錄、再發一次 | ✅ |
+| 測試 | `test/fbpost-duty.test.js`、fbpost e2e（值班 2、再發一次 2） | ✅ |
 
 ## 下一步
 - [x] 一、純文字只用標題框（fbpost＋compose e2e 61）
 - [x] 二、值班粉專（單元 2、e2e 2；測試輔助 `presetDuty` 在 `test/helpers/tool-page.js`）
-- [ ] 三、再發一次
-- [ ] 全部 fbpost e2e、側邊欄窄版、獨立審查
+- [x] 三、再發一次
+- [x] npm test 754、build --check、fbpost＋compose＋sidepanel＋admin e2e 全過
+- [ ] 獨立審查

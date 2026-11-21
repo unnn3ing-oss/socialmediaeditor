@@ -378,7 +378,7 @@ body.no-scroll { overflow: hidden; }
 /* 依權限隱藏（用 class，不重建列表） */
 .who { font-size: 12px; color: var(--muted, #5b6472); }
 .noview { margin: 16px 0; padding: 14px 16px; border-radius: var(--radius-control); background: var(--warn-bg); color: var(--warn-text); }
-#fbpostApp.no-post #newBtn, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
+#fbpostApp.no-post #newBtn, #fbpostApp.no-post .act-resend, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
 #needStaff { margin-top: 12px; }
 
 /* 臉書權杖快到期／失效提醒（只有管理員看得到） */

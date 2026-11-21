@@ -47,6 +47,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
         ? { page: t.page, ok: false, scheduled: false, comment: 'none', error: '臉書拒絕' }
         : { page: t.page, ok: true, postId: t.page + '_9', scheduled: t.at != null, at: t.at ?? undefined, comment: t.at != null ? 'armed' : 'done' })) });
     }
+    if (p === '/fb/scheduled' && opts.sched) return json(opts.sched);
     if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: 'pending' }]);
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
     if (p === '/fb/presets') return json([{ name: '雙11抽獎', body: '留言＋分享抽 AirPods！\nhttps://example.com/a' }, { name: '訂閱', body: '記得訂閱 YouTube' }]);
@@ -280,7 +281,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   // 列表一列：內容一行截斷、相片．粉專．留言、編輯（即將推出）／改時間／刪除、時間欄
   assert.equal(await page.$eval('#schedList .msg', (e) => getComputedStyle(e).whiteSpace), 'nowrap');
   assert.match(await page.textContent('#schedList .meta .kind'), /^相片．新聞．留言：/);
-  assert.deepEqual(await page.$$eval('#schedList li:first-child .acts button', (b) => b.map((x) => [x.textContent, x.disabled])), [['編輯', true], ['改時間', false], ['刪除', false]]);
+  assert.deepEqual(await page.$$eval('#schedList li:first-child .acts button', (b) => b.map((x) => [x.textContent, x.disabled])), [['編輯', true], ['再發一次', true], ['改時間', false], ['刪除', false]]);
   assert.match(await page.textContent('#schedList .when'), /^\d+月\d+日 \d\d:\d\d$/);
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-sched-desktop.png') });
   await page.click('#schedList li >> text=改時間');
@@ -314,7 +315,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   assert.equal(await page.getAttribute('#pubList .pv-arm', 'aria-expanded'), 'true');
   await page.keyboard.press('Escape');
   assert.equal(await page.isVisible('#pubList .pv-open'), false);
-  assert.deepEqual(await page.$$eval('#pubList li:first-child .acts button', (b) => b.map((x) => x.textContent)), ['編輯', '刪除']);
+  assert.deepEqual(await page.$$eval('#pubList li:first-child .acts button', (b) => b.map((x) => x.textContent)), ['編輯', '再發一次', '刪除']);
   await page.click('#pubList li >> text=刪除');
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfYes');
@@ -977,6 +978,7 @@ test('值班粉專：班段第一次開啟要先選（不能略過），選好�
   assert.equal(await page.isHidden('#dutyCancel'), true, '第一次不能取消');
   assert.match(await page.textContent('#dutyShift'), /^(早班|晚班|大夜)/);
   assert.equal(await page.isDisabled('#dutyOk'), true, '至少選 1 個');
+  if (SHOT) { await page.check('#dutyList input[value="111"]'); await page.screenshot({ path: path.join(SHOT, 'fbpost-duty.png') }); await page.uncheck('#dutyList input[value="111"]'); }
   await page.keyboard.press('Escape');
   assert.equal(await page.isVisible('#dutyDlg'), true, 'Esc 關不掉');
   await page.check('#dutyList input[value="111"]');
@@ -1022,5 +1024,79 @@ test('值班粉專：沒有發文權限不問、不顯示按鈕', async () => {
   await page.waitForTimeout(400);
   assert.equal(await page.isVisible('#dutyDlg'), false);
   assert.equal(await page.isHidden('#dutyBtn'), true);
+  await page.close();
+});
+
+test('再發一次：送出記錄帶回網址、照片、發出時的標題與模式；沒記錄的停用；有內容先問', async () => {
+  const soon = Math.floor(Date.now() / 1000) + 7200;
+  const sched = [{ id: '111_9', message: '【改過的標題】', at: soon, picture: null, comment: 'none' }, { id: '111_7', message: '別人發的', at: soon + 60, picture: null, comment: 'none' }];
+  const { page, errors, api } = await newPage('admin', { width: 1280, height: 900 }, { duty: ['111'], sched });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  assert.deepEqual(await page.$$eval('#pages .chip.on', (els) => els.map((e) => e.dataset.page)), ['111'], '值班粉專預勾');
+  await pasteImage(page, fakeAsset([200, 30, 30]));
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.fill('#title', '改過的標題');
+  await page.fill('#msg', '貼文內容不帶回');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  await page.click('#doneBack');
+  await page.click('#schedReload');
+  await page.waitForSelector('#schedList li[data-id="111_7"]');
+  const r7 = '#schedList li[data-id="111_7"] .act-resend', r9 = '#schedList li[data-id="111_9"] .act-resend';
+  assert.equal(await page.isDisabled(r7), true, '沒記錄的停用');
+  assert.match(await page.getAttribute(r7, 'title'), /只有這台電腦/);
+  assert.equal(await page.isDisabled(r9), false);
+  if (SHOT) await page.locator('#listCard').screenshot({ path: path.join(SHOT, 'fbpost-resend-list.png') });
+  await page.click(r9);
+  await page.waitForSelector('#postDlg:not([hidden])');
+  assert.equal(await page.inputValue('#link'), 'https://news.tvbs.com.tw/life/1');
+  assert.equal(await page.inputValue('#title'), '改過的標題');
+  assert.equal(await page.inputValue('#msg'), '', '貼文內容不帶回');
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+  const px = await page.evaluate(() => Array.from(document.getElementById('cv').getContext('2d').getImageData(540, 300, 1, 1).data));
+  assert.ok(px[0] > 150 && px[1] < 90, '照片帶回：' + px);
+  assert.deepEqual(await page.$$eval('#pages .chip.on', (els) => els.map((e) => e.dataset.page)), ['111']);
+  assert.match(await page.textContent('#pullHint'), /已帶回上次送出的網址、標題、照片/);
+  // 已有內容：先問，按返回不動
+  await page.fill('#title', '正在編輯');
+  await page.click('#dlgClose');
+  await page.click(r9);
+  await page.waitForSelector('#cfDlg[open]');
+  await page.click('#cfNo');
+  assert.equal(await page.inputValue('#title'), '正在編輯');
+  // 再送一次是新的一則（不同 sendId）
+  await page.click(r9); await page.waitForSelector('#cfDlg[open]'); await page.click('#cfYes');
+  await page.waitForSelector('#postDlg:not([hidden])');
+  await page.fill('#msg', '第二次');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  const sid = (b) => /name="sendId"\r\n\r\n([^\r]*)\r\n/.exec(b)[1];
+  assert.notEqual(sid(api.posts[0]), sid(api.posts[1]));
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('再發一次：純文字帶回模式與標題框', async () => {
+  const soon = Math.floor(Date.now() / 1000) + 7200;
+  const { page } = await newPage('admin', { width: 1280, height: 900 }, { duty: ['111'], sched: [{ id: '111_9', message: 'x', at: soon, picture: null, comment: 'none' }] });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('#modeSeg [data-mode=text]');
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.fill('#title', '純文字標題');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  await page.click('#doneAgain');
+  await page.click('#modeSeg [data-mode=image]');
+  await page.click('#dlgClose');
+  await page.click('#schedReload');
+  await page.click('#schedList li[data-id="111_9"] .act-resend');
+  await page.waitForSelector('#postDlg:not([hidden])');
+  assert.equal(await page.getAttribute('#modeSeg [data-mode=text]', 'aria-pressed'), 'true');
+  assert.equal(await page.isHidden('#msg'), true);
+  assert.equal(await page.inputValue('#title'), '純文字標題');
+  if (SHOT) await page.locator('.post-body, #postDlg .dlg-box, #postDlg').first().screenshot({ path: path.join(SHOT, 'fbpost-text-mode.png') });
   await page.close();
 });

@@ -298,7 +298,7 @@ export function createComposer({ tb, assets }) {
     return new Promise((resolve) => {
       const url = URL.createObjectURL(blob);
       const im = new Image();
-      im.onload = () => { URL.revokeObjectURL(url); st.photo = im; st.view = newView(); draw(); syncFx(); resolve(true); };
+      im.onload = () => { URL.revokeObjectURL(url); st.photo = im; st.photoBlob = blob; st.view = newView(); draw(); syncFx(); resolve(true); };
       im.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
       im.src = url;
     });
@@ -408,7 +408,7 @@ export function createComposer({ tb, assets }) {
     reset() {
       if (titleEd) titleEd.end();
       $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = ''; msgCount();
-      st.photo = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = '';
+      st.photo = null; st.photoBlob = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = '';
       say('pullHint', '');
       titleChanged(); showMode();
     },
@@ -421,6 +421,22 @@ export function createComposer({ tb, assets }) {
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       if (!blob) throw new Error('產生圖片失敗');
       return new File([blob], 'fbpost.png', { type: 'image/png' });
+    },
+    // 送出記錄用（再發一次）：文章網址、發出時的標題、模式、框、底色、原始照片
+    snapshot: () => ({ link: $('link').value.trim(), title: $('title').value, mode: st.mode, frame: st.frame, color: st.color, photo: st.photo ? st.photoBlob || null : null }),
+    // 再發一次：清空後帶回（不自動重新帶入文章、不帶貼文內容）
+    async restore(rec) {
+      this.reset();
+      if (rec.mode === 'image' || rec.mode === 'color' || rec.mode === 'text') { st.mode = rec.mode; setMode(rec.mode); }
+      if (assets.company && (rec.frame === 'news' || rec.frame === 'entertainment')) { st.frame = rec.frame; setFrame(rec.frame); }
+      if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; showColor(); }
+      $('link').value = rec.link || ''; lastPulled = $('link').value.trim();
+      $('title').value = rec.title || '';
+      showMode();
+      let photoOk = true;
+      if (rec.photo instanceof Blob) photoOk = await loadPhoto(rec.photo);
+      draw();
+      say('pullHint', '已帶回上次送出的網址、標題' + (rec.photo ? (photoOk ? '、照片' : '（照片讀取失敗）') : '') + '；貼文內容請重新填寫');
     },
     mode: () => st.mode,
     text: postText,   // 送出用的貼文內容

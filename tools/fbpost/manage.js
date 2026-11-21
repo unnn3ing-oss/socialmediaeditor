@@ -1,5 +1,6 @@
 // 已排程／已發佈：選粉專＋刷新才查；編輯（尚未推出）、改時間、刪除
 import { $, errText, bounds, inRange, toLocalInput, commentState, say, confirmBox } from './util.js';
+import { postKey } from './history.js';
 
 // 列表（2026-11-18 使用者定版）：縮圖｜內容（一行）＋「相片／文字．粉專．留言」｜按鈕｜時間欄
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -83,7 +84,16 @@ function skelEnd(ul, restore) {
 }
 function skelDrop(ul) { ul._kept = null; ul.textContent = ''; ul.setAttribute('aria-busy', 'false'); }
 
-export function createManage({ tb }) {
+// history：送出記錄（只在這個瀏覽器，7 天）；onResend(記錄)：再發一次
+const NO_REC = '沒有記錄：只有這台電腦、這個瀏覽器 7 天內送出的貼文才能再發一次';
+export function createManage({ tb, history = null, onResend = null }) {
+  const recIndex = () => (history ? history.index() : Promise.resolve(new Map()));
+  function resendBtn(it, idx) {
+    const rec = idx.get(postKey(it.id));
+    const b = btn('再發一次', 'btn-secondary act-resend', rec ? () => onResend && onResend(rec) : null);
+    if (!rec) { b.disabled = true; b.title = NO_REC; b.setAttribute('aria-description', NO_REC); }
+    return b;
+  }
   // 排序只重排畫面上的列，不重查臉書
   function sortSched() {
     const ul = $('schedList');
@@ -96,7 +106,8 @@ export function createManage({ tb }) {
     say('schedHint', '查詢中…');
     skelStart($('schedList'), false);
     try {
-      const items = (await tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page))).slice();
+      const [raw, idx] = await Promise.all([tb.api.call('/fb/scheduled?page=' + encodeURIComponent(page)), recIndex()]);
+      const items = raw.slice();
       if (my !== schedSeq) return;
       items.sort((a, b) => byAt(a.at, b.at, $('schedSort').value));
       const ul = $('schedList'); skelEnd(ul, false); ul.textContent = '';
@@ -130,7 +141,7 @@ export function createManage({ tb }) {
           }
           catch (e) { say('schedHint', errText(e), true); }
         });
-        acts.append(editSoon(), bEdit, bCancel);
+        acts.append(editSoon(), resendBtn(it, idx), bEdit, bCancel);
         li.insertBefore(acts, li.querySelector('.when')); li.append(edit); ul.append(li);
       }
       say('schedHint', items.length ? `共 ${items.length} 則` : '沒有排程貼文');
@@ -145,14 +156,14 @@ export function createManage({ tb }) {
     skelStart($('pubList'), more);
     $('pubMore').hidden = true;   // 查詢中不能再按「載入更多」，免得兩個請求互相蓋掉
     try {
-      const d = await tb.api.call('/fb/published?page=' + encodeURIComponent(page) + (more && pubNext ? '&after=' + encodeURIComponent(pubNext) : ''));
+      const [d, idx] = await Promise.all([tb.api.call('/fb/published?page=' + encodeURIComponent(page) + (more && pubNext ? '&after=' + encodeURIComponent(pubNext) : '')), recIndex()]);
       if (my !== pubSeq) return;
       const ul = $('pubList'); skelEnd(ul, false); if (!more) ul.textContent = '';
       const pageName = $('pubPage').selectedOptions[0]?.textContent || '';
       for (const it of d.items || []) {
         const li = rowBase(it, new Date(it.time).getTime(), pageName, it.url ? openablePreview(it) : null);
         const acts = document.createElement('div'); acts.className = 'acts';
-        acts.append(editSoon());
+        acts.append(editSoon(), resendBtn(it, idx));
         acts.append(btn('刪除', 'btn-secondary btn-del', async () => {
           if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
           try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/delete`, { method: 'POST', body: { page } }); li.remove(); const n = ul.children.length; say('pubHint', n ? `共 ${n} 則` : '沒有已發佈貼文'); }

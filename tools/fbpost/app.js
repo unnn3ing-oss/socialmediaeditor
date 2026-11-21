@@ -4,10 +4,11 @@
 //   targets.js 粉專膠囊＋timepop.js 排程時間、rd.js 排入 RD、send.js 送出；time.js、slug.js、rules.js 是純規則，util.js 共用小工具
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
-import { $, errText } from './util.js';
+import { $, errText, confirmBox } from './util.js';
 import { createManage } from './manage.js';
 import { createDialog } from './dialog.js';
 import { createDuty } from './duty.js';
+import { createHistory } from './history.js';
 
 tb.init('fbpost');
 
@@ -60,21 +61,30 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   booted(true);
   $('fbpostApp').hidden = false;
   // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
-  let currentPages = pages, targets = null, loading = null;
+  let currentPages = pages, targets = null, loading = null, composer = null, sender = null;
+  const history = createHistory();
   const duty = createDuty({ pages: () => currentPages, canAsk: () => canPost, onChange: () => { if (targets) targets.applyDefaults(); } });
   const ensureCompose = () => loading || (loading = (async () => {
     const [{ loadComposeAssets }, { createComposer }, { createTargets }, { createSender }, { createTimePop }, { createRd }, { createComments }] =
       await Promise.all([import('../../ui/compose/assets.js'), import('./compose.js'), import('./targets.js'), import('./send.js'),
         import('./timepop.js'), import('./rd.js'), import('./comments.js')]);
-    const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
-    let sender;
+    composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
     targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton(), defaults: () => duty.ids() });
-    sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }),
+    sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }), history,
       onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
     targets.setPages(currentPages);
   })().catch((e) => { loading = null; throw e; }));
   const dialog = createDialog({ beforeOpen: ensureCompose });   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
-  const manage = createManage({ tb });
+  // 再發一次：開新增發文、清空後帶回網址／照片／標題（粉專照值班粉專預勾）；正在編輯的內容先問
+  async function resend(rec) {
+    try { await ensureCompose(); } catch (e) { $('pagesState').textContent = '載入新增發文失敗：' + errText(e); return; }
+    const busy = $('link').value.trim() || $('title').value.trim() || $('msg').value.trim();
+    if (busy && !(await confirmBox('要用這則貼文覆蓋嗎？', '新增發文裡已經有內容，再發一次會清空它（網址、照片、標題、貼文內容、粉專勾選）。'))) return;
+    sender.clearAll();
+    await composer.restore(rec);
+    dialog.open();
+  }
+  const manage = createManage({ tb, history, onResend: resend });
   const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); duty.paint(); };
   showPages(pages);
   $('pagesRefresh').addEventListener('click', async () => {
