@@ -122,6 +122,7 @@ test('文字背景：不在清單、超過 130 字、附圖 → 400，不呼叫�
   const { f, env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_5' }) });
   const tg = JSON.stringify([{ page: '111', at: null }]);
   assert.equal((await send(env, headers, { message: '短句', bg: '999999999', targets: tg })).status, 400);
+  assert.equal((await send(env, headers, { message: '短句', bg: '303063890126415', targets: tg })).status, 400, '圖樣類未開放');
   assert.equal((await send(env, headers, { message: '字'.repeat(131), bg: '106018623298955', targets: tg })).status, 400);
   assert.equal((await send(env, headers, { message: '字'.repeat(130), bg: 'abc', targets: tg })).status, 400);
   assert.equal((await send(env, headers, { message: '短句', bg: '106018623298955', image: img(), targets: tg })).status, 400);
@@ -134,8 +135,22 @@ test('GET /fb/backgrounds：回清單（id、name、css）', async (t) => {
   const r = await w.fetch(new Request('https://api.test/fb/backgrounds', { headers: { origin: ORIGIN, ...headers } }), env, { waitUntil() {} });
   assert.equal(r.status, 200);
   const list = (await r.json()).data;
-  assert.ok(list.length >= 10);
-  assert.ok(list.every((b) => /^\d+$/.test(b.id) && b.name && b.css));
+  assert.equal(list.length, 11, '臉書實際清單：純色 7＋漸層 4（圖樣類未開放）');
+  assert.ok(list.every((b) => /^\d+$/.test(b.id) && b.name && b.css && /^#[0-9A-F]{6}$/i.test(b.text) && ['solid', 'gradient'].includes(b.type)));
+  assert.deepEqual([...new Set(list.map((b) => b.type))], ['solid', 'gradient'], '純色在前、漸層在後');
+  const purple = list.find((b) => b.id === '106018623298955');
+  assert.deepEqual(purple, { id: '106018623298955', name: '純紫', type: 'solid', css: '#C600FF', text: '#FFFFFF' });
+  assert.equal(list.find((b) => b.id === '249307305544279').css, 'linear-gradient(to top right,#FF0047,#2C34C7)');
+  assert.ok(!list.some((b) => b.id === '204187940028597'), '臉書選單已沒有的舊代號不再列出');
+});
+
+test('文字背景：圖樣類與格式不對的資料不開放', async () => {
+  const { toBackground } = await import('../../server/fb/bgpresets.js');
+  assert.equal(toBackground({ preset_id: '303063890126415', type: 'image', background_color: '#DC7A5A', text_color: '#FFFFFF' }), null);
+  assert.equal(toBackground({ preset_id: '1', type: 'solid', background_color: '#000000', text_color: '#FFFFFF' }), null);
+  assert.equal(toBackground({ preset_id: '1881421442117417', type: 'solid', background_color: 'red;x', text_color: '#FFFFFF' }), null);
+  assert.equal(toBackground({ preset_id: '1881421442117417', type: 'gradient', background_color: '#000000', text_color: '#FFFFFF' }), null, '漸層缺第二色');
+  assert.equal(toBackground({ preset_id: '1881421442117417', type: 'solid', background_color: '#111111', text_color: '#FFFFFF', fb_description: '黑色' }).name, '黑色', '沒有 label 用臉書描述');
 });
 
 test('立即發布第 1 則留言失敗：交給計時器重試，第 2、3 則排在它後面', async (t) => {

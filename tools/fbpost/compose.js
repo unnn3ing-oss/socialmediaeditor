@@ -85,10 +85,11 @@ export function createComposer({ tb, assets }) {
     if (b) {
       const t = stripLead($('msg').value).trim(), n = [...t].length;
       $('bgPrev').style.background = b.css;
+      $('bgPrev').style.color = b.text || '#fff';
       $('bgText').textContent = t || '貼文內容會顯示在這裡';
       $('bgText').style.fontSize = n <= 40 ? '30px' : n <= 85 ? '24px' : '19px';
     }
-    for (const el of $('bgSws').children) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
+    for (const el of $('bgSws').querySelectorAll('.sw')) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
   }
   function bgButton(id, name, css) {
     const el = document.createElement('button');
@@ -98,9 +99,16 @@ export function createComposer({ tb, assets }) {
   }
   $('bgSws').addEventListener('click', (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); });
   Promise.resolve().then(() => tb.api.call('/fb/backgrounds')).then((list) => {
-    bgs = (Array.isArray(list) ? list : []).filter((b) => b && /^\d+$/.test(b.id) && b.name && b.css);
+    bgs = (Array.isArray(list) ? list : []).filter((b) => b && /^\d+$/.test(b.id) && b.name && b.css && /^#[0-9a-f]{6}$/i.test(b.text || ''));
     if (!bgs.length) return;
-    $('bgSws').append(bgButton('', '無', ''), ...bgs.map((b) => bgButton(b.id, b.name, b.css)));
+    // 「無」→ 依種類分組（純色｜漸層），組與組之間一條分隔線
+    const els = [bgButton('', '無', '')];
+    let type = '';
+    for (const b of bgs) {
+      if (b.type !== type) { type = b.type; const sep = document.createElement('span'); sep.className = 'bg-sep'; sep.setAttribute('aria-hidden', 'true'); els.push(sep); }
+      els.push(bgButton(b.id, b.name, b.css));
+    }
+    $('bgSws').append(...els);
     $('bgBox').hidden = false; msgCount();
   }).catch(() => {});
 

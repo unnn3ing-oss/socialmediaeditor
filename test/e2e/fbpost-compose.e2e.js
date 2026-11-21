@@ -19,7 +19,7 @@ const ARTICLE = `<html><head><meta property="og:title" content="${TITLE}"><meta 
 <meta name="keywords" content="監視器,吃到飽,詐欺,很長很長的標籤"></head><body><article><h1>${TITLE}</h1>
 <figure><img src="${IMG_URL}"><figcaption>（圖／TVBS）</figcaption></figure><p>內文</p></article></body></html>`;
 const PHOTO = fakeAsset([60, 170, 90]);
-const BGS = [{ id: '106018623298955', name: '紫', css: '#8a3ffc' }, { id: '901751159967576', name: '橘紅漸層', css: 'linear-gradient(135deg,#f7931e,#e0281c)' }];
+const BGS = [{ id: '106018623298955', name: '純紫', type: 'solid', css: '#C600FF', text: '#FFFFFF' }, { id: '249307305544279', name: '紅→藍漸層', type: 'gradient', css: 'linear-gradient(to top right,#FF0047,#2C34C7)', text: '#FFFFFF' }];
 
 // 公司模式（假外殼＋假憑證）開排程發布
 async function openFb() {
@@ -191,7 +191,9 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   await frame.click('#bgSws .sw[data-bg="106018623298955"]');
   assert.equal(await frame.isVisible('#bgPrev'), true);
   assert.equal(await frame.textContent('#bgText'), '今天你投票了嗎？');
-  assert.equal(await frame.textContent('#bgName'), '紫');
+  assert.equal(await frame.textContent('#bgName'), '純紫');
+  assert.equal(await frame.evaluate(() => getComputedStyle(document.getElementById('bgPrev')).color), 'rgb(255, 255, 255)');
+  assert.equal(await frame.locator('#bgSws .bg-sep').count(), 2, '純色、漸層各一組');
   assert.match(await frame.textContent('#msgCount'), /^8／130 字/);
   await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
   await frame.click('#pages .chip[data-page="111"] .chip-l');
@@ -210,7 +212,7 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   await frame.click('#doneAgain');
   assert.equal(await frame.textContent('#bgName'), '無', '送出完成清空後回「無」');
   // 切到選套版：不帶 bg、字數不顯示 130
-  await frame.click('#bgSws .sw[data-bg="901751159967576"]');
+  await frame.click('#bgSws .sw[data-bg="249307305544279"]');
   await frame.click('#modeSeg [data-mode=image]');
   assert.doesNotMatch(await frame.textContent('#msgCount'), /130/);
   await page.close();

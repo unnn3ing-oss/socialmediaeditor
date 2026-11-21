@@ -48,7 +48,7 @@ route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: 
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
-route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, css }) => ({ id, name, css }))));
+route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, type, css, text }) => ({ id, name, type, css, text }))));
 
 route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   const ct = request.headers.get('content-type') || '';

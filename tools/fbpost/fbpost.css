@@ -157,6 +157,7 @@ body.no-scroll { overflow: hidden; }
 .bg-box .hint { margin: 6px 4px 0; }
 .bg-sws { margin: 0; }
 .bg-sws .sw { width: 34px; height: 34px; }
+.bg-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line-strong); }
 .bg-sws .sw.bg-none { background: #fff linear-gradient(to top right, transparent calc(50% - 1.5px), #d92d20 calc(50% - 1.5px), #d92d20 calc(50% + 1.5px), transparent calc(50% + 1.5px)); }
 .noimg { border: 1px dashed var(--line-strong); border-radius: var(--radius-card); padding: 28px 16px; text-align: center; color: var(--muted); background: var(--fill); margin: 0; }
 .swatches { margin: 12px 0 4px; }
