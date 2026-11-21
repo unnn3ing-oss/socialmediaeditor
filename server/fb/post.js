@@ -4,6 +4,7 @@ import { pageTokens, pageUtm } from './pages.js';
 import { commentText, postComment, MAX_LEAD as MAX_COMMENT_LEAD } from './comment.js';
 import { armTimer } from './timer.js';
 import { claimSend, finishSend } from './sends.js';
+import { BG_MAX_CHARS } from './bgpresets.js';
 
 export { commentLink, commentText } from './comment.js';
 
@@ -49,6 +50,9 @@ export function parsePostForm(fd) {
     file = image;
   }
   if (!message.trim() && !file) return null;
+  // 文字背景（只限純文字、≤130 字）；代號是否在清單由路由查 findBackground
+  const bg = fd.has('bg') ? String(fd.get('bg')) : '';
+  if (bg && (!/^\d{6,20}$/.test(bg) || file || [...message].length > BG_MAX_CHARS)) return null;
   let targets;
   try { targets = JSON.parse(String(fd.get('targets') || '')); } catch { return null; }
   if (!Array.isArray(targets) || targets.length < 1 || targets.length > 20) return null;
@@ -69,10 +73,10 @@ export function parsePostForm(fd) {
     try { retry = JSON.parse(String(fd.get('retry'))); } catch { return null; }
     if (!Array.isArray(retry) || !retry.every((id) => seen.has(id))) return null;
   }
-  return { message, link, lead, file, extras, sendId, retry, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  return { message, link, lead, file, bg, extras, sendId, retry, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
-async function publishOne(env, page, token, { message, file, at }) {
+async function publishOne(env, page, token, { message, file, bg, at }) {
   if (file) {
     if (at === null) {
       const fd = new FormData();
@@ -99,6 +103,7 @@ async function publishOne(env, page, token, { message, file, at }) {
     return String(d.id);
   }
   const params = at === null ? { message } : { message, published: 'false', scheduled_publish_time: at };
+  if (bg) params.text_format_preset_id = bg;
   const d = await graph(env, 'POST', '/' + page + '/feed', params, token);
   return String(d.id);
 }
@@ -128,7 +133,7 @@ export async function createPosts(env, form) {
       }
     }
     try {
-      r.postId = await publishOne(env, t.page, p.token, { message: form.message, file: form.file, at: t.at });
+      r.postId = await publishOne(env, t.page, p.token, { message: form.message, file: form.file, bg: form.bg, at: t.at });
       r.ok = true;
       if (sid) await finishSend(env, sid, t.page, 'ok', r.postId);
     } catch (e) {

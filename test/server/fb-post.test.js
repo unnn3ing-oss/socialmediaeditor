@@ -104,6 +104,40 @@ test('純文字（無圖）排程走 /feed；沒有文章網址 → 400', async 
   }
 });
 
+test('文字背景：純文字立即／排程帶 text_format_preset_id；沒選不帶', async (t) => {
+  const at = nowSec() + 3600;
+  const { f, env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_5' }), 'POST /111_5/comments': () => ({ id: 'C' }) });
+  const BG = '106018623298955';
+  assert.equal((await send(env, headers, { message: '短句', bg: BG, targets: JSON.stringify([{ page: '111', at: null }]) })).status, 200);
+  assert.equal(f.calls.filter((c) => c.path === '/111/feed').at(-1).body.text_format_preset_id, BG);
+  assert.equal((await send(env, headers, { message: '短句', bg: BG, targets: JSON.stringify([{ page: '111', at }]) })).status, 200);
+  const sch = f.calls.filter((c) => c.path === '/111/feed').at(-1).body;
+  assert.equal(sch.text_format_preset_id, BG);
+  assert.equal(sch.scheduled_publish_time, String(at));
+  await send(env, headers, { message: '沒背景', targets: JSON.stringify([{ page: '111', at: null }]) });
+  assert.equal(f.calls.filter((c) => c.path === '/111/feed').at(-1).body.text_format_preset_id, undefined);
+});
+
+test('文字背景：不在清單、超過 130 字、附圖 → 400，不呼叫臉書', async (t) => {
+  const { f, env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_5' }) });
+  const tg = JSON.stringify([{ page: '111', at: null }]);
+  assert.equal((await send(env, headers, { message: '短句', bg: '999999999', targets: tg })).status, 400);
+  assert.equal((await send(env, headers, { message: '字'.repeat(131), bg: '106018623298955', targets: tg })).status, 400);
+  assert.equal((await send(env, headers, { message: '字'.repeat(130), bg: 'abc', targets: tg })).status, 400);
+  assert.equal((await send(env, headers, { message: '短句', bg: '106018623298955', image: img(), targets: tg })).status, 400);
+  assert.ok(!f.calls.some((c) => c.path === '/111/feed' || c.path === '/111/photos'));
+});
+
+test('GET /fb/backgrounds：回清單（id、name、css）', async (t) => {
+  const { env, headers } = await setup(t, {});
+  const w = await load();
+  const r = await w.fetch(new Request('https://api.test/fb/backgrounds', { headers: { origin: ORIGIN, ...headers } }), env, { waitUntil() {} });
+  assert.equal(r.status, 200);
+  const list = (await r.json()).data;
+  assert.ok(list.length >= 10);
+  assert.ok(list.every((b) => /^\d+$/.test(b.id) && b.name && b.css));
+});
+
 test('立即發布第 1 則留言失敗：交給計時器重試，第 2、3 則排在它後面', async (t) => {
   const { env, headers } = await setup(t, {
     'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),

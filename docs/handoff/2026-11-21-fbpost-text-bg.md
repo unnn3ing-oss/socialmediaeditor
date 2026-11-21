@@ -17,16 +17,16 @@ Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `b
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/bgpresets.js`（新） | 預設清單＋`listBackgrounds`／`findBackground` | ⬜ |
-| `server/fb/index.js` | `GET /fb/backgrounds` | ⬜ |
+| `server/fb/bgpresets.js`（新） | 預設清單 15 個＋`listBackgrounds`／`findBackground` | ✅ |
+| `server/fb/index.js` | `GET /fb/backgrounds` | ✅ |
 | `server/fb/post.js` | `parsePostForm` 收 `bg`（有圖或 >130 字或不在清單 → 400）；`publishOne` 純文字帶 `text_format_preset_id` | ⬜ |
-| `tools/fbpost/index.html`／`compose.js`／`fbpost.css` | 純文字模式顯示背景區（預覽＋色塊，第一個「無」），隱藏切換 | ⬜ |
-| `tools/fbpost/send.js` | 送 `bg`；>130 字擋送出 | ⬜ |
-| 測試 | `test/server/fb-post.test.js`、`test/e2e/fbpost-compose.e2e.js` | ⬜ |
+| `tools/fbpost/index.html`／`compose.js`／`fbpost.css` | 純文字模式顯示背景區（預覽＋色塊，第一個「無」），隱藏切換 | ✅ |
+| `tools/fbpost/send.js` | 送 `bg`；>130 字擋送出 | ✅ |
+| 測試 | `test/server/fb-post.test.js`、`test/e2e/fbpost-compose.e2e.js` | ✅ |
 
 ## 下一步
-- [ ] 後端＋單元測試
-- [ ] 前端＋e2e、截圖給使用者
+- [x] 後端＋單元測試
+- [x] 前端＋e2e、截圖（npm test 743、fbpost e2e 60、build --check 通過）
 - [ ] 獨立審查
 - [ ] 使用者部署測試後端實測（立即／排程各一則，確認臉書顯示背景）
 

@@ -150,6 +150,14 @@ body.no-scroll { overflow: hidden; }
 .compose .right .lbl:first-child { margin-top: 0; }
 .lbl small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
 .lbl small.bad { color: var(--bad-text); font-weight: 600; }
+/* 純文字的臉書文字背景 */
+.bg-prev { aspect-ratio: 1 / 1; max-width: 100%; border-radius: var(--radius-card); display: flex; align-items: center; justify-content: center; padding: 36px; color: #fff; overflow: hidden; }
+.bg-prev p { margin: 0; font-weight: 700; line-height: 1.3; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 100%; overflow: hidden; }
+.bg-box { margin: 12px 0 4px; }
+.bg-box .hint { margin: 6px 4px 0; }
+.bg-sws { margin: 0; }
+.bg-sws .sw { width: 34px; height: 34px; }
+.bg-sws .sw.bg-none { background: #fff linear-gradient(to top right, transparent calc(50% - 1.5px), #d92d20 calc(50% - 1.5px), #d92d20 calc(50% + 1.5px), transparent calc(50% + 1.5px)); }
 .noimg { border: 1px dashed var(--line-strong); border-radius: var(--radius-card); padding: 28px 16px; text-align: center; color: var(--muted); background: var(--fill); margin: 0; }
 .swatches { margin: 12px 0 4px; }
 .post-body .hint { margin: 6px 0 0; }

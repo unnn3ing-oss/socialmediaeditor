@@ -1,6 +1,7 @@
 // 送出：組 FormData（圖、內文、文章網址、留言文字、各粉專目標）→ /fb/post → 排入 RD → 顯示每個粉專的結果
 // 全部粉專成功＝清空頁面、跳「送出完成」（再發一則／返回列表）；有任一失敗＝結果留在頁面、不清空
 import { $, fmt, errText, COMMENT, confirmBox, copyText, stripLead } from './util.js';
+import { BG_MAX } from './compose.js';
 
 const newSendId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
@@ -62,6 +63,8 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
       const image = await composer.image();
       const msg = stripLead($('msg').value);   // 開頭留給小編文的空行沒填就拿掉
       if (!msg.trim() && !image) { err.textContent = '請輸入貼文內容，或貼上網址帶入照片。'; return; }
+      const bg = image ? '' : composer.bg();
+      if (bg && [...msg].length > BG_MAX) { err.textContent = `有文字背景的貼文最多 ${BG_MAX} 字（目前 ${[...msg].length} 字），請縮短內容或把背景改成「無」。`; return; }
       // 純文字（沒附圖）用各粉專的「文字」UTM；沒設定的提醒一下（留言連結不會加 UTM）
       if (!image) {
         const miss = c.targets.map((t) => targets.page(t.page)).filter((p) => p && p.noTextUtm).map((p) => p.short);
@@ -82,6 +85,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack }) {
       }
       if (extra.comments.length) fd.append('comments', JSON.stringify(extra.comments));
       if (image) fd.append('image', image, image.name);
+      if (bg) fd.append('bg', bg);
       fd.append('targets', JSON.stringify(c.targets));
       const sentAt = Date.now();
       const data = await tb.api.call('/fb/post', { method: 'POST', body: fd });

@@ -19,6 +19,7 @@ const ARTICLE = `<html><head><meta property="og:title" content="${TITLE}"><meta 
 <meta name="keywords" content="監視器,吃到飽,詐欺,很長很長的標籤"></head><body><article><h1>${TITLE}</h1>
 <figure><img src="${IMG_URL}"><figcaption>（圖／TVBS）</figcaption></figure><p>內文</p></article></body></html>`;
 const PHOTO = fakeAsset([60, 170, 90]);
+const BGS = [{ id: '106018623298955', name: '紫', css: '#8a3ffc' }, { id: '901751159967576', name: '橘紅漸層', css: 'linear-gradient(135deg,#f7931e,#e0281c)' }];
 
 // 公司模式（假外殼＋假憑證）開排程發布
 async function openFb() {
@@ -33,6 +34,7 @@ async function openFb() {
     if (p.startsWith('/assets/')) return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset() });
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
+    if (p === '/fb/backgrounds') return json(BGS);
     if (p === '/fetch/article') {
       const url = u.searchParams.get('url'); articles.push(url);
       if (/slow/.test(url)) await new Promise((res) => setTimeout(res, 1500));
@@ -176,6 +178,41 @@ test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍�
   assert.doesNotMatch(body, /name="image"/, '純文字不附圖');
   assert.match(body, /name="message"\r\n\r\n只有文字/);
   assert.doesNotMatch(body, /name="commentLead"/, '留言內容沒輸入就不送，後端用預設文字');
+  await page.close();
+});
+
+test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg；超過 130 字擋送出；清空回「無」', async () => {
+  const { page, frame, posts } = await openFb();
+  await frame.click('#modeSeg [data-mode=text]');
+  await frame.waitForSelector('#bgBox:not([hidden])');
+  assert.equal(await frame.locator('#bgSws .sw').count(), 3, '「無」＋2 個背景');
+  assert.equal(await frame.isHidden('#bgPrev'), true, '預設無背景');
+  await frame.fill('#msg', '\n今天你投票了嗎？');
+  await frame.click('#bgSws .sw[data-bg="106018623298955"]');
+  assert.equal(await frame.isVisible('#bgPrev'), true);
+  assert.equal(await frame.textContent('#bgText'), '今天你投票了嗎？');
+  assert.equal(await frame.textContent('#bgName'), '紫');
+  assert.match(await frame.textContent('#msgCount'), /^8／130 字/);
+  await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
+  await frame.click('#pages .chip[data-page="111"] .chip-l');
+  // 超過 130 字：字數變紅、擋送出
+  await frame.fill('#msg', '字'.repeat(131));
+  assert.match(await frame.getAttribute('#msgCount', 'class'), /\bbad\b/);
+  await frame.click('#sendBtn');
+  await frame.waitForFunction(() => /最多 130 字（目前 131 字）/.test(document.getElementById('sendErr').textContent));
+  assert.equal(posts.length, 0);
+  await frame.fill('#msg', '短句');
+  await frame.click('#sendBtn');
+  await frame.waitForSelector('#doneList li');
+  const body = posts[0].toString('utf8');
+  assert.match(body, /name="bg"\r\n\r\n106018623298955/);
+  assert.doesNotMatch(body, /name="image"/);
+  await frame.click('#doneAgain');
+  assert.equal(await frame.textContent('#bgName'), '無', '送出完成清空後回「無」');
+  // 切到選套版：不帶 bg、字數不顯示 130
+  await frame.click('#bgSws .sw[data-bg="901751159967576"]');
+  await frame.click('#modeSeg [data-mode=image]');
+  assert.doesNotMatch(await frame.textContent('#msgCount'), /130/);
   await page.close();
 });
 

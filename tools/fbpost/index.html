@@ -135,7 +135,15 @@
               <div class="fx-hint" id="fxHint"></div>
             </div>
           </div>
-          <p class="noimg" id="noImg" hidden>純文字：這則貼文不附圖，只發貼文內容。</p>
+          <div id="noImg" hidden>
+            <div class="bg-prev" id="bgPrev" hidden><p id="bgText"></p></div>
+            <p class="noimg" id="noImgTxt">純文字：這則貼文不附圖，只發貼文內容。</p>
+            <div class="bg-box" id="bgBox" hidden>
+              <div class="sw-head"><strong>文字背景</strong><span id="bgName">無</span></div>
+              <div class="swatches bg-sws" id="bgSws" role="group" aria-label="文字背景"></div>
+              <p class="hint">有背景時最多 130 字；顏色是近似預覽，實際以臉書為準。</p>
+            </div>
+          </div>
         </div>
         <div class="right">
           <div class="link-box">

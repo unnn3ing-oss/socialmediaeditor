@@ -8,6 +8,7 @@ import { GraphError, checkAppCred, graph } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
+import { listBackgrounds, findBackground } from './bgpresets.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
@@ -47,6 +48,8 @@ route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: 
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
+route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, css }) => ({ id, name, css }))));
+
 route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   const ct = request.headers.get('content-type') || '';
   if (!ct.includes('multipart/form-data')) return fail(request, env, 'bad_request');
@@ -56,6 +59,7 @@ route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   try { fd = await new Response(buf, { headers: { 'content-type': ct } }).formData(); } catch { return fail(request, env, 'bad_request'); }
   const form = parsePostForm(fd);
   if (!form) return fail(request, env, 'bad_request');
+  if (form.bg && !(await findBackground(env, form.bg))) return fail(request, env, 'bad_request');
   const results = await createPosts(env, form);
   for (const r of results) {
     if (r.ok && !r.dup) await audit(env, me.who, r.scheduled ? 'schedule' : 'publish', r.page, r.postId || '', r.scheduled && r.at ? 'at=' + r.at : '');

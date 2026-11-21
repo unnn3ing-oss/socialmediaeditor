@@ -12,6 +12,7 @@ import {
 import { createFxKit } from '../../ui/compose/fx.js';
 
 const MAX_IMAGES = 3;
+export const BG_MAX = 130;                          // 臉書文字背景貼文字數上限
 export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級（只用在排程發布）
 const ARTICLE_RE = /^https?:\/\/\S+\/\d{6,9}\/?(?:[?#]\S*)?$/i;   // 打完一個新聞網址（結尾是文章編號）就自動帶入
 
@@ -73,8 +74,44 @@ export function createComposer({ tb, assets }) {
   $('fxBtn').addEventListener('click', () => { const open = $('fxBar').hidden; $('fxBar').hidden = !open; $('fxBtn').setAttribute('aria-expanded', String(open)); if (open) editor.sync(); });
   // 標題、貼文內容：最少 4 行，內容多就往下長（不出現框內捲軸）
   const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`; };
-  // 字數只算實際送出的內容（開頭留給小編文的空行沒填，送出時會拿掉）
-  const msgCount = () => { $('msgCount').textContent = `${[...stripLead($('msg').value)].length} 字`; if ($('msg').offsetParent) grow($('msg')); };
+  // ---- 純文字的臉書文字背景（清單由後端 /fb/backgrounds 給；讀不到就不顯示）----
+  let bgs = [];
+  st.bg = '';
+  const bgOn = () => (st.mode === 'text' && bgs.some((b) => b.id === st.bg) ? st.bg : '');
+  function bgShow() {
+    const b = bgs.find((x) => x.id === st.bg);
+    $('bgPrev').hidden = !b; $('noImgTxt').hidden = !!b;
+    $('bgName').textContent = b ? b.name : '無';
+    if (b) {
+      const t = stripLead($('msg').value).trim(), n = [...t].length;
+      $('bgPrev').style.background = b.css;
+      $('bgText').textContent = t || '貼文內容會顯示在這裡';
+      $('bgText').style.fontSize = n <= 40 ? '30px' : n <= 85 ? '24px' : '19px';
+    }
+    for (const el of $('bgSws').children) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
+  }
+  function bgButton(id, name, css) {
+    const el = document.createElement('button');
+    el.type = 'button'; el.className = 'sw' + (id ? '' : ' bg-none'); el.dataset.bg = id; el.title = name; el.setAttribute('aria-label', '文字背景 ' + name);
+    if (css) el.style.background = css;
+    return el;
+  }
+  $('bgSws').addEventListener('click', (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); });
+  Promise.resolve().then(() => tb.api.call('/fb/backgrounds')).then((list) => {
+    bgs = (Array.isArray(list) ? list : []).filter((b) => b && /^\d+$/.test(b.id) && b.name && b.css);
+    if (!bgs.length) return;
+    $('bgSws').append(bgButton('', '無', ''), ...bgs.map((b) => bgButton(b.id, b.name, b.css)));
+    $('bgBox').hidden = false; msgCount();
+  }).catch(() => {});
+
+  // 字數只算實際送出的內容（開頭留給小編文的空行沒填，送出時會拿掉）；選了背景顯示「N／130 字」，超過變紅
+  const msgCount = () => {
+    const n = [...stripLead($('msg').value)].length, bg = bgOn();
+    $('msgCount').textContent = bg ? `${n}／${BG_MAX} 字（文字背景）` : `${n} 字`;
+    $('msgCount').classList.toggle('bad', !!bg && n > BG_MAX);
+    bgShow();
+    if ($('msg').offsetParent) grow($('msg'));
+  };
   // 視窗原本隱藏量不到高度：打開（尺寸改變）時再算一次；程式填值走 msgCount／titleChanged
   for (const id of ['title', 'msg']) { $(id).addEventListener('input', () => grow($(id))); new ResizeObserver(() => { if ($(id).offsetParent) grow($(id)); }).observe($(id)); }
   $('msg').addEventListener('input', msgCount); msgCount();
@@ -116,7 +153,7 @@ export function createComposer({ tb, assets }) {
     $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
     $('swatchBox').hidden = st.mode !== 'color';
     if (st.mode === 'color') requestAnimationFrame(showColor);
-    draw(); syncFx();
+    draw(); syncFx(); msgCount();
   }
   const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
   const setFrame = segmented($('frameSeg'), 'frame', (v) => { st.frame = v; draw(); });
@@ -303,7 +340,7 @@ export function createComposer({ tb, assets }) {
     reset() {
       if (titleEd) titleEd.end();
       $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = ''; msgCount();
-      st.photo = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = '';
+      st.photo = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = '';
       say('pullHint', '');
       titleChanged(); showMode();
     },
@@ -317,6 +354,7 @@ export function createComposer({ tb, assets }) {
       if (!blob) throw new Error('產生圖片失敗');
       return new File([blob], 'fbpost.png', { type: 'image/png' });
     },
-    mode: () => st.mode
+    mode: () => st.mode,
+    bg: bgOn   // 送出用的文字背景代號（只有純文字模式；沒選＝''）
   };
 }
