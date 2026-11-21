@@ -19,6 +19,10 @@
 | tools/fbpost/fbpost.css、targets.js／共用 | 粉專列左右滑 | ✅ |
 | ui/compose/render.js | 新增 8 色 | ✅ |
 
+## 結果
+- npm test 754、全部 e2e 261、獨立審查通過（Minor：選中項目捲到邊緣被淡出 4px → reveal 邊距改 32px 已修）
+- [ ] 使用者確認後說「推」才併 main
+
 ## 測試
 npm test；fbpost、fbpost-compose、pattern 相關 e2e；全部 e2e 整合時跑一次；build --check。
 

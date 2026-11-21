@@ -71,8 +71,8 @@ export function hscroll(el) {
   const reveal = (child) => {
     if (!child || !el.clientWidth) return;
     const l = child.offsetLeft - el.offsetLeft, r = l + child.offsetWidth;
-    if (l < el.scrollLeft) el.scrollLeft = Math.max(0, l - 24);
-    else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 24;
+    if (l < el.scrollLeft) el.scrollLeft = Math.max(0, l - 32);
+    else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 32;   // 多留過淡出寬度（28px），選到的不會被淡掉
     sync();
   };
   el.addEventListener('scroll', sync, { passive: true });
