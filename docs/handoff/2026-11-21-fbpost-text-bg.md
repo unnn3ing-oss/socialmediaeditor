@@ -11,6 +11,8 @@
 | 第一版範圍 | 只放純色＋漸層（Publer 清單中描述為 Solid／Gradient 者，同描述只取一個），插畫類之後再加 | CSS 畫得出近似預覽 |
 | 預覽 | 近似色，標示「實際以臉書為準」 | 臉書沒公開色碼 |
 | 清空頁面 | 背景回「無」 | 避免下一則誤帶 |
+| **清單改用臉書實際資料（第 1 階段，2026-11-21）** | 使用者從自己粉專發文框擷取 77 組（7 純色／4 漸層／66 圖樣），存 `server/fb/bgpresets.data.js`（JSON 原樣）；只開放純色＋漸層 11 個，用實際色碼、文字色、漸層方向；移除 Publer 清單中臉書選單已沒有的 7 個代號 | Publer 清單有 7 個疑似下架 |
+| 圖樣類（第 3 階段，實測成功後另開對話） | 擷取腳本輸出完整圖片網址 → 管理頁貼上 → 後端分批（每批 10，免費方案 50 個子請求上限）下載存 R2 `fbbg/<代號>.jpg` → 登入才可讀；與 ①B 合併 | 臉書 CDN 網址帶 oh／oe 簽章會過期；圖不進 repo |
 
 Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `bgpresets.js`。
 
@@ -25,6 +27,7 @@ Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `b
 | 測試 | `test/server/fb-post.test.js`、`test/e2e/fbpost-compose.e2e.js` | ✅ |
 
 ## 下一步
+- [ ] 第 1 階段：`bgpresets.data.js`＋`bgpresets.js` 改讀資料（回 id、name、type、css、text）、前端套文字色與分組、擷取腳本放 `docs/fb-text-backgrounds/`、測試
 - [x] 後端＋單元測試
 - [x] 前端＋e2e、截圖（npm test 743、fbpost e2e 60、build --check 通過）
 - [x] 獨立審查（修正後通過：後端計字 CRLF 修正 `2b65ccc`）
