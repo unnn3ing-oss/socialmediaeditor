@@ -29,7 +29,7 @@
 - [x] 後端＋單元測試（`test/server/fb-bg.test.js` 5 項）
 - [x] 管理頁＋e2e（admin e2e 33）
 - [x] 排程發布＋e2e、截圖（fbpost-compose 24、fbpost＋legal＋company 54；npm test 752、build --check）
-- [ ] 獨立審查
+- [x] 獨立審查（通過，無修改；Minor：無 content-length 時先讀完才判斷大小，來源限 fbcdn 風險低）
 
 ## 注意事項
 - 後端需重新部署（正式＋測試），自動建表；外掛不升版。
