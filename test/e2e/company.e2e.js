@@ -18,7 +18,7 @@ test.after(async () => { await browser.close(); await srv.close(); });
 
 // 假後端：A123 已設密碼（pw-12345）、N9 第一次登入（設定碼 123456）、S1 系統管理者（已設密碼）
 //   api.statusCode 控制 /auth/status；api.authDown 讓 /auth 連不上
-const STAFF = { A123: { name: '王小明', group: '小編組', level: 'user', pw: 'pw-12345' }, N9: { name: '新同事', group: '小編組', level: 'user', pw: null }, S1: { name: '莊鈞評', group: '管理', level: 'sys', pw: 'pw-sys-1' } };
+const STAFF = { A123: { name: '王小明', group: '小編組', level: 'staff', pw: 'pw-12345' }, N9: { name: '新同事', group: '小編組', level: 'staff', pw: null }, S1: { name: '莊鈞評', group: '管理', level: 'sys', pw: 'pw-sys-1' } };
 async function open(vp = { width: 1280, height: 820 }) {
   const ctx = await browser.newContext({ viewport: vp });
   const page = await ctx.newPage();
@@ -108,7 +108,7 @@ test('登入：員工編號 → 下一步 → 密碼；右上角「公司模式 
   assert.deepEqual(api.bodies, [{ staffId: 'A123' }, { staffId: 'A123', password: 'pw-12345' }]);
   assert.equal((await acctText(page)).replace(/\s/g, ''), '公司模式王小明');
   assert.equal(await page.isVisible('#company-dialog'), false);
-  assert.deepEqual(await page.evaluate(() => window.tbxShell.company().staff), { id: 'A123', name: '王小明', group: '小編組', level: 'user' });
+  assert.deepEqual(await page.evaluate(() => window.tbxShell.company().staff), { id: 'A123', name: '王小明', group: '小編組', level: 'staff' });
   assert.equal(await page.evaluate(() => localStorage.getItem('tbx.staffId')), 'A123');
   await page.reload();
   await page.waitForFunction(() => /王小明/.test(document.getElementById('company-btn').textContent));
@@ -218,7 +218,7 @@ test('cancel keeps locked', async () => {
   await page.waitForSelector('#company-dialog[open]');
 });
 
-test('帳號彈窗：姓名、層級、員工編號、分機、解鎖有效、通知；一般員工沒有管理頁與切到測試後端；Esc 關閉焦點回按鈕；登出', async () => {
+test('帳號彈窗：姓名、權限組、員工編號、分機、解鎖有效、通知；一般員工沒有管理頁與切到測試後端；Esc 關閉焦點回按鈕；登出', async () => {
   const { page } = await open();
   await unlock(page);
   await page.waitForSelector('#toolbar button[data-tool=secret]', { state: 'attached' });
@@ -226,7 +226,7 @@ test('帳號彈窗：姓名、層級、員工編號、分機、解鎖有效、�
   await page.waitForSelector('#acct-pop:not([hidden])');
   assert.equal(await page.getAttribute('#company-btn', 'aria-expanded'), 'true');
   assert.equal(await page.textContent('#acct-pop .acct-name'), '王小明');
-  assert.equal(await page.textContent('#acct-pop .acct-lv'), '普通');
+  assert.equal(await page.textContent('#acct-pop .acct-lv'), '小編組');
   assert.equal(await page.textContent('#acct-pop dd[data-k=id]'), 'A123');
   await page.waitForFunction(() => document.querySelector('#acct-pop dd[data-k=contact]').textContent === '#12345');
   assert.match(await page.textContent('#acct-pop dd[data-k=exp]'), /剩 30 天/);

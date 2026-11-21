@@ -41,10 +41,13 @@ const groupId = (d, name) => d.groups.find((g) => g.name === name).id;
 
 test('管理 API：要管理憑證；預設 3 組權限組；新增驗證、編號轉大寫、不能重複', async (t) => {
   const { env, adm } = await setup(t);
+  const { PERMS } = await sm();
   assert.equal((await call(env, '/admin/staff')).status, 401);
   const { body } = await call(env, '/admin/staff', { headers: adm });
-  assert.deepEqual(body.data.groups.map((g) => [g.name, g.perms]), [['管理', ['view', 'post', 'edit', 'delete', 'bypass']], ['發文', ['view', 'post', 'edit', 'delete']], ['檢視', ['view']]]);
-  assert.equal(body.data.perms.length, 5);
+  assert.deepEqual(body.data.groups.map((g) => [g.name, g.perms]), [['管理', PERMS], ['發文', ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report']], ['檢視', ['view', 'vview', 'report']]]);
+  assert.equal(body.data.perms.length, PERMS.length);
+  assert.deepEqual(body.data.sections.flatMap((x) => x.keys), PERMS, '分區涵蓋全部權限、順序一致');
+  assert.ok(PERMS.includes('card:pages') && !PERMS.includes('card:groups') && !PERMS.includes('card:levels'), '管理頁卡片：只有非敏感卡片可勾');
   const g = groupId(body.data, '發文');
   assert.equal((await post(env, adm, '/admin/staff', { id: 'a 1', name: '甲', group: g })).status, 400);
   assert.equal((await post(env, adm, '/admin/staff', { id: 'A1', name: '', group: g })).status, 400);
@@ -65,13 +68,13 @@ test('員工編號登入：名單內才發憑證（帶 uid、轉大寫）、記�
   assert.equal(bad.body.ok, false); assert.equal(bad.body.code, 'bad_staff');
   const r = await login(env, 't1');
   assert.equal(r.body.ok, true);
-  assert.deepEqual(r.body.data.staff, { id: 'T1', name: '王小明', group: '發文', level: 'user' });
+  assert.deepEqual(r.body.data.staff, { id: 'T1', name: '王小明', group: '發文', level: 'staff' });
   assert.equal(r.body.data.manage, false);
   const { readToken } = await tok();
   assert.equal((await readToken(env.SESSION_SECRET, r.body.data.token, nowSec())).uid, 'T1');
   const st = await call(env, '/auth/status', { headers: bearer(r.body.data.token) });
-  assert.deepEqual(st.body.data.staff, { id: 'T1', name: '王小明', group: '發文', level: 'user' });
-  assert.equal(st.body.data.manage, false, '普通預設沒有卡片');
+  assert.deepEqual(st.body.data.staff, { id: 'T1', name: '王小明', group: '發文', level: 'staff' });
+  assert.equal(st.body.data.manage, false, '發文組沒有任何 card: 就沒有管理頁入口');
   assert.ok((await call(env, '/admin/staff', { headers: adm })).body.data.staff[0].lastLogin > 0);
   // 停用後不能登入
   await post(env, adm, '/admin/staff/T1', { enabled: false });
@@ -115,7 +118,7 @@ test('權限組：檢視組不能發文／改時間／刪除；/fb/me 回權限�
   await post(env, adm, '/admin/staff', { id: 'V1', name: '看', group: groupId(d, '檢視') });
   const h = bearer((await login(env, 'V1')).body.data.token);
   const me = await call(env, '/fb/me', { headers: h });
-  assert.deepEqual(me.body.data, { admin: false, id: 'V1', name: '看', group: '檢視', perms: ['view'], mode: 'company', tokenWarn: null });
+  assert.deepEqual(me.body.data, { admin: false, id: 'V1', name: '看', group: '檢視', perms: ['view', 'vview', 'report'], mode: 'company', tokenWarn: null });
   const fd = new FormData(); fd.set('message', 'x');
   const w = await load();
   const rp = await w.fetch(new Request('https://api.test/fb/post', { method: 'POST', headers: { origin: ORIGIN, ...h }, body: fd }), env, { waitUntil() {} });
@@ -191,11 +194,11 @@ test('分機：自己讀寫 /staff/me、格式驗證、只能改自己；公司�
   const { signToken } = await tok();
   assert.equal((await call(env, '/staff/me', { headers: bearer(await signToken(env.SESSION_SECRET, 'company', nowSec() + 600)) })).status, 401, '沒有員工編號的舊公司憑證無效');
   const h = bearer((await login(env, 'C2')).body.data.token);
-  assert.deepEqual((await call(env, '/staff/me', { headers: h })).body.data, { id: 'C2', name: '乙', group: '檢視', contact: '', level: 'user' });
+  assert.deepEqual((await call(env, '/staff/me', { headers: h })).body.data, { id: 'C2', name: '乙', group: '檢視', contact: '', level: 'staff' });
   assert.equal((await post(env, h, '/staff/me', { contact: '1'.repeat(31) })).status, 400);
   assert.equal((await post(env, h, '/staff/me', { contact: '<b>' })).status, 400);
   const saved = await post(env, h, '/staff/me', { contact: '#12345', id: 'C1', name: '改名' });
-  assert.deepEqual(saved.body.data, { id: 'C2', name: '乙', group: '檢視', contact: '#12345', level: 'user' }, '只改自己的分機，不能改姓名或別人');
+  assert.deepEqual(saved.body.data, { id: 'C2', name: '乙', group: '檢視', contact: '#12345', level: 'staff' }, '只改自己的分機，不能改姓名或別人');
   const list = (await call(env, '/admin/staff', { headers: adm })).body.data.staff;
   assert.deepEqual(list.map((s) => [s.id, s.contact]), [['C1', '0912-345-678'], ['C2', '#12345']]);
   assert.equal((await post(env, adm, '/admin/staff/C2', { contact: '' })).body.data.staff[1].contact, '');
@@ -208,4 +211,40 @@ test('舊的 staff 表沒有 contact 欄：自動補上', async (t) => {
   env.DB.raw.prepare("INSERT INTO staff (id, name, grp, enabled, created, updated) VALUES ('OLD', '舊', 1, 1, 1, 1)").run();
   const r = await call(env, '/admin/staff', { headers: adm });
   assert.equal(r.status, 200); assert.equal(r.body.data.staff[0].contact, '');
+});
+
+test('影片發布／數據報表／Rundown 的權限：vview／vpost／report 各自獨立；Rundown 任一 post 或 vpost 即可；系統管理者全有', async (t) => {
+  const { env, adm } = await setup(t);
+  const { PERMS, CARD_PERMS, findStaff } = await sm();
+  const { GRANTABLE } = await import('../../server/core/levels.js');
+  assert.deepEqual([...CARD_PERMS].sort(), GRANTABLE.map((k) => 'card:' + k).sort(), '每張可勾卡片都有權限 key');
+  await post(env, adm, '/admin/fb/access', { mode: 'company' });
+  const mk = async (id, perms) => {
+    const g = await post(env, adm, '/admin/staff-groups', { name: 'g' + id, perms });
+    const gid = g.body.data.groups.find((x) => x.name === 'g' + id).id;
+    assert.equal((await post(env, adm, '/admin/staff', { id, name: id, group: gid })).status, 200);
+    return bearer((await login(env, id)).body.data.token);
+  };
+  const code = async (h, path, method = 'GET', body = null) => (await call(env, path, { method, headers: h, ...(body ? { body: JSON.stringify(body) } : {}) })).body.code;
+  const rpt = '/fb/reports/posts?page=111&from=2026-11-01&to=2026-11-02';
+  const onlyView = await mk('O1', ['view']);   // 舊版只有排程發布檢視：影片、報表都不行
+  assert.equal(await code(onlyView, '/fb/video/settings'), 'fb_no_perm');
+  assert.equal(await code(onlyView, '/fb/video/jobs'), 'fb_no_perm');
+  assert.equal(await code(onlyView, rpt), 'fb_no_perm');
+  const vv = await mk('O2', ['vview']);
+  assert.notEqual(await code(vv, '/fb/video/settings'), 'fb_no_perm');
+  assert.equal(await code(vv, '/fb/video/start', 'POST', {}), 'fb_no_perm', '只有檢視不能上傳');
+  assert.equal(await code(vv, '/rundown', 'POST', { items: [] }), 'fb_no_perm');
+  const vp = await mk('O3', ['vpost']);
+  assert.notEqual(await code(vp, '/fb/video/start', 'POST', {}), 'fb_no_perm');
+  assert.equal(await code(vp, '/fb/video/settings'), 'fb_no_perm', 'vpost 不含 vview（要另外勾）');
+  assert.notEqual(await code(vp, '/rundown', 'POST', { items: [] }), 'fb_no_perm', 'Rundown：vpost 即可');
+  const po = await mk('O4', ['post']);
+  assert.notEqual(await code(po, '/rundown', 'POST', { items: [] }), 'fb_no_perm', 'Rundown：post 即可');
+  assert.equal(await code(po, '/fb/video/start', 'POST', {}), 'fb_no_perm', 'post 不能上傳影片');
+  const rp = await mk('O5', ['report']);
+  assert.notEqual(await code(rp, rpt), 'fb_no_perm');
+  assert.equal(await code(rp, '/fb/scheduled?page=111'), 'fb_no_perm', 'report 不含排程發布檢視');
+  env.SYS_STAFF_ID = 'SYS9';
+  assert.deepEqual((await findStaff(env, 'SYS9')).perms, PERMS, '系統管理者 perms＝全部');
 });

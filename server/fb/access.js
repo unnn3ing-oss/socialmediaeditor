@@ -37,9 +37,8 @@ export async function setAccessState(env, { mode, reason }) {
 }
 
 export const ADMIN_WHO = { uid: 'ADMIN', name: '管理員' };
-const ALL_PERMS = ['view', 'post', 'edit', 'delete', 'bypass'];
 
-// 目前登入者：{ who:{uid,name}, admin, staff, perms, mode, reason }；需要 need 權限（null＝名單內即可）
+// 目前登入者：{ who:{uid,name}, admin, staff, perms, mode, reason }；需要 need 權限（null＝名單內即可；陣列＝其中任一個即可）
 // 不通過回 { denied: Response }
 export async function fbAccess(request, env, need = null) {
   const t = await bearer(request, env, 'company');
@@ -50,6 +49,6 @@ export async function fbAccess(request, env, need = null) {
   // 系統管理者（SYS_STAFF_ID）：等同舊版首頁管理員，全部權限、關閉時也能用，操作紀錄記本人
   if (t.staff.level === 'sys') return { who: { uid: t.staff.id, name: t.staff.name }, admin: true, staff: t.staff, perms, mode: st.mode, reason: st.reason };
   if (st.mode !== 'company' && !perms.includes('bypass')) return { denied: fail(request, env, 'fb_forbidden', undefined, { reason: st.reason }) };
-  if (need && !perms.includes(need)) return { denied: fail(request, env, 'fb_no_perm') };
+  if (need && !(Array.isArray(need) ? need : [need]).some((p) => perms.includes(p))) return { denied: fail(request, env, 'fb_no_perm') };
   return { who: { uid: t.staff.id, name: t.staff.name }, admin: false, staff: t.staff, perms, mode: st.mode, reason: st.reason };
 }

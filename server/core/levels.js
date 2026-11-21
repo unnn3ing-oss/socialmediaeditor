@@ -1,6 +1,6 @@
-// 管理頁層級：系統管理者（管理員密碼）／管理者（mgr）／普通（user）。
-//   卡片清單、敏感卡片、預設分配；勾選表存 D1 fb_settings k='admin_levels'（{ mgr:[], user:[] }），讀不到或壞掉用預設。
-//   不變式（存與讀都強制）：不含 'levels'；普通 ⊆ 管理者。
+// 管理頁卡片定義（卡片清單、敏感卡片、可勾給權限組的卡片）。
+//   管理頁能看到哪些卡片由「權限組」決定（權限 card:<key>，見 staff.js）；系統管理者（SYS_STAFF_ID）另有敏感卡片（輸入管理員密碼解鎖後）。
+//   舊版「層級權限」（D1 fb_settings k='admin_levels'）只在第一次升級搬移權限組時讀一次（staff.js migratePerms），之後不再使用。
 import { ensureSettings } from './once.js';
 export const CARDS = [
   { key: 'access', name: '排程發布 開放／關閉', sensitive: true, locked: true },
@@ -19,54 +19,28 @@ export const CARDS = [
   { key: 'audit', name: '操作紀錄' },
   { key: 'rundown', name: 'Rundown 連線' },
   { key: 'assets', name: '素材設定' },
-  { key: 'logs', name: '錯誤日誌' },
-  { key: 'levels', name: '層級權限', sensitive: true, locked: true }
+  { key: 'logs', name: '錯誤日誌' }
 ];
 export const CARD_KEYS = CARDS.map((c) => c.key);
 export const SENSITIVE = CARDS.filter((c) => c.sensitive).map((c) => c.key);
-// 可以勾給管理者／普通的卡片（levels 永遠只有系統管理者）
-export const GRANTABLE = CARDS.filter((c) => !c.locked).map((c) => c.key);
-export const LEVELS = ['user', 'mgr'];
-export const LEVEL_NAMES = { sys: '系統管理者', mgr: '管理者', user: '普通' };
+// 可以勾進權限組的卡片（非敏感、非 locked）；敏感卡片只有系統管理者
+export const GRANTABLE = CARDS.filter((c) => !c.locked && !c.sensitive).map((c) => c.key);
+export const LEVEL_NAMES = { sys: '系統管理者' };
+// 舊版層級預設（只供升級搬移：讀不到 admin_levels 時用）
 export const DEFAULT_LEVELS = {
   mgr: ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'audit', 'rundown', 'assets', 'logs'],
   user: []
 };
-const KEY = 'admin_levels';
 
-const clean = (v) => (Array.isArray(v) ? GRANTABLE.filter((k) => v.includes(k)) : null);
-
-// 套用不變式；raw 某一層壞掉就用那層的預設
-export function normLevels(raw) {
-  const r = raw && typeof raw === 'object' ? raw : {};
-  const mgr = clean(r.mgr) || DEFAULT_LEVELS.mgr.slice();
-  const user = (clean(r.user) || DEFAULT_LEVELS.user.slice()).filter((k) => mgr.includes(k));
-  return { mgr, user };
-}
-
-export async function readLevels(env) {
+// 升級搬移用：讀舊版 admin_levels（壞掉或沒有用預設）；{ mgr, user }（只留可勾卡片）
+export async function readOldLevels(env) {
   let raw = null;
   try {
-    const row = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(KEY).first();
+    await ensureSettings(env);
+    const row = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind('admin_levels').first();
     if (row) raw = JSON.parse(row.v);
   } catch { raw = null; }
-  return normLevels(raw);
-}
-
-// 存檔：普通勾的自動併入管理者；回傳實際存的值
-export async function saveLevels(env, body) {
-  const mgr = clean(body && body.mgr), user = clean(body && body.user);
-  if (!mgr || !user) return null;
-  const v = normLevels({ mgr: GRANTABLE.filter((k) => mgr.includes(k) || user.includes(k)), user });
-  await ensureSettings(env);
-  await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
-    .bind(KEY, JSON.stringify(v), Date.now()).run();
-  return v;
-}
-
-// 某層級（'sys'／'mgr'／'user'）可用的卡片；系統管理者（未解鎖）＝全部非敏感卡片
-export async function cardsFor(env, level) {
-  if (level === 'sys') return CARD_KEYS.filter((k) => !SENSITIVE.includes(k));
-  const lv = await readLevels(env);
-  return level === 'mgr' ? lv.mgr : lv.user;
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const clean = (v, def) => (Array.isArray(v) ? GRANTABLE.filter((k) => v.includes(k)) : def.slice());
+  return { mgr: clean(r.mgr, DEFAULT_LEVELS.mgr), user: clean(r.user, DEFAULT_LEVELS.user) };
 }
