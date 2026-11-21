@@ -54,6 +54,7 @@
     <span class="who" id="whoAmI" hidden></span>
     <span class="pill warn test-pill">測試模式（僅管理員）</span>
     <button type="button" class="btn btn-secondary btn-sm" id="pagesRefresh">重新整理粉專</button>
+    <button type="button" class="btn btn-secondary btn-sm duty-btn" id="dutyBtn">值班粉專</button>
     <span class="grow"></span>
     <button type="button" class="btn btn-primary new-btn" id="newBtn">＋ 新增發文</button>
   </header>
@@ -213,6 +214,17 @@
   <div class="actions">
     <button type="button" class="btn btn-secondary" id="doneBack">返回列表</button>
     <button type="button" class="btn btn-primary" id="doneAgain">再發一則</button>
+  </div>
+</dialog>
+
+<!-- 值班粉專：每個班段第一次開啟要先選（至少 1 個） -->
+<dialog class="dlg duty-dlg" id="dutyDlg" aria-labelledby="dutyTitle">
+  <h2 id="dutyTitle">選擇值班粉專</h2>
+  <p><span id="dutyShift"></span>：新增發文時會自動勾選這些粉專。</p>
+  <div class="duty-list" id="dutyList" role="group" aria-label="值班粉專"></div>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="dutyCancel">取消</button>
+    <button type="button" class="btn btn-primary" id="dutyOk">確定</button>
   </div>
 </dialog>
 

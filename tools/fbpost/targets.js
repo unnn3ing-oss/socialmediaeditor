@@ -5,7 +5,8 @@ import { timeStr, check, plus } from './time.js';
 // 預設排程時間：現在＋30 分，進位到下一個 10 分
 const defaultAt = () => { const ms = plus(Date.now(), 30); return Math.ceil(ms / 600000) * 600000; };
 
-export function createTargets({ timePop, onChange }) {
+// defaults()：值班粉專 id（開始、清空時自動勾選）
+export function createTargets({ timePop, onChange, defaults = () => [] }) {
   let pages = [];
   const sel = new Map();   // pageId -> { on, sched, at(ms) }
   const nodes = new Map(); // pageId -> { chip, left, right }
@@ -22,7 +23,7 @@ export function createTargets({ timePop, onChange }) {
   function render() {
     const box = $('pages'); box.textContent = ''; nodes.clear();
     pages.forEach((p) => {
-      const s = sel.get(p.id) || { on: false, sched: false, at: defaultAt() };
+      const s = sel.get(p.id) || { on: defaults().includes(p.id), sched: false, at: defaultAt() };
       sel.set(p.id, s);
       const chip = document.createElement('span'); chip.className = 'chip'; chip.dataset.page = p.id;
       const left = document.createElement('button'); left.type = 'button'; left.className = 'chip-l';
@@ -59,6 +60,8 @@ export function createTargets({ timePop, onChange }) {
       }
       return { targets };
     },
-    reset() { for (const s of sel.values()) { s.on = false; s.sched = false; s.at = defaultAt(); } for (const id of nodes.keys()) paint(id); onChange(); }
+    reset() { const d = defaults(); for (const [id, s] of sel) { s.on = d.includes(id); s.sched = false; s.at = defaultAt(); } for (const id of nodes.keys()) paint(id); onChange(); },
+    // 值班粉專改了：還沒勾任何粉專時才套用（不蓋掉正在編輯的勾選）
+    applyDefaults() { if (!pages.some((p) => sel.get(p.id) && sel.get(p.id).on)) this.reset(); }
   };
 }

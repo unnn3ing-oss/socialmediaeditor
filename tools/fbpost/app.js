@@ -7,6 +7,7 @@ import { tb } from '../../sdk/toolbox.js';
 import { $, errText } from './util.js';
 import { createManage } from './manage.js';
 import { createDialog } from './dialog.js';
+import { createDuty } from './duty.js';
 
 tb.init('fbpost');
 
@@ -43,35 +44,38 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   tb.api.call('/fb/access').then((a) => {
     if (a && a.mode === 'company') for (const el of document.querySelectorAll('.test-pill')) el.hidden = true;
   }).catch(() => {});
-  // 依權限顯示：讀不到 /fb/me 就當全部都有（後端仍會擋）
+  // 依權限顯示：讀不到 /fb/me 就當全部都有（後端仍會擋）；之後才問值班粉專（沒有發文權限不問）
+  let canPost = true;
   tb.api.call('/fb/me').then((me) => {
     if (!me) return;
     const perms = me.admin ? ['view', 'post', 'edit', 'delete'] : (me.perms || []);
+    canPost = perms.includes('post');
     const app = $('fbpostApp');
     for (const k of ['view', 'post', 'edit', 'delete']) app.classList.toggle('no-' + k, !perms.includes(k));
     $('noView').hidden = perms.includes('view');
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
     if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
-  }).catch(() => {});
+  }).catch(() => {}).then(() => { $('dutyBtn').hidden = !canPost; duty.check(); });
   booted(true);
   $('fbpostApp').hidden = false;
   // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
   let currentPages = pages, targets = null, loading = null;
+  const duty = createDuty({ pages: () => currentPages, canAsk: () => canPost, onChange: () => { if (targets) targets.applyDefaults(); } });
   const ensureCompose = () => loading || (loading = (async () => {
     const [{ loadComposeAssets }, { createComposer }, { createTargets }, { createSender }, { createTimePop }, { createRd }, { createComments }] =
       await Promise.all([import('../../ui/compose/assets.js'), import('./compose.js'), import('./targets.js'), import('./send.js'),
         import('./timepop.js'), import('./rd.js'), import('./comments.js')]);
     const composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
     let sender;
-    targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton() });
+    targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton(), defaults: () => duty.ids() });
     sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }),
       onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
     targets.setPages(currentPages);
   })().catch((e) => { loading = null; throw e; }));
   const dialog = createDialog({ beforeOpen: ensureCompose });   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
   const manage = createManage({ tb });
-  const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); };
+  const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); duty.paint(); };
   showPages(pages);
   $('pagesRefresh').addEventListener('click', async () => {
     const b = $('pagesRefresh'); b.disabled = true;

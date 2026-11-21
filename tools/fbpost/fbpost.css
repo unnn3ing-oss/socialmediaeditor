@@ -480,3 +480,10 @@ body.no-scroll { overflow: hidden; }
 .is-side .boot-tabs .sk:first-child { width: 140px !important; height: 40px !important; }
 .is-side .boot-row { grid-template-columns: 48px minmax(0, 1fr); }
 .is-side .boot-thumb { width: 48px; height: 48px; }
+
+/* 值班粉專 */
+.duty-btn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duty-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.duty-item { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 12px; cursor: pointer; font-weight: 500; }
+.duty-item:has(input:checked) { border-color: var(--accent); background: #eaf1ff; }
+.duty-item input { width: 18px; height: 18px; margin: 0; }

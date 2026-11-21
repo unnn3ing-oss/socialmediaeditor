@@ -18,12 +18,12 @@
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
 | `tools/fbpost/compose.js`（`postText`、showMode）／`send.js`（`composer.text()`）／`index.html`（`#titleName`、`#msgLbl`） | 純文字只用標題框 | ✅ |
-| `tools/fbpost/duty.js`（新）＋ app／targets | 值班粉專視窗、班段、預勾 | ⬜ |
+| `tools/fbpost/duty.js`（新，`shiftOf`／`readDuty`／`createDuty`）＋ app（`canPost` 後 `duty.check()`）／targets（`defaults`、`applyDefaults`）＋ `#dutyDlg`、`#dutyBtn` | 值班粉專 | ✅ |
 | `tools/fbpost/history.js`（新）＋ send／manage／compose | 送出記錄、再發一次 | ⬜ |
 | 測試 | fbpost e2e、單元 | ⬜ |
 
 ## 下一步
 - [x] 一、純文字只用標題框（fbpost＋compose e2e 61）
-- [ ] 二、值班粉專
+- [x] 二、值班粉專（單元 2、e2e 2；測試輔助 `presetDuty` 在 `test/helpers/tool-page.js`）
 - [ ] 三、再發一次
 - [ ] 全部 fbpost e2e、側邊欄窄版、獨立審查

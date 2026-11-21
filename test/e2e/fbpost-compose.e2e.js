@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { serve } = require('../helpers/serve.js');
 const { launch } = require('../helpers/browser.js');
-const { fakeAsset, API_BASE, openTool } = require('../helpers/tool-page.js');
+const { fakeAsset, API_BASE, openTool, presetDuty } = require('../helpers/tool-page.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SHOT = process.env.SHOT_DIR;
@@ -30,6 +30,7 @@ async function openFb() {
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
   const posts = [], errors = [], articles = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  await presetDuty(page);
   await page.addInitScript(() => { try { localStorage.setItem('tbx.company', JSON.stringify({ token: 't', exp: Math.floor(Date.now() / 1000) + 3600, admin: true })); } catch {} });
   await page.route(API_BASE + '/**', async (r) => {
     const req = r.request(), u = new URL(req.url()), p = u.pathname;

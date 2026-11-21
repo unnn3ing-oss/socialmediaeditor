@@ -45,4 +45,14 @@ async function openTool(browser, srvUrl, id, { company = false, admin = false, s
   return { page, frame, requested };
 }
 
-module.exports = { openTool, fakeAsset, API_BASE };
+// 排程發布：先替這個班段選好值班粉專（不然一開頁就跳出必選視窗）；ids＝預設勾選的粉專（空＝不預勾）
+// 班段規則同 tools/fbpost/duty.js 的 shiftOf
+async function presetDuty(page, ids = []) {
+  await page.addInitScript((list) => {
+    const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), p = (n) => String(n).padStart(2, '0');
+    const key = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${m < 450 ? 'night' : m < 960 ? 'am' : 'pm'}`;
+    try { if (!sessionStorage.getItem('test.noDuty')) localStorage.setItem('tbx.fbpost.duty', JSON.stringify({ shift: key, pages: list })); } catch {}
+  }, ids);
+}
+
+module.exports = { openTool, fakeAsset, API_BASE, presetDuty };

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { serve } = require('../helpers/serve.js');
 const { launch } = require('../helpers/browser.js');
-const { fakeAsset, API_BASE } = require('../helpers/tool-page.js');
+const { fakeAsset, API_BASE, presetDuty } = require('../helpers/tool-page.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 let srv, browser;
@@ -21,6 +21,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
   const errors = [], fbCalls = [], api = { posts: [], reschedules: [], cancels: [], deletes: [], rundown: [] };
   const soon = Math.floor(Date.now() / 1000) + 7200;
   page.on('pageerror', (e) => errors.push(String(e)));
+  if (opts.duty !== false) await presetDuty(page, opts.duty || []);
   await page.route(API_BASE + '/**', async (r) => {
     const req = r.request(), u = new URL(req.url()), p = u.pathname;
     const json = (data, status = 200) => r.fulfill({ status, headers: CORS, json: status === 200 ? { ok: true, data } : data });
@@ -967,4 +968,59 @@ test('開啟時先顯示骨架、不閃「功能停用」；能用換成內容�
     assert.deepEqual(errors, []);
     await page.close();
   }
+});
+
+test('值班粉專：班段第一次開啟要先選（不能略過），選好的在新增發文、清空後自動勾選', async () => {
+  const { page, errors } = await newPage('admin', { width: 1280, height: 900 }, { duty: false });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#dutyDlg[open]');
+  assert.equal(await page.isHidden('#dutyCancel'), true, '第一次不能取消');
+  assert.match(await page.textContent('#dutyShift'), /^(早班|晚班|大夜)/);
+  assert.equal(await page.isDisabled('#dutyOk'), true, '至少選 1 個');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.isVisible('#dutyDlg'), true, 'Esc 關不掉');
+  await page.check('#dutyList input[value="111"]');
+  await page.check('#dutyList input[value="333"]');
+  await page.click('#dutyOk');
+  assert.equal(await page.isVisible('#dutyDlg'), false);
+  assert.equal(await page.textContent('#dutyBtn'), '值班：新聞、國際');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tbx.fbpost.duty')));
+  assert.deepEqual(saved.pages, ['111', '333']);
+  await openPost(page);
+  const on = () => page.$$eval('#pages .chip.on', (els) => els.map((e) => e.dataset.page));
+  assert.deepEqual(await on(), ['111', '333']);
+  // 手動改勾選後清空：回到值班粉專
+  await page.click(chip(111) + ' .chip-l');
+  await page.click(chip(222) + ' .chip-l');
+  await page.click('#clearBtn');
+  await page.click('#cfYes');
+  assert.deepEqual(await on(), ['111', '333']);
+  // 從按鈕改值班（可以取消）；已有勾選時不蓋掉
+  await page.click('#dlgClose');
+  await page.click('#dutyBtn');
+  assert.equal(await page.isVisible('#dutyCancel'), true);
+  await page.uncheck('#dutyList input[value="333"]');
+  await page.click('#dutyOk');
+  assert.equal(await page.textContent('#dutyBtn'), '值班：新聞');
+  await page.click('#newBtn');
+  assert.deepEqual(await on(), ['111', '333'], '正在編輯的勾選不被改掉');
+  await page.click('#clearBtn'); await page.click('#cfYes');
+  assert.deepEqual(await on(), ['111']);
+  // 重新整理：同班段不再問
+  await page.reload();
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('#dutyDlg'), false);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('值班粉專：沒有發文權限不問、不顯示按鈕', async () => {
+  const { page } = await newPage('admin', { width: 1280, height: 900 }, { duty: false, me: { admin: false, perms: ['view'], name: '小明' } });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.waitForTimeout(400);
+  assert.equal(await page.isVisible('#dutyDlg'), false);
+  assert.equal(await page.isHidden('#dutyBtn'), true);
+  await page.close();
 });
