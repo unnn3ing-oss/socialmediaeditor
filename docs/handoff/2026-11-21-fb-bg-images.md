@@ -1,5 +1,5 @@
 # 文字背景第 3 階段：管理頁＋圖樣存 R2
-- 狀態：進行中　- 分支：claude/compassionate-babbage-pwd4cb　- 最後更新：2026-11-21
+- 狀態：已完成（2026-11-21 併入 main）　- 分支：claude/compassionate-babbage-pwd4cb　- 最後更新：2026-11-21
 - 使用者原始需求：「接著做文字背景第 3 階段：管理頁＋圖樣存 R2」（前情見 `2026-11-21-fbpost-text-bg.md`）
 
 ## 已定案的決定
