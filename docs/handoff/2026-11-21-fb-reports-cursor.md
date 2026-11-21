@@ -12,9 +12,9 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/reports.js` | readBatch／游標／probe | 🚧 |
-| `test/server/fb-reports.test.js` | 替身：since/until＋after → 100；續頁照 next 參數 | 🚧 |
+| `server/fb/reports.js` | readBatch／游標（`pagingFrom`／`readPaging`）／probe（6 篇＋翻第 2 頁）／KV key 翻頁參數改雜湊 | ✅ |
+| `test/server/fb-reports.test.js` | 替身：since/until＋after → 100（舊版重現失敗）；續頁照 next 參數；白名單；缺 insights 提示 | ✅ |
 
 ## 下一步
-- [ ] 改程式＋測試、npm test、審查、推開發分支
+- [x] 改程式＋測試（npm test 742、fbreports e2e 6、build --check）、獨立審查通過、推開發分支
 - [ ] 使用者：說「推」→ 部署後端（正式＋測試）→ 重查＋欄位檢查「翻第 2 頁」
