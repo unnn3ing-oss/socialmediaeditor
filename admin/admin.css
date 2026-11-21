@@ -160,3 +160,15 @@ textarea{width:100%;min-height:72px;padding:8px 12px;border:1px solid var(--line
 nav.side #tab-adv{border:1px solid #f04438;color:#b42318}
 nav.side #tab-adv:hover:not(:disabled){border-color:#d92d20;background:#fef3f2;color:#b42318}
 nav.side #tab-adv[aria-selected=true]{border-color:#d92d20;background:#fef3f2;color:#b42318;box-shadow:none}
+
+/* 文字背景 */
+#bgPaste{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.bg-diff{margin:10px 0;padding:10px 12px;border:1px solid #d6e0ef;border-radius:12px;background:#f6f9fe}
+.bg-diff p{margin:0 0 6px}
+.bg-gone label{display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:400}
+.bg-sum{margin:8px 0 0;color:#5b6472;font-size:13px}
+.bg-wrap{overflow-x:auto;margin-top:10px}
+.bg-table{min-width:560px;font-size:14px}.bg-table th,.bg-table td{padding:6px 8px;border-bottom:1px solid #e6ecf6;text-align:left;vertical-align:middle}
+.bg-sw{display:block;width:40px;height:40px;border-radius:8px;background-size:cover;background-position:center;border:1px solid rgba(0,0,0,.08)}
+.bg-name{width:160px}.bg-err{color:var(--bad-text)}.bg-ok{color:var(--ok-text)}
+.bg-table input[type=checkbox]{width:20px;height:20px}

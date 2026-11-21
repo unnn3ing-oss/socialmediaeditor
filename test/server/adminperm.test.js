@@ -63,7 +63,7 @@ test('身分：admin 憑證全開；adm:1 擋敏感卡片；公司密碼憑證 4
   assert.equal((await call(env, '/admin/logs', { headers: co })).status, 401);
   const mm = (await call(env, '/admin/me', { headers: m1 })).body.data;
   assert.equal(mm.role, 'mgr'); assert.equal(mm.id, 'M1');
-  assert.deepEqual(mm.cards, ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs']);
+  assert.deepEqual(mm.cards, ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'audit', 'rundown', 'assets', 'logs']);
   assert.equal((await call(env, '/admin/fb/token', { headers: m1 })).status, 403);
   assert.equal((await call(env, '/admin/fb/access', { headers: m1 })).status, 403, '排程發布開關只有系統管理者');
   assert.equal((await call(env, '/admin/fb/access', { headers: adm })).status, 403, '系統管理者也要解鎖');

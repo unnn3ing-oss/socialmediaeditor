@@ -16,6 +16,18 @@ let PG_SAVED = null;
 let GD_SAVED = null;
 const GD_CHECKS = [];
 let PS_SAVED = null;
+// 文字背景替身
+const PNG1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+const BG = { list: [], posts: [], fetches: [] };
+function bgReset() {
+  BG.posts = []; BG.fetches = [];
+  BG.list = [
+    { id: '106018623298955', name: '純紫', type: 'solid', bg: '#C600FF', text: '#FFFFFF', grad: null, dir: null, img: false, hasUrl: false, err: '', show: true },
+    { id: '249307305544279', name: '紅→藍漸層', type: 'gradient', bg: '#FF0047', text: '#FFFFFF', grad: '#2C34C7', dir: 'BL_TR', img: false, hasUrl: false, err: '', show: true },
+    { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', bg: '#DC7A5A', text: '#FFFFFF', grad: null, dir: null, img: true, hasUrl: true, err: '', show: true },
+    { id: '303063890126416', name: '過期圖樣', type: 'image', bg: '#33234B', text: '#FFFFFF', grad: null, dir: null, img: false, hasUrl: true, err: '', show: true }];
+}
+bgReset();
 let VS_SAVED = null;
 let TOK_SAVED = null;
 let AC = { mode: 'admin', reason: '' };
@@ -51,6 +63,10 @@ const DATA = {
     stored: { pages: 3, expires: 0, dataExpires: Math.floor(Date.UTC(2027, 1, 10, 4, 0) / 1000), savedAt: Date.UTC(2026, 10, 19, 4, 0) },
     warn: { level: 'warn', days: 10, text: '臉書權杖 10 天後到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。' } },
   'GET /admin/fb/pages': PAGES,
+  'GET /admin/fb/backgrounds': () => ({ list: BG.list, batch: 10 }),
+  'POST /admin/fb/backgrounds': (b) => { BG.posts.push(b); if (b.dry) return { add: 1, update: 3, gone: [{ id: '303063890126416', name: '過期圖樣', type: 'image' }], bad: 0 }; BG.list = BG.list.filter((x) => !b.remove.includes(x.id)); return { list: BG.list, batch: 10 }; },
+  'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
+  'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
@@ -125,7 +141,7 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs', 'levels'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 let LV_SAVED = null;
 const LV = { levels: { mgr: ['access', 'staff', 'logs'], user: [] }, defaults: { mgr: ['access', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'], user: [] },
@@ -155,6 +171,7 @@ async function open(viewport, hash = '', front = null) {
       if (front && a === 'Bearer ' + front.token) return r.fulfill({ json: front.me ? { ok: true, data: front.me } : { ok: false, code: 'forbidden', error: '沒有這個功能的權限。' } });
       return r.fulfill({ json: { ok: false, code: 'unauthorized' } });
     }
+    if (/^\/admin\/fb\/backgrounds\/\d+\/img$/.test(u.pathname)) return r.fulfill({ contentType: 'image/png', body: Buffer.from(PNG1, 'base64') });
     const sf = staffRoute(req, u, key);
     if (sf) return r.fulfill({ json: sf });
     if (typeof DATA[key] === 'function') return r.fulfill({ json: { ok: true, data: DATA[key](req.postData() ? JSON.parse(req.postData()) : null, u) } });
@@ -855,4 +872,47 @@ test('留言守門卡片：打開不查權限、按了才查、儲存規則、�
   if (SHOT) await page.locator('#gdLogCard').screenshot({ path: path.join(SHOT, 'admin-guard-log-mobile.png') });
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/guard/log/9_1/hide'));
   assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
+});
+
+test('文字背景：列表與預覽圖；預覽匯入勾選刪除後套用；下載圖樣；改名', async () => {
+  bgReset();
+  const { page, calls } = await open({ width: 1280, height: 900 }, '#post');
+  await login(page);
+  await page.waitForSelector('#bgRows tr');
+  assert.match(await page.textContent('#bgSum'), /已存 4 個：純色 1．漸層 1．圖樣 2（圖已下載 1／2）/);
+  assert.equal(await page.textContent('#bgFetch'), '下載圖樣（1 張）');
+  await page.waitForFunction(() => /blob:/.test(document.querySelectorAll('#bgRows .bg-sw')[2].style.backgroundImage));
+  assert.ok(calls.some((c) => c.key === 'GET /admin/fb/backgrounds/303063890126415/img' && c.auth === 'Bearer T'));
+  assert.match(await page.$eval('#bgRows tr:nth-child(2) .bg-sw', (e) => e.style.background), /linear-gradient/);
+  // 格式錯
+  await page.fill('#bgPaste', 'nope');
+  await page.click('#bgPreview');
+  assert.match(await page.textContent('#bgMsg'), /不是擷取腳本的結果/);
+  // 預覽 → 勾刪除 → 套用
+  await page.fill('#bgPaste', JSON.stringify({ presets: [{ preset_id: '1', type: 'solid' }] }));
+  await page.click('#bgPreview');
+  await page.waitForSelector('#bgDiff:not([hidden])');
+  assert.match(await page.textContent('#bgDiffSum'), /新增 1．更新 3．臉書已沒有 1/);
+  if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg.png') });
+  await page.check('#bgGone input[value="303063890126416"]');
+  await page.click('#bgApply');
+  await page.waitForFunction(() => document.getElementById('bgMsg').textContent.startsWith('已匯入'));
+  assert.deepEqual(BG.posts[0], { presets: [{ preset_id: '1', type: 'solid' }], dry: true });
+  assert.deepEqual(BG.posts[1], { presets: [{ preset_id: '1', type: 'solid' }], remove: ['303063890126416'] });
+  assert.equal(await page.$$eval('#bgRows tr', (r) => r.length), 3);
+  assert.ok(await page.isHidden('#bgDiff'));
+  // 改名（Enter 儲存）
+  await page.fill('#bgRows tr:nth-child(1) .bg-name', '紫色');
+  await page.press('#bgRows tr:nth-child(1) .bg-name', 'Enter');
+  await page.waitForFunction(() => document.getElementById('bgMsg').textContent === '已儲存「紫色」');
+  // 下載圖樣：沒剩下就不顯示按鈕
+  assert.ok(await page.isHidden('#bgFetch'));
+  BG.list.push({ id: '303063890126417', name: '新圖樣', type: 'image', bg: '#000000', text: '#FFFFFF', img: false, hasUrl: true, err: '', show: true });
+  await page.reload(); await login(page);
+  await page.waitForSelector('#bgFetch:not([hidden])');
+  await page.click('#bgFetch');
+  await page.waitForFunction(() => /下載完成：成功 0 張、失敗 1 張/.test(document.getElementById('bgMsg').textContent));
+  assert.equal(BG.fetches.length, 1);
+  assert.ok(typeof BG.fetches[0].since === 'number');
+  assert.ok(!calls.some((c) => typeof c === 'string'), JSON.stringify(calls.filter((c) => typeof c === 'string')));
 });

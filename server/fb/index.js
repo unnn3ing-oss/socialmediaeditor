@@ -1,5 +1,5 @@
 // 排程發布後端：/fb/*（權限見 access.js：管理頁切換只開放管理員／開放公司帳號）與管理路由 /admin/fb/*、/admin/rundown*
-import { ok, fail, readBody } from '../core/http.js';
+import { ok, fail, readBody, corsHeaders } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
 import { audit } from '../core/staff.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError, activePageTokens, pageTokens } from './pages.js';
@@ -9,6 +9,7 @@ import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
+import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
@@ -48,7 +49,17 @@ route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: 
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
-route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, type, css, text }) => ({ id, name, type, css, text }))));
+route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, type, css, text, img }) => (img ? { id, name, type, css, text, img } : { id, name, type, css, text }))));
+// 圖樣背景的圖片（R2 fbbg/<代號>）：要登入；回應依憑證而異，不讓共用快取混用
+function bgImageResponse(request, env, obj) {
+  if (!obj) return fail(request, env, 'not_found');
+  return new Response(obj.body, { headers: {
+    'content-type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'image/jpeg',
+    'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', Vary: 'Origin, Authorization',
+    ...corsHeaders(request, env)
+  } });
+}
+route('GET', /^\/fb\/bg\/(\d{6,20})$/, async (request, env, ctx, m) => bgImageResponse(request, env, await bgReadImage(env, m[1])));
 
 route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   const ct = request.headers.get('content-type') || '';
@@ -179,6 +190,38 @@ adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
   await savePresets(env, list);
   return ok(request, env, await listPresets(env));
 });
+// 文字背景：清單、匯入（dry＝只預覽）、改名稱／顯示、刪除、分批下載圖樣
+adminRoute('GET', /^\/admin\/fb\/backgrounds$/, async (request, env) => ok(request, env, await bgAdminState(env)));
+adminRoute('POST', /^\/admin\/fb\/backgrounds$/, async (request, env) => {
+  const body = await readJsonBody(request, 400000);
+  const parsed = bgParseImport(body);
+  if (!parsed) return fail(request, env, 'bad_request', '內容不是擷取腳本的結果（要有 presets 清單）。');
+  if (body.dry) return ok(request, env, { ...(await bgImportDiff(env, parsed.rows)), bad: parsed.bad });
+  const remove = Array.isArray(body.remove) ? body.remove.filter((x) => typeof x === 'string' && BG_ID_RE.test(x)).slice(0, 200) : [];
+  await bgImportApply(env, parsed.rows, remove);
+  return ok(request, env, await bgAdminState(env));
+});
+adminRoute('POST', /^\/admin\/fb\/backgrounds\/fetch$/, async (request, env) => {
+  const body = (await readJsonBody(request)) || {};
+  const since = Math.min(Date.now(), Math.max(0, Number(body.since) || 0));
+  const r = await bgFetchBatch(env, since);
+  if (r.error) return fail(request, env, 'misconfigured', r.error);
+  return ok(request, env, r);
+});
+adminRoute('POST', /^\/admin\/fb\/backgrounds\/(\d{6,20})$/, async (request, env, m) => {
+  const body = (await readJsonBody(request)) || {};
+  const patch = {};
+  if (body.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    if (!name || [...name].length > BG_MAX_NAME) return fail(request, env, 'bad_request', '名稱 1～' + BG_MAX_NAME + ' 字。');
+    patch.name = name;
+  }
+  if (body.show !== undefined) patch.show = !!body.show;
+  if (!(await bgUpdate(env, m[1], patch))) return fail(request, env, 'not_found');
+  return ok(request, env, await bgAdminState(env));
+});
+adminRoute('GET', /^\/admin\/fb\/backgrounds\/(\d{6,20})\/img$/, async (request, env, m) => bgImageResponse(request, env, await bgReadImage(env, m[1], true)));
+adminRoute('DELETE', /^\/admin\/fb\/backgrounds\/(\d{6,20})$/, async (request, env, m) => { await bgDelete(env, m[1]); return ok(request, env, await bgAdminState(env)); });
 // 管理頁換權杖：驗證 → 自動延長（有 App 密鑰時）→ 換粉專權杖並確認不過期 → 才存；回傳狀態，不回傳權杖
 adminRoute('POST', /^\/admin\/fb\/token$/, async (request, env) => {
   const body = await readJsonBody(request, 8192);

@@ -76,6 +76,7 @@ export function createComposer({ tb, assets }) {
   const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`; };
   // ---- 純文字的臉書文字背景（清單由後端 /fb/backgrounds 給；讀不到就不顯示）----
   let bgs = [];
+  const bgImgUrl = {};   // 圖樣代號 → 已載入的圖片網址（ObjectURL）
   st.bg = '';
   const bgOn = () => (st.mode === 'text' && bgs.some((b) => b.id === st.bg) ? st.bg : '');
   function bgShow() {
@@ -85,11 +86,14 @@ export function createComposer({ tb, assets }) {
     if (b) {
       const t = stripLead($('msg').value).trim(), n = [...t].length;
       $('bgPrev').style.background = b.css;
+      if (bgImgUrl[b.id]) $('bgPrev').style.background = `${b.css} url("${bgImgUrl[b.id]}") center / cover no-repeat`;
       $('bgPrev').style.color = b.text || '#fff';
       $('bgText').textContent = t || '貼文內容會顯示在這裡';
       $('bgText').style.fontSize = n <= 40 ? '30px' : n <= 85 ? '24px' : '19px';
     }
-    for (const el of $('bgSws').querySelectorAll('.sw')) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
+    for (const el of $('bgBox').querySelectorAll('.sw')) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
+    const more = $('bgSws').querySelector('.bg-more');
+    if (more) more.classList.toggle('is-on', !!b && b.type === 'image');
   }
   function bgButton(id, name, css) {
     const el = document.createElement('button');
@@ -97,16 +101,55 @@ export function createComposer({ tb, assets }) {
     if (css) el.style.background = css;
     return el;
   }
-  $('bgSws').addEventListener('click', (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); });
+  const bgPick = (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); };
+  $('bgSws').addEventListener('click', bgPick);
+  $('bgImgs').addEventListener('click', bgPick);
+  // 圖樣：第一次按「圖樣」才建按鈕、帶登入讀圖（同時最多 6 張），還沒載完的先顯示骨架
+  let bgImgsBuilt = false;
+  function bgLoadImgs() {
+    if (bgImgsBuilt) return;
+    bgImgsBuilt = true;
+    const list = bgs.filter((b) => b.type === 'image');
+    const els = list.map((b) => { const el = bgButton(b.id, b.name, ''); el.classList.add('sk'); return el; });
+    $('bgImgs').append(...els);
+    bgShow();
+    let i = 0;
+    const next = () => {
+      if (i >= list.length) return Promise.resolve();
+      const k = i++, b = list[k], el = els[k];
+      return Promise.resolve().then(() => tb.api.call(b.img, { raw: true })).then((r) => r.blob()).then((blob) => {
+        bgImgUrl[b.id] = URL.createObjectURL(blob);
+        el.style.background = `${b.css} url("${bgImgUrl[b.id]}") center / cover no-repeat`;
+        if (st.bg === b.id) bgShow();
+      }).catch(() => { el.style.background = b.css; }).then(() => { el.classList.remove('sk'); return next(); });
+    };
+    for (let n = 0; n < 6; n++) next();
+  }
   Promise.resolve().then(() => tb.api.call('/fb/backgrounds')).then((list) => {
-    bgs = (Array.isArray(list) ? list : []).filter((b) => b && /^\d+$/.test(b.id) && b.name && b.css && /^#[0-9a-f]{6}$/i.test(b.text || ''));
+    bgs = (Array.isArray(list) ? list : []).filter((b) => b && /^\d+$/.test(b.id) && b.name && b.css && /^#[0-9a-f]{6}$/i.test(b.text || '')
+      && (b.type !== 'image' || /^\/fb\/bg\/\d+$/.test(b.img || '')));
     if (!bgs.length) return;
-    // 「無」→ 依種類分組（純色｜漸層），組與組之間一條分隔線
+    // 「無」→ 依種類分組（純色｜漸層），組與組之間一條分隔線；圖樣收在「圖樣」按鈕裡，點了才載入
+    const sep = () => { const el = document.createElement('span'); el.className = 'bg-sep'; el.setAttribute('aria-hidden', 'true'); return el; };
     const els = [bgButton('', '無', '')];
     let type = '';
     for (const b of bgs) {
-      if (b.type !== type) { type = b.type; const sep = document.createElement('span'); sep.className = 'bg-sep'; sep.setAttribute('aria-hidden', 'true'); els.push(sep); }
+      if (b.type === 'image') continue;
+      if (b.type !== type) { type = b.type; els.push(sep()); }
       els.push(bgButton(b.id, b.name, b.css));
+    }
+    const nImg = bgs.filter((b) => b.type === 'image').length;
+    if (nImg) {
+      const more = document.createElement('button');
+      more.type = 'button'; more.className = 'bg-more'; more.textContent = `圖樣 ${nImg} ▾`;
+      more.setAttribute('aria-expanded', 'false'); more.setAttribute('aria-controls', 'bgImgs');
+      more.addEventListener('click', () => {
+        const open = $('bgImgs').hidden;
+        $('bgImgs').hidden = !open; more.setAttribute('aria-expanded', String(open));
+        more.textContent = `圖樣 ${nImg} ${open ? '▴' : '▾'}`;
+        if (open) bgLoadImgs();
+      });
+      els.push(sep(), more);
     }
     $('bgSws').append(...els);
     $('bgBox').hidden = false; msgCount();

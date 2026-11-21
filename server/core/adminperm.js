@@ -21,6 +21,7 @@ export const ROUTES = [
   [/^\/admin\/fb\/pages$/, 'pages'],
   [/^\/admin\/fb\/presets$/, 'presets'],
   [/^\/admin\/fb\/video-settings$/, 'video'],
+  [/^\/admin\/fb\/backgrounds(\/fetch|\/\d{6,20}(\/img)?)?$/, 'bg'],
   [/^\/admin\/staff-groups(\/\d{1,9})?$/, 'groups'],
   [/^\/admin\/staff(\/[^/]+(\/reset)?)?$/, 'staff'],
   [/^\/admin\/audit$/, 'audit'],

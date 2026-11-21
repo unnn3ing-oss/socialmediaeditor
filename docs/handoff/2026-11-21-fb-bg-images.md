@@ -15,20 +15,20 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `docs/fb-text-backgrounds/extract-fb-backgrounds.js` | 輸出 `background_image_url` | ⬜ |
-| `server/fb/bgstore.js`（新） | 建表、匯入比對、清單、改顯示／名稱／刪除、分批下載 | ⬜ |
-| `server/fb/bgpresets.js` | `listBackgrounds` 讀 D1、圖樣要有圖 | ⬜ |
-| `server/fb/index.js` | `/fb/bg/<id>`、`/admin/fb/backgrounds*` | ⬜ |
-| `server/core/adminperm.js`／`levels.js` | 卡片 `bg` | ⬜ |
-| `admin/` | 「文字背景」卡片 | ⬜ |
-| `tools/fbpost/compose.js`／`fbpost.css`／`index.html` | 圖樣分組、展開才載入 | ⬜ |
-| `privacy/` | 補一句 | ⬜ |
-| 測試 | 單元＋e2e | ⬜ |
+| `docs/fb-text-backgrounds/extract-fb-backgrounds.js` | 輸出 `background_image_url` | ✅ |
+| `server/fb/bgstore.js`（新） | 建表、匯入比對、清單、改顯示／名稱／刪除、分批下載 | ✅ |
+| `server/fb/bgpresets.js` | `listBackgrounds` 讀 D1、圖樣要有圖 | ✅ |
+| `server/fb/index.js` | `/fb/bg/<id>`、`/admin/fb/backgrounds`（GET／POST 匯入，dry＝預覽）、`/fetch`（body `since`）、`/<id>`（POST 名稱／顯示、DELETE）、`/<id>/img`（管理頁看圖） | ✅ |
+| `server/core/adminperm.js`／`levels.js` | 卡片 `bg` | ✅ |
+| `admin/` | 「文字背景」卡片 | ✅ |
+| `tools/fbpost/compose.js`／`fbpost.css`／`index.html` | 圖樣分組、展開才載入 | ✅ |
+| `privacy/` | 補一句 | ✅ |
+| 測試 | 單元＋e2e | ✅ |
 
 ## 下一步
-- [ ] 後端＋單元測試
-- [ ] 管理頁＋e2e
-- [ ] 排程發布＋e2e、截圖
+- [x] 後端＋單元測試（`test/server/fb-bg.test.js` 5 項）
+- [x] 管理頁＋e2e（admin e2e 33）
+- [x] 排程發布＋e2e、截圖（fbpost-compose 24、fbpost＋legal＋company 54；npm test 752、build --check）
 - [ ] 獨立審查
 
 ## 注意事項

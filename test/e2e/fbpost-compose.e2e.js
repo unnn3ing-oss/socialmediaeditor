@@ -7,6 +7,7 @@ const { launch } = require('../helpers/browser.js');
 const { fakeAsset, API_BASE, openTool } = require('../helpers/tool-page.js');
 
 const ROOT = path.join(__dirname, '..', '..');
+const SHOT = process.env.SHOT_DIR;
 let srv, browser;
 test.before(async () => { srv = await serve(ROOT); browser = await launch(); });
 test.after(async () => { await browser.close(); await srv.close(); });
@@ -19,7 +20,10 @@ const ARTICLE = `<html><head><meta property="og:title" content="${TITLE}"><meta 
 <meta name="keywords" content="監視器,吃到飽,詐欺,很長很長的標籤"></head><body><article><h1>${TITLE}</h1>
 <figure><img src="${IMG_URL}"><figcaption>（圖／TVBS）</figcaption></figure><p>內文</p></article></body></html>`;
 const PHOTO = fakeAsset([60, 170, 90]);
-const BGS = [{ id: '106018623298955', name: '純紫', type: 'solid', css: '#C600FF', text: '#FFFFFF' }, { id: '249307305544279', name: '紅→藍漸層', type: 'gradient', css: 'linear-gradient(to top right,#FF0047,#2C34C7)', text: '#FFFFFF' }];
+const BGS = [{ id: '106018623298955', name: '純紫', type: 'solid', css: '#C600FF', text: '#FFFFFF' }, { id: '249307305544279', name: '紅→藍漸層', type: 'gradient', css: 'linear-gradient(to top right,#FF0047,#2C34C7)', text: '#FFFFFF' },
+  { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', css: '#DC7A5A', text: '#FFFFFF', img: '/fb/bg/303063890126415' },
+  { id: '303063890126499', name: '壞圖樣', type: 'image', css: '#33234B', text: '#FFFFFF', img: 'https://evil.example/x.jpg' }];
+const BG_IMG_HITS = [];
 
 // 公司模式（假外殼＋假憑證）開排程發布
 async function openFb() {
@@ -35,6 +39,7 @@ async function openFb() {
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
     if (p === '/fb/backgrounds') return json(BGS);
+    if (p.startsWith('/fb/bg/')) { BG_IMG_HITS.push({ p, auth: req.headers().authorization || '' }); return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([10, 200, 30]) }); }
     if (p === '/fetch/article') {
       const url = u.searchParams.get('url'); articles.push(url);
       if (/slow/.test(url)) await new Promise((res) => setTimeout(res, 1500));
@@ -193,7 +198,7 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   assert.equal(await frame.textContent('#bgText'), '今天你投票了嗎？');
   assert.equal(await frame.textContent('#bgName'), '純紫');
   assert.equal(await frame.evaluate(() => getComputedStyle(document.getElementById('bgPrev')).color), 'rgb(255, 255, 255)');
-  assert.equal(await frame.locator('#bgSws .bg-sep').count(), 2, '純色、漸層各一組');
+  assert.equal(await frame.locator('#bgSws .bg-sep').count(), 3, '純色、漸層、圖樣各一組');
   assert.match(await frame.textContent('#msgCount'), /^8／130 字/);
   await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
   await frame.click('#pages .chip[data-page="111"] .chip-l');
@@ -215,6 +220,36 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   await frame.click('#bgSws .sw[data-bg="249307305544279"]');
   await frame.click('#modeSeg [data-mode=image]');
   assert.doesNotMatch(await frame.textContent('#msgCount'), /130/);
+  await page.close();
+});
+
+test('純文字圖樣背景：點「圖樣」才帶登入讀圖；選了預覽用圖片；送出帶 bg；不合法的圖片路徑不列', async () => {
+  BG_IMG_HITS.length = 0;
+  const { page, frame, posts } = await openFb();
+  await frame.click('#modeSeg [data-mode=text]');
+  await frame.waitForSelector('#bgBox:not([hidden])');
+  assert.equal(await frame.textContent('#bgSws .bg-more'), '圖樣 1 ▾', '壞路徑的圖樣不列');
+  assert.equal(await frame.isHidden('#bgImgs'), true);
+  assert.equal(BG_IMG_HITS.length, 0, '還沒點不載入');
+  await frame.click('#bgSws .bg-more');
+  assert.equal(await frame.getAttribute('#bgSws .bg-more', 'aria-expanded'), 'true');
+  await frame.waitForFunction(() => /blob:/.test(document.querySelector('#bgImgs .sw[data-bg="303063890126415"]').style.backgroundImage));
+  assert.deepEqual(BG_IMG_HITS.map((h) => h.p), ['/fb/bg/303063890126415']);
+  assert.match(BG_IMG_HITS[0].auth, /^Bearer /);
+  await frame.fill('#msg', '\n圖樣背景測試');
+  await frame.click('#bgImgs .sw[data-bg="303063890126415"]');
+  assert.equal(await frame.textContent('#bgName'), '黃橘粉圖樣');
+  assert.match(await frame.evaluate(() => document.getElementById('bgPrev').style.backgroundImage), /blob:/);
+  assert.match(await frame.getAttribute('#bgSws .bg-more', 'class'), /is-on/);
+  if (SHOT) await frame.locator('.left').first().screenshot({ path: path.join(SHOT, 'fbpost-bg-image.png') });
+  // 收起再打開不重抓
+  await frame.click('#bgSws .bg-more'); await frame.click('#bgSws .bg-more');
+  assert.equal(BG_IMG_HITS.length, 1);
+  await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
+  await frame.click('#pages .chip[data-page="111"] .chip-l');
+  await frame.click('#sendBtn');
+  await frame.waitForSelector('#doneList li');
+  assert.match(posts[0].toString('utf8'), /name="bg"\r\n\r\n303063890126415/);
   await page.close();
 });
 

@@ -13,6 +13,7 @@ export const CARDS = [
   { key: 'pages', name: '粉專設定' },
   { key: 'presets', name: '活動留言' },
   { key: 'video', name: '影片設定' },
+  { key: 'bg', name: '文字背景' },
   { key: 'staff', name: '授權名單' },
   { key: 'groups', name: '權限組', sensitive: true },
   { key: 'audit', name: '操作紀錄' },
@@ -28,7 +29,7 @@ export const GRANTABLE = CARDS.filter((c) => !c.locked).map((c) => c.key);
 export const LEVELS = ['user', 'mgr'];
 export const LEVEL_NAMES = { sys: '系統管理者', mgr: '管理者', user: '普通' };
 export const DEFAULT_LEVELS = {
-  mgr: ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'staff', 'audit', 'rundown', 'assets', 'logs'],
+  mgr: ['guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'audit', 'rundown', 'assets', 'logs'],
   user: []
 };
 const KEY = 'admin_levels';

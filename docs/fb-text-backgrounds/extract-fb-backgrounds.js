@@ -6,14 +6,18 @@
 //   - font_weight 欄位已不存在
 //   - 500px 背景圖改在 background(...) → image(scale:2,width:500)
 //   - 新增 background_description（臉書的中文描述）
+//   - 2026-11-21 起圖樣類多輸出 background_image_url（完整網址，帶臉書簽章、幾天後會過期），
+//     貼到管理頁「文字背景」後當天按「下載圖樣」
 
 (() => {
   const src = require('CometRelayEnvironment').getStore().getSource();
   const hex = argb => (argb ? '#' + String(argb).slice(2) : null);
-  const fileId = id => {
+  const fileUrl = id => {
     const r = id && src.get(id);
-    if (!r) return null;
-    const f = String(r.uri || r.url || '').split('?')[0].split('/').pop();
+    return r ? String(r.uri || r.url || '') : '';
+  };
+  const fileId = id => {
+    const f = fileUrl(id).split('?')[0].split('/').pop();
     const m = f.match(/^(\d+_\d+)_/);
     return m ? m[1] : null;
   };
@@ -27,16 +31,16 @@
     if (!r || r.__typename !== 'TextFormatMetadata' || seen.has(r.preset_id)) continue;
     seen.add(r.preset_id);
 
-    let imageId = null;
+    let imageId = null, imageUrl = '';
     const bk = refKey(r, 'background(');
     if (bk) {
       const b = src.get(r[bk].__ref);
       const ik = b && refKey(b, 'image(');
-      if (ik) imageId = fileId(b[ik].__ref);
+      if (ik) { imageId = fileId(b[ik].__ref); imageUrl = fileUrl(b[ik].__ref); }
     }
     if (!imageId) {
       const tk = refKey(r, 'background_image(');
-      if (tk) imageId = fileId(r[tk].__ref);
+      if (tk) { imageId = fileId(r[tk].__ref); imageUrl = fileUrl(r[tk].__ref); }
     }
 
     const bg = hex(r.background_color);
@@ -54,7 +58,7 @@
       p.gradient_color = grad;
       p.gradient_direction = r.background_gradient_direction || null;
     }
-    if (type === 'image') p.background_image_id = imageId;
+    if (type === 'image') { p.background_image_id = imageId; p.background_image_url = imageUrl; }
     presets.push(p);
   }
 

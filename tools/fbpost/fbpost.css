@@ -158,6 +158,10 @@ body.no-scroll { overflow: hidden; }
 .bg-sws { margin: 0; }
 .bg-sws .sw { width: 34px; height: 34px; }
 .bg-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line-strong); }
+.bg-more { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink, #1f2328); font: inherit; font-size: 13px; cursor: pointer; }
+.bg-more.is-on { box-shadow: 0 0 0 2px var(--accent); border-color: transparent; }
+.bg-imgs { margin-top: 8px; }
+.bg-imgs .sw { background-size: cover; background-position: center; }
 .bg-sws .sw.bg-none { background: #fff linear-gradient(to top right, transparent calc(50% - 1.5px), #d92d20 calc(50% - 1.5px), #d92d20 calc(50% + 1.5px), transparent calc(50% + 1.5px)); }
 .noimg { border: 1px dashed var(--line-strong); border-radius: var(--radius-card); padding: 28px 16px; text-align: center; color: var(--muted); background: var(--fill); margin: 0; }
 .swatches { margin: 12px 0 4px; }
