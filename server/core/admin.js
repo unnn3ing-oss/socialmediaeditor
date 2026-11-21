@@ -1,7 +1,7 @@
 import { ok, fail } from './http.js';
 import { loginWith } from './auth.js';
 import { adminList, adminPut, adminDelete } from './assets.js';
-import { adminWho, gate, meInfo, adminLevels } from './adminperm.js';
+import { adminWho, gate, meInfo } from './adminperm.js';
 
 export const ADMIN_TTL = 12 * 3600;
 // 管理頁只留網站版；後端 /admin 轉過去
@@ -31,8 +31,6 @@ export async function handleAdmin(request, env, path) {
   const denied = gate(request, env, who, path);
   if (denied) return denied;
 
-  const lv = await adminLevels(request, env, path);
-  if (lv) return lv;
   if (path === '/admin/assets' && request.method === 'GET') return adminList(request, env);
   const m = /^\/admin\/assets\/([^/]+)$/.exec(path);
   if (m) {

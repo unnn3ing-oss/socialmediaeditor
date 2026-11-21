@@ -2,7 +2,7 @@
 //   GET /fb/reports/posts?page=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD[&asOf=<秒>&scope=<代碼>] → 第一批
 //   GET /fb/reports/posts?cursor=<Worker 核發的游標>                                          → 續頁
 //   GET /fb/reports/probe?page=<id>（只給系統管理者）→ 欄位檢查（規格步驟 1，用真實權杖在測試 Worker 跑）
-// 權限：route(..., 'view')；粉專必須在使用中組別且設定為顯示（每次請求都驗證，含續頁與快取命中）
+// 權限：route(..., 'report')；粉專必須在使用中組別且設定為顯示（每次請求都驗證，含續頁與快取命中）
 // 範圍代碼：組別＋顯示中的粉專＋登入者的簽章；續頁或同一輪的下一個粉專帶回來，對不上回 report_scope（前端清掉重讀粉專）
 // 用量：每批最多 6 次 Graph 呼叫；用量 ≥90% 或 10 分鐘內被限流先不打臉書（status 'paused'），被限流當批停（'throttled'），都保留游標
 import { ok, fail } from '../core/http.js';
@@ -349,6 +349,6 @@ export async function reportProbe(request, env, me) {
 }
 
 export function registerReports(route) {
-  route('GET', /^\/fb\/reports\/posts$/, (request, env, ctx, m, me) => reportPosts(request, env, me), 'view');
-  route('GET', /^\/fb\/reports\/probe$/, (request, env, ctx, m, me) => reportProbe(request, env, me), 'view');
+  route('GET', /^\/fb\/reports\/posts$/, (request, env, ctx, m, me) => reportPosts(request, env, me), 'report');
+  route('GET', /^\/fb\/reports\/probe$/, (request, env, ctx, m, me) => reportProbe(request, env, me), 'report');
 }

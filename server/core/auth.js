@@ -1,7 +1,6 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
-import { cardsFor } from './levels.js';
-import { findStaff, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
+import { findStaff, cardsOf, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
 import { pwProblem, hashPassword, verifyPassword, codeHash, safeEqual, MAX_FAILS, LOCK_MS } from './password.js';
 
 export const MIN_SECRET = 32;
@@ -70,7 +69,7 @@ async function issue(request, env, id, ver) {
   if (!staff) return fail(request, env, 'bad_staff');
   await touchLogin(env, staff.id);
   const exp = nowSec() + sessionTtl(env);
-  const manage = (await cardsFor(env, staff.level)).length > 0;
+  const manage = staff.level === 'sys' || cardsOf(staff.perms).length > 0;
   return ok(request, env, { token: await signToken(env.SESSION_SECRET, 'company', exp, false, staff.id, ver), exp, staff: staffInfo(staff), manage });
 }
 const lockedRes = (request, env, row) => fail(request, env, 'locked', '連續輸入錯誤太多次，請 ' + Math.max(1, Math.ceil((row.lockUntil - Date.now()) / 60000)) + ' 分鐘後再試，或請管理者重置密碼。', { until: row.lockUntil });
@@ -163,7 +162,7 @@ export async function handleAuth(request, env, path) {
     if (!t) return fail(request, env, 'unauthorized');
     const data = { company: true, exp: t.exp, ...(t.staff ? { staff: staffInfo(t.staff) } : {}) };
     // manage：首頁要不要顯示「管理頁」按鈕（管理員密碼登入，或員工層級至少有一張卡片）
-    data.manage = (!!t.staff && (await cardsFor(env, t.staff.level)).length > 0);
+    data.manage = !!t.staff && (t.staff.level === 'sys' || cardsOf(t.staff.perms).length > 0);
     // 剩不到一半效期就續一張；舊的到期前仍有效。管理員憑證不續（續了會變成普通憑證，到期請重新輸入）
     if (t.exp - nowSec() < sessionTtl(env) / 2) {
       const exp = nowSec() + sessionTtl(env);

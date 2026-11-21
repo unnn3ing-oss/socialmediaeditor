@@ -87,7 +87,7 @@ test('公司密碼登入已拿掉：只有 password 沒有 staffId → bad_reque
   assert.equal((await j(auth({ staffId: 'T1', code: '123456', newPassword: 'password-1' }, env))).code, 'setup_expired');
 });
 
-test('系統管理者（SYS_STAFF_ID）：名單沒有自動建立；可用管理員密碼代替設定碼；全部非敏感卡片；不能停用、刪除、改層級', async () => {
+test('系統管理者（SYS_STAFF_ID）：名單沒有自動建立；可用管理員密碼代替設定碼；全部非敏感卡片；不能停用、刪除；可改姓名', async () => {
   const env = mkEnv({ SYS_STAFF_ID: '13082605', FAIL_DELAY_MS: '0' });
   assert.deepEqual((await j(auth({ staffId: '13082605' }, env))).data, { next: 'setup' });
   assert.equal((await j(auth({ staffId: '13082605', code: 'wrong', newPassword: 'password-1' }, env))).code, 'bad_password');
@@ -101,7 +101,6 @@ test('系統管理者（SYS_STAFF_ID）：名單沒有自動建立；可用管�
   const { signToken } = await loadToken();
   const A = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'admin', nowSec() + 600)), 'content-type': 'application/json' };
   assert.equal((await call('/admin/staff/13082605', { method: 'POST', headers: A, body: JSON.stringify({ enabled: false }) }, env)).status, 403);
-  assert.equal((await call('/admin/staff/13082605', { method: 'POST', headers: A, body: JSON.stringify({ level: 'user' }) }, env)).status, 403);
   assert.equal((await call('/admin/staff/13082605', { method: 'DELETE', headers: A }, env)).status, 403);
   assert.equal((await call('/admin/staff/13082605', { method: 'POST', headers: A, body: JSON.stringify({ name: '莊' }) }, env)).status, 200);
   // 別人不能用管理員密碼代替設定碼
