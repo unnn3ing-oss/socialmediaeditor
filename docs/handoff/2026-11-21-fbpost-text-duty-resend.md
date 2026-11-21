@@ -27,4 +27,4 @@
 - [x] 二、值班粉專（單元 2、e2e 2；測試輔助 `presetDuty` 在 `test/helpers/tool-page.js`）
 - [x] 三、再發一次
 - [x] npm test 754、build --check、fbpost＋compose＋sidepanel＋admin e2e 全過
-- [ ] 獨立審查
+- [x] 獨立審查（修正：值班視窗 Esc 連帶關新增發文、restore 底色沒亮、只有照片時沒先問；未修 Minor：純文字整段當 RD title）
