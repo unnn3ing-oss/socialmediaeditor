@@ -23,7 +23,8 @@
 
 ## 下一步
 - [x] 改名 → 預覽 → RD → 補丁 → 測試（npm test 754、fbpost＋compose＋admin e2e 100）
-- [ ] 全部 e2e、獨立審查、給使用者截圖
+- [x] 全部 e2e 260 通過、獨立審查通過（Minor 未修：預覽顯示未 trim 的標題、背景清單載入前按再發一次會改隨機）
+- [ ] 使用者確認後說「推」才併 main（併入時更新 CLAUDE.md 目前進度）
 
 ## 實作細節
 - 預覽 `#bgText` contenteditable plaintext-only；結尾換行瀏覽器會多放一個 \n，讀回時去掉一個、寫入時補一個
