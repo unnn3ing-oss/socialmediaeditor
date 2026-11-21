@@ -403,6 +403,17 @@ test('排入 RD：開關記住、SLUG 留空取標題（斜線後前 4 字）、
   await page.click('#sendBtn');
   for (let i = 0; i < 50 && api.rundown.length < 2; i++) await page.waitForTimeout(100);
   assert.equal(api.rundown[1].entries[0].text, '4051394/圖文/秋冬衣櫃');
+  // 純文字：寫「文字」
+  await page.waitForSelector('#doneDlg[open]');
+  await page.click('#doneAgain');
+  await page.click('#modeSeg [data-mode=text]');
+  await page.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
+  await page.fill('#title', '純文字貼文');
+  await page.click(chip(111) + ' .chip-l');
+  await page.fill('#rdSlug', '純文字');
+  await page.click('#sendBtn');
+  for (let i = 0; i < 50 && api.rundown.length < 3; i++) await page.waitForTimeout(100);
+  assert.equal(api.rundown[2].entries[0].text, '4051394/文字/純文字');
   // 重新整理後開關還記得
   await page.reload();
   await openPost(page);

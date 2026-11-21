@@ -26,7 +26,7 @@ export function rundownBody(body) {
     if (!e || !PAGES.includes(e.page) || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || !/^\d{2}:\d{2}$/.test(e.time)) return null;
     if (typeof e.text !== 'string' || !e.text.trim() || e.text.length > 100 || /[\r\n]/.test(e.text)) return null;
     if (e.style !== undefined && e.style !== 'video') return null;
-    // style 'video'：影片發布（純影／Reels）→ Apps Script 套綠色 #38761d、粗體、置中（見 docs/rundown-gs-video-style.md）
+    // style 'video'：影片發布（純影／Reels）→ Apps Script 套綠色 #38761d、粗體；所有 RD 寫入都置中（見 docs/rundown-gs-video-style.md）
     // slot：影片草稿（'draft'）／被多文的粉專（'cross'）→ 不照時間插入，改填今天欄右邊的預留格（見 docs/rundown-gs-draft-slot.md）
     //   kind：'video'＝純影、'reel'＝Reels（多文只有 video）
     if (e.slot !== undefined) {

@@ -74,6 +74,8 @@ test('slug：文章 ID 與 RD 文字', async () => {
   assert.equal(articleId('https://news.tvbs.com.tw/life/4046330?utm=x#a'), '4046330');
   assert.equal(articleId('https://example.com/a'), '');
   assert.equal(rdText('4046330', '秋冬衣櫃'), '4046330/圖文/秋冬衣櫃');
+  assert.equal(rdText('4046330', '秋冬衣櫃', 'color'), '4046330/圖文/秋冬衣櫃');
+  assert.equal(rdText('4046330', '秋冬衣櫃', 'text'), '4046330/文字/秋冬衣櫃', '純文字寫「文字」');
 });
 
 test('RD：相同的筆去重，超過 10 筆分批', async () => {

@@ -15,7 +15,7 @@ export function createRd({ tb }) {
 
   // results：/fb/post 的結果；pageOf(id) -> { rd, short }
   // 回傳 { lines：要顯示的文字（空＝沒開或沒有要寫的）, missing：組不出 RD 格式的原因, failed：{ text, where[] } 寫入失敗要手動貼的 }
-  async function write({ results, pageOf, link, title, sentAt }) {
+  async function write({ results, pageOf, link, title, sentAt, mode }) {   // mode：text＝純文字（寫「文字」）
     const out = (lines, extra) => ({ lines, missing: null, failed: null, ...extra });
     if (!sw.checked) return out([]);
     const id = articleId(link);
@@ -27,7 +27,7 @@ export function createRd({ tb }) {
       const p = pageOf(r.page);
       if (!r.ok || r.dup || !p || !p.rd) continue;   // dup＝先前已送出（RD 當時已寫過）
       const ms = r.scheduled && r.at ? r.at * 1000 : sentAt;
-      entries.push({ page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(id, slug) });
+      entries.push({ page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(id, slug, mode) });
     }
     if (!entries.length) return out([results.some((r) => r.ok && r.dup) && !results.some((r) => r.ok && !r.dup) ? 'RD：先前已送出，這次未重寫' : 'RD：成功的粉專都沒有設定 RD 區段，未寫入']);
     const lines = [], where = [];
@@ -44,7 +44,7 @@ export function createRd({ tb }) {
         for (const x of batch) where.push(at(x));
       }
     }
-    return out(lines, where.length ? { failed: { text: rdText(id, slug), where } } : {});
+    return out(lines, where.length ? { failed: { text: rdText(id, slug, mode), where } } : {});
   }
   // Apps Script 回傳的一筆 → 顯示文字，例：RD 主粉 15:13 → AE255（插入）
   function line(x) {

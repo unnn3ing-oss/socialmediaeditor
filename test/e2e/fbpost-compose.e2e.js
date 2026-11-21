@@ -176,7 +176,9 @@ test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍�
   await frame.click('#modeSeg [data-mode=text]');
   assert.equal(await frame.isHidden('#imgArea'), true);
   assert.equal(await frame.isVisible('#noImg'), true);
-  // 純文字：只剩標題框（＝貼文內容），貼文內容框隱藏但內容保留、不送出；不顯示每行字數
+  // 純文字：只剩標題框（＝貼文內容），貼文內容框隱藏但內容保留、不送出；文字背景選「無」時不顯示每行字數
+  await frame.waitForSelector('#bgBox:not([hidden])');
+  await frame.click('#bgSws .sw.bg-none');
   assert.equal(await frame.isHidden('#msg'), true);
   assert.equal(await frame.isHidden('#msgLbl'), true);
   assert.equal(await frame.textContent('#titleName'), '標題（貼文內容）');
@@ -203,13 +205,18 @@ test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍�
   await page.close();
 });
 
-test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg；超過 130 字擋送出；清空回「無」', async () => {
+test('純文字文字背景：預設隨機純色／漸層、選「無」不顯示；N／130 字、送出帶 bg；超過 130 字擋送出；清空重新隨機', async () => {
   const { page, frame, posts } = await openFb();
   await frame.click('#modeSeg [data-mode=text]');
   await frame.waitForSelector('#bgBox:not([hidden])');
   assert.equal(await frame.locator('#bgSws .sw').count(), 3, '「無」＋2 個背景');
-  assert.equal(await frame.isHidden('#bgPrev'), true, '預設無背景');
-  await frame.fill('#title', '\n今天你投票了嗎？');
+  assert.equal(await frame.isVisible('#bgPrev'), true, '預設隨機一個背景');
+  assert.notEqual(await frame.textContent('#bgName'), '無');
+  await frame.click('#bgSws .sw.bg-none');
+  assert.equal(await frame.isHidden('#bgPrev'), true, '「無」不顯示背景預覽');
+  assert.equal(await frame.isHidden('#titleLines'), true, '「無」不顯示每行字數');
+  assert.equal(await frame.getAttribute('#title', 'wrap'), 'soft');
+  await frame.fill('#title', '今天你投票了嗎？');
   await frame.click('#bgSws .sw[data-bg="106018623298955"]');
   assert.equal(await frame.isVisible('#bgPrev'), true);
   assert.equal(await frame.textContent('#bgText'), '今天你投票了嗎？');
@@ -232,11 +239,54 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   assert.match(body, /name="bg"\r\n\r\n106018623298955/);
   assert.doesNotMatch(body, /name="image"/);
   await frame.click('#doneAgain');
-  assert.equal(await frame.textContent('#bgName'), '無', '送出完成清空後回「無」');
+  assert.ok(['純紫', '紅→藍漸層'].includes(await frame.textContent('#bgName')), '送出完成清空後重新隨機（不選圖樣）');
   // 切到選套版：不帶 bg、字數不顯示 130
   await frame.click('#bgSws .sw[data-bg="249307305544279"]');
   await frame.click('#modeSeg [data-mode=image]');
   assert.doesNotMatch(await frame.textContent('#titleCount'), /130/);
+  await page.close();
+});
+
+test('純文字背景預覽：可直接編輯並同步標題框；字級自適應；每行 11 字右側提醒不擋送出', async () => {
+  const { page, frame, posts } = await openFb();
+  await frame.click('#modeSeg [data-mode=text]');
+  await frame.waitForSelector('#bgBox:not([hidden])');
+  await frame.click('#bgSws .sw[data-bg="106018623298955"]');
+  assert.equal(await frame.getAttribute('#title', 'wrap'), 'off', '有背景時不自動換行（右側字數才對得齊）');
+  // 預覽上打字 → 標題框同步
+  await frame.click('#bgText');
+  await page.keyboard.type('第一行');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('第二行');
+  assert.equal(await frame.inputValue('#title'), '第一行\n第二行');
+  assert.deepEqual(await frame.$$eval('#titleLines div', (els) => els.map((e) => e.textContent)), ['3/11', '3/11']);
+  await page.keyboard.press('Enter');
+  assert.equal(await frame.inputValue('#title'), '第一行\n第二行\n', '結尾按 Enter 只多一個換行');
+  await page.keyboard.type('三');
+  assert.equal(await frame.inputValue('#title'), '第一行\n第二行\n三');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  // 標題框改 → 預覽同步（預覽沒在編輯時）
+  await frame.fill('#title', '短');
+  const big = await frame.evaluate(() => parseFloat(document.getElementById('bgText').style.fontSize));
+  assert.equal(big, 30, '字少用最大字級');
+  assert.equal(await frame.textContent('#bgText'), '短');
+  // 超過 11 字：提醒、變紅，字級縮小但不超出預覽框
+  await frame.fill('#title', '一二三四五六七八九十一二\n短\n' + '多\n'.repeat(8) + '尾');
+  assert.match(await frame.textContent('#titleCount'), /第 1 行 12 字，超過 11 字（仍可送出）/);
+  assert.match(await frame.getAttribute('#titleCount', 'class'), /\bbad\b/);
+  assert.match(await frame.getAttribute('#titleLines div:first-child', 'class'), /\bbad\b/);
+  const fit = await frame.evaluate(() => { const b = document.getElementById('bgPrev'), p = document.getElementById('bgText'), cs = getComputedStyle(b);
+    return { s: parseFloat(p.style.fontSize), ow: p.scrollWidth <= b.clientWidth - parseFloat(cs.paddingLeft) * 2 + 1, oh: p.scrollHeight <= b.clientHeight - parseFloat(cs.paddingTop) * 2 + 1 }; });
+  assert.ok(fit.s < 30 && fit.s >= 14, '字多時字級縮小：' + fit.s);
+  assert.ok(fit.ow && fit.oh, '縮小後塞得進預覽框');
+  if (SHOT) await frame.locator('.compose').first().screenshot({ path: path.join(SHOT, 'fbpost-text-preview.png') });
+  // 不擋送出
+  await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
+  await frame.click('#pages .chip[data-page="111"] .chip-l');
+  await frame.click('#sendBtn');
+  await frame.waitForSelector('#doneList li');
+  assert.equal(posts.length, 1);
   await page.close();
 });
 

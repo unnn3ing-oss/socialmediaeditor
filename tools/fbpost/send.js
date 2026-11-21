@@ -93,7 +93,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
       const results = data.results || [];
       if (history) history.save(snap, results.filter((r) => r.ok && r.postId).map((r) => String(r.postId)));
       for (const r of results) { if (r.unknown) unknown.add(r.page); else unknown.delete(r.page); }
-      const rdOut = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt });
+      const rdOut = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt, mode: composer.mode() });
       if (results.length && results.every((r) => r.ok)) { clearAll(); showDone(results, rdOut); return; }
       renderResults($('results'), results, rdOut.lines);
       $('results').scrollIntoView({ block: 'nearest' });

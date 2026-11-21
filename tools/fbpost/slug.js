@@ -1,4 +1,4 @@
-// 排入 RD 的文字（純函式）：`文章ID/圖文/SLUG`
+// 排入 RD 的文字（純函式）：`文章ID/圖文/SLUG`；純文字（不附圖）`文章ID/文字/SLUG`
 const LABELS = ['快訊', '最新', '新'];          // 第一行只有這類標籤時改從下一行取
 const clean = (s) => String(s || '').replace(/[^\p{L}\p{N}]/gu, '');   // 只留文字和數字
 
@@ -29,7 +29,7 @@ export function articleId(url) {
   return m ? m[1] : '';
 }
 
-export const rdText = (id, slug) => `${id}/圖文/${slug}`;
+export const rdText = (id, slug, mode) => `${id}/${mode === 'text' ? '文字' : '圖文'}/${slug}`;
 
 // 送給後端的 RD 筆數：同一筆（區段＋日期＋時間＋文字都一樣）只寫一次；後端一次最多 10 筆，超過就分批
 export function rdBatches(entries, size = 10) {

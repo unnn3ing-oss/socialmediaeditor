@@ -18,7 +18,7 @@ export const CARDS = [
   { key: 'groups', name: '權限組', sensitive: true },
   { key: 'audit', name: '操作紀錄' },
   { key: 'rundown', name: 'Rundown 連線' },
-  { key: 'assets', name: '素材' },
+  { key: 'assets', name: '素材設定' },
   { key: 'logs', name: '錯誤日誌' },
   { key: 'levels', name: '層級權限', sensitive: true, locked: true }
 ];
