@@ -636,6 +636,22 @@ test('文章網址必填：沒填按送出會提示、不送出', async () => {
   await page.close();
 });
 
+test('粉專膠囊一列左右滑：不換行、滾輪左右捲、右邊淡出提示還有', async () => {
+  const { page } = await newPage('admin', { width: 300, height: 760 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.$eval('#pages', (el) => { el.style.maxWidth = '160px'; });   // 測試只有 3 個粉專，縮窄才放不下
+  const r = await page.$eval('#pages', (el) => ({ rows: new Set([...el.children].map((c) => c.offsetTop)).size, over: el.scrollWidth > el.clientWidth, wrap: getComputedStyle(el).flexWrap }));
+  assert.equal(r.rows, 1, '只有一排');
+  assert.equal(r.wrap, 'nowrap');
+  assert.ok(r.over, '放不下時可以左右滑');
+  await page.waitForFunction(() => document.getElementById('pages').classList.contains('fade-r'));
+  await page.hover('#pages');
+  await page.mouse.wheel(0, 300);
+  await page.waitForFunction(() => { const el = document.getElementById('pages'); return el.scrollLeft > 20 && el.classList.contains('fade-l'); });
+  await page.close();
+});
+
 test('舊版版面：1280×800 與窄寬度下，新增發文底列（粉專、送出）都在畫面內', async () => {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 400, height: 760 }]) {
     const { page } = await newPage('admin', viewport);

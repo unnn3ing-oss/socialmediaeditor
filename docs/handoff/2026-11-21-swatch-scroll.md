@@ -14,10 +14,10 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| tools/fbpost/title.js、e2e | 提醒文字 | ⬜ |
-| tools/fbpost/index.html、fbpost.css、compose.js | 選色列統一＋共用左右滑 | ⬜ |
-| tools/fbpost/fbpost.css、targets.js／共用 | 粉專列左右滑 | ⬜ |
-| ui/compose/render.js | 新增 8 色 | ⬜ |
+| tools/fbpost/title.js、e2e | 提醒文字 | ✅ |
+| tools/fbpost/index.html、fbpost.css、compose.js | 選色列統一＋共用左右滑 | ✅ |
+| tools/fbpost/fbpost.css、targets.js／共用 | 粉專列左右滑 | ✅ |
+| ui/compose/render.js | 新增 8 色 | ✅ |
 
 ## 測試
 npm test；fbpost、fbpost-compose、pattern 相關 e2e；全部 e2e 整合時跑一次；build --check。

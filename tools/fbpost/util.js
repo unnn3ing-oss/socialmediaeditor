@@ -60,3 +60,29 @@ export async function copyText(text) {
 
 // 貼文開頭的空白行（帶入時留給小編文，沒填就不送）
 export const stripLead = (t) => String(t).replace(/^(?:[ \t\u3000]*\n)+/, '');
+
+// 一列左右滑（選色列、粉專列）：滾輪上下 → 左右捲；左右還有東西時邊緣淡出（.fade-l／.fade-r）；鍵盤焦點移到看不到的項目會自動捲過去
+export function hscroll(el) {
+  const sync = () => {
+    const max = el.scrollWidth - el.clientWidth;
+    el.classList.toggle('fade-l', max > 2 && el.scrollLeft > 2);
+    el.classList.toggle('fade-r', max > 2 && el.scrollLeft < max - 2);
+  };
+  const reveal = (child) => {
+    if (!child || !el.clientWidth) return;
+    const l = child.offsetLeft - el.offsetLeft, r = l + child.offsetWidth;
+    if (l < el.scrollLeft) el.scrollLeft = Math.max(0, l - 24);
+    else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 24;
+    sync();
+  };
+  el.addEventListener('scroll', sync, { passive: true });
+  el.addEventListener('wheel', (e) => {
+    if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    e.preventDefault(); el.scrollLeft += e.deltaY;
+  }, { passive: false });
+  el.addEventListener('focusin', (e) => { const c = [...el.children].find((x) => x.contains(e.target)); reveal(c); });
+  new ResizeObserver(sync).observe(el);
+  new MutationObserver(sync).observe(el, { childList: true });
+  sync();
+  return { sync, reveal };
+}

@@ -158,7 +158,6 @@ body.no-scroll { overflow: hidden; }
 .bg-box { margin: 12px 0 4px; }
 .bg-box .hint { margin: 6px 4px 0; }
 .bg-sws { margin: 0; }
-.bg-sws .sw { width: 34px; height: 34px; }
 .bg-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line-strong); }
 .bg-more { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink, #1f2328); font: inherit; font-size: 13px; cursor: pointer; }
 .bg-more.is-on { box-shadow: 0 0 0 2px var(--accent); border-color: transparent; }
@@ -180,15 +179,6 @@ body.no-scroll { overflow: hidden; }
 .swatch-box { margin: 12px 0 4px; }
 .sw-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 6px; font-size: 13px; }
 .sw-head span { color: var(--accent); font-weight: 500; font-variant-numeric: tabular-nums; }
-.shelf { display: flex; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--accent-tint); }
-.shelf-nav { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line-strong); background: #fff; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
-.shelf-nav svg { width: 12px; height: 12px; fill: none; stroke: var(--text); stroke-width: 1.8; }
-.shelf-nav:disabled { opacity: .35; cursor: default; }
-.shelf .swatches { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: nowrap; gap: 10px; margin: 0; padding: 4px 2px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
-.shelf .swatches::-webkit-scrollbar { display: none; }
-.shelf .swatches .sw { flex: none; width: 52px; height: 52px; border-radius: var(--radius-control); border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line-strong); scroll-snap-align: start; position: relative; }
-.shelf .swatches .sw.is-on { box-shadow: 0 0 0 3px var(--accent); }
-.shelf .swatches .sw.is-on::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 20px; text-shadow: 0 1px 2px rgba(0, 0, 0, .55); }
 
 /* ---- 第 2、3 則留言 ---- */
 .extras { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
@@ -282,7 +272,6 @@ body.no-scroll { overflow: hidden; }
   .rd { flex: 1 1 100%; }
   .clear-btn { flex: 0 0 auto; }
   .send, .send-wrap { flex: 1 1 auto; width: auto; min-width: 0; }
-  .post-foot .chips { max-height: 92px; overflow-y: auto; }
 }
 .seg.tabs { display: inline-flex; align-self: flex-start; }
 .post-head .pill, .fp-head .pill { line-height: 1.5; }
@@ -367,14 +356,6 @@ body.no-scroll { overflow: hidden; }
   .compose > .left { overflow-y: auto; padding: 20px 6px 20px 20px; }
   .compose > .right { overflow-y: auto; padding: 20px 20px 20px 6px; overscroll-behavior: contain; }
   .post-body > :not(.compose) { margin-left: 20px; margin-right: 20px; }
-  /* 純文字圖底色選框縮小 1/3 */
-  .shelf { padding: 5px; }
-  .shelf .swatches { gap: 8px; padding: 3px 2px; }
-  .shelf .swatches .sw { width: 35px; height: 35px; border-width: 2px; border-radius: 9px; }
-  .shelf .swatches .sw.is-on { box-shadow: 0 0 0 2px var(--accent); }
-  .shelf .swatches .sw.is-on::after { font-size: 14px; }
-  .shelf-nav { width: 30px; height: 30px; min-height: 30px; }
-  .shelf-nav svg { width: 9px; height: 9px; }
 }
 
 /* 依權限隱藏（用 class，不重建列表） */
@@ -416,7 +397,6 @@ body.no-scroll { overflow: hidden; }
 .is-side .post-body input[type=url], .is-side .post-body input[type=text] { height: 40px; }
 .is-side .soft-btn, .is-side .add-comment { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
 .is-side .extra-del { min-height: 32px; }
-.is-side .shelf-nav { width: 32px; height: 32px; min-height: 32px; }
 .is-side .help { width: 32px; height: 32px; }
 .is-side .rd-copy { min-height: 32px; }
 /* 底列：粉專膠囊 36、RD 左開關右 SLUG 同一列、清空／送出 40 */
@@ -489,3 +469,20 @@ body.no-scroll { overflow: hidden; }
 .duty-item { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 12px; cursor: pointer; font-weight: 500; }
 .duty-item:has(input:checked) { border-color: var(--accent); background: #eaf1ff; }
 .duty-item input { width: 18px; height: 18px; margin: 0; }
+
+/* 一列左右滑（選色列、粉專列；util.js hscroll）：不換行、隱藏捲軸，左右還有東西時邊緣淡出 */
+.hscroll { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; --fl: 0px; --fr: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); }
+.hscroll::-webkit-scrollbar { display: none; }
+.hscroll.fade-l { --fl: 28px; }
+.hscroll.fade-r { --fr: 28px; }
+.hscroll > * { flex: none; }
+/* 選色（純文字圖底色、文字背景）：34px 小方塊；外圈留 3px 給選中藍框，不被捲動區裁掉 */
+.swatches.pick-sws { gap: 6px; margin: 0; padding: 3px; }
+.pick-sws .sw { width: 34px; height: 34px; }
+.pick-sws .bg-sep { align-self: stretch; }
+.pick-sws .bg-more { white-space: nowrap; }
+/* 粉專膠囊一列；上下留 2px 給聚焦外框 */
+.post-foot .chips.hscroll { padding: 2px; margin: -2px; }
+.post-foot .chips.hscroll .chip { flex: none; white-space: nowrap; }
