@@ -429,7 +429,7 @@ export function createComposer({ tb, assets }) {
       this.reset();
       if (rec.mode === 'image' || rec.mode === 'color' || rec.mode === 'text') { st.mode = rec.mode; setMode(rec.mode); }
       if (assets.company && (rec.frame === 'news' || rec.frame === 'entertainment')) { st.frame = rec.frame; setFrame(rec.frame); }
-      if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; showColor(); }
+      if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; setColor(rec.color); }
       $('link').value = rec.link || ''; lastPulled = $('link').value.trim();
       $('title').value = rec.title || '';
       showMode();

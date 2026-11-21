@@ -1100,3 +1100,30 @@ test('再發一次：純文字帶回模式與標題框', async () => {
   if (SHOT) await page.locator('.post-body, #postDlg .dlg-box, #postDlg').first().screenshot({ path: path.join(SHOT, 'fbpost-text-mode.png') });
   await page.close();
 });
+
+test('再發一次：純色底色帶回時色塊亮起；值班視窗開著按 Esc 不會關掉新增發文', async () => {
+  const soon = Math.floor(Date.now() / 1000) + 7200;
+  const { page } = await newPage('admin', { width: 1280, height: 900 }, { duty: ['111'], sched: [{ id: '111_9', message: 'x', at: soon, picture: null, comment: 'none' }] });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('#modeSeg [data-mode=color]');
+  const colors = await page.$$eval('#swatches [data-color]', (b) => b.map((x) => x.dataset.color));
+  const pick = colors[colors.length - 1];
+  await page.click(`#swatches [data-color="${pick}"]`);
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.fill('#title', '純色標題');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneDlg[open]');
+  await page.click('#doneAgain');
+  await page.click('#modeSeg [data-mode=image]');
+  await page.click('#dlgClose');
+  await page.click('#schedReload');
+  await page.click('#schedList li[data-id="111_9"] .act-resend');
+  await page.waitForSelector('#postDlg:not([hidden])');
+  assert.equal(await page.getAttribute(`#swatches [data-color="${pick}"]`, 'aria-pressed'), 'true');
+  // 值班視窗（手動開）開著按 Esc：只關值班視窗，新增發文留著
+  await page.evaluate(() => document.getElementById('dutyDlg').showModal());
+  await page.keyboard.press('Escape');
+  assert.equal(await page.isVisible('#postDlg'), true);
+  await page.close();
+});

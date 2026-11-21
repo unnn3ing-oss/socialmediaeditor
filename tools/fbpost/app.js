@@ -78,7 +78,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   // 再發一次：開新增發文、清空後帶回網址／照片／標題（粉專照值班粉專預勾）；正在編輯的內容先問
   async function resend(rec) {
     try { await ensureCompose(); } catch (e) { $('pagesState').textContent = '載入新增發文失敗：' + errText(e); return; }
-    const busy = $('link').value.trim() || $('title').value.trim() || $('msg').value.trim();
+    const busy = $('link').value.trim() || $('title').value.trim() || $('msg').value.trim() || composer.snapshot().photo;
     if (busy && !(await confirmBox('要用這則貼文覆蓋嗎？', '新增發文裡已經有內容，再發一次會清空它（網址、照片、標題、貼文內容、粉專勾選）。'))) return;
     sender.clearAll();
     await composer.restore(rec);
