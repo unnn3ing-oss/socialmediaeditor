@@ -152,12 +152,12 @@
             <input id="link" type="url" inputmode="url" required aria-required="true" placeholder="https://news.tvbs.com.tw/...">
             <p class="hint" id="pullHint" role="status"></p>
           </div>
-          <label class="lbl" for="title">標題 <small id="titleCount"></small></label>
+          <label class="lbl" for="title"><span id="titleName">標題</span> <small id="titleCount"></small></label>
           <div class="title-row">
             <textarea id="title" rows="4" wrap="off" placeholder="帶入時自動換行"></textarea>
             <div class="title-lines" id="titleLines" aria-hidden="true"></div>
           </div>
-          <label class="lbl" for="msg">貼文內容 <small id="msgCount"></small></label>
+          <label class="lbl" for="msg" id="msgLbl">貼文內容 <small id="msgCount"></small></label>
           <textarea id="msg" rows="4" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
           <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
           <input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）">

@@ -37,6 +37,8 @@ export function createComposer({ tb, assets }) {
     $('fontWarn').hidden = false;
   }
   const ready = () => !!source();
+  // 實際送出的貼文內容：純文字＝標題框；其他＝貼文內容（開頭留給小編文的空行沒填就拿掉）
+  const postText = () => (st.mode === 'text' ? $('title').value.trim() : stripLead($('msg').value));
   const px = () => (st.mode === 'color' ? TITLE_PX.color : TITLE_PX.image);
   let titleEd = null;
 
@@ -84,7 +86,7 @@ export function createComposer({ tb, assets }) {
     $('bgPrev').hidden = !b; $('noImgTxt').hidden = !!b;
     $('bgName').textContent = b ? b.name : '無';
     if (b) {
-      const t = stripLead($('msg').value).trim(), n = [...t].length;
+      const t = postText().trim(), n = [...t].length;
       $('bgPrev').style.background = b.css;
       if (bgImgUrl[b.id]) $('bgPrev').style.background = `${b.css} url("${bgImgUrl[b.id]}") center / cover no-repeat`;
       $('bgPrev').style.color = b.text || '#fff';
@@ -156,10 +158,12 @@ export function createComposer({ tb, assets }) {
   }).catch(() => {});
 
   // 字數只算實際送出的內容（開頭留給小編文的空行沒填，送出時會拿掉）；選了背景顯示「N／130 字」，超過變紅
+  // 純文字：只用標題框（＝貼文內容，貼文內容框隱藏、不送出）；字數顯示在標題旁
   const msgCount = () => {
-    const n = [...stripLead($('msg').value)].length, bg = bgOn();
-    $('msgCount').textContent = bg ? `${n}／${BG_MAX} 字（文字背景）` : `${n} 字`;
-    $('msgCount').classList.toggle('bad', !!bg && n > BG_MAX);
+    const n = [...postText()].length, bg = bgOn();
+    const el = st.mode === 'text' ? $('titleCount') : $('msgCount');
+    el.textContent = bg ? `${n}／${BG_MAX} 字（文字背景）` : `${n} 字`;
+    el.classList.toggle('bad', !!bg && n > BG_MAX);
     bgShow();
     if ($('msg').offsetParent) grow($('msg'));
   };
@@ -203,6 +207,13 @@ export function createComposer({ tb, assets }) {
     $('noImg').hidden = st.mode !== 'text';
     $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
     $('swatchBox').hidden = st.mode !== 'color';
+    const text = st.mode === 'text';
+    $('msg').hidden = text; $('msgLbl').hidden = text; $('titleLines').hidden = text;
+    $('titleName').textContent = text ? '標題（貼文內容）' : '標題';
+    $('title').setAttribute('wrap', text ? 'soft' : 'off');
+    $('title').placeholder = text ? '純文字貼文只發這一欄的內容' : '帶入時自動換行';
+    if (!text) $('msgCount').classList.remove('bad');
+    titleChanged();
     if (st.mode === 'color') requestAnimationFrame(showColor);
     draw(); syncFx(); msgCount();
   }
@@ -249,6 +260,12 @@ export function createComposer({ tb, assets }) {
 
   // ---- 標題：改了先畫，缺的字型段載好再重畫；旁邊顯示每行字數（超過只提醒） ----
   function titleChanged() {
+    if (st.mode === 'text') {   // 純文字：沒有圖上的標題，不顯示每行字數
+      $('titleLines').textContent = '';
+      msgCount();
+      if ($('title').offsetParent) grow($('title'));
+      return;
+    }
     const c = titleCheck($('title').value);
     $('titleCount').textContent = c.text;
     $('titleCount').classList.toggle('bad', !c.ok);
@@ -406,6 +423,7 @@ export function createComposer({ tb, assets }) {
       return new File([blob], 'fbpost.png', { type: 'image/png' });
     },
     mode: () => st.mode,
+    text: postText,   // 送出用的貼文內容
     bg: bgOn   // 送出用的文字背景代號（只有純文字模式；沒選＝''）
   };
 }

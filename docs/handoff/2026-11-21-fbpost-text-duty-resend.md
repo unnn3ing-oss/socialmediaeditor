@@ -17,13 +17,13 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/compose.js`／`send.js`／`index.html`／`fbpost.css` | 純文字只用標題框 | ⬜ |
+| `tools/fbpost/compose.js`（`postText`、showMode）／`send.js`（`composer.text()`）／`index.html`（`#titleName`、`#msgLbl`） | 純文字只用標題框 | ✅ |
 | `tools/fbpost/duty.js`（新）＋ app／targets | 值班粉專視窗、班段、預勾 | ⬜ |
 | `tools/fbpost/history.js`（新）＋ send／manage／compose | 送出記錄、再發一次 | ⬜ |
 | 測試 | fbpost e2e、單元 | ⬜ |
 
 ## 下一步
-- [ ] 一、純文字只用標題框
+- [x] 一、純文字只用標題框（fbpost＋compose e2e 61）
 - [ ] 二、值班粉專
 - [ ] 三、再發一次
 - [ ] 全部 fbpost e2e、側邊欄窄版、獨立審查

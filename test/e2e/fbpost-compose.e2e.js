@@ -171,17 +171,33 @@ test('純文字：不附圖送出；標題字數超過 15 字紅字提醒但仍�
   await frame.fill('#title', '一二三四五六七八九十一二三四五六\n第二行');
   assert.match(await frame.textContent('#titleCount'), /第 1 行 16 字，超過 15 字（仍可送出）/);
   assert.match(await frame.getAttribute('#titleCount', 'class'), /\bbad\b/);
+  await frame.fill('#msg', '這段不會送出');
   await frame.click('#modeSeg [data-mode=text]');
   assert.equal(await frame.isHidden('#imgArea'), true);
   assert.equal(await frame.isVisible('#noImg'), true);
-  await frame.fill('#msg', '只有文字');
+  // 純文字：只剩標題框（＝貼文內容），貼文內容框隱藏但內容保留、不送出；不顯示每行字數
+  assert.equal(await frame.isHidden('#msg'), true);
+  assert.equal(await frame.isHidden('#msgLbl'), true);
+  assert.equal(await frame.textContent('#titleName'), '標題（貼文內容）');
+  assert.equal(await frame.textContent('#titleCount'), '20 字');
+  assert.equal(await frame.getAttribute('#title', 'wrap'), 'soft');
+  assert.equal(await frame.isHidden('#titleLines'), true);
+  await frame.fill('#title', '只有文字\n第二行');
+  assert.equal(await frame.textContent('#titleCount'), '8 字');
+  // 切回選套版：貼文內容還在、標題每行字數回來
+  await frame.click('#modeSeg [data-mode=image]');
+  assert.equal(await frame.inputValue('#msg'), '這段不會送出');
+  assert.equal(await frame.textContent('#titleName'), '標題');
+  assert.equal(await frame.getAttribute('#title', 'wrap'), 'off');
+  await frame.click('#modeSeg [data-mode=text]');
   await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });   // 網址必填（不觸發帶入）
   await frame.click('#pages .chip[data-page="111"] .chip-l');
   await frame.click('#sendBtn');
   await frame.waitForSelector('#doneList li');
   const body = posts[0].toString('utf8');
   assert.doesNotMatch(body, /name="image"/, '純文字不附圖');
-  assert.match(body, /name="message"\r\n\r\n只有文字/);
+  assert.match(body, /name="message"\r\n\r\n只有文字\r?\n第二行\r\n/);
+  assert.doesNotMatch(body, /這段不會送出/);
   assert.doesNotMatch(body, /name="commentLead"/, '留言內容沒輸入就不送，後端用預設文字');
   await page.close();
 });
@@ -192,23 +208,23 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   await frame.waitForSelector('#bgBox:not([hidden])');
   assert.equal(await frame.locator('#bgSws .sw').count(), 3, '「無」＋2 個背景');
   assert.equal(await frame.isHidden('#bgPrev'), true, '預設無背景');
-  await frame.fill('#msg', '\n今天你投票了嗎？');
+  await frame.fill('#title', '\n今天你投票了嗎？');
   await frame.click('#bgSws .sw[data-bg="106018623298955"]');
   assert.equal(await frame.isVisible('#bgPrev'), true);
   assert.equal(await frame.textContent('#bgText'), '今天你投票了嗎？');
   assert.equal(await frame.textContent('#bgName'), '純紫');
   assert.equal(await frame.evaluate(() => getComputedStyle(document.getElementById('bgPrev')).color), 'rgb(255, 255, 255)');
   assert.equal(await frame.locator('#bgSws .bg-sep').count(), 3, '純色、漸層、圖樣各一組');
-  assert.match(await frame.textContent('#msgCount'), /^8／130 字/);
+  assert.match(await frame.textContent('#titleCount'), /^8／130 字/);
   await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
   await frame.click('#pages .chip[data-page="111"] .chip-l');
   // 超過 130 字：字數變紅、擋送出
-  await frame.fill('#msg', '字'.repeat(131));
-  assert.match(await frame.getAttribute('#msgCount', 'class'), /\bbad\b/);
+  await frame.fill('#title', '字'.repeat(131));
+  assert.match(await frame.getAttribute('#titleCount', 'class'), /\bbad\b/);
   await frame.click('#sendBtn');
   await frame.waitForFunction(() => /最多 130 字（目前 131 字）/.test(document.getElementById('sendErr').textContent));
   assert.equal(posts.length, 0);
-  await frame.fill('#msg', '短句');
+  await frame.fill('#title', '短句');
   await frame.click('#sendBtn');
   await frame.waitForSelector('#doneList li');
   const body = posts[0].toString('utf8');
@@ -219,7 +235,7 @@ test('純文字文字背景：選了顯示預覽與 N／130 字、送出帶 bg�
   // 切到選套版：不帶 bg、字數不顯示 130
   await frame.click('#bgSws .sw[data-bg="249307305544279"]');
   await frame.click('#modeSeg [data-mode=image]');
-  assert.doesNotMatch(await frame.textContent('#msgCount'), /130/);
+  assert.doesNotMatch(await frame.textContent('#titleCount'), /130/);
   await page.close();
 });
 
@@ -236,7 +252,7 @@ test('純文字圖樣背景：點「圖樣」才帶登入讀圖；選了預覽�
   await frame.waitForFunction(() => /blob:/.test(document.querySelector('#bgImgs .sw[data-bg="303063890126415"]').style.backgroundImage));
   assert.deepEqual(BG_IMG_HITS.map((h) => h.p), ['/fb/bg/303063890126415']);
   assert.match(BG_IMG_HITS[0].auth, /^Bearer /);
-  await frame.fill('#msg', '\n圖樣背景測試');
+  await frame.fill('#title', '\n圖樣背景測試');
   await frame.click('#bgImgs .sw[data-bg="303063890126415"]');
   assert.equal(await frame.textContent('#bgName'), '黃橘粉圖樣');
   assert.match(await frame.evaluate(() => document.getElementById('bgPrev').style.backgroundImage), /blob:/);

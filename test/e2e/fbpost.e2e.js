@@ -116,7 +116,7 @@ test('純文字貼文：勾到沒設定文字 UTM 的粉專會先提醒，返回
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await openPost(page);
   await page.click('#modeSeg [data-mode=text]');
-  await page.fill('#msg', '只有文字');
+  await page.fill('#title', '只有文字');
   await page.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(333) + ' .chip-l');
