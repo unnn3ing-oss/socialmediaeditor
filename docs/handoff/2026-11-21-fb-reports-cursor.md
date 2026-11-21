@@ -1,5 +1,5 @@
 # 數據報表：續頁 Invalid cursor 修正
-- 狀態：進行中　- 分支：claude/sleepy-albattani-xtbkpg　- 最後更新：2026-11-21
+- 狀態：已完成（已併入 main）　- 分支：claude/sleepy-albattani-xtbkpg　- 最後更新：2026-11-21
 - 使用者原始需求：「讀取失敗：臉書：(#100) Invalid cursor … 會出現這個無法順利讀取數據」
 
 ## 已定案的決定
