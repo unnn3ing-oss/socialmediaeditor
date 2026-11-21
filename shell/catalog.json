@@ -96,7 +96,7 @@
       },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=017b868080"
+      "entry": "tools/fbvideo/index.html?v=fc4cffa23e"
     },
     {
       "id": "fbreports",
@@ -112,7 +112,7 @@
       },
       "icon": "tools/fbreports/icon.svg",
       "thumb": "tools/fbreports/thumb.svg",
-      "entry": "tools/fbreports/index.html?v=d71fec16cd"
+      "entry": "tools/fbreports/index.html?v=caca72707e"
     },
     {
       "id": "livereq",
