@@ -2,7 +2,7 @@
 // The background script owns one controller; the side panel and the web page only see its state.
 import {
   addPlaceholder, applyHostEvent, applyResolveFailed, applyResolved, createState, hostLost, markRunning,
-  canClearAll, clearAll, itemKey, setTagsError, markSent, outputDirLocked, pendingDownloads, removeItem, retryItem, setCover, setHostConnected, setSettings, setTags, QueueError,
+  applyAutoRetry, cancelAutoRetries, canAutoRetry, scheduleAutoRetry, canClearAll, clearAll, itemKey, setTagsError, markSent, outputDirLocked, pendingDownloads, removeItem, retryItem, setCover, setHostConnected, setSettings, setTags, QueueError,
 } from "./queue.js";
 import { KEEP_TAGS, MAX_TAGS, buildCopyText, extractHashtags, pickTags } from "./copytext.js";
 import { coverBaseName, coverName } from "./covername.js";
@@ -20,7 +20,9 @@ const fail = (error) => ({ ok: false, error });
 // deps.host: { connected(), version(), request(message, timeoutMs) -> Promise<event>, send(message) }
 // prefetchTags: read every video's description by itself (one at a time, `tagGapMs` apart) so its text is ready under the row.
 export function createController({ host, save, notify, fetchFn = fetch, downloads, now = Date.now, initial = null, retryDelayMs = 400,
-  prefetchTags = false, tagGapMs = 4000, pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
+  prefetchTags = false, tagGapMs = 4000,
+  retryPause = (ms) => new Promise((resolve) => { const timer = setTimeout(resolve, ms); timer.unref?.(); }), // 失敗後等「每支間隔」再自動重試（測試可換掉）
+  pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
   let state = createState(initial);
   const sentIds = new Set(); // video ids the host already has in its current job
   const resolving = new Set(); // uids with a resolve request in flight
@@ -184,8 +186,34 @@ export function createController({ host, save, notify, fetchFn = fetch, download
     return { ok: true };
   }
 
+  // 失敗（有影片 ID）後，等「每支間隔」秒數自動重試一次：時間到回到等待，並入正在跑的任務（排在最後），
+  // 任務已結束就開新一批。使用者停止、任務被中止、斷線、移除或清除時不重試。
+  function scheduleRetry(uid) {
+    if (stopRequested || state.aborted || !host.connected()) return;
+    const waitMs = state.settings.cooldownSec * 1000;
+    const next = scheduleAutoRetry(state, uid, now() + waitMs);
+    if (next === state) return;
+    commit(next);
+    retryPause(waitMs).then(() => {
+      const item = find(uid);
+      if (!item || item.status !== "failed" || !item.retryAt) return; // 移除、清除、手動重試或取消了
+      if (!host.connected() || state.aborted) {
+        commit(cancelAutoRetries(state));
+        return;
+      }
+      commit(applyAutoRetry(state, uid));
+      sentIds.delete(itemKey(item));
+      if (state.running) syncRun();
+      else if (!starting) {
+        const items = pendingDownloads(state);
+        if (items.length) track(startRun(items));
+      }
+    });
+  }
+
   function cancelJob() {
     stopRequested = true;
+    commit(cancelAutoRetries(state));
     try { host.send({ type: "cancel" }); } catch { /* host gone */ }
   }
 
@@ -379,6 +407,11 @@ export function createController({ host, save, notify, fetchFn = fetch, download
       const next = applyHostEvent(state, seen, now());
       if (next !== state) commit(next);
       if (event.type === "item_failed" || event.type === "item_removed") sentIds.delete(event.itemId);
+      if (event.type === "item_failed") {
+        const failed = state.items.find((i) => i.id && itemKey(i) === event.itemId && canAutoRetry(i) && !i.retryAt);
+        if (failed) scheduleRetry(failed.uid);
+      }
+      if (event.type === "done" && (stopRequested || state.aborted) && state.items.some((i) => i.retryAt)) commit(cancelAutoRetries(state));
       if (event.type === "item_done" && !event.skipped && state.settings.autoCover) {
         const finished = state.items.find((i) => i.id && itemKey(i) === event.itemId && !i.dupOf && i.status === "done" && !isInstagramUrl(i.url));
         // a video that is also queued as audio has one cover: it is saved once

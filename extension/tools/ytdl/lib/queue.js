@@ -40,6 +40,8 @@ const blankItem = (uid, fields) => ({
   uid, id: null, url: "", title: "", duration: null, tags: null, tagsV: null, textError: null, status: "waiting", dupOf: null,
   percent: null, speed: null, eta: null, file: null, height: null, audio: null, error: null, sent: false, cover: null,
   outDir: null, // the folder its video was written to (the output folder of the job it finished in)
+  retryAt: null, // 失敗後自動重試的時間（毫秒）；到時間前顯示「X 秒後自動重試」
+  autoRetried: false, // 這支已經自動重試過一次（同一支最多自動一次）
   limitHit: null, // set on the last row of a channel or playlist that came back as long as the limit: it probably goes on
   ...fields,
 });
@@ -128,7 +130,7 @@ export function createState(saved = null) {
     const limitHit = Number.isInteger(raw.limitHit) && raw.limitHit > 0 ? raw.limitHit : null;
     const outDir = typeof raw.outDir === "string" && raw.outDir ? raw.outDir : null;
     const audio = Object.hasOwn(AUDIO_LABELS, raw.audio) ? raw.audio : null;
-    let item = { ...blankItem(raw.uid, raw), audio, sent: false, cover: cleanCover(raw.cover), limitHit, outDir }; // a restart ends the host's job
+    let item = { ...blankItem(raw.uid, raw), audio, sent: false, retryAt: null, autoRetried: raw.autoRetried === true, cover: cleanCover(raw.cover), limitHit, outDir }; // a restart ends the host's job
     // tags kept by an older version were cut at three, channel tags included: they are read again
     if (item.tagsV !== TAGS_VERSION || !Array.isArray(item.tags)) item = { ...item, tags: null, tagsV: null };
     item = { ...item, textError: null }; // a failed read is tried again after a restart
@@ -191,7 +193,27 @@ export function retryItem(state, uid) {
   const item = state.items.find((i) => i.uid === uid);
   if (!item || item.status !== "failed" || !item.id) return state;
   return withItems(state, state.items.map((i) => (i.uid === uid
-    ? { ...i, status: "waiting", error: null, percent: null, speed: null, eta: null, sent: false, cover: null } : i)));
+    ? { ...i, status: "waiting", error: null, percent: null, speed: null, eta: null, sent: false, cover: null, retryAt: null } : i)));
+}
+
+// 失敗後自動重試一次：只有「有影片 ID、失敗、還沒自動重試過」的項目會排；到 `at`（毫秒）前顯示冷卻樣式。
+export const canAutoRetry = (item) => Boolean(item && item.status === "failed" && item.id && !item.dupOf && !item.autoRetried);
+export function scheduleAutoRetry(state, uid, at) {
+  const item = state.items.find((i) => i.uid === uid);
+  if (!canAutoRetry(item)) return state;
+  return { ...state, items: state.items.map((i) => (i.uid === uid ? { ...i, retryAt: at } : i)) };
+}
+// 取消所有等待中的自動重試（使用者停止、下載助手斷線、任務被中止）：項目維持失敗，可手動重試。
+export function cancelAutoRetries(state) {
+  if (!state.items.some((i) => i.retryAt)) return state;
+  return { ...state, items: state.items.map((i) => (i.retryAt ? { ...i, retryAt: null } : i)) };
+}
+// 時間到：回到等待（排在清單原來的位置，照排隊順序跟著下一批送出），並記下已自動重試過。
+export function applyAutoRetry(state, uid) {
+  const item = state.items.find((i) => i.uid === uid);
+  if (!item || item.status !== "failed" || !item.retryAt) return state;
+  return withItems(state, state.items.map((i) => (i.uid === uid
+    ? { ...i, status: "waiting", error: null, percent: null, speed: null, eta: null, sent: false, cover: null, retryAt: null, autoRetried: true } : i)));
 }
 
 export const setSettings = (state, patch) => ({ ...state, settings: cleanSettings(patch, state.settings) });
@@ -233,7 +255,7 @@ const resetInterrupted = (items) => items.map((i) => {
 });
 
 export function hostLost(state) {
-  return { ...state, running: false, cooldown: null, hostConnected: false, hostOutdated: false, items: resetInterrupted(state.items) };
+  return { ...cancelAutoRetries(state), running: false, cooldown: null, hostConnected: false, hostOutdated: false, items: resetInterrupted(state.items) };
 }
 
 export function applyHostEvent(state, event, now) {
@@ -321,6 +343,9 @@ export function describeItem(state, item, now) {
     case "skipped":
       return { ...base, label: "略過", sub: ["已下載過，略過", coverText(item.cover)].filter(Boolean).join(" · "), percent: 100 };
     default:
+      if (item.retryAt && now < item.retryAt) {
+        return { ...base, kind: "cooling", label: `失敗，${formatWait((item.retryAt - now) / 1000)}後自動重試`, sub: item.error ?? "" };
+      }
       return { ...base, kind: "failed", label: "失敗", sub: item.error ?? "" };
   }
 }

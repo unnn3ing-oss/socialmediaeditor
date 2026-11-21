@@ -106,26 +106,33 @@ function makeRow(item, handlers) {
   bar.setAttribute("aria-valuemin", "0");
   bar.setAttribute("aria-valuemax", "100");
   bar.append(document.createElement("i"));
+  // 狀態列固定一行：狀態標籤＋小黃標（"same title as row N, but another video": only a hint, the row downloads like any other）
+  // ＋單行狀態文字（省略號，title 是全文）＋失敗時的小「重試」鈕。列高不隨狀態改變。
   const line = el("div", "qline");
-  line.append(el("span", "qpill"), el("span", "qsub"));
-  const hint = el("div", "qhint"); // "same title as row N, but another video": only a hint, the row downloads like any other
-  const flashLine = el("div", "qflash");
+  const hint = el("span", "qhint");
+  const retry = el("button", "qretry");
+  retry.type = "button";
+  retry.append(icon("retry"), el("span", "", "重試"));
+  retry.setAttribute("aria-label", "重試");
+  retry.title = "重試";
+  retry.addEventListener("click", () => handlers.retry(item.uid));
+  line.append(el("span", "qpill"), hint, el("span", "qsub"), retry);
+  const flashLine = el("div", "qflash"); // 畫面外的朗讀區：複製／下載封面的結果由這裡念出，畫面上的字顯示在狀態文字位置
   flashLine.setAttribute("role", "status"); // announced when it gets text, so it is in the page from the start
   flashLine.setAttribute("aria-live", "polite");
-  main.append(head, bar, line, hint, flashLine);
+  main.append(head, bar, line, flashLine);
 
   const acts = el("div", "qacts");
   const copy = tipped(button("qcopy", "複製內文", "copy"), "複製影片內文");
   copy.addEventListener("click", () => handlers.copy(item.uid, copy));
-  const retry = tipped(button("qretry", "重試", "retry"), "重試");
-  retry.addEventListener("click", () => handlers.retry(item.uid));
   const remove = tipped(button("qx", "從清單移除", "x"), "從清單移除");
-  acts.append(copy, retry, remove);
+  acts.append(copy, remove);
 
   // With `handlers.askBeforeRemove` (the side panel) the X first turns the row into a question; the web page removes at once.
-  const ask = el("div", "qask");
+  const ask = el("div", "qask"); // 疊在同一列上（不推開別的列）
   ask.hidden = true;
   const askText = el("div", "qask-t", REMOVE_CONFIRM_TEXT);
+  askText.title = REMOVE_CONFIRM_TEXT;
   askText.setAttribute("role", "alert"); // read out when the question appears
   const no = el("button", "qask-no", "取消");
   const yes = el("button", "qask-yes", "移除");
@@ -181,6 +188,15 @@ export function makeDemoRow() {
   return row;
 }
 
+// 小黃標的短字（全文在 title）
+function hintShort(hint) {
+  if (!hint) return "";
+  const parts = [];
+  if (hint.includes("標題與第")) parts.push("同標題");
+  if (hint.includes("已達上限")) parts.push("已達上限");
+  return parts.join(" · ");
+}
+
 function updateRow(row, state, item, index, now, showText = false) {
   const info = describeItem(state, item, now);
   row.dataset.kind = info.kind;
@@ -205,8 +221,16 @@ function updateRow(row, state, item, index, now, showText = false) {
     q(selector).setAttribute("aria-label", named ? base : `${base}：${item.title}`);
   }
   q(".qpill").textContent = info.label;
-  q(".qsub").textContent = info.sub;
-  q(".qhint").textContent = info.hint;
+  row._sub = info.sub;
+  const sub = q(".qsub");
+  const subText = row._flashText ?? info.sub; // 複製／下載封面的結果暫時取代狀態文字
+  setText(sub, subText);
+  sub.title = subText;
+  if (row._flashText === undefined) delete sub.dataset.state;
+  const hint = q(".qhint");
+  setText(hint, hintShort(info.hint));
+  hint.title = info.hint;
+  hint.hidden = !info.hint;
   q(".qdur").textContent = item.duration ? duration(item.duration) : "";
 
   const source = thumbSource(item);
@@ -221,9 +245,11 @@ function updateRow(row, state, item, index, now, showText = false) {
   const youtube = !!item.id && !isInstagramUrl(item.url); // cover image and post text exist only for YouTube videos
   q(".qcover").disabled = !youtube;
   q(".qcopy").disabled = !youtube;
-  q(".qretry").hidden = !(item.status === "failed" && item.id);
+  q(".qretry").hidden = !(item.status === "failed" && item.id && info.kind === "failed"); // 等自動重試時不顯示
   const box = q(".qtext");
-  syncTextBox(box, info, showText);
+  // 抓取中的影片也先放好內文框（讀取中），列高不會在解析完成時跳動；Instagram 貼文沒有內文
+  const loadingBox = fetching && !isInstagramUrl(item.url) ? { textState: "loading" } : info;
+  syncTextBox(box, loadingBox, showText);
   box.setAttribute("aria-label", named ? "貼文內容" : `貼文內容：${item.title}`);
 }
 
@@ -409,23 +435,42 @@ export function startTicker(fn) {
   return () => clearInterval(timer);
 }
 
-// A short message under the row ("已複製"); the button itself carries the state in data-state.
+// A short message in the row ("已複製"); the button itself carries the state in data-state. The message takes the place
+// of the status text (the row keeps its height) for a moment; the hidden live region reads it out.
 export function flash(target, state, hint) {
-  const line = target.closest(".qrow")?.querySelector(".qflash");
+  const row = target.closest(".qrow");
+  const line = row?.querySelector(".qflash");
+  const sub = row?.querySelector(".qsub");
   clearTimeout(target._flash);
   target.dataset.state = state;
-  if (line) {
-    line.textContent = hint;
-    line.dataset.state = state;
+  if (row) {
+    row._flashText = hint;
+    if (line) {
+      line.textContent = hint;
+      line.dataset.state = state;
+    }
+    if (sub) {
+      setText(sub, hint);
+      sub.title = hint;
+      sub.dataset.state = state;
+    }
   }
   if (state !== "busy") {
     target._flash = setTimeout(() => {
       delete target.dataset.state;
+      if (!row) return;
+      delete row._flashText;
       if (line) {
         line.textContent = "";
         delete line.dataset.state;
       }
-    }, 2600);
+      if (sub) {
+        const text = row._sub ?? "";
+        setText(sub, text);
+        sub.title = text;
+        delete sub.dataset.state;
+      }
+    }, 3000);
   }
 }
 
