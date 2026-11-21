@@ -52,7 +52,7 @@ export function parsePostForm(fd) {
   if (!message.trim() && !file) return null;
   // 文字背景（只限純文字、≤130 字）；代號是否在清單由路由查 findBackground
   const bg = fd.has('bg') ? String(fd.get('bg')) : '';
-  if (bg && (!/^\d{6,20}$/.test(bg) || file || [...message].length > BG_MAX_CHARS)) return null;
+  if (bg && (!/^\d{6,20}$/.test(bg) || file || [...message.replace(/\r\n/g, '\n')].length > BG_MAX_CHARS)) return null;
   let targets;
   try { targets = JSON.parse(String(fd.get('targets') || '')); } catch { return null; }
   if (!Array.isArray(targets) || targets.length < 1 || targets.length > 20) return null;

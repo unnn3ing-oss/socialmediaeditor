@@ -367,3 +367,13 @@ test('防重複：臉書回 5xx／錯誤碼 2 也是待確認，不能直接重�
   assert.ok(!r3.unknown);
   assert.equal(env.DB.raw.prepare('SELECT status FROM fb_sends WHERE send_id = ?').get(SID2).status, 'failed');
 });
+
+test('parsePostForm：文字背景的字數以 LF 計（瀏覽器 FormData 會把換行轉成 CRLF）', async () => {
+  const { parsePostForm } = await lp();
+  const fd = new FormData();
+  fd.set('message', Array(65).fill('字').join('\r\n') + '字'.repeat(0));   // 65 字＋64 換行：LF 計 129、CRLF 計 193
+  fd.set('link', 'https://news.tvbs.com.tw/life/1');
+  fd.set('targets', JSON.stringify([{ page: '111', at: null }]));
+  fd.set('bg', '106018623298955');
+  assert.ok(parsePostForm(fd));
+});
