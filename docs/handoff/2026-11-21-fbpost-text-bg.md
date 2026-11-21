@@ -19,7 +19,7 @@ Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `b
 |---|---|---|
 | `server/fb/bgpresets.js`（新） | 預設清單 15 個＋`listBackgrounds`／`findBackground` | ✅ |
 | `server/fb/index.js` | `GET /fb/backgrounds` | ✅ |
-| `server/fb/post.js` | `parsePostForm` 收 `bg`（有圖或 >130 字或不在清單 → 400）；`publishOne` 純文字帶 `text_format_preset_id` | ⬜ |
+| `server/fb/post.js` | `parsePostForm` 收 `bg`（有圖或 >130 字或不在清單 → 400）；`publishOne` 純文字帶 `text_format_preset_id`；計字前 CRLF→LF（審查修正） | ✅ |
 | `tools/fbpost/index.html`／`compose.js`／`fbpost.css` | 純文字模式顯示背景區（預覽＋色塊，第一個「無」），隱藏切換 | ✅ |
 | `tools/fbpost/send.js` | 送 `bg`；>130 字擋送出 | ✅ |
 | 測試 | `test/server/fb-post.test.js`、`test/e2e/fbpost-compose.e2e.js` | ✅ |
@@ -27,7 +27,7 @@ Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `b
 ## 下一步
 - [x] 後端＋單元測試
 - [x] 前端＋e2e、截圖（npm test 743、fbpost e2e 60、build --check 通過）
-- [ ] 獨立審查
+- [x] 獨立審查（修正後通過：後端計字 CRLF 修正 `2b65ccc`）
 - [ ] 使用者部署測試後端實測（立即／排程各一則，確認臉書顯示背景）
 
 ## 測試
