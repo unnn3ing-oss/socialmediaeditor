@@ -1,6 +1,6 @@
 // FB RUNDOWN Apps Script 補丁：影片「草稿」與「被多文的粉專」填今天欄右邊的預留格（貼法見 docs/rundown-gs-draft-slot.md）
 // 這段貼在 rundown.gs 最後面；用到 rundown.gs 原有的 rdStr、rdFindSection、rdBlocks、rdFindSheetName、rdFindDateCol、rdPad。
-// 不插新列、不改格式（預留格本來就是綠色），只把格子文字換成 純影/SLUG（Reels/SLUG）。
+// 不插新列；只把格子文字換成 純影/SLUG（Reels/SLUG）並置中，其他格式保留預留格原本的（本來就是綠色）。
 //
 // 規則（今天欄＝x，看右邊第 1～8 欄；從「現在」所在的時段區塊開始，再往前後相近的區塊找）：
 //   橫式草稿：標記「純影已上傳」下面第一格「純影/」；標記「草稿內」下面第一格「純影/」或「網新/」
