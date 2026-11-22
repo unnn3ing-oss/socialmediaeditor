@@ -163,8 +163,10 @@ if (window.top !== window.self) {
       var tb = $('logRows'); tb.textContent = '';
       res.data.forEach(function (r) {
         var tr = document.createElement('tr');
-        [fmtTime(r.at), r.tool, r.code, r.page || '', r.ver || ''].forEach(function (t, i) {
-          var c = document.createElement('td'); c.textContent = t; if (i === 0) c.className = 'num'; tr.appendChild(c);
+        [fmtTime(r.at), r.tool, r.code, r.pageName || r.page || '', r.ver || ''].forEach(function (t, i) {
+          var c = document.createElement('td'); c.textContent = t; if (i === 0) c.className = 'num';
+          if (i === 3 && r.pageName) c.title = '粉專 ID ' + r.page;   // 顯示簡稱，游標移上去看 ID
+          tr.appendChild(c);
         });
         tb.appendChild(tr);
       });

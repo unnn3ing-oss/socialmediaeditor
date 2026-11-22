@@ -101,3 +101,20 @@ test('scheduled 會呼叫 cleanup', async () => {
   await waited;
   assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM logs').get().n, 0);
 });
+
+test('GET /admin/logs：粉專 ID 換成粉專設定的簡稱；對不到只給 ID；沒有粉專不帶 pageName', async () => {
+  const env = mkEnv();
+  const { logEvent } = await loadLogs();
+  env.DB.raw.prepare("INSERT INTO fb_pages (id, short, updated) VALUES ('111', '新聞', 0)").run();
+  await logEvent(env, 'fbpost', 'comment_failed:32', '111');
+  await logEvent(env, 'fbpost', 'comment_failed', '999');
+  await post(env, { tool: 'sample', code: 'x' });
+  const { signToken } = await loadToken();
+  const h = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'admin', nowSec() + 600)) };
+  const rows = (await (await call('/admin/logs', { headers: h }, env)).json()).data;
+  const by = (p) => rows.find((r) => r.page === p);
+  assert.equal(by('111').pageName, '新聞');
+  assert.equal(by('999').pageName, undefined);
+  const plain = rows.find((r) => r.tool === 'sample');
+  assert.equal(plain.page, null); assert.equal(plain.pageName, undefined);
+});

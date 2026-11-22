@@ -1,5 +1,5 @@
 # 錯誤日誌粉專欄顯示粉專名稱
-- 狀態：進行中　- 分支：claude/modest-bohr-dxn17c　- 最後更新：2026-11-22
+- 狀態：待使用者確認（npm test 776、admin e2e 34）　- 分支：claude/modest-bohr-dxn17c　- 最後更新：2026-11-22
 - 使用者原始需求：「錯誤日誌的粉專也可以變成顯示粉專名稱嗎？」
 
 ## 已定案的決定
@@ -13,9 +13,9 @@
 ## 做法
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/logs.js` `adminLogs` | 回 `pageName` | ⬜ |
-| `admin/admin.js` | 粉專欄顯示 `pageName`，title＝ID | ⬜ |
-| `test/server/logs.test.js` | 對到／對不到／空白 | ⬜ |
+| `server/core/logs.js` `adminLogs` | 回 `pageName` | ✅ |
+| `admin/admin.js` | 粉專欄顯示 `pageName`，title＝ID | ✅ |
+| `test/server/logs.test.js` | 對到／對不到／空白 | ✅ |
 
 ## 測試
 `node --test test/server/logs.test.js`、`npm test`、admin e2e。後端需重新部署，外掛不升版號。
