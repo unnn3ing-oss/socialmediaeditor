@@ -395,16 +395,23 @@ export async function adminStaff(request, env, path, who) {
     return ok(request, env, await state(env, who));
   }
 
-  // 操作紀錄：?days=1～90（預設 7）、?uid=編號（選填），最多 500 筆
+  // 操作紀錄：?days=1～90（預設 7）、?q=員工編號或姓名（選填；舊參數 ?uid= 相容），最多 500 筆
+  //   員工編號完全相同，或紀錄當時姓名包含，或目前名單姓名包含（改名後用新名字也查得到）；% _ 跳脫
   if (path === '/admin/audit' && method === 'GET') {
     const q = new URL(request.url).searchParams;
     const d = Number(q.get('days'));
     const days = Number.isFinite(d) && d >= 1 ? Math.min(Math.floor(d), AUDIT_KEEP_DAYS) : 7;
-    const uid = q.get('uid') ? normId(q.get('uid')) : '';
+    const raw = String(q.get('q') || q.get('uid') || '').trim().slice(0, 30);
+    const uid = raw ? normId(raw) : '';
     const since = Date.now() - days * DAY;
-    const rows = uid
-      ? await all(env, 'SELECT id, at, uid, name, action, page, post, detail FROM fb_audit WHERE at >= ? AND uid = ? ORDER BY at DESC, id DESC LIMIT ?', since, uid, MAX_AUDIT)
-      : await all(env, 'SELECT id, at, uid, name, action, page, post, detail FROM fb_audit WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?', since, MAX_AUDIT);
+    const cols = 'SELECT id, at, uid, name, action, page, post, detail FROM fb_audit WHERE at >= ?';
+    let rows;
+    if (!raw) rows = await all(env, cols + ' ORDER BY at DESC, id DESC LIMIT ?', since, MAX_AUDIT);
+    else {
+      const like = '%' + raw.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+      rows = await all(env, cols + " AND (uid = ? OR name LIKE ? ESCAPE '\\' OR uid IN (SELECT id FROM staff WHERE name LIKE ? ESCAPE '\\')) ORDER BY at DESC, id DESC LIMIT ?",
+        since, uid || '\u0000', like, like, MAX_AUDIT);
+    }
     return ok(request, env, rows);
   }
   return fail(request, env, 'not_found');

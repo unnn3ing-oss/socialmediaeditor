@@ -392,3 +392,13 @@ test('parsePostForm：文字背景的字數以 LF 計（瀏覽器 FormData 會�
   fd.set('bg', '106018623298955');
   assert.ok(parsePostForm(fd));
 });
+
+test('操作紀錄：發文類型 kind（套版／字圖／文字）寫進 detail；不認得的不記', async (t) => {
+  const at = nowSec() + 3600;
+  const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_5' }), 'POST /111_5/comments': () => ({ id: 'C' }) });
+  assert.equal((await send(env, headers, { message: 'a', kind: 'text', targets: JSON.stringify([{ page: '111', at }]) })).status, 200);
+  assert.equal((await send(env, headers, { message: 'b', kind: 'textimg', targets: JSON.stringify([{ page: '111', at: null }]) })).status, 200);
+  assert.equal((await send(env, headers, { message: 'c', kind: 'evil', targets: JSON.stringify([{ page: '111', at: null }]) })).status, 200);
+  const log = env.DB.raw.prepare('SELECT action, detail FROM fb_audit ORDER BY id').all().map((r) => [r.action, r.detail]);
+  assert.deepEqual(log, [['schedule', 'at=' + at + ' kind=text'], ['publish', 'kind=textimg'], ['publish', '']]);
+});

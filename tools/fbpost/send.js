@@ -89,6 +89,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
       if (extra.comments.length) fd.append('comments', JSON.stringify(extra.comments));
       if (image) fd.append('image', image, image.name);
       if (bg) fd.append('bg', bg);
+      fd.append('kind', { image: 'template', color: 'textimg', text: 'text' }[composer.mode()] || '');   // 操作紀錄：套版／字圖／文字
       fd.append('targets', JSON.stringify(c.targets));
       const sentAt = Date.now();
       const snap = composer.snapshot();   // 再發一次用（送出完成會清空，要先記下）

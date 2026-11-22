@@ -779,6 +779,9 @@ if (window.top !== window.self) {
   var BG_TYPE = { solid: '純色', gradient: '漸層', image: '圖樣' };
   var BG_DIR = { BL_TR: 'to top right', TR_BL: 'to bottom left', TL_BR: 'to bottom right', BR_TL: 'to top left' };
   function bgCss(x) { return x.type === 'gradient' && x.grad ? 'linear-gradient(' + (BG_DIR[x.dir] || 'to bottom right') + ',' + x.bg + ',' + x.grad + ')' : x.bg; }
+  // 圖樣網址到期（後端從臉書 CDN 網址的 oe= 解析，秒；推論為簽章到期）
+  function bgExpText(exp) { var d = new Date(exp * 1000), p = function (v) { return String(v).padStart(2, '0'); }; return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function bgExpLeft(exp) { var h = (exp * 1000 - Date.now()) / 3600000; return h <= 0 ? '' : h < 24 ? '剩 ' + Math.max(1, Math.floor(h)) + ' 小時' : '剩 ' + Math.floor(h / 24) + ' 天'; }
   function bgTodo() { return bgList.filter(function (x) { return x.type === 'image' && !x.img && x.hasUrl; }).length; }
   function bgPost(path, body, method) { return api(path, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }); }
   function bgThumb(x, sw) {
@@ -807,9 +810,22 @@ if (window.top !== window.self) {
       var td2 = document.createElement('td'); td2.textContent = BG_TYPE[x.type] || x.type;
       var td3 = document.createElement('td');
       if (x.type !== 'image') td3.textContent = '—';
-      else if (x.img) { td3.textContent = '已下載'; td3.className = 'bg-ok'; }
-      else if (x.err) { td3.textContent = x.err; td3.className = 'bg-err'; }
-      else td3.textContent = x.hasUrl ? '待下載' : '沒有網址（請重新擷取）';
+      else if (x.img) {
+        td3.textContent = '已下載'; td3.className = 'bg-ok';
+        if (x.exp) { var sub = document.createElement('span'); sub.className = 'bg-sub'; sub.textContent = '原網址到期 ' + bgExpText(x.exp); td3.appendChild(sub); }
+      } else {
+        var left = x.exp ? x.exp * 1000 - Date.now() : null;
+        if (x.hasUrl && left !== null && left <= 0) { td3.textContent = '網址已過期，請重新擷取匯入'; td3.className = 'bg-err'; }
+        else {
+          td3.textContent = x.err ? x.err : x.hasUrl ? '待下載' : '沒有網址（請重新擷取）';
+          if (x.err) td3.className = 'bg-err';
+          if (x.hasUrl && left !== null) {
+            var ex = document.createElement('span'); ex.className = 'bg-sub' + (left < 86400000 ? ' bg-warn' : '');
+            ex.textContent = '網址到期 ' + bgExpText(x.exp) + '（' + bgExpLeft(x.exp) + '）' + (left < 86400000 ? '，請盡快下載圖樣' : '');
+            td3.appendChild(ex);
+          }
+        }
+      }
       var td4 = document.createElement('td'), cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = x.show; cb.setAttribute('aria-label', '顯示 ' + x.name);
       cb.onchange = function () { bgPost('/admin/fb/backgrounds/' + x.id, { show: cb.checked }).then(function (res) { if (res.ok) bgSet(res.data); else { cb.checked = !cb.checked; if (res.code === 'unauthorized') expired(); else say($('bgMsg'), res.error || '儲存失敗。', 'err'); } }); };
       td4.appendChild(cb);
@@ -828,6 +844,15 @@ if (window.top !== window.self) {
       : '還沒匯入，排程發布目前用內建的純色＋漸層。';
     var todo = bgTodo();
     $('bgFetch').hidden = !todo; $('bgFetch').textContent = '下載圖樣（' + todo + ' 張）';
+    // 未下載圖樣最早的網址到期時間
+    var first = bgList.reduce(function (m, x) { return x.type === 'image' && !x.img && x.hasUrl && x.exp && (!m || x.exp < m) ? x.exp : m; }, null);
+    var fe = $('bgExp');
+    if (!todo || !first) { fe.hidden = true; fe.textContent = ''; }
+    else {
+      var gone = first * 1000 <= Date.now(), soon = first * 1000 - Date.now() < 86400000;
+      fe.hidden = false; fe.className = 'bg-exp' + (gone ? ' bg-err' : soon ? ' bg-warn' : '');
+      fe.textContent = todo + ' 張未下載，最早 ' + bgExpText(first) + (gone ? ' 已過期（請重新擷取匯入）' : ' 到期（' + bgExpLeft(first) + '）');
+    }
   }
   function bgSet(d) { bgList = (d && d.list) || []; bgRender(); }
   function bgLoad() {
@@ -848,7 +873,8 @@ if (window.top !== window.self) {
     bgPost('/admin/fb/backgrounds', { presets: data.presets, dry: true }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); return say($('bgMsg'), res.error || '比對失敗。', 'err'); }
       var d = res.data; bgPend = data.presets;
-      $('bgDiffSum').textContent = '新增 ' + d.add + '．更新 ' + d.update + '．臉書已沒有 ' + d.gone.length + (d.bad ? '．格式不對略過 ' + d.bad : '') + '（更新會保留名稱、顯示與已下載的圖）';
+      $('bgDiffSum').textContent = '新增 ' + d.add + '．更新 ' + d.update + '．臉書已沒有 ' + d.gone.length + (d.bad ? '．格式不對略過 ' + d.bad : '') + '（更新會保留名稱、顯示與已下載的圖）'
+        + (d.exp ? '。這份圖樣網址最早 ' + bgExpText(d.exp) + (d.exp * 1000 <= Date.now() ? ' 已過期，請重新擷取' : ' 到期（' + bgExpLeft(d.exp) + '），套用後請盡快下載') : '');
       var g = $('bgGone'); g.textContent = ''; g.className = 'bg-gone';
       if (d.gone.length) {
         var h = document.createElement('p'); h.textContent = '臉書已沒有的背景：勾選的會刪除，沒勾的保留。'; g.appendChild(h);
@@ -1127,21 +1153,43 @@ if (window.top !== window.self) {
       $('sfConfirm').hidden = true; sfPending = null; $('sfCfYes').disabled = false;
     });
   };
+  // 操作紀錄：類別（工具／後台）依動作判斷；發文類型從 detail 的 kind= 讀（舊紀錄沒有）
+  var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1 };
+  var AU_OPEN = { publish: 1, schedule: 1, reschedule: 1, video_publish: 1, video_schedule: 1, video_draft: 1 };   // 這些的 post 是貼文／影片 ID
+  var AU_KIND = { template: '套版', textimg: '字圖', text: '文字' };
+  var auRows = [];
+  function auKind(detail) { var m = /(?:^|\s)kind=(\w+)/.exec(detail || ''); return m && AU_KIND[m[1]] ? AU_KIND[m[1]] : ''; }
+  function auRender() {
+    var src = $('auSrc').value, tb = $('auRows'); tb.textContent = '';
+    var list = auRows.filter(function (r) { return !src || (src === 'tool') === !!AU_TOOL[r.action]; });
+    list.forEach(function (r) {
+      var tr = document.createElement('tr'), tool = !!AU_TOOL[r.action];
+      tr.appendChild(sfEl('td', 'num', fmtTime(r.at)));
+      tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
+      var ts = document.createElement('td'); ts.appendChild(sfEl('span', 'au-src' + (tool ? '' : ' is-admin'), tool ? '工具' : '後台')); tr.appendChild(ts);
+      var k = auKind(r.detail), act = SF_ACT[r.action] || r.action;
+      tr.appendChild(sfEl('td', '', k ? act + '（' + k + '）' : act)); tr.appendChild(sfEl('td', 'num', r.page || ''));
+      var tp = document.createElement('td');
+      if (r.post && AU_OPEN[r.action] && /^\d{1,30}(_\d{1,30})?$/.test(r.post)) {
+        var a = document.createElement('a'); a.className = 'au-open'; a.href = 'https://www.facebook.com/' + r.post; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.textContent = '開啟貼文 ↗'; a.title = r.post; a.setAttribute('aria-label', '開啟貼文 ' + r.post + '（另開分頁）');
+        tp.appendChild(a);
+      } else if (r.post) { tp.className = 'num'; tp.textContent = r.post; tp.style.color = '#5b6472'; }
+      tr.appendChild(tp);
+      tb.appendChild(tr);
+    });
+    $('auWrap').hidden = !list.length;
+    say($('auMsg'), !auRows.length ? '這段期間沒有紀錄。' : list.length === auRows.length ? '共 ' + list.length + ' 筆。' : '共 ' + auRows.length + ' 筆，顯示' + (src === 'tool' ? '工具' : '後台') + ' ' + list.length + ' 筆。');
+  }
+  $('auSrc').onchange = function () { if (auRows.length) auRender(); };
+  $('auUid').onkeydown = function (e) { if (e.key === 'Enter') $('auBtn').click(); };
   $('auBtn').onclick = function () {
-    var q = 'days=' + encodeURIComponent($('auDays').value), uid = $('auUid').value.trim();
-    if (uid) q += '&uid=' + encodeURIComponent(uid);
+    var q = 'days=' + encodeURIComponent($('auDays').value), who = $('auUid').value.trim();
+    if (who) q += '&q=' + encodeURIComponent(who);
     $('auBtn').disabled = true; say($('auMsg'), '查詢中');
     api('/admin/audit?' + q).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('auMsg'), res.error || '查詢失敗。', 'err'); return; }
-      var tb = $('auRows'); tb.textContent = '';
-      res.data.forEach(function (r) {
-        var tr = document.createElement('tr');
-        tr.appendChild(sfEl('td', 'num', fmtTime(r.at))); tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
-        tr.appendChild(sfEl('td', '', SF_ACT[r.action] || r.action)); tr.appendChild(sfEl('td', 'num', r.page || '')); tr.appendChild(sfEl('td', 'num', r.post || ''));
-        tb.appendChild(tr);
-      });
-      $('auWrap').hidden = !res.data.length;
-      say($('auMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '這段期間沒有紀錄。');
+      auRows = res.data || []; auRender();
     }).catch(function () { say($('auMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { $('auBtn').disabled = false; });
   };

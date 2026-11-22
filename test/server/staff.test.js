@@ -182,6 +182,23 @@ test('操作紀錄：寫入、依編號篩選、管理憑證才能看、90 天�
   assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM fb_audit').get().n, 2);
 });
 
+test('操作紀錄：?q= 用員工編號或姓名查（紀錄姓名、目前名單姓名都算；% _ 不當萬用字元）', async (t) => {
+  const { env, adm } = await setup(t);
+  const { audit } = await sm();
+  const g = groupId((await call(env, '/admin/staff', { headers: adm })).body.data, '檢視');
+  await post(env, adm, '/admin/staff', { id: 'N1', name: '王大明', group: g });
+  await audit(env, { uid: 'N1', name: '王小明' }, 'publish', '111', '111_1');   // 改名前的紀錄
+  await audit(env, { uid: 'N2', name: '李100%' }, 'delete', '111', '111_2');
+  await audit(env, { uid: 'N3', name: '李1000' }, 'delete', '111', '111_3');
+  const q = async (v) => (await call(env, '/admin/audit?days=1&q=' + encodeURIComponent(v), { headers: adm })).body.data.map((r) => r.post).sort();
+  assert.deepEqual(await q('小明'), ['111_1'], '紀錄當時姓名');
+  assert.deepEqual(await q('大明'), ['111_1'], '目前名單姓名（改名後）');
+  assert.deepEqual(await q('n1'), ['111_1'], '員工編號');
+  assert.deepEqual(await q('100%'), ['111_2'], '% 不是萬用字元');
+  assert.deepEqual(await q('李_'), [], '_ 不是萬用字元');
+  assert.deepEqual(await q('李'), ['111_2', '111_3']);
+});
+
 test('分機：自己讀寫 /staff/me、格式驗證、只能改自己；公司密碼憑證不行；管理頁可改與新增時帶入', async (t) => {
   const { env, adm } = await setup(t);
   const d = (await call(env, '/admin/staff', { headers: adm })).body.data;

@@ -36,6 +36,7 @@ export function parseExtras(raw) {
   return out;
 }
 
+export const KINDS = ['template', 'textimg', 'text'];
 export function parsePostForm(fd) {
   const message = String(fd.get('message') || '');
   const link = String(fd.get('link') || '').trim();
@@ -73,7 +74,9 @@ export function parsePostForm(fd) {
     try { retry = JSON.parse(String(fd.get('retry'))); } catch { return null; }
     if (!Array.isArray(retry) || !retry.every((id) => seen.has(id))) return null;
   }
-  return { message, link, lead, file, bg, extras, sendId, retry, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  // kind：發文類型（只用在操作紀錄）；沒帶或不認得＝不記
+  const kind = KINDS.includes(String(fd.get('kind') || '')) ? String(fd.get('kind')) : '';
+  return { message, link, lead, file, bg, extras, sendId, retry, kind, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
 async function publishOne(env, page, token, { message, file, bg, at }) {

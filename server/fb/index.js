@@ -73,7 +73,7 @@ route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   if (form.bg && !(await findBackground(env, form.bg))) return fail(request, env, 'bad_request');
   const results = await createPosts(env, form);
   for (const r of results) {
-    if (r.ok && !r.dup) await audit(env, me.who, r.scheduled ? 'schedule' : 'publish', r.page, r.postId || '', r.scheduled && r.at ? 'at=' + r.at : '');
+    if (r.ok && !r.dup) await audit(env, me.who, r.scheduled ? 'schedule' : 'publish', r.page, r.postId || '', [r.scheduled && r.at ? 'at=' + r.at : '', form.kind ? 'kind=' + form.kind : ''].filter(Boolean).join(' '));
   }
   return ok(request, env, { results });
 }, 'post');

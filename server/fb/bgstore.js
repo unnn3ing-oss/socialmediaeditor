@@ -65,7 +65,18 @@ async function readAll(env) {
 export function storedBackgrounds(env) { return cached(env.DB, CACHE_KEY, 60000, () => readAll(env)); }
 const changed = (env) => forget(env.DB, CACHE_KEY);
 
-const adminRow = (r) => ({ id: r.id, name: r.name, type: r.type, bg: r.bg, text: r.text, grad: r.grad, dir: r.dir, img: !!r.img, hasUrl: !!r.url, err: r.err || '', show: !!r.show });
+// 臉書 CDN 網址的到期時間：oe=16 進位 Unix 秒（推論為簽章到期，臉書沒有官方文件）；解析不到回 null
+export function urlExpiry(url) {
+  if (typeof url !== 'string' || !url) return null;
+  let v;
+  try { v = new URL(url).searchParams.get('oe'); } catch { return null; }
+  if (!v || !/^[0-9a-f]{6,10}$/i.test(v)) return null;
+  const n = parseInt(v, 16);
+  return n > 1e9 && n < 1e10 ? n : null;
+}
+const minExp = (rows) => rows.reduce((m, r) => { const e = r.type === 'image' ? urlExpiry(r.url) : null; return e && (!m || e < m) ? e : m; }, null);
+
+const adminRow = (r) => ({ id: r.id, name: r.name, type: r.type, bg: r.bg, text: r.text, grad: r.grad, dir: r.dir, img: !!r.img, hasUrl: !!r.url, exp: r.type === 'image' ? urlExpiry(r.url) : null, err: r.err || '', show: !!r.show });
 
 export async function adminState(env) {
   const rows = await readAll(env);
@@ -80,7 +91,8 @@ export async function importDiff(env, rows) {
   return {
     add: rows.filter((r) => !has.has(r.id)).length,
     update: rows.filter((r) => has.has(r.id)).length,
-    gone: cur.filter((r) => !ids.has(r.id)).map((r) => ({ id: r.id, name: r.name, type: r.type }))
+    gone: cur.filter((r) => !ids.has(r.id)).map((r) => ({ id: r.id, name: r.name, type: r.type })),
+    exp: minExp(rows)
   };
 }
 

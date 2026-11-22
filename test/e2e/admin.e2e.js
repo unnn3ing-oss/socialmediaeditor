@@ -64,7 +64,7 @@ const DATA = {
     warn: { level: 'warn', days: 10, text: '臉書權杖 10 天後到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。' } },
   'GET /admin/fb/pages': PAGES,
   'GET /admin/fb/backgrounds': () => ({ list: BG.list, batch: 10 }),
-  'POST /admin/fb/backgrounds': (b) => { BG.posts.push(b); if (b.dry) return { add: 1, update: 3, gone: [{ id: '303063890126416', name: '過期圖樣', type: 'image' }], bad: 0 }; BG.list = BG.list.filter((x) => !b.remove.includes(x.id)); return { list: BG.list, batch: 10 }; },
+  'POST /admin/fb/backgrounds': (b) => { BG.posts.push(b); if (b.dry) return { add: 1, update: 3, gone: [{ id: '303063890126416', name: '過期圖樣', type: 'image' }], bad: 0, exp: Math.floor(Date.now() / 1000) + 2 * 86400 + 600 }; BG.list = BG.list.filter((x) => !b.remove.includes(x.id)); return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
   'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
@@ -121,7 +121,9 @@ function staffRoute(req, u, key) {
   const body = req.postData() ? JSON.parse(req.postData()) : null;
   if (req.method() !== 'GET') SF.bodies.push({ key, body });
   if (key === 'GET /admin/audit') { SF.audit.push(u.search); return { ok: true, data: [
-    { id: 2, at: Date.UTC(2026, 10, 17, 2, 5), uid: 'A001', name: '王小明', action: 'schedule', page: '111', post: '111_222', detail: '' },
+    { id: 4, at: Date.UTC(2026, 10, 17, 3, 5), uid: 'ADMIN', name: '', action: 'reset', page: '', post: '', detail: 'A001' },
+    { id: 3, at: Date.UTC(2026, 10, 17, 2, 30), uid: 'A001', name: '王小明', action: 'publish', page: '111', post: '111_444', detail: 'kind=textimg' },
+    { id: 2, at: Date.UTC(2026, 10, 17, 2, 5), uid: 'A001', name: '王小明', action: 'schedule', page: '111', post: '111_222', detail: 'at=1795000000 kind=template' },
     { id: 1, at: Date.UTC(2026, 10, 16, 2, 5), uid: 'ADMIN', name: '', action: 'delete', page: '111', post: '111_333', detail: '' }] }; }
   if (key === 'GET /admin/staff') return { ok: true, data: sfState() };
   if (key === 'POST /admin/staff') { STAFF.push({ ...body, enabled: true, created: 1, lastLogin: null, pw: 'setup', setupExp: Date.now() + 86400000 }); return { ok: true, data: { ...sfState(), ...(SF.withCode ? { setup: { id: body.id, code: '482913', exp: Date.now() + 86400000 } } : {}) } }; }
@@ -628,7 +630,7 @@ test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增�
   assert.equal(await page.$$eval('#sgRows .sg-row', (r) => r.length), 4);
 });
 
-test('操作紀錄：查詢帶期間與員工編號，顯示中文動作；沒資料顯示說明', async () => {
+test('操作紀錄：查詢帶期間與員工編號或姓名；來源欄與篩選、發文類型、開啟貼文按鈕', async () => {
   resetStaff();
   const { page } = await open({ width: 1280, height: 860 }, '#staff');
   await login(page);
@@ -637,9 +639,25 @@ test('操作紀錄：查詢帶期間與員工編號，顯示中文動作；沒�
   await page.selectOption('#auDays', '30'); await page.fill('#auUid', 'a001');
   await page.click('#auBtn');
   await page.waitForSelector('#auWrap:not([hidden])');
-  assert.equal(SF.audit.pop(), '?days=30&uid=a001');
-  const txt = await page.textContent('#auRows');
-  assert.match(txt, /排程/); assert.match(txt, /刪除/); assert.match(txt, /ADMIN/); assert.match(txt, /王小明/);
+  assert.equal(SF.audit.pop(), '?days=30&q=a001');
+  await page.fill('#auUid', '王小明'); await page.press('#auUid', 'Enter');
+  await page.waitForFunction(() => document.getElementById('auMsg').textContent === '共 4 筆。');
+  assert.equal(SF.audit.pop(), '?days=30&q=' + encodeURIComponent('王小明'));
+  const rows = await page.$$eval('#auRows tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent)));
+  assert.deepEqual(rows.map((r) => [r[3], r[4]]), [['後台', '重置密碼'], ['工具', '立即發布（字圖）'], ['工具', '排程（套版）'], ['工具', '刪除']]);
+  const links = await page.$$eval('#auRows a.au-open', (as) => as.map((a) => [a.href, a.target, a.rel, a.textContent]));
+  assert.deepEqual(links, [['https://www.facebook.com/111_444', '_blank', 'noopener noreferrer', '開啟貼文 ↗'], ['https://www.facebook.com/111_222', '_blank', 'noopener noreferrer', '開啟貼文 ↗']]);
+  assert.equal(rows[3][6], '111_333', '刪除的貼文只顯示 ID');
+  const hs = await page.$$eval('#auRows tr', (trs) => trs.map((tr) => Math.round(tr.getBoundingClientRect().height)));
+  assert.ok(Math.max(...hs) - Math.min(...hs) <= 2, '有按鈕的列和沒按鈕的列一樣高：' + hs);
+  if (SHOT) await page.locator('#auCard').screenshot({ path: path.join(SHOT, 'admin-audit.png') });
+  // 來源篩選：不重查
+  await page.selectOption('#auSrc', 'admin');
+  assert.equal(await page.$$eval('#auRows tr', (r) => r.length), 1);
+  assert.equal(await page.textContent('#auMsg'), '共 4 筆，顯示後台 1 筆。');
+  await page.selectOption('#auSrc', 'tool');
+  assert.equal(await page.$$eval('#auRows tr', (r) => r.length), 3);
+  assert.equal(SF.audit.length, 0);
 });
 
 test('授權名單：320px 頁面不橫向捲動（表格自己橫捲）', async () => {
@@ -901,6 +919,7 @@ test('文字背景：列表與預覽圖；預覽匯入勾選刪除後套用；�
   await page.click('#bgPreview');
   await page.waitForSelector('#bgDiff:not([hidden])');
   assert.match(await page.textContent('#bgDiffSum'), /新增 1．更新 3．臉書已沒有 1/);
+  assert.match(await page.textContent('#bgDiffSum'), /圖樣網址最早 .+ 到期（剩 2 天），套用後請盡快下載/);
   if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg.png') });
   await page.check('#bgGone input[value="303063890126416"]');
   await page.click('#bgApply');
@@ -923,4 +942,23 @@ test('文字背景：列表與預覽圖；預覽匯入勾選刪除後套用；�
   assert.equal(BG.fetches.length, 1);
   assert.ok(typeof BG.fetches[0].since === 'number');
   assert.ok(!calls.some((c) => typeof c === 'string'), JSON.stringify(calls.filter((c) => typeof c === 'string')));
+});
+
+test('文字背景：圖樣網址到期（未下載：剩幾天／一天內黃字／已過期紅字；已下載附原網址到期）＋摘要、預覽最早到期', async () => {
+  bgReset();
+  const now = Math.floor(Date.now() / 1000);
+  BG.list[2].exp = now + 3 * 86400;   // 已下載
+  BG.list[3].exp = now + 5 * 3600;    // 一天內
+  BG.list.push({ id: '303063890126418', name: '還早', type: 'image', bg: '#000000', text: '#FFFFFF', img: false, hasUrl: true, exp: now + 6 * 86400 + 600, err: '', show: true });
+  BG.list.push({ id: '303063890126419', name: '過期了', type: 'image', bg: '#000000', text: '#FFFFFF', img: false, hasUrl: true, exp: now - 60, err: '', show: true });
+  const { page } = await open({ width: 1280, height: 900 }, '#post');
+  await login(page);
+  await page.waitForSelector('#bgRows tr');
+  const st = await page.$$eval('#bgRows tr td:nth-child(4)', (tds) => tds.map((td) => [td.textContent, td.className, (td.querySelector('.bg-sub') || {}).className || '']));
+  assert.match(st[2][0], /^已下載原網址到期 \d+\/\d+ \d\d:\d\d$/);
+  assert.match(st[3][0], /^待下載網址到期 .+（剩 [45] 小時），請盡快下載圖樣$/); assert.match(st[3][2], /bg-warn/);
+  assert.match(st[4][0], /（剩 6 天）$/); assert.doesNotMatch(st[4][2], /bg-warn/);
+  assert.deepEqual(st[5].slice(0, 2), ['網址已過期，請重新擷取匯入', 'bg-err']);
+  assert.match(await page.textContent('#bgExp'), /^3 張未下載，最早 .+ 已過期（請重新擷取匯入）$/);
+  if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg-exp.png') });
 });

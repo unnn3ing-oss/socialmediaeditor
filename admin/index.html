@@ -84,7 +84,7 @@
           <div class="row"><button id="bgApply" class="primary" type="button">套用</button><button id="bgCancel" type="button">取消</button></div>
         </div>
         <p id="bgSum" class="bg-sum"></p>
-        <div class="row"><button id="bgFetch" class="primary" type="button" hidden>下載圖樣</button></div>
+        <div class="row"><button id="bgFetch" class="primary" type="button" hidden>下載圖樣</button><span id="bgExp" class="bg-exp" hidden></span></div>
         <div id="bgWrap" class="bg-wrap" hidden>
           <table class="bg-table"><thead><tr><th>預覽</th><th>名稱</th><th>種類</th><th>圖片</th><th>顯示</th><th></th></tr></thead><tbody id="bgRows"></tbody></table>
         </div>
@@ -279,16 +279,17 @@
 
       <section class="card" id="auCard" data-card="audit">
         <h2>操作紀錄</h2>
-        <p>誰在什麼時候發布、排程、改時間或刪除了哪一則貼文，保存 90 天。</p>
+        <p>誰在什麼時候從工具發布、排程、改時間或刪除了哪一則貼文，以及在後台做了哪些操作，保存 90 天。</p>
         <div class="sf-add">
           <label class="sf-f">期間<select id="auDays"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select></label>
-          <label class="sf-f">員工編號（選填）<input id="auUid" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+          <label class="sf-f">員工編號或姓名（選填）<input id="auUid" type="text" maxlength="30" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+          <label class="sf-f">類別<select id="auSrc"><option value="">全部</option><option value="tool">工具</option><option value="admin">後台</option></select></label>
           <button id="auBtn" type="button">查詢</button>
         </div>
         <p class="msg" id="auMsg" role="status"></p>
         <div class="scroll" id="auWrap" hidden>
           <table>
-            <thead><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>動作</th><th>粉專 ID</th><th>貼文 ID</th></tr></thead>
+            <thead><tr><th>時間</th><th>員工編號</th><th>姓名</th><th>類別</th><th>動作</th><th>粉專 ID</th><th>貼文</th></tr></thead>
             <tbody id="auRows"></tbody>
           </table>
         </div>

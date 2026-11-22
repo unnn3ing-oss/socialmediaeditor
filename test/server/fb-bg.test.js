@@ -51,7 +51,7 @@ test('文字背景：沒匯入用內建清單；匯入預覽／套用；圖樣�
   // 預覽：不存
   const dry = await call(env, '/admin/fb/backgrounds', adm, { ...DATA, dry: true });
   assert.equal(dry.status, 200, JSON.stringify(dry.body));
-  assert.deepEqual(dry.body.data, { add: 5, update: 0, gone: [], bad: 1 });
+  assert.deepEqual(dry.body.data, { add: 5, update: 0, gone: [], bad: 1, exp: null });
   assert.deepEqual((await call(env, '/admin/fb/backgrounds', adm)).body.data.list, []);
 
   // 套用
@@ -162,4 +162,25 @@ test('管理頁層級：文字背景卡片預設給管理者', async () => {
   assert.ok(CARD_KEYS.includes('bg') && DEFAULT_LEVELS.mgr.includes('bg'));
   for (const p of ['/admin/fb/backgrounds', '/admin/fb/backgrounds/fetch', '/admin/fb/backgrounds/106018623298955', '/admin/fb/backgrounds/106018623298955/img']) assert.equal(cardFor(p), 'bg', p);
   assert.equal(cardFor('/admin/fb/backgrounds/abc'), null);
+});
+
+test('圖樣網址到期：從 oe=（16 進位秒）解析；沒有或格式不對回 null；列表與匯入預覽帶 exp', async () => {
+  const { urlExpiry } = await import('../../server/fb/bgstore.js');
+  assert.equal(urlExpiry('https://scontent.xx.fbcdn.net/v/a.jpg?oh=x&oe=6745A1B0'), 0x6745A1B0);
+  assert.equal(urlExpiry('https://scontent.xx.fbcdn.net/v/a.jpg?oh=x'), null);
+  assert.equal(urlExpiry('https://scontent.xx.fbcdn.net/v/a.jpg?oe=zzzzzzzz'), null);
+  assert.equal(urlExpiry('https://scontent.xx.fbcdn.net/v/a.jpg?oe=1'), null);
+  assert.equal(urlExpiry('not a url'), null);
+  assert.equal(urlExpiry(null), null);
+  const env = mkEnv();
+  const adm = await auth(env, 'admin');
+  const u = (oe) => `https://scontent.xx.fbcdn.net/v/t39/${oe}.jpg?oe=${oe}`;
+  const presets = [
+    { preset_id: '300000000000001', type: 'image', background_color: '#000000', text_color: '#FFFFFF', label: 'A', background_image_url: u('6745A1B0') },
+    { preset_id: '300000000000002', type: 'image', background_color: '#000000', text_color: '#FFFFFF', label: 'B', background_image_url: u('6745A000') },
+    { preset_id: '300000000000003', type: 'solid', background_color: '#FF0000', text_color: '#FFFFFF', label: 'C' }];
+  assert.equal((await call(env, '/admin/fb/backgrounds', adm, { presets, dry: true })).body.data.exp, 0x6745A000, '預覽回最早到期');
+  const list = (await call(env, '/admin/fb/backgrounds', adm, { presets })).body.data.list;
+  assert.deepEqual(list.map((x) => x.exp), [0x6745A1B0, 0x6745A000, null]);
+  assert.ok(list.every((x) => !('url' in x)), '不回傳網址');
 });
