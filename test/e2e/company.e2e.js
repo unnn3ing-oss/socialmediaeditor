@@ -22,7 +22,7 @@ const STAFF = { A123: { name: '王小明', group: '小編組', level: 'staff', p
 async function open(vp = { width: 1280, height: 820 }) {
   const ctx = await browser.newContext({ viewport: vp });
   const page = await ctx.newPage();
-  const api = { statusCode: 200, authDown: false, bodies: [], hosts: [], pwBodies: [] };
+  const api = { statusCode: 200, authDown: false, bodies: [], hosts: [], pwBodies: [], notices: null, retries: [] };
   const staff = JSON.parse(JSON.stringify(STAFF));
   await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
   await page.route(/^https:\/\/toolbox-api(-dev)?\.19jpz-3\.workers\.dev\//, async (r) => {
@@ -57,6 +57,8 @@ async function open(vp = { width: 1280, height: 820 }) {
       return r.fulfill({ headers: CORS, json: { ok: true, data: { company: true, exp, staff: { id, name: staff[id].name, group: staff[id].group, level: staff[id].level }, manage: staff[id].level === 'sys' } } });
     }
     if (p === '/staff/me') { const id = who(); return id ? r.fulfill({ headers: CORS, json: { ok: true, data: { id, name: staff[id].name, group: staff[id].group, contact: '#12345' } } }) : fail('unauthorized', 'x', 401); }
+    if (p === '/staff/me/notices' && api.notices) return who() ? r.fulfill({ headers: CORS, json: { ok: true, data: api.notices } }) : fail('unauthorized', 'x', 401);
+    if (p === '/fb/comment/retry') { api.retries.push(JSON.parse(req.postData())); return r.fulfill({ headers: CORS, json: { ok: true, data: { ok: true } } }); }
     if (p === '/staff/me/password') {
       const id = who(); const body = JSON.parse(req.postData()); api.pwBodies.push(body);
       if (!id) return fail('unauthorized', 'x', 401);
@@ -306,4 +308,42 @@ test('測試後端：系統管理者切過去 → 測試膠囊、憑證分開、
   await page.waitForFunction(() => /莊鈞評/.test(document.getElementById('company-btn').textContent));
   assert.equal(await page.locator('#status [data-status=apienv]').count(), 0);
   assert.equal(await page.evaluate(() => localStorage.getItem('tbx.api')), null);
+});
+
+test('留言失敗通知：右上紅點；彈窗列出粉專／第幾則／原因；重新留言後移除；開排程發布切網址', async () => {
+  const { page, api } = await open();
+  const at = Date.now() - 60000;
+  api.notices = { enabled: true, items: [
+    { postId: '111_5', page: '111', pageName: '新聞', kind: 'post', seq: 1, error: '(#32) page rate limit', failed: true, at, canRetry: true },
+    { postId: '222_9', page: '222', pageName: '娛樂', kind: 'video', seq: 2, error: 'temporary', failed: false, at, canRetry: false }
+  ] };
+  await unlock(page, 'S1');
+  await page.waitForSelector('#company-btn .acct-ndot');
+  assert.match(await acctText(page), /有 2 則通知/);
+  await page.click('#company-btn');
+  await page.waitForSelector('#acct-pop .acct-note');
+  const notes = page.locator('#acct-pop .acct-note');
+  assert.equal(await notes.count(), 2);
+  assert.match(await notes.nth(0).textContent(), /新聞｜第 1 則留言失敗.*\(#32\) page rate limit/);
+  assert.match(await notes.nth(1).textContent(), /娛樂｜第 2 則留言重試中/);
+  assert.equal(await notes.nth(1).locator('button', { hasText: '重新留言' }).count(), 0, '沒有權限不顯示重新留言');
+  assert.equal(await page.isVisible('#acct-pop .acct-empty'), false);
+  await notes.nth(0).locator('button', { hasText: '重新留言' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('#acct-pop .acct-note').length === 1);
+  assert.deepEqual(api.retries, [{ postId: '111_5', page: '111' }]);
+  assert.match(await acctText(page), /有 1 則通知/);
+  await page.locator('#acct-pop .acct-note button', { hasText: '開影片發布' }).click();
+  await page.waitForSelector('#acct-pop', { state: 'hidden' });
+  assert.equal(await page.evaluate(() => location.hash), '#fbvideo');
+});
+
+test('留言失敗通知：權限組沒開 notify（enabled false）不顯示紅點，彈窗維持目前沒有通知', async () => {
+  const { page, api } = await open();
+  api.notices = { enabled: false, items: [] };
+  await unlock(page);
+  await page.click('#company-btn');
+  await page.waitForSelector('#acct-pop:not([hidden])');
+  await page.waitForTimeout(200);
+  assert.match(await page.textContent('#acct-pop .acct-sec'), /目前沒有通知/);
+  assert.equal(await page.locator('#company-btn .acct-ndot').count(), 0);
 });

@@ -280,3 +280,21 @@ test('留言失敗通知：權限組沒勾 notify 回 enabled false；勾了才�
   assert.deepEqual(r2.body.data.items, []);
   assert.equal((await call(env, '/staff/me/notices')).status, 401);
 });
+
+test('重新留言 API：影片的留言要 vpost，只有 post 不行', async (t) => {
+  const { env, adm } = await setup(t);
+  const { FbCommentTimer } = await import('../../server/fb/timer.js');
+  const { fakeNamespace } = require('../helpers/fake-fb.js');
+  env.FB_TIMER = fakeNamespace(FbCommentTimer, () => env);
+  await post(env, adm, '/admin/fb/access', { mode: 'company' });
+  const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
+  const g = (await post(env, adm, '/admin/staff-groups', { name: '只發文', perms: ['view', 'post'] })).body.data;
+  const gid = (g && g.id) || (await call(env, '/admin/staff', { headers: adm })).body.data.groups.find((x) => x.name === '只發文').id;
+  await post(env, adm, '/admin/staff', { id: 'Q1', name: '小編', group: gid });
+  const tk = (await login(env, 'Q1')).body.data.token;
+  const { armTimer } = await import('../../server/fb/timer.js');
+  await armTimer(env, { pageId: '111', postId: '555', message: 'c', at: nowSec() + 3600, kind: 'video' });
+  const r = await call(env, '/fb/comment/retry', { method: 'POST', headers: { ...bearer(tk), 'content-type': 'application/json' }, body: JSON.stringify({ postId: '555', page: '111' }) });
+  assert.equal(r.body.code, 'fb_no_perm');
+  assert.ok(d);
+});

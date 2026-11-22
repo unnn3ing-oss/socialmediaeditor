@@ -238,7 +238,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     dl.append(dd[k]);
   }
   const notice = mk('div', 'acct-sec');
-  notice.append(mk('h3', null, '通知'), mk('div', 'acct-empty', '目前沒有通知'));
+  const noticeEmpty = mk('div', 'acct-empty', '目前沒有通知');
+  const noticeList = mk('ul', 'acct-notes');
+  noticeList.hidden = true;
+  notice.append(mk('h3', null, '通知'), noticeEmpty, noticeList);
   const act = mk('div', 'acct-act');
   const manageBtn = mk('a', 'btn btn-primary acct-manage', '管理頁');
   manageBtn.href = new URL('admin/', document.baseURI).href;
@@ -283,6 +286,66 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       if (my === contactReq) dd.contact.textContent = (p && p.contact) || '未填';
     } catch { if (my === contactReq) dd.contact.textContent = '—'; }
   }
+  // ---- 留言失敗通知（/staff/me/notices，權限組有 notify 才有；只查 D1）：開彈窗、登入後、每 30 分鐘各讀一次 ----
+  let notes = [];
+  let noteReq = 0;
+  const NOTE_INTERVAL = 30 * 60 * 1000;
+  const TOOL_OF = { post: 'fbpost', video: 'fbvideo' };
+  function fmtNoteTime(ms) {
+    const d = new Date(ms);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+  function openTool(id) {
+    closePop(false);
+    try { history.pushState(null, '', '#' + id); } catch { location.hash = id; return; }
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+  function renderNotes() {
+    noticeList.textContent = '';
+    noticeEmpty.hidden = notes.length > 0;
+    noticeList.hidden = !notes.length;
+    for (const n of notes) {
+      const li = mk('li', 'acct-note');
+      const top = mk('div', 'acct-note-top');
+      top.append(mk('b', null, `${n.pageName}｜第 ${n.seq} 則留言${n.failed ? '失敗' : '重試中'}`), mk('small', null, fmtNoteTime(n.at)));
+      li.append(top);
+      if (n.error) { const er = mk('div', 'acct-note-err', n.error); er.title = n.error; li.append(er); }
+      const acts = mk('div', 'acct-note-act');
+      if (n.canRetry) {
+        const rb = mk('button', 'btn btn-secondary btn-sm', '重新留言');
+        rb.type = 'button';
+        rb.addEventListener('click', async () => {
+          rb.disabled = true;
+          try {
+            await api.call('/fb/comment/retry', { method: 'POST', body: { postId: n.postId, page: n.page } });
+            notes = notes.filter((x) => x !== n);
+            renderNotes(); renderButton();
+            showToast('已要求重新留言，稍後會再試一次');
+          } catch (ex) { rb.disabled = false; showToast((ex && ex.message) || '重新留言失敗'); }
+        });
+        acts.append(rb);
+      }
+      const go = mk('button', 'btn btn-secondary btn-sm', n.kind === 'video' ? '開影片發布' : '開排程發布');
+      go.type = 'button';
+      go.addEventListener('click', () => openTool(TOOL_OF[n.kind] || 'fbpost'));
+      acts.append(go);
+      li.append(acts);
+      noticeList.append(li);
+    }
+  }
+  async function loadNotes() {
+    if (!account || !(shell.company().staff || {}).id) return;
+    const my = ++noteReq;
+    try {
+      const d = await api.call('/staff/me/notices');
+      if (my !== noteReq) return;
+      notes = (d && d.enabled && Array.isArray(d.items)) ? d.items : [];
+    } catch { return; /* 讀不到維持原本 */ }
+    renderNotes();
+    renderButton();
+  }
+  setInterval(() => { if (shell.company().unlocked) loadNotes(); }, NOTE_INTERVAL);
+
   // 貼在按鈕下方、右緣對齊；窄螢幕左右撐滿（CSS）
   function place() {
     const r = button.getBoundingClientRect();
@@ -296,6 +359,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     pop.hidden = false;
     button.setAttribute('aria-expanded', 'true');
     loadContact();
+    loadNotes();
     (manageBtn.hidden ? cpBtn.hidden ? outBtn : cpBtn : manageBtn).focus();
   }
   function closePop(focusBack = true) {
@@ -331,6 +395,12 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     const dot = mk('span', 'acct-dot');
     dot.setAttribute('aria-hidden', 'true');
     button.append(dot, mk('span', 'acct-mode', '公司模式'), mk('span', 'acct-nm', s.name || (c.admin ? '管理員' : '')));
+    // 有通知：名字右上紅點，讀屏念「有 N 則通知」
+    if (notes.length) {
+      const nd = mk('span', 'acct-ndot');
+      nd.setAttribute('aria-hidden', 'true');
+      button.append(nd, mk('span', 'sr-only', `，有 ${notes.length} 則通知`));
+    }
   }
   button.addEventListener('click', () => {
     if (!shell.company().unlocked) { openLogin(false); return; }
@@ -343,7 +413,9 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   // staff：員工資料 { id, name, group, level }；admin：舊版首頁管理員憑證（已不再發出，到期前仍可用）
+  let notesLoaded = false;
   function unlocked(exp, staff = null, mg = false, admin = false) {
+    if (!notesLoaded && staff && staff.id) { notesLoaded = true; setTimeout(loadNotes, 0); }
     internal.setCompany({ unlocked: true, exp, admin: Boolean(admin || (staff && staff.level === 'sys')), staff: staff || null });
     manage = mg;
     shell.setStatus('company', { state: 'hidden', text: '' });
@@ -353,6 +425,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   function locked() {
+    notes = []; notesLoaded = false; noteReq++;
+    renderNotes();
     internal.setCompany({ unlocked: false, exp: null, admin: false, staff: null });
     manage = false;
     shell.setStatus('company', { state: 'hidden', text: '' });

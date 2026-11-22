@@ -513,3 +513,17 @@ test('提醒：影片的留言 tool 記 fbvideo、通知 kind video', async (t) 
   assert.equal(notices(env)[0].kind, 'video');
   assert.equal(failLogs(env)[0].tool, 'fbvideo');
 });
+
+test('提醒：取消（貼文刪除）後通知收掉；status 回 kind', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => gErr(32, 400, 'rate limit')
+  });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal(notices(env).length, 1);
+  assert.equal((await post('status')).kind, 'post');
+  await post('cancel');
+  assert.equal(notices(env).length, 0);
+  assert.equal((await post('status')).alert, null);
+});

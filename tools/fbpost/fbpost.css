@@ -38,6 +38,9 @@
 .list .body { min-width: 0; }
 .list .msg { font-size: 15px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list .meta { display: flex; flex-wrap: wrap; gap: 0 6px; margin-top: 4px; color: var(--muted); font-size: 13px; }
+.list .meta .cm { margin-left: -6px; }   /* 接在「相片．粉專」後面，用 ．連接 */
+.list .meta .cm-bad, .list .meta .cm-line { flex-basis: 100%; margin-left: 0; }
+.list .meta .cm-bad { color: #d92d20; font-weight: 600; }
 .list .when-m { display: none; }
 .list .when { font-size: 14px; color: var(--text); text-align: right; white-space: nowrap; }
 .list .acts { display: flex; gap: 8px; align-items: center; }
@@ -358,7 +361,7 @@ body.no-scroll { overflow: hidden; }
 /* 依權限隱藏（用 class，不重建列表） */
 .who { font-size: 12px; color: var(--muted, #5b6472); }
 .noview { margin: 16px 0; padding: 14px 16px; border-radius: var(--radius-control); background: var(--warn-bg); color: var(--warn-text); }
-#fbpostApp.no-post #newBtn, #fbpostApp.no-post .act-resend, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
+#fbpostApp.no-post #newBtn, #fbpostApp.no-post .act-resend, #fbpostApp.no-post .act-retry, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
 #needStaff { margin-top: 12px; }
 
 /* 臉書權杖快到期／失效提醒（只有管理員看得到） */

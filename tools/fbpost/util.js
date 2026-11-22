@@ -13,6 +13,8 @@ export const COMMENT = { done: '已留言', armed: '排程後補留言', retry: 
 export const commentState = (c) => {
   if (!c) return '';
   if (typeof c === 'string') return '留言：' + (COMMENT[c] || c);
+  // 失敗提醒（後端 alert）：第 N 則失敗／重試中，附原因
+  if (c.alert) return '留言：' + (c.failed ? '留言失敗' : '留言重試中') + '（第 ' + c.seq + ' 則' + (c.error ? '：' + c.error : '') + '）';
   return '留言：' + (COMMENT[c.status] || c.status || '') + (c.error ? '（' + c.error + '）' : '');
 };
 

@@ -38,8 +38,16 @@ document.addEventListener('pointerdown', (e) => { for (const x of document.query
 document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; for (const x of document.querySelectorAll('.pv.armed')) { disarm(x); x.querySelector('.pv-arm').focus(); } });
 
 function metaText(it, pageName) {
-  const c = commentState(it.comment);
-  return [it.picture ? '相片' : '文字', pageName, c].filter(Boolean).join('．');
+  return [it.picture ? '相片' : '文字', pageName].filter(Boolean).join('．');
+}
+// 留言狀態：失敗累計 ≥2 次或已失敗（後端回 alert）＝紅字
+function commentSpan(c) {
+  const sp = document.createElement('span'); sp.className = 'cm';
+  const t = commentState(c);
+  const bad = !!(c && c.alert);
+  if (t) sp.textContent = bad ? t : '．' + t;   // 紅字自己一行，不接「．」
+  sp.classList.toggle('cm-bad', bad);
+  return sp;
 }
 function rowBase(it, whenMs, pageName, preview) {
   const li = document.createElement('li'); li.dataset.id = it.id;
@@ -48,7 +56,7 @@ function rowBase(it, whenMs, pageName, preview) {
   const meta = document.createElement('div'); meta.className = 'meta';
   const kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = metaText(it, pageName);
   const t2 = document.createElement('span'); t2.className = 'when-m'; t2.textContent = fmtDay(whenMs);   // 手機：時間併到這一行
-  meta.append(kind, t2);
+  meta.append(kind, commentSpan(it.comment), t2);
   body.append(m, meta);
   const when = document.createElement('div'); when.className = 'when'; when.textContent = fmtDay(whenMs);
   li.append(preview || thumb(it.picture), body, when);
@@ -94,15 +102,32 @@ export function createManage({ tb, history = null, onResend = null }) {
     if (!rec) { b.disabled = true; b.title = NO_REC; b.setAttribute('aria-description', NO_REC); }
     return b;
   }
+  // 重新留言：只在留言失敗累計 ≥2 次或已失敗時出現；成功後改成「重新留言中」，不重查臉書
+  function retryBtn(it, li, page, hint) {
+    const c = it.comment;
+    if (!c || !c.alert) return null;
+    const b = btn('重新留言', 'btn-secondary act-retry', async () => {
+      b.disabled = true;
+      try {
+        await tb.api.call('/fb/comment/retry', { method: 'POST', body: { postId: it.id, page } });
+        const sp = li.querySelector('.cm'); sp.textContent = '留言：重新留言中'; sp.classList.remove('cm-bad'); sp.classList.add('cm-line');
+        b.remove(); say(hint, '已要求重新留言，稍後按「刷新」看結果');
+      } catch (e) { b.disabled = false; say(hint, errText(e), true); }
+    });
+    b.title = '馬上再試一次留言（已留過的不會重複）';
+    return b;
+  }
   // 排序只重排畫面上的列，不重查臉書
   function sortSched() {
     const ul = $('schedList');
     [...ul.children].sort((a, b) => byAt(a.dataset.at, b.dataset.at, $('schedSort').value)).forEach((li) => ul.append(li));
   }
   let schedSeq = 0, pubSeq = 0;   // 換粉專或再查一次時，晚到的舊回應丟掉
+  let lastSched = Date.now();      // 上次查已排程（自動刷新用）
   async function loadSched() {
     const page = $('schedPage').value; if (!page) return;
     const my = ++schedSeq;
+    lastSched = Date.now();
     say('schedHint', '查詢中…');
     skelStart($('schedList'), false);
     try {
@@ -142,6 +167,8 @@ export function createManage({ tb, history = null, onResend = null }) {
           }
           catch (e) { say('schedHint', errText(e), true); }
         });
+        const bRetry = retryBtn(it, li, page, 'schedHint');
+        if (bRetry) acts.append(bRetry);
         acts.append(editSoon(), resendBtn(it, idx), bEdit, bCancel);
         li.insertBefore(acts, li.querySelector('.when')); li.append(edit); ul.append(li);
       }
@@ -164,6 +191,8 @@ export function createManage({ tb, history = null, onResend = null }) {
       for (const it of d.items || []) {
         const li = rowBase(it, new Date(it.time).getTime(), pageName, it.url ? openablePreview(it) : null);
         const acts = document.createElement('div'); acts.className = 'acts';
+        const bRetry = retryBtn(it, li, page, 'pubHint');
+        if (bRetry) acts.append(bRetry);
         acts.append(editSoon(), resendBtn(it, idx));
         acts.append(btn('刪除', 'btn-secondary btn-del', async () => {
           if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
@@ -184,6 +213,16 @@ export function createManage({ tb, history = null, onResend = null }) {
     if (gone) { const n = ul.children.length; say('schedHint', n ? `共 ${n} 則` : '沒有排程貼文'); }
   }
   setInterval(pruneSched, 60 * 1000);
+  // 已排程每 30 分鐘自動刷新（2026-11-22）：分頁在背景時先不查，切回來超過 30 分鐘就補查；正在改時間時延後
+  const AUTO_MS = 30 * 60 * 1000;
+  function autoSched() {
+    if (document.visibilityState !== 'visible' || !$('schedPage').value) return;
+    if (Date.now() - lastSched < AUTO_MS) return;
+    if ([...$('schedList').querySelectorAll('.edit')].some((x) => !x.hidden)) return;
+    loadSched();
+  }
+  setInterval(autoSched, 60 * 1000);
+  document.addEventListener('visibilitychange', autoSched);
   $('schedReload').onclick = loadSched;
   // 排序只重排畫面上的列，不重查臉書
   $('schedSort').onchange = sortSched;

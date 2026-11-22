@@ -5,7 +5,12 @@ import { all, run } from './db.js';
 const pageCol = new WeakMap();   // D1 綁定 → Promise
 export function ensurePageCol(env) {
   let p = pageCol.get(env.DB);
-  if (!p) { p = env.DB.prepare('ALTER TABLE logs ADD COLUMN page TEXT').run().catch(() => {}).then(() => true); pageCol.set(env.DB, p); }
+  if (!p) {
+    // 欄位已存在＝成功；其他錯誤（暫時性）不記住，下次再試
+    p = env.DB.prepare('ALTER TABLE logs ADD COLUMN page TEXT').run()
+      .catch((e) => { if (!/duplicate column/i.test(String(e && e.message))) pageCol.delete(env.DB); }).then(() => true);
+    pageCol.set(env.DB, p);
+  }
   return p;
 }
 // 後端自己記的事件（例：留言失敗），不經過 /logs

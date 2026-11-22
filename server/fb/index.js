@@ -11,7 +11,7 @@ import { listPresets, validPresets, savePresets } from './presets.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
 import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
-import { retryTimer } from './timer.js';
+import { retryTimer, timerStatus } from './timer.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 import { webhookState } from './webhook.js';
@@ -117,6 +117,9 @@ route('POST', /^\/fb\/comment\/retry$/, async (request, env, ctx, m, me) => {
   const postId = b && String(b.postId || ''), page = b && String(b.page || '');
   if (!/^\d{1,30}(?:_\d{1,30})?$/.test(postId) || !/^\d{1,30}$/.test(page)) return fail(request, env, 'bad_request');
   if (!env.FB_TIMER) return fail(request, env, 'misconfigured');
+  // 影片的留言要 vpost、貼文的要 post
+  const st = await timerStatus(env, postId);
+  if (!me.perms.includes(st && st.kind === 'video' ? 'vpost' : 'post')) return fail(request, env, 'fb_no_perm');
   const d = await retryTimer(env, postId, page);
   if (!d || !d.ok) return fail(request, env, 'bad_request', (d && d.error) || '沒有失敗的留言');
   await audit(env, me.who, 'comment_retry', page, postId);

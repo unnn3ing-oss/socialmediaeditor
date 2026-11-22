@@ -18,7 +18,7 @@ const SHOT = process.env.SHOT_DIR;
 // mode: 'admin' | 'company'（無 admin）| 'denied'（401）| 'tokenbad'（管理員，但 /fb/pages 回 fb_token）
 async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {}) {
   const page = await browser.newPage({ viewport });
-  const errors = [], fbCalls = [], api = { posts: [], reschedules: [], cancels: [], deletes: [], rundown: [] };
+  const errors = [], fbCalls = [], api = { posts: [], reschedules: [], cancels: [], deletes: [], rundown: [], retries: [] };
   const soon = Math.floor(Date.now() / 1000) + 7200;
   page.on('pageerror', (e) => errors.push(String(e)));
   if (opts.duty !== false) await presetDuty(page, opts.duty || []);
@@ -49,6 +49,8 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     }
     if (p === '/fb/scheduled' && opts.sched) return json(opts.sched);
     if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: 'pending' }]);
+    if (p === '/fb/comment/retry') { api.retries.push(JSON.parse(req.postData() || '{}')); return opts.retryFail ? json({ ok: false, code: 'bad_request', error: '沒有失敗的留言' }, 400) : json({ ok: true }); }
+    if (p === '/fb/published' && opts.pub) return json({ items: opts.pub, next: null });
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
     if (p === '/fb/presets') return json([{ name: '雙11抽獎', body: '留言＋分享抽 AirPods！\nhttps://example.com/a' }, { name: '訂閱', body: '記得訂閱 YouTube' }]);
     if (p === '/rundown') {
@@ -287,7 +289,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   await page.waitForSelector('#schedList li img.thumb[src]');
   // 列表一列：內容一行截斷、相片．粉專．留言、編輯（即將推出）／改時間／刪除、時間欄
   assert.equal(await page.$eval('#schedList .msg', (e) => getComputedStyle(e).whiteSpace), 'nowrap');
-  assert.match(await page.textContent('#schedList .meta .kind'), /^相片．新聞．留言：/);
+  assert.match(await page.$eval('#schedList .meta', (m) => m.querySelector('.kind').textContent + m.querySelector('.cm').textContent), /^相片．新聞．留言：/);
   assert.deepEqual(await page.$$eval('#schedList li:first-child .acts button', (b) => b.map((x) => [x.textContent, x.disabled])), [['編輯', true], ['再發一次', true], ['改時間', false], ['刪除', false]]);
   assert.match(await page.textContent('#schedList .when'), /^\d+月\d+日 \d\d:\d\d$/);
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-sched-desktop.png') });
@@ -1226,5 +1228,79 @@ test('選套版沒照片：送出鈕停用並說明原因；改純文字就能�
   await page.click('#modeSeg [data-mode=image]');
   await withPhoto(page);
   assert.equal(await page.locator('#sendBtn').isDisabled(), false, '有照片就能送');
+  await page.close();
+});
+
+// ===== 留言失敗提醒（2026-11-22）=====
+const ALERT_PUB = [
+  { id: '111_5', message: '留言失敗的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: { status: 'failed', alert: true, failed: true, seq: 1, error: '(#32) page rate limit' } },
+  { id: '111_6', message: '重試中的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/6', comment: { status: 'pending', alert: true, failed: false, seq: 2, error: 'temporary' } },
+  { id: '111_8', message: '正常的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/8', comment: 'done' }
+];
+test('留言失敗：紅字＋「重新留言」；按下送出 postId／page，改成重新留言中、按鈕消失；正常的沒有按鈕', async () => {
+  const { page, errors, api } = await newPage('admin', undefined, { pub: ALERT_PUB });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  await page.click('[data-tab=pub]');
+  await page.click('#pubReload');
+  await page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  const rows = page.locator('#pubList > li');
+  assert.match(await rows.nth(0).locator('.cm').textContent(), /留言失敗（第 1 則：\(#32\) page rate limit）/);
+  assert.match(await rows.nth(1).locator('.cm').textContent(), /留言重試中（第 2 則：temporary）/);
+  const red = await rows.nth(0).locator('.cm').evaluate((el) => getComputedStyle(el).color);
+  assert.equal(red, 'rgb(217, 45, 32)');
+  assert.equal(await rows.nth(0).locator('.act-retry').count(), 1);
+  assert.equal(await rows.nth(1).locator('.act-retry').count(), 1);
+  assert.equal(await rows.nth(2).locator('.act-retry').count(), 0);
+  assert.doesNotMatch(await rows.nth(2).locator('.cm').evaluate((el) => el.className), /cm-bad/);
+  await rows.nth(0).locator('.act-retry').click();
+  await page.waitForFunction(() => /重新留言中/.test(document.querySelector('#pubList > li .cm').textContent));
+  assert.deepEqual(api.retries, [{ postId: '111_5', page: '111' }]);
+  assert.equal(await rows.nth(0).locator('.act-retry').count(), 0);
+  assert.doesNotMatch(await rows.nth(0).locator('.cm').evaluate((el) => el.className), /cm-bad/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('留言失敗：重新留言失敗顯示原因、按鈕可再按；沒有發文權限看不到按鈕', async () => {
+  const a = await newPage('admin', undefined, { pub: ALERT_PUB, retryFail: true });
+  await a.page.goto(srv.url + 'tools/fbpost/index.html');
+  await a.page.waitForSelector('#fbpostApp:not([hidden])');
+  await a.page.click('[data-tab=pub]'); await a.page.click('#pubReload');
+  await a.page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  await a.page.locator('#pubList > li').nth(0).locator('.act-retry').click();
+  await a.page.waitForFunction(() => /沒有失敗的留言/.test(document.getElementById('pubHint').textContent));
+  assert.equal(await a.page.locator('#pubList > li').nth(0).locator('.act-retry').isEnabled(), true);
+  await a.page.close();
+  const b = await newPage('admin', undefined, { pub: ALERT_PUB, me: { admin: false, perms: ['view'], name: '小明', group: '檢視' } });
+  await b.page.goto(srv.url + 'tools/fbpost/index.html');
+  await b.page.waitForSelector('#fbpostApp:not([hidden])');
+  await b.page.waitForSelector('#fbpostApp.no-post');
+  await b.page.click('[data-tab=pub]'); await b.page.click('#pubReload');
+  await b.page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  assert.equal(await b.page.locator('#pubList .act-retry').first().isVisible(), false);
+  await b.page.close();
+});
+
+test('已排程每 30 分鐘自動刷新；不到 30 分鐘不查；分頁在背景時不查', async () => {
+  const { page, fbCalls } = await newPage('admin');
+  await page.clock.install();
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#fbpostApp:not([hidden])');
+  const n = () => fbCalls.filter((p) => p === '/fb/scheduled').length;
+  assert.equal(n(), 0, '開頁不自動查');
+  await page.clock.fastForward('29:00');
+  assert.equal(n(), 0);
+  await page.clock.fastForward('02:00');
+  await page.waitForFunction(() => /共 1 則/.test(document.getElementById('schedHint').textContent));
+  assert.equal(n(), 1);
+  await page.clock.fastForward('10:00');
+  assert.equal(n(), 1, '剛查過不再查');
+  await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); });
+  await page.clock.fastForward('40:00');
+  assert.equal(n(), 1, '背景不查');
+  await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForFunction(() => document.getElementById('schedList').getAttribute('aria-busy') === 'false');
+  assert.equal(n(), 2, '切回來超過 30 分鐘補查');
   await page.close();
 });

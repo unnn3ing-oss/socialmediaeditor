@@ -39,6 +39,17 @@
 .acct-dl small { color: var(--muted); font-weight: 400; }
 .acct-sec { border-top: 1px solid var(--line); padding: 12px 16px; }
 .acct-sec h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.acct-pill { position: relative; }
+.acct-pill .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.acct-ndot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #d92d20; box-shadow: 0 0 0 2px var(--surface); }
+.acct-notes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.acct-notes[hidden] { display: none; }
+.acct-note { padding: 10px 12px; border: 1px solid #fecdca; border-radius: var(--radius-control); background: #fef3f2; }
+.acct-note-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.acct-note-top b { color: #b42318; font-size: 13px; }
+.acct-note-top small { color: var(--muted); flex: none; }
+.acct-note-err { margin-top: 4px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-note-act { display: flex; gap: 8px; margin-top: 8px; }
 .acct-empty { padding: 14px; border: 1px dashed var(--line); border-radius: var(--radius-control); color: var(--muted); text-align: center; font-size: 13px; }
 .acct-act { border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
 .acct-act .btn { flex: 1 1 0; height: 40px; font-size: 14px; }

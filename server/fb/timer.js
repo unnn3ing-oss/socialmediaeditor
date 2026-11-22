@@ -58,6 +58,7 @@ function summary(rec) {
 export const ALERT_AT = 2;
 const CASCADE = '前一則留言失敗，未留';
 export function alertOf(rec) {
+  if (rec.canceled) return null;   // 整則取消（貼文刪除）就不再提醒
   const i = rec.items.findIndex((x) => x.status === 'failed' || (open(x) && (x.attempts || 0) >= ALERT_AT));
   if (i < 0) return null;
   const it = rec.items[i];
@@ -114,7 +115,7 @@ export class FbCommentTimer {
       return reply({ ok: true });
     }
     if (action === 'cancel') {
-      if (rec) { [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) x.status = 'canceled'; }); await s.put('rec', rec); await this.schedule(rec); }
+      if (rec) { [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) x.status = 'canceled'; }); rec.canceled = true; await s.put('rec', rec); await this.schedule(rec); }
       else await s.deleteAlarm();
       return reply({ ok: true });
     }
@@ -140,7 +141,7 @@ export class FbCommentTimer {
       if (!rec.purgeAt && !anyOpen(rec)) await this.schedule(rec);   // 舊紀錄（沒排清除）被查到時補排 14 天清除
       const first = rec.items[0] || {};
       // 頂層欄位沿用第 1 則（列表顯示用），items 是每則的狀態
-      return reply({ ok: true, pageId: rec.pageId, postId: rec.postId, at: rec.at, retimes: rec.retimes, status: summary(rec), commentId: first.commentId, attempts: first.attempts, error: first.error, items: rec.items, alert: alertOf(rec),
+      return reply({ ok: true, kind: rec.kind === 'video' ? 'video' : 'post', pageId: rec.pageId, postId: rec.postId, at: rec.at, retimes: rec.retimes, status: summary(rec), commentId: first.commentId, attempts: first.attempts, error: first.error, items: rec.items, alert: alertOf(rec),
         cross: crossOf(rec).map((c) => ({ page: c.page, status: c.status, ...(c.videoId ? { videoId: c.videoId } : {}), ...(c.error ? { error: c.error } : {}) })) });
     }
     return reply({ ok: false, error: '不支援的動作' });
