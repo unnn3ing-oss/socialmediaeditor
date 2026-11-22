@@ -21,7 +21,7 @@ export const PERMS = [...BASE_PERMS, ...CARD_PERMS];
 const CARD_NAME = Object.fromEntries(CARDS.map((c) => [c.key, c.name]));
 export const PERM_LABELS = {
   view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文',
-  vview: '檢視影片發布', vpost: '上傳發布影片（含改時間、刪除）', report: '檢視數據報表', bypass: '關閉時仍可使用排程發布／影片發布', notify: '接收留言失敗通知',
+  vview: '檢視影片發布', vpost: '上傳發布影片（含改時間、刪除）', report: '檢視數據報表', bypass: '關閉時仍可使用排程發布／影片發布', notify: '接收所有人的留言失敗通知（發文者本來就收得到自己的）',
   ...Object.fromEntries(GRANTABLE.map((k) => [CARD_PREFIX + k, CARD_NAME[k]]))
 };
 // 權限組卡片的分區（管理頁依此分組顯示）

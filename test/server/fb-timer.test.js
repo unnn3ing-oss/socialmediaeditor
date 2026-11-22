@@ -527,3 +527,13 @@ test('提醒：取消（貼文刪除）後通知收掉；status 回 kind', async
   assert.equal(notices(env).length, 0);
   assert.equal((await post('status')).alert, null);
 });
+
+test('發文者：arm 帶 by 寫進通知；沒帶就空白', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => gErr(32, 400, 'rate limit')
+  });
+  await post('arm', { ...REC(nowSec() - 60), by: 'P1' });
+  await obj.alarm();
+  assert.equal(notices(env)[0].by, 'P1');
+});

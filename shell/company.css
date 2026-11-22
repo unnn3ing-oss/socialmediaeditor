@@ -38,6 +38,7 @@
 .acct-dl dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
 .acct-dl small { color: var(--muted); font-weight: 400; }
 .acct-sec { border-top: 1px solid var(--line); padding: 12px 16px; }
+.acct-scope { margin-left: 6px; font-weight: 400; color: var(--muted); }
 .acct-sec h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .acct-pill { position: relative; }
 .acct-pill .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

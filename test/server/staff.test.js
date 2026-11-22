@@ -266,18 +266,21 @@ test('影片發布／數據報表／Rundown 的權限：vview／vpost／report �
   assert.deepEqual((await findStaff(env, 'SYS9')).perms, PERMS, '系統管理者 perms＝全部');
 });
 
-test('留言失敗通知：權限組沒勾 notify 回 enabled false；勾了才回清單', async (t) => {
+test('留言失敗通知：發文者只收自己的；權限組有 notify 收全部；舊紀錄（沒有發文者）只有看全部的人收到', async (t) => {
   const { env, adm } = await setup(t);
+  const { setNotice } = await import('../../server/fb/notices.js');
   const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
-  await post(env, adm, '/admin/staff', { id: 'P1', name: '小編', group: groupId(d, '發文') });
-  const tk = (await login(env, 'P1')).body.data.token;
-  const r1 = await call(env, '/staff/me/notices', { headers: bearer(tk) });
-  assert.deepEqual(r1.body.data, { enabled: false, items: [] });
+  await post(env, adm, '/admin/staff', { id: 'P1', name: '小編甲', group: groupId(d, '發文') });
+  await post(env, adm, '/admin/staff', { id: 'P2', name: '小編乙', group: groupId(d, '發文') });
+  await setNotice(env, { postId: '111_1', pageId: '111', kind: 'post', by: 'P1' }, { seq: 1, error: 'x', failed: true });
+  await setNotice(env, { postId: '111_2', pageId: '111', kind: 'post', by: 'P2' }, { seq: 1, error: 'y', failed: false });
+  await setNotice(env, { postId: '111_3', pageId: '111', kind: 'post' }, { seq: 2, error: 'z', failed: true });
+  const ids = async (id) => { const tk = (await login(env, id)).body.data.token; const r = (await call(env, '/staff/me/notices', { headers: bearer(tk) })).body.data; return [r.all, r.items.map((x) => x.postId).sort()]; };
+  assert.deepEqual(await ids('P1'), [false, ['111_1']]);
+  assert.deepEqual(await ids('P2'), [false, ['111_2']]);
   const g = d.groups.find((x) => x.name === '發文');
   assert.equal((await post(env, adm, '/admin/staff-groups', { id: g.id, name: g.name, perms: [...g.perms, 'notify'] })).status, 200);
-  const r2 = await call(env, '/staff/me/notices', { headers: bearer(tk) });
-  assert.equal(r2.body.data.enabled, true);
-  assert.deepEqual(r2.body.data.items, []);
+  assert.deepEqual(await ids('P1'), [true, ['111_1', '111_2', '111_3']]);
   assert.equal((await call(env, '/staff/me/notices')).status, 401);
 });
 

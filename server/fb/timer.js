@@ -100,7 +100,7 @@ export class FbCommentTimer {
       const cross = body.kind === 'video' ? normCross(body) : [];
       const items = normItems(body, !!(cross && cross.length));
       if (!body.pageId || !body.postId || !items || !cross || !Number.isInteger(at)) return reply({ ok: false, error: '資料不完整' });
-      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items, ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(cross.length ? { cross } : {}) };
+      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(cross.length ? { cross } : {}) };
       await s.put('rec', r);
       await this.schedule(r);
       return reply({ ok: true });

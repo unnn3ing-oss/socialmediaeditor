@@ -1,4 +1,5 @@
 // 留言失敗通知（排程發布、影片發布共用）
+//   by＝發文者員工編號：發文者收自己的；系統管理者與權限組有 notify（接收所有人的通知）收全部；舊紀錄沒有 by 只有後者看得到
 //   計時器（timer.js）在某則留言失敗累計 ≥2 次、或判定失敗時寫一筆；重新留言成功／取消就刪。只存 D1，不打臉書。
 //   員工權限組有 notify（系統管理者一律有）才看得到：GET /staff/me/notices（auth.js）。保留 7 天。
 //   最後判定失敗時另寫一筆錯誤日誌（logs，tool＝fbpost／fbvideo，code＝comment_failed[:錯誤碼]，page＝粉專 ID）。
@@ -10,15 +11,26 @@ const SQL = 'CREATE TABLE IF NOT EXISTS fb_notices (post_id TEXT PRIMARY KEY, pa
 export const NOTICE_KEEP_DAYS = 7;
 export const MAX_NOTICES = 50;
 const DAY = 86400000;
-const ensure = (env) => ensureOnce(env.DB, SQL);
+const BY_SQL = "ALTER TABLE fb_notices ADD COLUMN by TEXT NOT NULL DEFAULT ''";
+const byCol = new WeakMap();
+async function ensure(env) {
+  await ensureOnce(env.DB, SQL);
+  // by 欄（2026-11-22 第三輪）：舊表自動補；欄位已存在算成功，其他錯誤下次再試
+  let p = byCol.get(env.DB);
+  if (!p) {
+    p = env.DB.prepare(BY_SQL).run().catch((e) => { if (!/duplicate column/i.test(String(e && e.message))) byCol.delete(env.DB); }).then(() => true);
+    byCol.set(env.DB, p);
+  }
+  await p;
+}
 
 // a＝{ seq, error, failed }；null＝沒事（刪除）
-export async function setNotice(env, { postId, pageId, kind }, a) {
+export async function setNotice(env, { postId, pageId, kind, by }, a) {
   if (!env.DB) return;
   await ensure(env);
   if (!a) { await run(env, 'DELETE FROM fb_notices WHERE post_id = ?', String(postId)); return; }
-  await run(env, 'INSERT INTO fb_notices (post_id, page, kind, seq, error, failed, at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(post_id) DO UPDATE SET page = excluded.page, kind = excluded.kind, seq = excluded.seq, error = excluded.error, failed = excluded.failed, at = excluded.at',
-    String(postId), String(pageId), kind === 'video' ? 'video' : 'post', a.seq, String(a.error || '').slice(0, 200), a.failed ? 1 : 0, Date.now());
+  await run(env, 'INSERT INTO fb_notices (post_id, page, kind, seq, error, failed, at, by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(post_id) DO UPDATE SET page = excluded.page, kind = excluded.kind, seq = excluded.seq, error = excluded.error, failed = excluded.failed, at = excluded.at, by = excluded.by',
+    String(postId), String(pageId), kind === 'video' ? 'video' : 'post', a.seq, String(a.error || '').slice(0, 200), a.failed ? 1 : 0, Date.now(), String(by || ''));
 }
 
 // 錯誤碼：臉書錯誤碼（數字）；沒有就只寫 comment_failed
@@ -28,13 +40,17 @@ export async function logCommentFail(env, { pageId, kind }, code) {
   await logEvent(env, kind === 'video' ? 'fbvideo' : 'fbpost', failCode(code), String(pageId));
 }
 
-export async function listNotices(env) {
+// uid：只看這個人發的；null＝看全部
+export async function listNotices(env, uid = null) {
   if (!env.DB) return [];
   await ensure(env);
-  const rows = await all(env, 'SELECT post_id, page, kind, seq, error, failed, at FROM fb_notices WHERE at >= ? ORDER BY at DESC LIMIT ?', Date.now() - NOTICE_KEEP_DAYS * DAY, MAX_NOTICES);
+  const since = Date.now() - NOTICE_KEEP_DAYS * DAY;
+  const rows = uid === null
+    ? await all(env, 'SELECT post_id, page, kind, seq, error, failed, at, by FROM fb_notices WHERE at >= ? ORDER BY at DESC LIMIT ?', since, MAX_NOTICES)
+    : await all(env, 'SELECT post_id, page, kind, seq, error, failed, at, by FROM fb_notices WHERE at >= ? AND by = ? ORDER BY at DESC LIMIT ?', since, String(uid), MAX_NOTICES);
   let names = new Map();
   try { names = new Map((await all(env, 'SELECT id, short FROM fb_pages')).map((r) => [String(r.id), r.short])); } catch { /* 沒有粉專表就顯示 ID */ }
-  return rows.map((r) => ({ postId: r.post_id, page: r.page, pageName: names.get(String(r.page)) || r.page, kind: r.kind, seq: r.seq, error: r.error, failed: !!r.failed, at: r.at }));
+  return rows.map((r) => ({ postId: r.post_id, page: r.page, pageName: names.get(String(r.page)) || r.page, kind: r.kind, seq: r.seq, error: r.error, failed: !!r.failed, at: r.at, by: r.by || '' }));
 }
 
 export async function cleanupNotices(env, nowMs) {

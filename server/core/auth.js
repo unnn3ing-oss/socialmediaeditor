@@ -140,15 +140,16 @@ async function changePassword(request, env) {
 }
 
 // 員工自己的資料：GET 讀（姓名、權限組、分機），POST { contact } 只能改自己的分機
-// 留言失敗通知（server/fb/notices.js）：權限組有 notify（系統管理者一律有）才回；canRetry＝能不能按「重新留言」
+// 留言失敗通知（server/fb/notices.js）：發文者收自己發的；系統管理者與權限組有 notify 收全部（all）；canRetry＝能不能按「重新留言」
 async function myNotices(request, env) {
   const t = await bearer(request, env, 'company');
   if (!t) return fail(request, env, 'unauthorized');
-  const perms = (t.staff && t.staff.perms) || [];
-  if (!t.staff || !perms.includes('notify')) return ok(request, env, { enabled: false, items: [] });
-  const items = await listNotices(env);
+  if (!t.staff) return ok(request, env, { enabled: false, items: [] });
+  const perms = t.staff.perms || [];
+  const all = t.staff.level === 'sys' || perms.includes('notify');
+  const items = await listNotices(env, all ? null : t.staff.id);
   const can = { post: perms.includes('post'), video: perms.includes('vpost') };
-  return ok(request, env, { enabled: true, items: items.map((x) => ({ ...x, canRetry: x.kind === 'video' ? can.video : can.post })) });
+  return ok(request, env, { enabled: true, all, items: items.map((x) => ({ ...x, canRetry: x.kind === 'video' ? can.video : can.post })) });
 }
 
 async function staffMe(request, env) {

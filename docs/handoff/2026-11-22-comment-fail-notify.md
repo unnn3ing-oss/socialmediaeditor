@@ -38,7 +38,7 @@
 - 決定：**C**，`notify` 權限改義為「接收所有人的留言失敗通知」；發文者一律收自己的；系統管理者收全部。
 - 做法：armTimer 帶 `by`（員工編號，`me.who.uid`；影片用 job 的 `who`）→ timer rec 存 `by` → `fb_notices.by` 欄（自動補）→ `/staff/me/notices`：sys 或 notify＝全部，否則 `by = 自己`。舊紀錄沒有 by＝只有全部權限的人看得到。
 - 列表紅字與重新留言按鈕不變（依 view／post 權限）。
-- 狀態：🚧 進行中
+- 狀態：✅ 完成（npm test 775、e2e company／fbpost／admin／fbvideo 110 過），待使用者確認
 
 ## 下一步
 - [x] 後端、前端、單元測試、e2e（fbpost 3、company 2）

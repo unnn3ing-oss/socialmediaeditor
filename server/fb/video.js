@@ -297,7 +297,7 @@ async function finishReady(env, uploadId, who) {
     try { comments = draft ? [] : JSON.parse(r.comments || '[]'); } catch { comments = []; }
     const cross = draft ? [] : xpostOf(r).map((x) => String(x.page));
     if ((comments.length || cross.length) && r.video_id) {
-      try { await armTimer(env, { pageId: r.page, postId: r.video_id, at: at ?? nowSec(), items: comments, cross, kind: 'video' }); }
+      try { await armTimer(env, { pageId: r.page, postId: r.video_id, at: at ?? nowSec(), items: comments, cross, kind: 'video', by: String(r.who || '').slice(0, 20) }); }
       catch (e) {
         const msg = errText(e);
         await update(env, r, {

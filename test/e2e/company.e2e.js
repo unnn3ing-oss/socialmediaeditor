@@ -313,7 +313,7 @@ test('測試後端：系統管理者切過去 → 測試膠囊、憑證分開、
 test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／第幾則／原因；重新留言後移除；開排程發布切網址', async () => {
   const { page, api } = await open();
   const at = Date.now() - 60000;
-  api.notices = { enabled: true, items: [
+  api.notices = { enabled: true, all: true, items: [
     { postId: '111_5', page: '111', pageName: '新聞', kind: 'post', seq: 1, error: '(#32) page rate limit', failed: true, at, canRetry: true },
     { postId: '222_9', page: '222', pageName: '娛樂', kind: 'video', seq: 2, error: 'temporary', failed: false, at, canRetry: false }
   ] };
@@ -328,6 +328,7 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   assert.match(await notes.nth(1).textContent(), /娛樂｜第 2 則留言重試中/);
   assert.equal(await notes.nth(1).locator('button', { hasText: '重新留言' }).count(), 0, '沒有權限不顯示重新留言');
   assert.equal(await page.isVisible('#acct-pop .acct-empty'), false);
+  assert.match(await page.textContent('#acct-pop .acct-scope'), /全部人/);
   await notes.nth(0).locator('button', { hasText: '重新留言' }).click();
   await page.waitForFunction(() => document.querySelectorAll('#acct-pop .acct-note').length === 1);
   assert.deepEqual(api.retries, [{ postId: '111_5', page: '111' }]);
@@ -346,4 +347,14 @@ test('留言失敗通知：權限組沒開 notify（enabled false）不閃紅光
   await page.waitForTimeout(200);
   assert.match(await page.textContent('#acct-pop .acct-sec'), /目前沒有通知/);
   assert.equal(await page.locator('#company-btn.acct-alert').count(), 0);
+});
+
+test('留言失敗通知：一般員工只看自己發的，標題註明', async () => {
+  const { page, api } = await open();
+  api.notices = { enabled: true, all: false, items: [{ postId: '111_5', page: '111', pageName: '新聞', kind: 'post', seq: 1, error: 'x', failed: true, at: Date.now(), canRetry: true }] };
+  await unlock(page);
+  await page.waitForSelector('#company-btn.acct-alert');
+  await page.click('#company-btn');
+  await page.waitForSelector('#acct-pop .acct-note');
+  assert.match(await page.textContent('#acct-pop .acct-scope'), /你發的貼文/);
 });

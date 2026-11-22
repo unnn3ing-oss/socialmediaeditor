@@ -116,6 +116,7 @@ test('已發佈列表：留言失敗回 alert 物件；重新留言 API 驗證�
 
   const n = await call('/staff/me/notices');
   assert.equal(n.body.data.enabled, true, '系統管理者一律收通知');
+  assert.equal(n.body.data.all, true);
   assert.equal(n.body.data.items.length, 1);
   assert.deepEqual([n.body.data.items[0].postId, n.body.data.items[0].page, n.body.data.items[0].kind, n.body.data.items[0].canRetry], ['111_7', '111', 'post', true]);
 

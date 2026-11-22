@@ -111,7 +111,9 @@ async function publishOne(env, page, token, { message, file, bg, at }) {
   return String(d.id);
 }
 
-export async function createPosts(env, form) {
+// who：送出的人（{ uid }），記給留言計時器，留言失敗通知只給他（和看全部的人）
+export async function createPosts(env, form, who = null) {
+  const by = who && who.uid ? String(who.uid).slice(0, 20) : '';
   const tokens = await pageTokens(env);
   const now = Math.floor(Date.now() / 1000);
   const results = [];
@@ -154,7 +156,7 @@ export async function createPosts(env, form) {
       const items = [...(first ? [{ message: first, offset: 0 }] : []), ...extras];
       if (!items.length) continue;
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by });
         if (first) r.comment = 'armed';
         if (extras.length) r.extra = extras.length;
       } catch (e) {
@@ -172,7 +174,7 @@ export async function createPosts(env, form) {
     const items = [...(first && !firstOk ? [{ message: first, offset: 0, recheck: true }] : []), ...extras];
     if (items.length) {
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items, by });
         if (first && !firstOk) r.comment = 'retry';
         if (extras.length) r.extra = extras.length;
       } catch (e) {

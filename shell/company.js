@@ -241,7 +241,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   const noticeEmpty = mk('div', 'acct-empty', '目前沒有通知');
   const noticeList = mk('ul', 'acct-notes');
   noticeList.hidden = true;
-  notice.append(mk('h3', null, '通知'), noticeEmpty, noticeList);
+  const noticeScope = mk('small', 'acct-scope', '');
+  const noticeH = mk('h3', null, '通知');
+  noticeH.append(noticeScope);
+  notice.append(noticeH, noticeEmpty, noticeList);
   const act = mk('div', 'acct-act');
   const manageBtn = mk('a', 'btn btn-primary acct-manage', '管理頁');
   manageBtn.href = new URL('admin/', document.baseURI).href;
@@ -288,6 +291,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
   // ---- 留言失敗通知（/staff/me/notices，權限組有 notify 才有；只查 D1）：開彈窗、登入後、每 30 分鐘各讀一次 ----
   let notes = [];
+  let notesAll = false;   // true＝看得到所有人的（系統管理者或權限組有 notify）；false＝只有自己發的
   let noteReq = 0;
   const NOTE_INTERVAL = 30 * 60 * 1000;
   const TOOL_OF = { post: 'fbpost', video: 'fbvideo' };
@@ -301,6 +305,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
   function renderNotes() {
+    noticeScope.textContent = notesAll ? '（全部人的留言失敗）' : '（你發的貼文）';
     noticeList.textContent = '';
     noticeEmpty.hidden = notes.length > 0;
     noticeList.hidden = !notes.length;
@@ -340,6 +345,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       const d = await api.call('/staff/me/notices');
       if (my !== noteReq) return;
       notes = (d && d.enabled && Array.isArray(d.items)) ? d.items : [];
+      notesAll = !!(d && d.all);
     } catch { return; /* 讀不到維持原本 */ }
     renderNotes();
     renderButton();
