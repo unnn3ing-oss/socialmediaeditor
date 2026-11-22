@@ -4,6 +4,7 @@
 //   憑證帶 uid 與 pv（密碼版本），每次請求由 bearer() 用 findStaff() 確認還在名單、還啟用、pv 相符；移除／停用／改密碼／重置立即生效。
 //   系統管理者＝後端設定 SYS_STAFF_ID 的那一位：名單沒有就自動建立，不能停用、刪除；只有系統管理者能改姓名。
 //   權限只看權限組（沒有層級）：功能權限＋管理頁卡片（card:<key>）都在 perms 裡。
+import { withPageNames } from './pagenames.js';
 import { ok, fail, readBody } from './http.js';
 import { all, first, run } from './db.js';
 import { newSetupCode, codeHash, SETUP_MS } from './password.js';
@@ -412,7 +413,7 @@ export async function adminStaff(request, env, path, who) {
       rows = await all(env, cols + " AND (uid = ? OR name LIKE ? ESCAPE '\\' OR uid IN (SELECT id FROM staff WHERE name LIKE ? ESCAPE '\\')) ORDER BY at DESC, id DESC LIMIT ?",
         since, uid || '\u0000', like, like, MAX_AUDIT);
     }
-    return ok(request, env, rows);
+    return ok(request, env, await withPageNames(env, rows));   // 粉專 ID 換成簡稱（pagenames.js）
   }
   return fail(request, env, 'not_found');
 }

@@ -1170,7 +1170,8 @@ if (window.top !== window.self) {
       tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
       var ts = document.createElement('td'); ts.appendChild(sfEl('span', 'au-src' + (tool ? '' : ' is-admin'), tool ? '工具' : '後台')); tr.appendChild(ts);
       var k = auKind(r.detail), act = SF_ACT[r.action] || r.action;
-      tr.appendChild(sfEl('td', '', k ? act + '（' + k + '）' : act)); tr.appendChild(sfEl('td', 'num', r.page || ''));
+      tr.appendChild(sfEl('td', '', k ? act + '（' + k + '）' : act));
+      var tdPg = sfEl('td', r.pageName ? '' : 'num', r.pageName || r.page || ''); if (r.pageName) tdPg.title = '粉專 ID ' + r.page; tr.appendChild(tdPg);   // 顯示簡稱，游標移上去看 ID
       var tp = document.createElement('td');
       if (r.post && AU_OPEN[r.action] && /^\d{1,30}(_\d{1,30})?$/.test(r.post)) {
         var a = document.createElement('a'); a.className = 'au-open'; a.href = 'https://www.facebook.com/' + r.post; a.target = '_blank'; a.rel = 'noopener noreferrer';

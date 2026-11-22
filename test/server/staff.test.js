@@ -301,3 +301,17 @@ test('重新留言 API：影片的留言要 vpost，只有 post 不行', async (
   assert.equal(r.body.code, 'fb_no_perm');
   assert.ok(d);
 });
+
+test('操作紀錄：粉專 ID 換成粉專設定的簡稱；對不到只給 ID；沒有粉專不帶 pageName', async (t) => {
+  const { env, adm } = await setup(t);
+  env.DB.raw.prepare("INSERT INTO fb_pages (id, short, updated) VALUES ('111', '新聞', 0)").run();
+  const { audit } = await import('../../server/core/staff.js');
+  await audit(env, { uid: 'T1', name: '甲' }, 'publish', '111', '111_1');
+  await audit(env, { uid: 'T1', name: '甲' }, 'publish', '999', '999_1');
+  await audit(env, { uid: 'T1', name: '甲' }, 'staff_rename', '', 'T2', '乙→丙');
+  const rows = (await call(env, '/admin/audit', { headers: adm })).body.data;
+  const by = (p) => rows.find((r) => r.page === p);
+  assert.equal(by('111').pageName, '新聞');
+  assert.equal(by('999').pageName, undefined);
+  assert.equal(by('').pageName, undefined);
+});

@@ -1,5 +1,6 @@
 import { ok, fail, readBody } from './http.js';
 import { all, run } from './db.js';
+import { withPageNames } from './pagenames.js';
 
 // page 欄位（2026-11-22，留言失敗記粉專 ID）：舊表自動補欄位；同一執行個體只試一次，並發 ALTER 失敗吞掉
 const pageCol = new WeakMap();   // D1 綁定 → Promise
@@ -50,12 +51,7 @@ export async function adminLogs(request, env, path) {
   const rows = await all(env,
     'SELECT id, at, tool, code, ver, ua, page FROM logs WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?',
     Date.now() - days * DAY, MAX_LOGS);
-  // 粉專 ID 換成管理頁「粉專設定」的簡稱（讀取時對照，改簡稱舊紀錄跟著變）；對不到就沒有 pageName，前端顯示 ID
-  let names = new Map();
-  if (rows.some((r) => r.page)) {
-    try { names = new Map((await all(env, 'SELECT id, short FROM fb_pages')).map((r) => [String(r.id), r.short])); } catch { /* 還沒有粉專表 */ }
-  }
-  return ok(request, env, rows.map((r) => (r.page && names.get(String(r.page)) ? { ...r, pageName: names.get(String(r.page)) } : r)));
+  return ok(request, env, await withPageNames(env, rows));   // 粉專 ID 換成簡稱（pagenames.js）
 }
 
 export async function cleanup(env, nowMs) {
