@@ -96,3 +96,36 @@ test('臉書改時間成功但計時器出錯 → 仍回成功', async (t) => {
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal((await call('/fb/posts/111_1/cancel', { method: 'POST', body: JSON.stringify({ page: '111' }) })).status, 200);
 });
+
+// ===== 留言失敗提醒（2026-11-22）=====
+test('已發佈列表：留言失敗回 alert 物件；重新留言 API 驗證、交給計時器、寫操作紀錄；通知 API 依 notify 權限', async (t) => {
+  const { gErr } = require('../helpers/fake-fb.js');
+  let fail = true;
+  const { env, call, armTimer } = await setup(t, {
+    'GET /111/published_posts': () => ({ data: [{ id: '111_7', message: 'm', created_time: '2026-11-16T01:00:00+0000' }] }),
+    'GET /111_7': () => ({ is_published: true }),
+    'POST /111_7/comments': () => (fail ? gErr(32, 400, 'page rate limit') : { id: 'C1' }),
+    'GET /111_7/comments': () => ({ data: [] })
+  });
+  await armTimer(env, { pageId: '111', postId: '111_7', message: '看更多', at: nowSec() - 120 });
+  const inst = env.FB_TIMER.instances.get('111_7');
+  await inst.obj.alarm();
+  const r = await call('/fb/published?page=111');
+  const c = r.body.data.items[0].comment;
+  assert.equal(c.alert, true); assert.equal(c.failed, true); assert.equal(c.seq, 1); assert.match(c.error, /rate limit/);
+
+  const n = await call('/staff/me/notices');
+  assert.equal(n.body.data.enabled, true, '系統管理者一律收通知');
+  assert.equal(n.body.data.items.length, 1);
+  assert.deepEqual([n.body.data.items[0].postId, n.body.data.items[0].page, n.body.data.items[0].kind, n.body.data.items[0].canRetry], ['111_7', '111', 'post', true]);
+
+  assert.equal((await call('/fb/comment/retry', { method: 'POST', body: JSON.stringify({ postId: 'x', page: '111' }) })).status, 400);
+  assert.equal((await call('/fb/comment/retry', { method: 'POST', body: JSON.stringify({ postId: '111_7', page: '222' }) })).status, 400);
+  fail = false;
+  const ok = await call('/fb/comment/retry', { method: 'POST', body: JSON.stringify({ postId: '111_7', page: '111' }) });
+  assert.equal(ok.status, 200);
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) n FROM fb_audit WHERE action = 'comment_retry'").get().n, 1);
+  assert.equal((await call('/staff/me/notices')).body.data.items.length, 0, '重新留言後通知收掉');
+  await inst.obj.alarm();
+  assert.equal((await call('/fb/published?page=111')).body.data.items[0].comment, 'done');
+});

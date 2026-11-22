@@ -425,3 +425,91 @@ test('多文：cancel 一起取消；非影片不收 cross', async (t) => {
   assert.equal((await post('arm', { ...XREC(nowSec() + 3600), kind: undefined })).ok, false, '非影片：沒有留言又不能多文 → 不接受');
   assert.equal((await post('arm', XREC(nowSec() + 3600, { cross: ['abc'] }))).ok, false);
 });
+
+// ===== 留言失敗提醒（2026-11-22）：第 2 次失敗起紅字＋通知；最後失敗寫錯誤日誌一次；重新留言 =====
+const notices = (env) => { try { return env.DB.raw.prepare('SELECT * FROM fb_notices').all(); } catch { return []; } };
+const failLogs = (env) => env.DB.raw.prepare("SELECT * FROM logs WHERE code LIKE 'comment_failed%'").all();
+async function mkEnvTimer(t, handlers) {
+  const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS, ...handlers }); t.after(f.restore);
+  const { FbCommentTimer } = await lm();
+  const state = { storage: fakeStorage() };
+  const env = mkEnv({ FB_USER_TOKEN: 'U' });
+  const obj = new FbCommentTimer(state, env);
+  const post = async (action, body) => (await obj.fetch(new Request('https://timer/' + action, { method: 'POST', body: JSON.stringify(body || {}) }))).json();
+  return { f, state, obj, post, env };
+}
+
+test('提醒：第 1 次失敗不提醒；第 2 次失敗起 alert＋通知；最後失敗寫一次錯誤日誌（含粉專 ID 與錯誤碼）', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ id: '111_5', is_published: true }),
+    'POST /111_5/comments': () => gErr(2, 500, '(#2) temporary'),
+    'GET /111_5/comments': () => ({ data: [] })
+  });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal((await post('status')).alert, null);
+  assert.equal(notices(env).length, 0);
+  await obj.alarm();
+  const s = await post('status');
+  assert.deepEqual({ seq: s.alert.seq, failed: s.alert.failed }, { seq: 1, failed: false });
+  const n = notices(env);
+  assert.equal(n.length, 1); assert.equal(n[0].post_id, '111_5'); assert.equal(n[0].page, '111'); assert.equal(n[0].kind, 'post'); assert.equal(n[0].failed, 0);
+  assert.equal(failLogs(env).length, 0, '還在重試不寫錯誤日誌');
+  for (let i = 0; i < 3; i++) await obj.alarm();
+  assert.equal((await post('status')).alert.failed, true);
+  assert.equal(notices(env)[0].failed, 1);
+  const logs = failLogs(env);
+  assert.equal(logs.length, 1); assert.equal(logs[0].tool, 'fbpost'); assert.equal(logs[0].code, 'comment_failed:2'); assert.equal(logs[0].page, '111');
+  await obj.alarm(); await post('status');
+  assert.equal(failLogs(env).length, 1, '同一則只記一次');
+});
+
+test('提醒：限流直接失敗也提醒；後面「前一則失敗未留」不另記錯誤日誌', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': (c) => (c.body.message === '第二則' ? gErr(32, 400, 'page rate limit') : { id: 'C' })
+  });
+  await post('arm', MULTI(nowSec() - 2000));
+  await obj.alarm();
+  const s = await post('status');
+  assert.equal(s.alert.seq, 2); assert.equal(s.alert.failed, true);
+  assert.equal(notices(env)[0].seq, 2);
+  assert.equal(failLogs(env).length, 1);
+  assert.equal(failLogs(env)[0].code, 'comment_failed:32');
+});
+
+test('重新留言：粉專不符拒絕；失敗的那則起歸零、先查再留，成功後通知刪除', async (t) => {
+  let fail = true;
+  const { f, state, obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': (c) => (fail && c.body.message === '第二則' ? gErr(32, 400, 'page rate limit') : { id: 'C-' + c.body.message }),
+    'GET /111_5/comments': () => ({ data: [] })
+  });
+  await post('arm', MULTI(nowSec() - 2000));
+  await obj.alarm();
+  assert.equal(notices(env).length, 1);
+  assert.equal((await post('retry', { pageId: '999' })).ok, false);
+  fail = false;
+  assert.equal((await post('retry', { pageId: '111' })).ok, true);
+  const mid = await post('status');
+  assert.deepEqual(mid.items.map((x) => x.status), ['done', 'posting', 'pending']);
+  assert.equal(mid.alert, null);
+  assert.equal(notices(env).length, 0, '重新留言就先收掉通知');
+  assert.ok((await state.storage.getAlarm()) <= Date.now());
+  await obj.alarm();
+  const s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['done', 'done', 'done']);
+  assert.ok(f.calls.some((c) => c.method === 'GET' && c.path === '/111_5/comments'), '留過一半的先查');
+  assert.equal((await post('retry', { pageId: '111' })).ok, false, '都完成就沒有可重試的');
+});
+
+test('提醒：影片的留言 tool 記 fbvideo、通知 kind video', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ id: '111_5', published: true }),
+    'POST /111_5/comments': () => gErr(32, 400, 'rate limit')
+  });
+  await post('arm', { ...REC(nowSec() - 60), kind: 'video' });
+  await obj.alarm();
+  assert.equal(notices(env)[0].kind, 'video');
+  assert.equal(failLogs(env)[0].tool, 'fbvideo');
+});

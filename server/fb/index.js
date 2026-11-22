@@ -11,6 +11,7 @@ import { listPresets, validPresets, savePresets } from './presets.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
 import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
+import { retryTimer } from './timer.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 import { webhookState } from './webhook.js';
@@ -109,6 +110,18 @@ route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete
   }
   return ok(request, env, { ok: true });
 }, 'view');
+
+// 重新留言（排程發布列表、首頁通知）：交給計時器馬上重試失敗的那則；貼文或影片都可以
+route('POST', /^\/fb\/comment\/retry$/, async (request, env, ctx, m, me) => {
+  const b = await readJsonBody(request, 4096);
+  const postId = b && String(b.postId || ''), page = b && String(b.page || '');
+  if (!/^\d{1,30}(?:_\d{1,30})?$/.test(postId) || !/^\d{1,30}$/.test(page)) return fail(request, env, 'bad_request');
+  if (!env.FB_TIMER) return fail(request, env, 'misconfigured');
+  const d = await retryTimer(env, postId, page);
+  if (!d || !d.ok) return fail(request, env, 'bad_request', (d && d.error) || '沒有失敗的留言');
+  await audit(env, me.who, 'comment_retry', page, postId);
+  return ok(request, env, { ok: true });
+}, ['post', 'vpost']);
 
 // 影片發布（tools/fbvideo，見 video.js）
 const vout = (request, env, r) => (r.error ? fail(request, env, r.error, r.message) : ok(request, env, r));

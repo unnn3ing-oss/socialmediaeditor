@@ -15,7 +15,12 @@ export async function pageToken(env, pageId) {
 
 async function commentState(env, id) {
   if (!env.FB_TIMER) return 'none';
-  try { return (await timerStatus(env, id)).status || 'none'; } catch { return 'none'; }
+  try {
+    const d = await timerStatus(env, id);
+    // 失敗累計 ≥2 次或已失敗：回物件（前端紅字＋「重新留言」）；其他照舊回狀態字串
+    if (d && d.alert) return { status: d.status || 'pending', alert: true, seq: d.alert.seq, error: d.alert.error, failed: d.alert.failed };
+    return (d && d.status) || 'none';
+  } catch { return 'none'; }
 }
 
 export async function listScheduled(env, page, token) {

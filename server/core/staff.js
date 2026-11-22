@@ -12,7 +12,7 @@ import { ensureSettings } from './once.js';
 
 // 權限 key：排程發布 view／post／edit／delete；影片發布 vview／vpost（vpost 含改時間、刪除）；數據報表 report；
 //   共用 bypass（關閉時仍可使用）；管理頁卡片 card:<key>（只有非敏感卡片能勾，敏感卡片只有系統管理者）
-export const BASE_PERMS = ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report', 'bypass'];
+export const BASE_PERMS = ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report', 'bypass', 'notify'];
 export const CARD_PREFIX = 'card:';
 // 卡片權限依管理頁分類順序排列（和 PERM_SECTIONS 一致）
 const CARD_ORDER = ['pages', 'presets', 'video', 'bg', 'guard', 'staff', 'fbstate', 'rundown', 'usage', 'assets', 'audit', 'logs'];
@@ -21,7 +21,7 @@ export const PERMS = [...BASE_PERMS, ...CARD_PERMS];
 const CARD_NAME = Object.fromEntries(CARDS.map((c) => [c.key, c.name]));
 export const PERM_LABELS = {
   view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文',
-  vview: '檢視影片發布', vpost: '上傳發布影片（含改時間、刪除）', report: '檢視數據報表', bypass: '關閉時仍可使用排程發布／影片發布',
+  vview: '檢視影片發布', vpost: '上傳發布影片（含改時間、刪除）', report: '檢視數據報表', bypass: '關閉時仍可使用排程發布／影片發布', notify: '接收留言失敗通知',
   ...Object.fromEntries(GRANTABLE.map((k) => [CARD_PREFIX + k, CARD_NAME[k]]))
 };
 // 權限組卡片的分區（管理頁依此分組顯示）
@@ -29,7 +29,7 @@ export const PERM_SECTIONS = [
   { name: '排程發布', keys: ['view', 'post', 'edit', 'delete'] },
   { name: '影片發布', keys: ['vview', 'vpost'] },
   { name: '數據報表', keys: ['report'] },
-  { name: '共用', keys: ['bypass'] },
+  { name: '共用', keys: ['bypass', 'notify'] },
   { name: '管理頁：發文設定', keys: ['card:pages', 'card:presets', 'card:video', 'card:bg'] },
   { name: '管理頁：留言管理', keys: ['card:guard'] },
   { name: '管理頁：人員與權限', keys: ['card:staff'] },
@@ -38,7 +38,7 @@ export const PERM_SECTIONS = [
   { name: '管理頁：使用紀錄', keys: ['card:audit', 'card:logs'] }
 ];
 export const DEFAULT_GROUPS = [
-  { name: '管理', perms: PERMS.slice() },
+  { name: '管理', perms: PERMS.filter((p) => p !== 'notify') },   // 留言失敗通知預設只給系統管理者（2026-11-22 使用者選），要的權限組自己勾
   { name: '發文', perms: ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report'] },
   { name: '檢視', perms: ['view', 'vview', 'report'] }
 ];

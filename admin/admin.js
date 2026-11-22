@@ -163,7 +163,7 @@ if (window.top !== window.self) {
       var tb = $('logRows'); tb.textContent = '';
       res.data.forEach(function (r) {
         var tr = document.createElement('tr');
-        [fmtTime(r.at), r.tool, r.code, r.ver || ''].forEach(function (t, i) {
+        [fmtTime(r.at), r.tool, r.code, r.page || '', r.ver || ''].forEach(function (t, i) {
           var c = document.createElement('td'); c.textContent = t; if (i === 0) c.className = 'num'; tr.appendChild(c);
         });
         tb.appendChild(tr);
@@ -984,7 +984,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言', comment_retry: '重新留言' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };
@@ -1154,8 +1154,8 @@ if (window.top !== window.self) {
     });
   };
   // 操作紀錄：類別（工具／後台）依動作判斷；發文類型從 detail 的 kind= 讀（舊紀錄沒有）
-  var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1 };
-  var AU_OPEN = { publish: 1, schedule: 1, reschedule: 1, video_publish: 1, video_schedule: 1, video_draft: 1 };   // 這些的 post 是貼文／影片 ID
+  var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };
+  var AU_OPEN = { publish: 1, schedule: 1, reschedule: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };   // 這些的 post 是貼文／影片 ID
   var AU_KIND = { template: '套版', textimg: '字圖', text: '文字' };
   var auRows = [];
   function auKind(detail) { var m = /(?:^|\s)kind=(\w+)/.exec(detail || ''); return m && AU_KIND[m[1]] ? AU_KIND[m[1]] : ''; }

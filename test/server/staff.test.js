@@ -44,7 +44,7 @@ test('管理 API：要管理憑證；預設 3 組權限組；新增驗證、編�
   const { PERMS } = await sm();
   assert.equal((await call(env, '/admin/staff')).status, 401);
   const { body } = await call(env, '/admin/staff', { headers: adm });
-  assert.deepEqual(body.data.groups.map((g) => [g.name, g.perms]), [['管理', PERMS], ['發文', ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report']], ['檢視', ['view', 'vview', 'report']]]);
+  assert.deepEqual(body.data.groups.map((g) => [g.name, g.perms]), [['管理', PERMS.filter((p) => p !== 'notify')], ['發文', ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report']], ['檢視', ['view', 'vview', 'report']]]);
   assert.equal(body.data.perms.length, PERMS.length);
   assert.deepEqual(body.data.sections.flatMap((x) => x.keys), PERMS, '分區涵蓋全部權限、順序一致');
   assert.ok(PERMS.includes('card:pages') && !PERMS.includes('card:groups') && !PERMS.includes('card:levels'), '管理頁卡片：只有非敏感卡片可勾');
@@ -264,4 +264,19 @@ test('影片發布／數據報表／Rundown 的權限：vview／vpost／report �
   assert.equal(await code(rp, '/fb/scheduled?page=111'), 'fb_no_perm', 'report 不含排程發布檢視');
   env.SYS_STAFF_ID = 'SYS9';
   assert.deepEqual((await findStaff(env, 'SYS9')).perms, PERMS, '系統管理者 perms＝全部');
+});
+
+test('留言失敗通知：權限組沒勾 notify 回 enabled false；勾了才回清單', async (t) => {
+  const { env, adm } = await setup(t);
+  const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
+  await post(env, adm, '/admin/staff', { id: 'P1', name: '小編', group: groupId(d, '發文') });
+  const tk = (await login(env, 'P1')).body.data.token;
+  const r1 = await call(env, '/staff/me/notices', { headers: bearer(tk) });
+  assert.deepEqual(r1.body.data, { enabled: false, items: [] });
+  const g = d.groups.find((x) => x.name === '發文');
+  assert.equal((await post(env, adm, '/admin/staff-groups', { id: g.id, name: g.name, perms: [...g.perms, 'notify'] })).status, 200);
+  const r2 = await call(env, '/staff/me/notices', { headers: bearer(tk) });
+  assert.equal(r2.body.data.enabled, true);
+  assert.deepEqual(r2.body.data.items, []);
+  assert.equal((await call(env, '/staff/me/notices')).status, 401);
 });

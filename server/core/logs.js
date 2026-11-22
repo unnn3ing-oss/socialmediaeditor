@@ -1,6 +1,19 @@
 import { ok, fail, readBody } from './http.js';
 import { all, run } from './db.js';
 
+// page 欄位（2026-11-22，留言失敗記粉專 ID）：舊表自動補欄位；同一執行個體只試一次，並發 ALTER 失敗吞掉
+const pageCol = new WeakMap();   // D1 綁定 → Promise
+export function ensurePageCol(env) {
+  let p = pageCol.get(env.DB);
+  if (!p) { p = env.DB.prepare('ALTER TABLE logs ADD COLUMN page TEXT').run().catch(() => {}).then(() => true); pageCol.set(env.DB, p); }
+  return p;
+}
+// 後端自己記的事件（例：留言失敗），不經過 /logs
+export async function logEvent(env, tool, code, page = '') {
+  await ensurePageCol(env);
+  await run(env, 'INSERT INTO logs (at, tool, code, ver, ua, page) VALUES (?, ?, ?, ?, ?, ?)', Date.now(), tool, String(code).slice(0, 60), null, 'server', page ? String(page).slice(0, 30) : null);
+}
+
 const TOOL_ID_RE = /^[a-z][a-z0-9-]{1,30}$/;
 const CODE_RE = /^[a-z0-9_.-]{1,60}$/;
 const DAY = 86400000;
@@ -28,8 +41,9 @@ export async function adminLogs(request, env, path) {
   if (path !== '/admin/logs' || request.method !== 'GET') return null;
   const n = Number(new URL(request.url).searchParams.get('days'));
   const days = Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), LOG_KEEP_DAYS) : 7;
+  await ensurePageCol(env);
   const rows = await all(env,
-    'SELECT id, at, tool, code, ver, ua FROM logs WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?',
+    'SELECT id, at, tool, code, ver, ua, page FROM logs WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?',
     Date.now() - days * DAY, MAX_LOGS);
   return ok(request, env, rows);
 }

@@ -2,6 +2,7 @@
 import { graph, isRateLimit, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
 import { postComment } from './comment.js';
+import { setNotice, logCommentFail } from './notices.js';
 async function callTimer(env, postId, action, body) {
   if (!env.FB_TIMER) throw new Error('FB_TIMER 未綁定');
   const stub = env.FB_TIMER.get(env.FB_TIMER.idFromName(String(postId)));
@@ -14,6 +15,7 @@ export const armTimer = (env, rec) => callTimer(env, rec.postId, 'arm', rec);
 export const retimeTimer = (env, postId, at) => callTimer(env, postId, 'retime', { at });
 export const cancelTimer = (env, postId) => callTimer(env, postId, 'cancel');
 export const timerStatus = (env, postId) => callTimer(env, postId, 'status');
+export const retryTimer = (env, postId, pageId) => callTimer(env, postId, 'retry', { pageId: String(pageId) });
 
 
 const FIRST_DELAY = 60;                    // 排定時間後 60 秒第一次檢查
@@ -50,6 +52,16 @@ function summary(rec) {
   if (st.some((x) => x === 'failed')) return 'failed';
   if (st.every((x) => x === 'canceled')) return 'canceled';
   return st.some((x) => x === 'done') ? 'done' : 'canceled';
+}
+
+// 要提醒的留言：第一則「失敗」或「失敗累計 ≥ ALERT_AT 次還在重試」的；沒有＝null
+export const ALERT_AT = 2;
+const CASCADE = '前一則留言失敗，未留';
+export function alertOf(rec) {
+  const i = rec.items.findIndex((x) => x.status === 'failed' || (open(x) && (x.attempts || 0) >= ALERT_AT));
+  if (i < 0) return null;
+  const it = rec.items[i];
+  return { seq: i + 1, error: String(it.error || ''), failed: it.status === 'failed', attempts: it.attempts || 0 };
 }
 
 function normCross(body) {
@@ -106,19 +118,52 @@ export class FbCommentTimer {
       else await s.deleteAlarm();
       return reply({ ok: true });
     }
+    // 重新留言（列表／通知的按鈕）：失敗或重試中的那則起，次數歸零、馬上再試；留過一半的先查再留，不重複
+    if (action === 'retry') {
+      if (!rec || String(body.pageId || '') !== rec.pageId) return reply({ ok: false, error: '找不到這則貼文的留言' });
+      const i = rec.items.findIndex((x) => x.status === 'failed' || (open(x) && (x.attempts || 0) > 0));
+      if (i < 0) return reply({ ok: false, error: '沒有失敗的留言' });
+      for (const x of rec.items.slice(i)) {
+        if (x.status !== 'failed' && !open(x)) continue;
+        x.status = (x.attempts || 0) > 0 || x.status === 'posting' ? 'posting' : 'pending';
+        x.attempts = 0; delete x.error; delete x.ecode; delete x.logged;
+      }
+      if (!rec.published) rec.retimes = 0;
+      delete rec.purgeAt;
+      await s.put('rec', rec);
+      await this.note(rec);
+      await s.setAlarm(Date.now());
+      return reply({ ok: true });
+    }
     if (action === 'status') {
       if (!rec) return reply({ ok: true, status: 'none' });
       if (!rec.purgeAt && !anyOpen(rec)) await this.schedule(rec);   // 舊紀錄（沒排清除）被查到時補排 14 天清除
       const first = rec.items[0] || {};
       // 頂層欄位沿用第 1 則（列表顯示用），items 是每則的狀態
-      return reply({ ok: true, pageId: rec.pageId, postId: rec.postId, at: rec.at, retimes: rec.retimes, status: summary(rec), commentId: first.commentId, attempts: first.attempts, error: first.error, items: rec.items,
+      return reply({ ok: true, pageId: rec.pageId, postId: rec.postId, at: rec.at, retimes: rec.retimes, status: summary(rec), commentId: first.commentId, attempts: first.attempts, error: first.error, items: rec.items, alert: alertOf(rec),
         cross: crossOf(rec).map((c) => ({ page: c.page, status: c.status, ...(c.videoId ? { videoId: c.videoId } : {}), ...(c.error ? { error: c.error } : {}) })) });
     }
     return reply({ ok: false, error: '不支援的動作' });
   }
 
+  // 通知與錯誤日誌（notices.js）：提醒狀態有變才寫 D1；每則最後失敗只記一次錯誤日誌。寫失敗不影響留言
+  async note(rec) {
+    let dirty = false;
+    const a = alertOf(rec);
+    const it = a && a.failed ? rec.items[a.seq - 1] : null;   // 只記最先失敗的那則（後面「前一則失敗未留」的不另記）
+    if (it && !it.logged) {
+      try { await logCommentFail(this.env, rec, it.ecode); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
+    }
+    const sig = a ? [a.seq, a.failed ? 1 : 0, a.error].join('|') : '';
+    if (sig !== (rec.noticeSig || '')) {
+      try { await setNotice(this.env, rec, a); rec.noticeSig = sig; dirty = true; } catch { /* 下次再寫 */ }
+    }
+    if (dirty) await this.state.storage.put('rec', rec);
+  }
+
   // 排下一個鬧鐘：還沒留的裡最早到點的；都結束了就排 14 天後清除整筆紀錄
   async schedule(rec, earliest = 0) {
+    await this.note(rec);
     const next = [...rec.items.filter(open).map((x) => dueOf(rec, x)), ...crossOf(rec).filter(open).map((c) => crossDue(rec, c))];
     if (!next.length) {
       if (!rec.purgeAt) { rec.purgeAt = Date.now() + PURGE_AFTER; await this.state.storage.put('rec', rec); }
@@ -247,14 +292,16 @@ export class FbCommentTimer {
     if (!it) return;
     it.attempts = (it.attempts || 0) + 1;
     it.error = msg;
+    if (e instanceof GraphError && Number.isInteger(e.code) && e.code > 0) it.ecode = e.code; else delete it.ecode;
     if (isRateLimit(e) || it.attempts >= MAX_ATTEMPTS) {
       it.status = 'failed';
       // 留言要依序：前一則失敗，後面還沒留的也不留
-      rec.items.slice(rec.items.indexOf(it) + 1).forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '前一則留言失敗，未留'; } });
+      rec.items.slice(rec.items.indexOf(it) + 1).forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = CASCADE; } });
       await s.put('rec', rec);
       return this.schedule(rec);
     }
     await s.put('rec', rec);
+    await this.note(rec);
     await s.setAlarm(Date.now() + RETRY[it.attempts - 1] * 1000);
   }
 }
