@@ -17,12 +17,10 @@ export function titleCheck(title) {
   return { widths, ok: true, text: `${RULE}・目前 ${widths.join('／')}` };
 }
 
-// 多行標題合併成一行：中文直接接；斷行兩邊都是英數時補一個空格（避免「iPhone\n17」變「iPhone17」）
+// 多行標題合併成一行：預覽（選套版、純文字圖）的每個換行處補一個空格
 export function joinTitle(title) {
   const lines = String(title || '').split('\n').map((l) => l.trim()).filter(Boolean);
-  let out = '';
-  for (const l of lines) out += (out && /[A-Za-z0-9]$/.test(out) && /^[A-Za-z0-9]/.test(l) ? ' ' : '') + l;
-  return out;
+  return lines.join(' ');   // 預覽換行處一律空一格
 }
 
 // 標題改了：貼文內容第一個整行是【…】的那一行換成【新標題】；沒有那一行就原樣回傳（不補回）

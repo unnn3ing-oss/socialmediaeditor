@@ -79,11 +79,11 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`; };
   // ---- 純文字的臉書文字背景（清單由後端 /fb/backgrounds 給；讀不到就不顯示）----
   let bgs = [];
-  const bgRows = [];   // 文字背景兩列（純色＋漸層、圖樣）的左右滑
+  let bgRow = null;   // 文字背景一列（無｜圖樣｜純色｜漸層）的左右滑
   const bgImgUrl = {};   // 圖樣代號 → 已載入的圖片網址（ObjectURL）
   st.bg = '';
   const bgOn = () => (st.mode === 'text' && bgs.some((b) => b.id === st.bg) ? st.bg : '');
-  // 預設背景：純色或漸層隨機一個（圖樣要點開才載入，不選）；「無」仍可手動選
+  // 預設背景：純色或漸層隨機一個（圖樣要讀圖，不選）；「無」仍可手動選
   const randomBg = () => { const l = bgs.filter((b) => b.type !== 'image'); return l.length ? l[Math.floor(Math.random() * l.length)].id : ''; };
   // 字級自適應：不自動換行，最長那行與總行數都塞得進預覽框的最大字級
   function fitBg() {
@@ -109,9 +109,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       fitBg();
     }
     for (const el of $('bgBox').querySelectorAll('.sw')) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
-    const more = $('bgSws').querySelector('.bg-more');
-    if (more) more.classList.toggle('is-on', !!b && b.type === 'image');
-    bgRows.forEach((r, i) => r.reveal([$('bgSws'), $('bgImgs')][i].querySelector('.sw.is-on')));   // 選到的捲到看得見
+    if (bgRow) bgRow.reveal($('bgSws').querySelector('.sw.is-on'));   // 選到的捲到看得見
   }
   function bgButton(id, name, css) {
     const el = document.createElement('button');
@@ -128,18 +126,14 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   $('bgText').addEventListener('blur', () => bgShow());
   new ResizeObserver(fitBg).observe($('bgPrev'));
   const bgPick = (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); };
-  bgRows.push(hscroll($('bgSws')), hscroll($('bgImgs')));
+  bgRow = hscroll($('bgSws'));
   $('bgSws').addEventListener('click', bgPick);
-  $('bgImgs').addEventListener('click', bgPick);
-  // 圖樣：第一次按「圖樣」才建按鈕、帶登入讀圖（同時最多 6 張），還沒載完的先顯示骨架
-  let bgImgsBuilt = false;
+  // 圖樣：按鈕跟著清單一起建（骨架），第一次切到純文字才帶登入讀圖（同時最多 6 張）
+  let bgImgEls = [], bgImgsLoading = false;
   function bgLoadImgs() {
-    if (bgImgsBuilt) return;
-    bgImgsBuilt = true;
-    const list = bgs.filter((b) => b.type === 'image');
-    const els = list.map((b) => { const el = bgButton(b.id, b.name, ''); el.classList.add('sk'); return el; });
-    $('bgImgs').append(...els);
-    bgShow();
+    if (bgImgsLoading || !bgImgEls.length) return;
+    bgImgsLoading = true;
+    const list = bgs.filter((b) => b.type === 'image'), els = bgImgEls;
     let i = 0;
     const next = () => {
       if (i >= list.length) return Promise.resolve();
@@ -156,32 +150,22 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     bgs = (Array.isArray(list) ? list : []).filter((b) => b && /^\d+$/.test(b.id) && b.name && b.css && /^#[0-9a-f]{6}$/i.test(b.text || '')
       && (b.type !== 'image' || /^\/fb\/bg\/\d+$/.test(b.img || '')));
     if (!bgs.length) return;
-    // 「無」→ 依種類分組（純色｜漸層），組與組之間一條分隔線；圖樣收在「圖樣」按鈕裡，點了才載入
+    // 「無」→ 圖樣 → 純色 → 漸層（同一列左右滑），組與組之間一條分隔線；圖樣先放骨架，切到純文字才讀圖
     const sep = () => { const el = document.createElement('span'); el.className = 'bg-sep'; el.setAttribute('aria-hidden', 'true'); return el; };
     const els = [bgButton('', '無', '')];
+    const order = ['image', 'solid', 'gradient'];
     let type = '';
-    for (const b of bgs) {
-      if (b.type === 'image') continue;
+    for (const b of [...bgs].sort((x, y) => order.indexOf(x.type) - order.indexOf(y.type))) {
       if (b.type !== type) { type = b.type; els.push(sep()); }
-      els.push(bgButton(b.id, b.name, b.css));
-    }
-    const nImg = bgs.filter((b) => b.type === 'image').length;
-    if (nImg) {
-      const more = document.createElement('button');
-      more.type = 'button'; more.className = 'bg-more'; more.textContent = `圖樣 ${nImg} ▾`;
-      more.setAttribute('aria-expanded', 'false'); more.setAttribute('aria-controls', 'bgImgs');
-      more.addEventListener('click', () => {
-        const open = $('bgImgs').hidden;
-        $('bgImgs').hidden = !open; more.setAttribute('aria-expanded', String(open));
-        if (open) requestAnimationFrame(() => bgRows[1].sync());
-        more.textContent = `圖樣 ${nImg} ${open ? '▴' : '▾'}`;
-        if (open) bgLoadImgs();
-      });
-      els.push(sep(), more);
+      const el = bgButton(b.id, b.name, b.type === 'image' ? '' : b.css);
+      if (b.type === 'image') { el.classList.add('sk', 'bg-img'); bgImgEls.push(el); }
+      els.push(el);
     }
     $('bgSws').append(...els);
     if (!st.bg) st.bg = randomBg();
     $('bgBox').hidden = false; msgCount();
+    if (st.mode === 'text') bgLoadImgs();
+    requestAnimationFrame(() => bgRow.sync());
   }).catch(() => {});
 
   // 字數只算實際送出的內容（開頭留給小編文的空行沒填，送出時會拿掉）；選了背景顯示「N／130 字」，超過變紅
@@ -254,6 +238,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     if (!text) $('msgCount').classList.remove('bad');
     titleChanged();
     if (st.mode === 'color') requestAnimationFrame(showColor);
+    if (st.mode === 'text') { bgLoadImgs(); if (bgRow) requestAnimationFrame(() => bgRow.sync()); }
     draw(); syncFx(); msgCount();
   }
   const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
@@ -395,7 +380,9 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       const done = [];
       if (assets.company) { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
-      $('msg').value = '\n' + formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags }); msgCount();
+      $('msg').value = '\n' + formatCopy({ title: article.title, caption: st.mode === 'image' ? mainCaption(article) : '', tags: article.tags });
+      if (st.mode !== 'text' && article.title) $('msg').value = syncTitleLine($('msg').value, $('title').value);   // 【標題】照預覽的分行補空格
+      msgCount();
       done.push('貼文內容');
       let imgFail = false;
       skel(true);

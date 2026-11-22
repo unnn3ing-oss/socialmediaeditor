@@ -74,7 +74,7 @@ test('貼網址帶入：sports 切娛樂框、標題自動換行、主圖、貼�
   assert.ok(title.split('\n').length >= 2, '標題已自動換行：' + title);
   assert.equal(title.replace(/\n/g, ''), TITLE.replace(/\s/g, ''));
   const msg = await frame.inputValue('#msg');
-  assert.match(msg, new RegExp('^\n【' + TITLE.replace(/[?？()（）]/g, '.') + '】'));
+  assert.equal(msg.split('\n')[1], '【' + title.split('\n').join(' ') + '】', '【標題】照預覽的分行補空格');
   assert.match(msg, /（圖／TVBS）/);
   assert.match(msg, /#監視器 #吃到飽 #詐欺/);
   assert.equal(await frame.isHidden('#cvEmpty'), true, '預覽已有圖');
@@ -209,7 +209,7 @@ test('純文字文字背景：預設隨機純色／漸層、選「無」不顯�
   const { page, frame, posts } = await openFb();
   await frame.click('#modeSeg [data-mode=text]');
   await frame.waitForSelector('#bgBox:not([hidden])');
-  assert.equal(await frame.locator('#bgSws .sw').count(), 3, '「無」＋2 個背景');
+  assert.equal(await frame.locator('#bgSws .sw').count(), 4, '「無」＋圖樣 1＋純色漸層 2');
   assert.equal(await frame.isVisible('#bgPrev'), true, '預設隨機一個背景');
   assert.notEqual(await frame.textContent('#bgName'), '無');
   await frame.click('#bgSws .sw.bg-none');
@@ -290,27 +290,26 @@ test('純文字背景預覽：可直接編輯並同步標題框；字級自適�
   await page.close();
 });
 
-test('純文字圖樣背景：點「圖樣」才帶登入讀圖；選了預覽用圖片；送出帶 bg；不合法的圖片路徑不列', async () => {
+test('純文字圖樣背景：直接排在最前面（無｜圖樣｜純色｜漸層），切到純文字才帶登入讀圖；選了預覽用圖片；送出帶 bg；不合法的圖片路徑不列', async () => {
   BG_IMG_HITS.length = 0;
   const { page, frame, posts } = await openFb();
+  await page.waitForTimeout(300);
+  assert.equal(BG_IMG_HITS.length, 0, '還沒切到純文字不讀圖');
   await frame.click('#modeSeg [data-mode=text]');
   await frame.waitForSelector('#bgBox:not([hidden])');
-  assert.equal(await frame.textContent('#bgSws .bg-more'), '圖樣 1 ▾', '壞路徑的圖樣不列');
-  assert.equal(await frame.isHidden('#bgImgs'), true);
-  assert.equal(BG_IMG_HITS.length, 0, '還沒點不載入');
-  await frame.click('#bgSws .bg-more');
-  assert.equal(await frame.getAttribute('#bgSws .bg-more', 'aria-expanded'), 'true');
-  await frame.waitForFunction(() => /blob:/.test(document.querySelector('#bgImgs .sw[data-bg="303063890126415"]').style.backgroundImage));
+  const order = await frame.$$eval('#bgSws .sw', (els) => els.map((e) => e.dataset.bg));
+  assert.deepEqual(order, ['', '303063890126415', '106018623298955', '249307305544279'], '無→圖樣→純色→漸層；壞路徑的圖樣不列');
+  assert.equal(await frame.locator('#bgSws .bg-more').count(), 0, '沒有「圖樣 ▾」按鈕');
+  await frame.waitForFunction(() => /blob:/.test(document.querySelector('#bgSws .sw[data-bg="303063890126415"]').style.backgroundImage));
   assert.deepEqual(BG_IMG_HITS.map((h) => h.p), ['/fb/bg/303063890126415']);
   assert.match(BG_IMG_HITS[0].auth, /^Bearer /);
   await frame.fill('#title', '\n圖樣背景測試');
-  await frame.click('#bgImgs .sw[data-bg="303063890126415"]');
+  await frame.click('#bgSws .sw[data-bg="303063890126415"]');
   assert.equal(await frame.textContent('#bgName'), '黃橘粉圖樣');
   assert.match(await frame.evaluate(() => document.getElementById('bgPrev').style.backgroundImage), /blob:/);
-  assert.match(await frame.getAttribute('#bgSws .bg-more', 'class'), /is-on/);
   if (SHOT) await frame.locator('.left').first().screenshot({ path: path.join(SHOT, 'fbpost-bg-image.png') });
-  // 收起再打開不重抓
-  await frame.click('#bgSws .bg-more'); await frame.click('#bgSws .bg-more');
+  // 切走再切回不重抓
+  await frame.click('#modeSeg [data-mode=color]'); await frame.click('#modeSeg [data-mode=text]');
   assert.equal(BG_IMG_HITS.length, 1);
   await frame.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
   await frame.click('#pages .chip[data-page="111"] .chip-l');
@@ -590,7 +589,7 @@ test('改標題同步貼文內容的【標題】：預覽上改、標題欄改�
   await frame.press('#cvWrap .cv-title', 'Escape');
   let msg = await frame.inputValue('#msg');
   assert.equal(msg.split('\n')[0], '小編文', '小編文不動');
-  assert.equal(msg.split('\n')[1], '【預覽上改的新款 iPhone 17 標題】');
+  assert.equal(msg.split('\n')[1], '【預覽上改的 新款 iPhone 17 標題】', '換行處一律空一格');
   assert.match(msg, /（圖／TVBS）/, '圖說不動');
   await frame.fill('#title', '標題欄改的');
   assert.equal((await frame.inputValue('#msg')).split('\n')[1], '【標題欄改的】');
