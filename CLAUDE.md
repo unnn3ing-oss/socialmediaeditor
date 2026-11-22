@@ -154,6 +154,7 @@
   - [ ] 排程發布：部署實測 → 第二段（值班粉專、管理頁按「開放」、工具 tier company）；交接檔「已知未處理」Minor 待使用者決定
   - [ ] 使用者在後端管理頁上傳公司素材 16 個檔（代號見 `assets-public/README.md`），上傳後實測有密碼畫面（§5.3）
   - [ ] YT 下載實機驗證（真實 YouTube、Windows／Mac 安裝檔）＋CI pytest 第一次結果；P2 其餘完成，網新排程不做（2026-11-15）
+  - [ ] **安裝檔合併 YT＋圖形化（暫緩，2026-11-22 使用者已定案）**：網頁只下載一個安裝檔，外掛＋YT 下載助手同一個視窗裝（進度條、步驟、詳細記錄收合、失敗重試／複製錯誤）；Windows＝WinForms（擴充 `shell/installer.js`，`installer.py` 加 `--progress` 機器可讀進度、`build_installers.py` 產生 `installers/ytdl-bundle.json` 給網頁以 blob SHA 驗證後嵌入）；**Mac＝方案 B**（JXA／Cocoa 真視窗＋進度條，終端機仍要貼一行啟動）；**YT 預設勾選**；**單獨的 YT 安裝檔暫時不改**（維持黑視窗）。使用者說開始才做。
   - [ ] P3（§9）
   - [ ] 規格待確認事項（§12）
   - 擱置：LINE 推播的推送／排程／訊息中心（P1 只搬做圖，使用者表示暫時不需要）

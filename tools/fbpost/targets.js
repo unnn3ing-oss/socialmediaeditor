@@ -22,7 +22,10 @@ export function createTargets({ timePop, onChange, defaults = () => [] }) {
 
   function render() {
     const box = $('pages'); box.textContent = ''; nodes.clear();
-    pages.forEach((p) => {
+    // 值班粉專排前面，其餘照原順序（勾選與時間存在 sel，重排不影響）
+    const d = defaults();
+    const ordered = [...pages.filter((p) => d.includes(p.id)), ...pages.filter((p) => !d.includes(p.id))];
+    ordered.forEach((p) => {
       const s = sel.get(p.id) || { on: defaults().includes(p.id), sched: false, at: defaultAt() };
       sel.set(p.id, s);
       const chip = document.createElement('span'); chip.className = 'chip'; chip.dataset.page = p.id;
@@ -61,7 +64,11 @@ export function createTargets({ timePop, onChange, defaults = () => [] }) {
       return { targets };
     },
     reset() { const d = defaults(); for (const [id, s] of sel) { s.on = d.includes(id); s.sched = false; s.at = defaultAt(); } for (const id of nodes.keys()) paint(id); onChange(); },
-    // 值班粉專改了：還沒勾任何粉專時才套用（不蓋掉正在編輯的勾選）
-    applyDefaults() { if (!pages.some((p) => sel.get(p.id) && sel.get(p.id).on)) this.reset(); }
+    // 值班粉專改了：重排（值班排前面）；還沒勾任何粉專時才套用勾選（不蓋掉正在編輯的勾選）
+    applyDefaults() {
+      if (timePop.isOpen()) timePop.close();
+      render();
+      if (!pages.some((p) => sel.get(p.id) && sel.get(p.id).on)) this.reset();
+    }
   };
 }

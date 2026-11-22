@@ -1028,6 +1028,27 @@ test('值班粉專：班段第一次開啟要先選（不能略過），選好�
   await page.close();
 });
 
+test('值班粉專：膠囊列值班排前面，改值班即時重排、勾選不變', async () => {
+  const { page, errors } = await newPage('admin', { width: 1280, height: 900 }, { duty: ['333'] });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  const order = () => page.$$eval('#pages .chip', (els) => els.map((e) => e.dataset.page));
+  const on = () => page.$$eval('#pages .chip.on', (els) => els.map((e) => e.dataset.page));
+  assert.deepEqual(await order(), ['333', '111', '222']);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-duty-order.png'), clip: await page.locator('#pages').boundingBox().then((b) => ({ x: b.x - 8, y: b.y - 8, width: b.width + 16, height: b.height + 16 })) });
+  await page.click(chip(222) + ' .chip-l');
+  await page.click('#dlgClose');
+  await page.click('#dutyBtn');
+  await page.check('#dutyList input[value="222"]');
+  await page.uncheck('#dutyList input[value="333"]');
+  await page.click('#dutyOk');
+  await page.click('#newBtn');
+  assert.deepEqual(await order(), ['222', '111', '333'], '值班改成娛樂：娛樂排第一，其他照原順序');
+  assert.deepEqual((await on()).sort(), ['222', '333'], '正在編輯的勾選不變');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('值班粉專：沒有發文權限不問、不顯示按鈕', async () => {
   const { page } = await newPage('admin', { width: 1280, height: 900 }, { duty: false, me: { admin: false, perms: ['view'], name: '小明' } });
   await page.goto(srv.url + 'tools/fbpost/index.html');
