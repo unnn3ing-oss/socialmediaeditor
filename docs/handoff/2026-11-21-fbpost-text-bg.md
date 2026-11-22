@@ -1,5 +1,5 @@
 # 排程發布「純文字」加臉書文字背景
-- 狀態：第 1 階段已完成並併入 main（待臉書實測）　- 分支：claude/zen-davinci-9rdqf4　- 最後更新：2026-11-21
+- 狀態：第 1 階段已完成並併入 main；2026-11-21 臉書實測通過（立即／排程皆顯示背景）　- 分支：claude/zen-davinci-9rdqf4　- 最後更新：2026-11-21
 - 使用者原始需求：「以 Publer 這個網頁上關於臉書貼文文字背景色，加到目前排程發布中的『純文字』，讓排程發文可以更像臉書前台發文一樣可選背景色。」
 
 ## 已定案的決定
@@ -31,7 +31,7 @@ Publer 原始清單（75 個）存在 scratchpad，不進 repo；ID 已抄進 `b
 - [x] 後端＋單元測試
 - [x] 前端＋e2e、截圖（npm test 743、fbpost e2e 60、build --check 通過）
 - [x] 獨立審查（修正後通過：後端計字 CRLF 修正 `2b65ccc`）
-- [ ] 使用者部署測試後端實測（立即／排程各一則，確認臉書顯示背景）
+- [x] 使用者部署實測：立即／排程都正常、臉書都顯示背景
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/fbpost-compose.e2e.js test/e2e/fbpost.e2e.js --trace off`、`node build.js --check`。
