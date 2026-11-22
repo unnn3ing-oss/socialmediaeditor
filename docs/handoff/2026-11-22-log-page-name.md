@@ -17,5 +17,14 @@
 | `admin/admin.js` | 粉專欄顯示 `pageName`，title＝ID | ✅ |
 | `test/server/logs.test.js` | 對到／對不到／空白 | ✅ |
 
+## 第二段：操作紀錄也顯示簡稱（2026-11-22 使用者「開始」）
+| 檔案 | 內容 | 狀態 |
+|---|---|---|
+| `server/core/pagenames.js`（新） | `withPageNames(env, rows)` 共用 | ⬜ |
+| `server/core/logs.js` | 改用共用函式 | ⬜ |
+| `server/core/staff.js` `/admin/audit` | 回 `pageName` | ⬜ |
+| `admin/admin.js` | 操作紀錄粉專欄顯示簡稱、title＝ID | ⬜ |
+| `test/server/staff.test.js` | 補測試 | ⬜ |
+
 ## 測試
 `node --test test/server/logs.test.js`、`npm test`、admin e2e。後端需重新部署，外掛不升版號。
