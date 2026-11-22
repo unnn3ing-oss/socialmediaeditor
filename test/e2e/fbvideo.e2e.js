@@ -42,7 +42,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
     if (mode === 'company' && p.startsWith('/fb/')) return json({ ok: false, code: 'fb_forbidden', error: '關閉', detail: { reason: '測試中' } }, 403);
     if (p === '/fb/pages') return json(opts.pages || PAGES);
     if (p === '/fb/access') return json({ mode: 'admin' });
-    if (p === '/fb/me') return json({ admin: true, perms: ['view', 'post', 'edit', 'delete'] });
+    if (p === '/fb/me') return json(opts.me || { admin: true, perms: ['view', 'post', 'edit', 'delete'] });
     if (p === '/fb/presets') return json([{ name: '抽獎', body: '留言抽獎！' }]);
     if (p === '/fb/video/settings') return json({ prefixes: ['1118_'], suffixes: ['_v2'], reelsTag: '#焦點新聞影音都在TVBS', tags: ['#國際', '#TVBS新聞'] });
     if (p === '/fb/video/start') {
@@ -384,4 +384,24 @@ test('開啟時先顯示骨架、不閃「功能停用」；能用換成內容�
     assert.deepEqual(errors, []);
     await page.close();
   }
+});
+
+test('權限：vview 才能開影片發布、vpost 才有送出鈕；只有排程發布 view／post 不行', async () => {
+  const none = await newPage('admin', { width: 1280, height: 900 }, { me: { admin: false, perms: ['view', 'post', 'edit', 'delete'] } });
+  await none.page.waitForSelector('#offMain:not([hidden])');
+  assert.match(await none.page.locator('#offTitle').innerText(), /沒有權限/);
+  assert.match(await none.page.locator('#offDesc').innerText(), /影片發布/);
+  assert.equal(await none.page.isVisible('#app'), false);
+  assert.deepEqual(none.errors, []);
+  await none.page.close();
+  const view = await newPage('admin', { width: 1280, height: 900 }, { me: { admin: false, perms: ['vview'], name: '甲', group: '檢視' } });
+  await view.page.waitForSelector('#app:not([hidden])');
+  await view.page.waitForFunction(() => !document.getElementById('whoAmI').hidden);
+  assert.equal(await view.page.isHidden('#sendBtn'), true, '沒有 vpost 隱藏送出鈕');
+  await view.page.close();
+  const post = await newPage('admin', { width: 1280, height: 900 }, { me: { admin: false, perms: ['vview', 'vpost'], name: '乙', group: '發文' } });
+  await post.page.waitForSelector('#app:not([hidden])');
+  await post.page.waitForFunction(() => !document.getElementById('whoAmI').hidden);
+  assert.equal(await post.page.isVisible('#sendBtn'), true);
+  await post.page.close();
 });

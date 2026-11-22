@@ -1,5 +1,5 @@
 // 公司模式：員工編號＋自己的密碼登入（第一次或被重置後用設定碼設密碼），解鎖公司工具；
-// 登入後右上角「● 公司模式 名字」，點了開帳號彈窗（姓名、層級、員工編號、分機、解鎖有效、通知、管理頁、變更密碼、登出）。
+// 登入後右上角「● 公司模式 名字」，點了開帳號彈窗（姓名、權限組、員工編號、分機、解鎖有效、通知、管理頁、變更密碼、登出）。
 // 憑證過期時自動跳登入彈窗，已開著的公司窗格保留內容。
 import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
 import { API_ENV } from './config.js';
@@ -7,7 +7,6 @@ import { switchApiEnv } from './apienv.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
 const ID_KEY = 'tbx.staffId';   // 記住上次登入的員工編號（這台瀏覽器）
-const LEVEL_NAMES = { sys: '系統管理者', mgr: '管理者', user: '普通' };
 const PW_MIN = 8;
 const isNetworkFailure = (e) => !e || !e.code || /^http_5/.test(e.code) || e.code === 'bad_response' || e.code === 'misconfigured';
 
@@ -265,7 +264,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     av.textContent = [...name][0] || '';
     nameEl.textContent = name;
     const level = s.level || (c.admin ? 'sys' : '');
-    lvEl.textContent = LEVEL_NAMES[level] || '';
+    lvEl.textContent = level === 'sys' ? '系統管理者' : (s.group || '');
     lvEl.hidden = !lvEl.textContent;
     dd.id.textContent = s.id || '—';
     dd.exp.textContent = '';

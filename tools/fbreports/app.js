@@ -61,6 +61,13 @@ async function loadPages() {
     if (why) { $('offReason').textContent = '原因：' + why; $('offReason').hidden = false; }
     booted(false); return;
   }
+  // 權限：數據報表需要 report；系統管理者（me.admin）＝全部；/fb/me 讀不到先放行，後端仍會擋
+  let me0 = null;
+  try { me0 = await tb.api.call('/fb/me'); } catch { me0 = null; }
+  if (me0 && !me0.admin && !(me0.perms || []).includes('report')) {
+    $('offTitle').textContent = '數據報表 沒有權限'; $('offDesc').textContent = '你的權限組沒有「檢視數據報表」，請找管理者。';
+    booted(false); return;
+  }
   booted(true);
   $('app').hidden = false;
   tb.api.call('/fb/access').then((a) => { if (a && a.mode === 'company') for (const el of document.querySelectorAll('.test-pill')) el.hidden = true; }).catch(() => {});

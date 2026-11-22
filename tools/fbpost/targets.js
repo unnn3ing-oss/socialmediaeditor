@@ -1,5 +1,5 @@
 // 粉專膠囊：沒勾＝外框；已勾＝藍底，左半勾選、右半「立即▾／排程 HH:MM▾」先跳小選單（立即發布／排程發布…）
-import { $ } from './util.js';
+import { $, hscroll } from './util.js';
 import { timeStr, check, plus } from './time.js';
 
 // 預設排程時間：現在＋30 分，進位到下一個 10 分
@@ -7,6 +7,7 @@ const defaultAt = () => { const ms = plus(Date.now(), 30); return Math.ceil(ms /
 
 // defaults()：值班粉專 id（開始、清空時自動勾選）
 export function createTargets({ timePop, onChange, defaults = () => [] }) {
+  hscroll($('pages'));   // 粉專一列左右滑（滾輪也可以）
   let pages = [];
   const sel = new Map();   // pageId -> { on, sched, at(ms) }
   const nodes = new Map(); // pageId -> { chip, left, right }

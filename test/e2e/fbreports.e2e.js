@@ -33,7 +33,7 @@ function dataset() {
   };
 }
 
-async function newPage({ viewport = { width: 1280, height: 900 }, handler } = {}) {
+async function newPage({ viewport = { width: 1280, height: 900 }, handler, me = { admin: true, perms: [] }, off = false } = {}) {
   const page = await browser.newPage({ viewport });
   const errors = [], calls = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -46,7 +46,7 @@ async function newPage({ viewport = { width: 1280, height: 900 }, handler } = {}
     if (p === '/auth/status') return json({ company: true });
     if (p === '/fb/pages') return json(st.pages || PAGES);
     if (p === '/fb/access') return json({ mode: 'admin' });
-    if (p === '/fb/me') return json({ admin: true, perms: ['view'] });
+    if (p === '/fb/me') return json(me);
     if (p === '/fb/reports/posts') {
       const q = Object.fromEntries(url.searchParams);
       calls.push(q);
@@ -62,7 +62,7 @@ async function newPage({ viewport = { width: 1280, height: 900 }, handler } = {}
     return json({ ok: false, code: 'not_found' }, 404);
   });
   await page.goto(srv.url + 'tools/fbreports/index.html');
-  await page.waitForSelector('#app:not([hidden])');
+  await page.waitForSelector(off ? '#offMain:not([hidden])' : '#app:not([hidden])');
   return { page, errors, calls, st };
 }
 // 下拉多選：打開 → 勾／取消 → 按 Esc 關閉
@@ -220,4 +220,20 @@ test('期間驗證、零篇、窄窗不撐寬', async () => {
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbreports-mobile.png'), fullPage: true });
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+test('權限：沒有 report 顯示「沒有權限」且不載入報表；有 report 可用（舊版只有 view 也不行）', async () => {
+  for (const perms of [['view'], ['vview', 'vpost']]) {
+    const { page, errors, calls } = await newPage({ me: { admin: false, perms }, off: true });
+    assert.match(await page.locator('#offTitle').innerText(), /沒有權限/);
+    assert.match(await page.locator('#offDesc').innerText(), /數據報表/);
+    assert.equal(await page.locator('#app').isHidden(), true);
+    assert.equal(calls.length, 0);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
+  const ok = await newPage({ me: { admin: false, perms: ['report'] } });
+  assert.equal(await ok.page.locator('#probeBtn').isVisible(), false, '只有系統管理者看得到欄位檢查');
+  assert.deepEqual(ok.errors, []);
+  await ok.page.close();
 });

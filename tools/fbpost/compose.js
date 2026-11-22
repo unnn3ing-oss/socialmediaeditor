@@ -1,6 +1,6 @@
 // 做圖＋帶入：貼上文章網址就自動帶入標題、主圖、貼文內容、框；[選套版｜純文字圖｜純文字]。
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：選套版 66px、純文字圖 76px。框的判斷用 rules.js。
-import { $, errText, say, confirmBox, segmented, stripLead } from './util.js';
+import { $, errText, say, confirmBox, segmented, stripLead, hscroll } from './util.js';
 import { frameForUrl } from './rules.js';
 import { titleCheck, LINE_MAX, syncTitleLine, textCheck, TEXT_LINE_MAX } from './title.js';
 import { createTitleEditor } from './titleedit.js';
@@ -17,7 +17,7 @@ export const BG_FONT = { max: 30, min: 14 };          // 文字背景預覽字�
 export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級（只用在排程發布）
 const ARTICLE_RE = /^https?:\/\/\S+\/\d{6,9}\/?(?:[?#]\S*)?$/i;   // 打完一個新聞網址（結尾是文章編號）就自動帶入
 
-export function createComposer({ tb, assets }) {
+export function createComposer({ tb, assets, onState = () => {} }) {   // onState：模式／照片改變（送出鈕要重算能不能送）
   const renderer = createRenderer(assets);
   const kit = createFxKit({ stickerUrls: assets.stickers });
   const canvas = $('cv');
@@ -79,6 +79,7 @@ export function createComposer({ tb, assets }) {
   const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`; };
   // ---- 純文字的臉書文字背景（清單由後端 /fb/backgrounds 給；讀不到就不顯示）----
   let bgs = [];
+  const bgRows = [];   // 文字背景兩列（純色＋漸層、圖樣）的左右滑
   const bgImgUrl = {};   // 圖樣代號 → 已載入的圖片網址（ObjectURL）
   st.bg = '';
   const bgOn = () => (st.mode === 'text' && bgs.some((b) => b.id === st.bg) ? st.bg : '');
@@ -110,6 +111,7 @@ export function createComposer({ tb, assets }) {
     for (const el of $('bgBox').querySelectorAll('.sw')) { const on = el.dataset.bg === st.bg; el.classList.toggle('is-on', on); el.setAttribute('aria-pressed', String(on)); }
     const more = $('bgSws').querySelector('.bg-more');
     if (more) more.classList.toggle('is-on', !!b && b.type === 'image');
+    bgRows.forEach((r, i) => r.reveal([$('bgSws'), $('bgImgs')][i].querySelector('.sw.is-on')));   // 選到的捲到看得見
   }
   function bgButton(id, name, css) {
     const el = document.createElement('button');
@@ -126,6 +128,7 @@ export function createComposer({ tb, assets }) {
   $('bgText').addEventListener('blur', () => bgShow());
   new ResizeObserver(fitBg).observe($('bgPrev'));
   const bgPick = (e) => { const el = e.target.closest('.sw'); if (!el) return; st.bg = el.dataset.bg; msgCount(); };
+  bgRows.push(hscroll($('bgSws')), hscroll($('bgImgs')));
   $('bgSws').addEventListener('click', bgPick);
   $('bgImgs').addEventListener('click', bgPick);
   // 圖樣：第一次按「圖樣」才建按鈕、帶登入讀圖（同時最多 6 張），還沒載完的先顯示骨架
@@ -170,6 +173,7 @@ export function createComposer({ tb, assets }) {
       more.addEventListener('click', () => {
         const open = $('bgImgs').hidden;
         $('bgImgs').hidden = !open; more.setAttribute('aria-expanded', String(open));
+        if (open) requestAnimationFrame(() => bgRows[1].sync());
         more.textContent = `圖樣 ${nImg} ${open ? '▴' : '▾'}`;
         if (open) bgLoadImgs();
       });
@@ -205,7 +209,7 @@ export function createComposer({ tb, assets }) {
   // 視窗原本隱藏量不到高度：打開（尺寸改變）時再算一次；程式填值走 msgCount／titleChanged
   for (const id of ['title', 'msg']) { $(id).addEventListener('input', () => grow($(id))); new ResizeObserver(() => { if ($(id).offsetParent) grow($(id)); }).observe($(id)); }
   $('msg').addEventListener('input', msgCount); msgCount();
-  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); };
+  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !ready(); }); $('fxBar').classList.toggle('off', !ready()); editor.sync(); onState(); };
 
   titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready: () => st.mode !== 'text', redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
@@ -265,32 +269,12 @@ export function createComposer({ tb, assets }) {
   const setColor = segmented($('swatches'), 'color', (v) => { st.color = v; showColor(); draw(); });
   setColor(st.color);
 
-  // ---- 底色展示窗：一排左右滑（觸控滑、滾輪、兩側鈕），選到的捲到看得見 ----
-  const track = $('swatches');
-  const syncNav = () => {
-    // 逐格對齊會停在第一格的起點（留白 2px），所以容許幾 px
-    $('swPrev').disabled = track.scrollLeft <= 4;
-    $('swNext').disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
-  };
+  // ---- 底色：一列左右滑（觸控滑、滾輪），選到的捲到看得見 ----
+  const colorRow = hscroll($('swatches'));
   function showColor() {
     $('colorCode').textContent = st.color;
-    const on = track.querySelector('.is-on');
-    if (on && track.clientWidth) {
-      const l = on.offsetLeft - track.offsetLeft, r = l + on.offsetWidth;
-      // 看不到就捲到它在最左（和逐格對齊一致，不會被對齊推回去）
-      if (l < track.scrollLeft || r > track.scrollLeft + track.clientWidth) track.scrollTo({ left: l, behavior: 'instant' });
-    }
-    syncNav();
+    colorRow.reveal($('swatches').querySelector('.is-on'));
   }
-  const page = (dir) => track.scrollBy({ left: dir * Math.max(60, track.clientWidth * 0.8), behavior: 'smooth' });
-  $('swPrev').addEventListener('click', () => page(-1));
-  $('swNext').addEventListener('click', () => page(1));
-  track.addEventListener('scroll', syncNav, { passive: true });
-  track.addEventListener('wheel', (e) => {   // 滑鼠滾輪上下 → 左右捲
-    if (track.scrollWidth <= track.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-    e.preventDefault(); track.scrollLeft += e.deltaY;
-  }, { passive: false });
-  new ResizeObserver(syncNav).observe(track);
   showColor();
 
   // ---- 標題：改了先畫，缺的字型段載好再重畫；旁邊顯示每行字數（超過只提醒） ----
@@ -474,6 +458,7 @@ export function createComposer({ tb, assets }) {
       say('pullHint', '已帶回上次送出的網址、標題' + (rec.photo ? (photoOk ? '、照片' : '（照片讀取失敗）') : '') + '；貼文內容請重新填寫');
     },
     mode: () => st.mode,
+    needsPhoto: () => st.mode === 'image' && !st.photo,   // 選套版沒有照片：不能送出
     text: postText,   // 送出用的貼文內容
     bg: bgOn   // 送出用的文字背景代號（只有純文字模式；沒選＝''）
   };

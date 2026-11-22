@@ -273,7 +273,7 @@ test('純文字背景預覽：可直接編輯並同步標題框；字級自適�
   assert.equal(await frame.textContent('#bgText'), '短');
   // 超過 11 字：提醒、變紅，字級縮小但不超出預覽框
   await frame.fill('#title', '一二三四五六七八九十一二\n短\n' + '多\n'.repeat(8) + '尾');
-  assert.match(await frame.textContent('#titleCount'), /第 1 行 12 字，超過 11 字（仍可送出）/);
+  assert.match(await frame.textContent('#titleCount'), /^字數超過可能換行顯示・\d+／130 字$/);
   assert.match(await frame.getAttribute('#titleCount', 'class'), /\bbad\b/);
   assert.match(await frame.getAttribute('#titleLines div:first-child', 'class'), /\bbad\b/);
   const fit = await frame.evaluate(() => { const b = document.getElementById('bgPrev'), p = document.getElementById('bgText'), cs = getComputedStyle(b);
@@ -402,7 +402,7 @@ test('預覽上編輯標題時帶入：編輯框收起，標題是文章標題',
   await page.close();
 });
 
-test('底色展示窗：一排可左右滑、按右側鈕往右捲、點色塊換底色並顯示色碼', async () => {
+test('底色選色列：一排 34px 小方塊可左右滑、滾輪左右捲、邊緣淡出、點色塊換底色並顯示色碼；文字背景同樣式', async () => {
   const { page, frame } = await openFb();
   await frame.click('#modeSeg [data-mode=color]');
   await frame.waitForSelector('#swatchBox:not([hidden])');
@@ -410,10 +410,13 @@ test('底色展示窗：一排可左右滑、按右側鈕往右捲、點色塊�
   assert.equal(t.rows, 1, '只有一排');
   assert.ok(t.sw > t.cw, '比可視寬度長，可以左右滑');
   await frame.waitForFunction(() => { const el = document.getElementById('swatches'), b = el.querySelector('.is-on'), l = b.offsetLeft - el.offsetLeft; return l >= el.scrollLeft - 1 && l + b.offsetWidth <= el.scrollLeft + el.clientWidth + 1; }, null, { timeout: 3000 });   // 選到的底色捲到看得見
+  assert.equal(await frame.$eval('#swatches .sw', (el) => el.getBoundingClientRect().width), 34, '和文字背景一樣 34px');
+  assert.equal(await frame.locator('#swatchBox .shelf-nav').count(), 0, '沒有左右圓鈕');
   await frame.$eval('#swatches', (el) => { el.scrollLeft = 0; });
-  await frame.waitForFunction(() => document.getElementById('swPrev').disabled, null, { timeout: 3000 });   // 最左邊時左鈕停用
-  await frame.click('#swNext');
-  await frame.waitForFunction(() => document.getElementById('swatches').scrollLeft > 50 && !document.getElementById('swPrev').disabled, null, { timeout: 3000 });   // 往右捲了一頁，左鈕恢復
+  await frame.waitForFunction(() => { const c = document.getElementById('swatches').classList; return !c.contains('fade-l') && c.contains('fade-r'); }, null, { timeout: 3000 });   // 最左邊：只有右邊淡出
+  await frame.hover('#swatches');
+  await page.mouse.wheel(0, 200);   // 滾輪上下 → 左右捲
+  await frame.waitForFunction(() => { const el = document.getElementById('swatches'); return el.scrollLeft > 50 && el.classList.contains('fade-l'); }, null, { timeout: 3000 });
   assert.match(await frame.textContent('#colorCode'), /#c80000/i);
   const before = await canvasHash(frame, '#cv');
   const c = await frame.locator('#swatches [data-color]:not(.is-on)').first().getAttribute('data-color');
@@ -422,6 +425,14 @@ test('底色展示窗：一排可左右滑、按右側鈕往右捲、點色塊�
   assert.equal(await btn.getAttribute('aria-pressed'), 'true');
   assert.equal((await frame.textContent('#colorCode')).toLowerCase(), c.toLowerCase());
   assert.notEqual(await canvasHash(frame, '#cv'), before);
+  if (SHOT) await frame.locator('.compose .left').first().screenshot({ path: path.join(SHOT, 'fbpost-color-row.png') });
+  // 文字背景：同樣式、一排、沒有灰字說明
+  await frame.click('#modeSeg [data-mode=text]');
+  await frame.waitForSelector('#bgBox:not([hidden])');
+  assert.equal(await frame.$eval('#bgSws .sw', (el) => el.getBoundingClientRect().width), 34);
+  assert.equal(await frame.$eval('#bgSws', (el) => getComputedStyle(el).flexWrap), 'nowrap');
+  assert.equal(await frame.locator('#bgBox .hint').count(), 0, '不要灰字說明');
+  if (SHOT) await frame.locator('.compose .left').first().screenshot({ path: path.join(SHOT, 'fbpost-bg-row.png') });
   await page.close();
 });
 
@@ -487,7 +498,7 @@ for (const mode of ['image', 'color']) {
       document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
     }, PHOTO.toString('base64'));
     await frame.waitForSelector('#cvEmpty', { state: 'hidden' });
-    if (mode === 'color') { await frame.click('#modeSeg [data-mode=color]'); await frame.click('.shelf .swatches .sw'); }
+    if (mode === 'color') { await frame.click('#modeSeg [data-mode=color]'); await frame.click('#swatches .sw'); }
     await frame.fill('#title', '第一行標題\n第二行比較長的標題');
     await page.waitForTimeout(400);
     const cv = frame.locator('#cv');

@@ -122,11 +122,7 @@
             </div>
             <div class="swatch-box" id="swatchBox" hidden>
               <div class="sw-head"><strong>底色</strong><span id="colorCode"></span></div>
-              <div class="shelf">
-                <button type="button" class="shelf-nav" id="swPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
-                <div class="swatches" id="swatches" role="group" aria-label="底色"></div>
-                <button type="button" class="shelf-nav" id="swNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
-              </div>
+              <div class="swatches pick-sws hscroll" id="swatches" role="group" aria-label="底色"></div>
             </div>
             <div class="tools-row">
               <button type="button" class="soft-btn" id="fxBtn" aria-expanded="false" aria-controls="fxBar">T寶／馬賽克<span class="fx-count" id="fxCount"></span></button>
@@ -141,9 +137,8 @@
             <p class="noimg" id="noImgTxt">純文字：這則貼文不附圖，只發貼文內容。</p>
             <div class="bg-box" id="bgBox" hidden>
               <div class="sw-head"><strong>文字背景</strong><span id="bgName">無</span></div>
-              <div class="swatches bg-sws" id="bgSws" role="group" aria-label="文字背景"></div>
-              <div class="swatches bg-sws bg-imgs" id="bgImgs" role="group" aria-label="圖樣背景" hidden></div>
-              <p class="hint">有背景時最多 130 字；字型與排版以臉書實際畫面為準。</p>
+              <div class="swatches pick-sws bg-sws hscroll" id="bgSws" role="group" aria-label="文字背景"></div>
+              <div class="swatches pick-sws bg-sws bg-imgs hscroll" id="bgImgs" role="group" aria-label="圖樣背景" hidden></div>
             </div>
           </div>
         </div>
@@ -169,7 +164,7 @@
       </div>
     </div>
     <footer class="post-foot">
-      <div class="chips" id="pages" role="group" aria-label="發到哪些粉專"></div>
+      <div class="chips hscroll" id="pages" role="group" aria-label="發到哪些粉專"></div>
       <div class="sendrow">
         <div class="rd">
           <label class="rd-switch"><input type="checkbox" id="rdOn"><span class="track" aria-hidden="true"></span><span class="rd-lbl">排入 RD</span></label>

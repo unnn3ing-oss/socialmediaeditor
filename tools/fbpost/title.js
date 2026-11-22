@@ -43,5 +43,5 @@ export function textCheck(text) {
   const lines = String(text || '').split('\n');
   const widths = lines.map((l) => charWidth(l));
   const over = widths.findIndex((w) => w > TEXT_LINE_MAX);
-  return { widths, over, text: over >= 0 ? `第 ${over + 1} 行 ${widths[over]} 字，超過 ${TEXT_LINE_MAX} 字（仍可送出）` : '' };
+  return { widths, over, text: over >= 0 ? '字數超過可能換行顯示' : '' };
 }

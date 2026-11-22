@@ -68,7 +68,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     const [{ loadComposeAssets }, { createComposer }, { createTargets }, { createSender }, { createTimePop }, { createRd }, { createComments }] =
       await Promise.all([import('../../ui/compose/assets.js'), import('./compose.js'), import('./targets.js'), import('./send.js'),
         import('./timepop.js'), import('./rd.js'), import('./comments.js')]);
-    composer = createComposer({ tb, assets: await loadComposeAssets(tb) });
+    composer = createComposer({ tb, assets: await loadComposeAssets(tb), onState: () => sender && sender.updateButton() });
     targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton(), defaults: () => duty.ids() });
     sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }), history,
       onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
