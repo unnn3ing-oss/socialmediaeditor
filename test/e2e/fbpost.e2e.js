@@ -49,6 +49,8 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     }
     if (p === '/fb/scheduled' && opts.sched) return json(opts.sched);
     if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: 'pending' }]);
+    if (p === '/staff/me/notices' && opts.notices) { api.noticeCalls = (api.noticeCalls || 0) + 1; return json(typeof opts.notices === 'function' ? opts.notices() : opts.notices); }
+    if (p === '/fb/published') api.pubPages = [...(api.pubPages || []), u.searchParams.get('page')];
     if (p === '/fb/comment/retry') { api.retries.push(JSON.parse(req.postData() || '{}')); return opts.retryFail ? json({ ok: false, code: 'bad_request', error: '沒有失敗的留言' }, 400) : json({ ok: true }); }
     if (p === '/fb/published' && opts.pub) return json({ items: opts.pub, next: null });
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
@@ -1302,5 +1304,72 @@ test('已排程每 30 分鐘自動刷新；不到 30 分鐘不查；分頁在背
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await page.waitForFunction(() => document.getElementById('schedList').getAttribute('aria-busy') === 'false');
   assert.equal(n(), 2, '切回來超過 30 分鐘補查');
+  await page.close();
+});
+
+// ===== 即時狀態（外掛側邊欄）與回列表切到已發佈（2026-11-22）=====
+const FAIL_NOTE = { enabled: true, items: [{ postId: '222_5', page: '222', pageName: '娛樂', kind: 'post', seq: 1, error: '(#32) page rate limit', failed: true, at: Date.now(), canRetry: true }] };
+const sidePage = async (opts) => {
+  return newPage('admin', { width: 360, height: 760 }, opts);
+};
+test('即時狀態（側邊欄）：沒問題綠燈；權限組沒開通知就不顯示；網頁版不顯示', async () => {
+  const a = await sidePage({ notices: { enabled: true, items: [] } });
+  await a.page.goto(srv.url + 'tools/fbpost/index.html');
+  await a.page.evaluate(() => document.documentElement.classList.add('is-side'));
+  await openPost(a.page);
+  await a.page.waitForSelector('#liveState:not([hidden])');
+  assert.equal(await a.page.$eval('#liveState', (e) => e.classList.contains('is-bad')), false);
+  assert.match(await a.page.textContent('#liveState'), /即時狀態/);
+  assert.equal(await a.page.$eval('#liveState i', (e) => getComputedStyle(e).backgroundColor), 'rgb(23, 178, 106)');
+  await a.page.close();
+  const b = await sidePage({ notices: { enabled: false, items: [] } });
+  await b.page.goto(srv.url + 'tools/fbpost/index.html');
+  await b.page.evaluate(() => document.documentElement.classList.add('is-side'));
+  await openPost(b.page);
+  await b.page.waitForTimeout(300);
+  assert.equal(await b.page.isVisible('#liveState'), false);
+  await b.page.close();
+  const c = await newPage('admin', undefined, { notices: { enabled: true, items: [] } });
+  await c.page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(c.page);
+  await c.page.waitForTimeout(300);
+  assert.equal(await c.page.isVisible('#liveState'), false);
+  await c.page.close();
+});
+
+test('即時狀態（側邊欄）：留言失敗紅燈閃爍；點一下關新增發文、切到已發佈並讀該粉專', async () => {
+  const { page, errors, api } = await sidePage({ notices: FAIL_NOTE, pub: ALERT_PUB });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.evaluate(() => document.documentElement.classList.add('is-side'));
+  await openPost(page);
+  await page.waitForSelector('#liveState.is-bad');
+  assert.notEqual(await page.$eval('#liveState', (e) => getComputedStyle(e).animationName), 'none');
+  assert.match(await page.getAttribute('#liveState', 'aria-label'), /留言失敗 1 則（娛樂）/);
+  await page.click('#liveState');
+  await page.waitForSelector('#postDlg', { state: 'hidden' });
+  await page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  assert.equal(await page.isVisible('#tab-pub'), true);
+  assert.equal(await page.$eval('#pubPage', (e) => e.value), '222');
+  assert.deepEqual(api.pubPages, ['222']);
+  assert.equal(await page.locator('#pubList .cm-bad').count(), 2);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('網頁版：留言失敗時關閉新增發文回列表，直接切到已發佈並顯示錯誤；沒有失敗維持原分頁', async () => {
+  let fail = false;
+  const { page, api } = await newPage('admin', undefined, { notices: () => (fail ? FAIL_NOTE : { enabled: true, items: [] }), pub: ALERT_PUB });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('#dlgClose');
+  await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('#tab-sched'), true, '沒有失敗留在已排程');
+  assert.equal(api.pubPages, undefined);
+  fail = true;
+  await page.click('#newBtn'); await page.waitForSelector('#postDlg:not([hidden])');
+  await page.click('#dlgClose');
+  await page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  assert.equal(await page.isVisible('#tab-pub'), true);
+  assert.deepEqual(api.pubPages, ['222']);
   await page.close();
 });

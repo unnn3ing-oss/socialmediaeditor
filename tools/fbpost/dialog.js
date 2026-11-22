@@ -2,18 +2,20 @@
 // beforeOpen：第一次開啟前要先等的載入（按鈕顯示「載入中…」）；視窗開著時背景設 inert，Tab 不會跑到背景，焦點落在文章網址
 import { $, errText } from './util.js';
 
-export function createDialog({ beforeOpen } = {}) {
+export function createDialog({ beforeOpen, onOpen, onClose } = {}) {
   const veil = $('postDlg'), btn = $('newBtn');
   const bg = () => document.querySelectorAll('main.fp, main.off');
   const open = () => {
     veil.hidden = false; document.body.classList.add('no-scroll');
     for (const el of bg()) el.inert = true;
     const link = $('link'); link.focus(); link.scrollIntoView({ block: 'nearest' });
+    if (onOpen) onOpen();
   };
   const close = () => {
     veil.hidden = true; document.body.classList.remove('no-scroll');
     for (const el of bg()) el.inert = false;
     btn.focus();
+    if (onClose) onClose();
   };
   // 窄版（單欄）文章網址放最上面（預覽圖之前）；電腦版兩欄放回右欄最上面。搬移元素，內容不會不見
   const mq = matchMedia('(max-width: 820px)');

@@ -56,7 +56,7 @@ function rowBase(it, whenMs, pageName, preview) {
   const meta = document.createElement('div'); meta.className = 'meta';
   const kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = metaText(it, pageName);
   const t2 = document.createElement('span'); t2.className = 'when-m'; t2.textContent = fmtDay(whenMs);   // 手機：時間併到這一行
-  meta.append(kind, commentSpan(it.comment), t2);
+  meta.append(kind, t2, commentSpan(it.comment));   // 時間（手機）接在粉專後面，留言狀態最後（紅字自己一行）
   body.append(m, meta);
   const when = document.createElement('div'); when.className = 'when'; when.textContent = fmtDay(whenMs);
   li.append(preview || thumb(it.picture), body, when);
@@ -233,6 +233,13 @@ export function createManage({ tb, history = null, onResend = null }) {
   $('pubMore').onclick = () => loadPub(true);
 
   return {
+    // 切到已發佈並讀某粉專（留言失敗回列表用）；粉專不在清單就讀目前選的
+    showPub(page) {
+      const el = $('pubPage');
+      if (page && [...el.options].some((o) => o.value === String(page))) el.value = String(page);
+      pubSeq++; pubNext = null;
+      loadPub(false);
+    },
     setPages(pages) {
       for (const id of ['schedPage', 'pubPage']) {
         const el = $(id), keep = el.value; el.textContent = '';

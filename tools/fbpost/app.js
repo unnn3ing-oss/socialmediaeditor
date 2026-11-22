@@ -9,6 +9,7 @@ import { createManage } from './manage.js';
 import { createDialog } from './dialog.js';
 import { createDuty } from './duty.js';
 import { createHistory } from './history.js';
+import { createLive } from './live.js';
 
 tb.init('fbpost');
 
@@ -74,7 +75,11 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
       onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
     targets.setPages(currentPages);
   })().catch((e) => { loading = null; throw e; }));
-  const dialog = createDialog({ beforeOpen: ensureCompose });   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
+  // 留言失敗：回到列表就切到「已發佈」並讀出錯誤（最新一則失敗的粉專）；外掛側邊欄另有即時狀態燈
+  const goFailed = (items) => { if (!items.length || !$('tab-pub')) return; showTab('pub'); manage.showPub(items[0].page); };
+  const live = createLive({ tb, onClick: () => dialog.close() });
+  const dialog = createDialog({ beforeOpen: ensureCompose, onOpen: () => live.refresh(),
+    onClose: () => { live.refresh().then(goFailed); } });   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
   // 再發一次：開新增發文、清空後帶回網址／照片／標題（粉專照值班粉專預勾）；正在編輯的內容先問
   async function resend(rec) {
     try { await ensureCompose(); } catch (e) { $('pagesState').textContent = '載入新增發文失敗：' + errText(e); return; }

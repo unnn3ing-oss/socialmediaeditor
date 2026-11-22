@@ -318,7 +318,8 @@ body.no-scroll { overflow: hidden; }
   .list .when-m { display: inline; }
   .list .when-m::before { content: '．'; }
   .list .acts { grid-column: 1 / -1; }
-  .list .acts .btn { flex: 1 1 0; }
+  .list .acts { flex-wrap: wrap; }
+  .list .acts .btn { flex: 1 1 0; white-space: nowrap; }
   .list .edit { grid-column: 1 / -1; }
 }
 
@@ -485,3 +486,13 @@ body.no-scroll { overflow: hidden; }
 /* 粉專膠囊一列；上下留 2px 給聚焦外框 */
 .post-foot .chips.hscroll { padding: 2px; margin: -2px; }
 .post-foot .chips.hscroll .chip { flex: none; white-space: nowrap; }
+
+/* 即時狀態（外掛側邊欄新增發文標題列）：綠燈正常；紅燈＋紅色光暈閃爍＝有留言失敗 */
+.live { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--text); font: 500 13px var(--font); cursor: default; white-space: nowrap; }
+.live[hidden] { display: none; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: #17b26a; box-shadow: 0 0 0 3px #dcfae6; }
+.live.is-bad { border-color: #d92d20; color: #b42318; cursor: pointer; animation: live-glow 1.2s ease-in-out infinite; }
+.live.is-bad i { background: #d92d20; box-shadow: 0 0 0 3px #fee4e2; }
+@keyframes live-glow { 0%, 100% { box-shadow: 0 0 0 2px rgba(217, 45, 32, .25), 0 0 6px 1px rgba(217, 45, 32, .25); } 50% { box-shadow: 0 0 0 4px rgba(217, 45, 32, .45), 0 0 16px 4px rgba(217, 45, 32, .55); } }
+@media (prefers-reduced-motion: reduce) { .live.is-bad { animation: none; box-shadow: 0 0 0 3px rgba(217, 45, 32, .4), 0 0 12px 3px rgba(217, 45, 32, .45); } }
+html:not(.is-side) .live { display: none; }

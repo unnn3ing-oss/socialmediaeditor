@@ -395,12 +395,9 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     const dot = mk('span', 'acct-dot');
     dot.setAttribute('aria-hidden', 'true');
     button.append(dot, mk('span', 'acct-mode', '公司模式'), mk('span', 'acct-nm', s.name || (c.admin ? '管理員' : '')));
-    // 有通知：名字右上紅點，讀屏念「有 N 則通知」
-    if (notes.length) {
-      const nd = mk('span', 'acct-ndot');
-      nd.setAttribute('aria-hidden', 'true');
-      button.append(nd, mk('span', 'sr-only', `，有 ${notes.length} 則通知`));
-    }
+    // 有通知：帳號框紅色光暈閃爍（不放紅點），讀屏念「有 N 則通知」
+    button.classList.toggle('acct-alert', notes.length > 0);
+    if (notes.length) button.append(mk('span', 'sr-only', `，有 ${notes.length} 則通知`));
   }
   button.addEventListener('click', () => {
     if (!shell.company().unlocked) { openLogin(false); return; }

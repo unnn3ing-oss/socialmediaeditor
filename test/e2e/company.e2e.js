@@ -310,7 +310,7 @@ test('測試後端：系統管理者切過去 → 測試膠囊、憑證分開、
   assert.equal(await page.evaluate(() => localStorage.getItem('tbx.api')), null);
 });
 
-test('留言失敗通知：右上紅點；彈窗列出粉專／第幾則／原因；重新留言後移除；開排程發布切網址', async () => {
+test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／第幾則／原因；重新留言後移除；開排程發布切網址', async () => {
   const { page, api } = await open();
   const at = Date.now() - 60000;
   api.notices = { enabled: true, items: [
@@ -318,7 +318,7 @@ test('留言失敗通知：右上紅點；彈窗列出粉專／第幾則／原�
     { postId: '222_9', page: '222', pageName: '娛樂', kind: 'video', seq: 2, error: 'temporary', failed: false, at, canRetry: false }
   ] };
   await unlock(page, 'S1');
-  await page.waitForSelector('#company-btn .acct-ndot');
+  await page.waitForSelector('#company-btn.acct-alert');
   assert.match(await acctText(page), /有 2 則通知/);
   await page.click('#company-btn');
   await page.waitForSelector('#acct-pop .acct-note');
@@ -337,7 +337,7 @@ test('留言失敗通知：右上紅點；彈窗列出粉專／第幾則／原�
   assert.equal(await page.evaluate(() => location.hash), '#fbvideo');
 });
 
-test('留言失敗通知：權限組沒開 notify（enabled false）不顯示紅點，彈窗維持目前沒有通知', async () => {
+test('留言失敗通知：權限組沒開 notify（enabled false）不閃紅光，彈窗維持目前沒有通知', async () => {
   const { page, api } = await open();
   api.notices = { enabled: false, items: [] };
   await unlock(page);
@@ -345,5 +345,5 @@ test('留言失敗通知：權限組沒開 notify（enabled false）不顯示紅
   await page.waitForSelector('#acct-pop:not([hidden])');
   await page.waitForTimeout(200);
   assert.match(await page.textContent('#acct-pop .acct-sec'), /目前沒有通知/);
-  assert.equal(await page.locator('#company-btn .acct-ndot').count(), 0);
+  assert.equal(await page.locator('#company-btn.acct-alert').count(), 0);
 });
