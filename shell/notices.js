@@ -52,10 +52,10 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
       if (n.error) { const er = mk('div', 'acct-note-err', n.error); er.title = n.error; li.append(er); }
       // 發文者處理過（只有看全部的人看得到）：誰、怎麼處理、何時
       if (done) li.append(mk('div', 'acct-note-who', `${n.hname || n.hby || '發文者'} ${n.how === 'retry' ? '已補留言' : '已完成'}・${fmtNoteTime(n.hat)}`));
-      // 按鈕一列：重新留言／看貼文↗／開列表↗／完成
+      // 按鈕一列：重留言／看貼文（另開分頁）／看列表（原頁切換）／完成
       const acts = mk('div', 'acct-note-act');
       if (n.canRetry && !done) {
-        const rb = mk('button', 'btn btn-secondary btn-sm', '重新留言');
+        const rb = mk('button', 'btn btn-secondary btn-sm', '重留言');
         rb.type = 'button';
         rb.addEventListener('click', async () => {
           rb.disabled = true;
@@ -68,16 +68,16 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
         acts.append(rb);
       }
       if (/^\d{1,30}(_\d{1,30})?$/.test(String(n.postId || ''))) {
-        const op = mk('a', 'btn btn-secondary btn-sm', '看貼文 ↗');
+        const op = mk('a', 'btn btn-secondary btn-sm', '看貼文');
         op.href = 'https://www.facebook.com/' + n.postId;
         op.target = '_blank'; op.rel = 'noopener noreferrer';
         op.setAttribute('aria-label', '看貼文（另開分頁）');
         acts.append(op);
       }
-      const go = mk('button', 'btn btn-secondary btn-sm', '開列表 ↗');
+      const go = mk('button', 'btn btn-secondary btn-sm', '看列表');
       go.type = 'button';
       go.title = n.kind === 'video' ? '開影片發布' : '開排程發布的已發佈列表';
-      go.setAttribute('aria-label', n.kind === 'video' ? '開列表（影片發布）' : '開列表（排程發布）');
+      go.setAttribute('aria-label', n.kind === 'video' ? '看列表（影片發布）' : '看列表（排程發布）');
       go.addEventListener('click', () => openTool(n.kind === 'video' ? 'video' : 'post'));
       acts.append(go);
       const rd = mk('button', 'btn btn-secondary btn-sm acct-done', '完成');

@@ -330,21 +330,21 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   assert.equal(await notes.nth(1).locator('.acct-note-title').count(), 0, '舊通知沒有摘要不顯示');
   assert.equal(await notes.nth(0).locator('a', { hasText: '看貼文' }).getAttribute('href'), 'https://www.facebook.com/111_5');
   assert.equal(await notes.nth(0).locator('a', { hasText: '看貼文' }).getAttribute('target'), '_blank');
-  // 按鈕一列：重新留言／看貼文／開列表／完成
-  assert.deepEqual(await notes.nth(0).locator('.acct-note-act > *').allTextContents(), ['重新留言', '看貼文 ↗', '開列表 ↗', '完成']);
+  // 按鈕一列：重留言／看貼文／看列表／完成
+  assert.deepEqual(await notes.nth(0).locator('.acct-note-act > *').allTextContents(), ['重留言', '看貼文', '看列表', '完成']);
   const tops = await notes.nth(0).locator('.acct-note-act > *').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   assert.equal(new Set(tops).size, 1, '按鈕要在同一列：' + tops);
-  assert.equal(await notes.nth(1).locator('button', { hasText: '重新留言' }).count(), 0, '沒有權限不顯示重新留言');
+  assert.equal(await notes.nth(1).locator('button', { hasText: '重留言' }).count(), 0, '沒有權限不顯示重新留言');
   assert.equal(await page.isVisible('#acct-pop .acct-empty'), false);
   assert.match(await page.textContent('#acct-pop .acct-scope'), /全部人/);
   // 看全部的人：重新留言後重讀，這則變「已補留言」（黃）
   api.notices = { enabled: true, all: true, items: [{ ...api.notices.items[0], state: 'handled', how: 'retry', hby: 'S1', hname: '莊鈞評', hat: at }, api.notices.items[1]] };
-  await notes.nth(0).locator('button', { hasText: '重新留言' }).click();
+  await notes.nth(0).locator('button', { hasText: '重留言' }).click();
   await page.waitForSelector('#acct-pop .acct-note.is-handled');
   assert.deepEqual(api.retries, [{ postId: '111_5', page: '111' }]);
   assert.match(await page.textContent('#acct-pop .acct-note.is-handled'), /莊鈞評 已補留言/);
   assert.match(await acctText(page), /有 1 則未處理通知/);
-  await page.locator('#acct-pop').getByRole('button', { name: '開列表（影片發布）' }).click();
+  await page.locator('#acct-pop').getByRole('button', { name: '看列表（影片發布）' }).click();
   await page.waitForSelector('#acct-pop', { state: 'hidden' });
   assert.equal(await page.evaluate(() => location.hash), '#fbvideo');
 });
