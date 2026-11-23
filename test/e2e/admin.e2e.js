@@ -70,7 +70,7 @@ const DATA = {
   'POST /admin/fb/profiles/pabcdef12/activate': () => { TP.list.forEach((x) => { x.active = x.id === 'pabcdef12'; }); TP.active = 'pabcdef12'; return TP; },
   'GET /admin/assets': [{ key: 'logo.png', tier: 'company', size: 2048, updated: Date.UTC(2026, 10, 1) }],
   'GET /admin/logs': [{ at: Date.UTC(2026, 10, 2), tool: 'fb', code: 'ok', ver: '1' }],
-  'GET /admin/fb/status': { configured: true, valid: true, userValid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], pages: 3, autoExtend: true,
+  'GET /admin/fb/status': { configured: true, valid: true, userValid: true, expires: Math.floor(Date.UTC(2027, 0, 5, 4, 0) / 1000), missing: ['pages_manage_posts'], granted: ['pages_read_engagement', 'public_profile'], pageScopes: ['pages_manage_engagement', 'pages_read_engagement'], needed: ['pages_manage_posts', 'pages_read_engagement', 'pages_manage_engagement'], app: '小編工具箱', appId: '123', pages: 3, autoExtend: true,
     stored: { pages: 3, expires: 0, dataExpires: Math.floor(Date.UTC(2027, 1, 10, 4, 0) / 1000), savedAt: Date.UTC(2026, 10, 19, 4, 0) },
     warn: { level: 'warn', days: 10, text: '臉書權杖 10 天後到期，請主管重新產生權杖，再到管理頁「臉書連線」換新。' } },
   'GET /admin/fb/pages': PAGES,
@@ -283,6 +283,11 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   assert.match(await page.textContent('#fbTokHint'), /會自動延長/);
   if (SHOT) await page.locator('#fbState').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'admin-fb-token.png') });
   assert.match(await page.textContent('#fbMissing'), /缺少權限：pages_manage_posts/);
+  const perms = await page.textContent('#fbPerms');
+  assert.match(perms, /小編工具箱（ID 123）/);
+  assert.match(perms, /使用者權杖權限pages_read_engagement、public_profile/);
+  assert.match(perms, /粉專權杖權限pages_manage_engagement、pages_read_engagement/);
+  assert.equal(await page.locator('#fbPerms b', { hasText: 'pages_read_engagement' }).count(), 2, '工具需要的權限標粗');
   await page.click('#tab-post'); await page.waitForSelector('#pgWrap:not([hidden])');
   assert.equal(await page.locator('#pgRows .pg-card').count(), 3);
   assert.deepEqual(await page.$$eval('#pgRows .pg-card', (rs) => rs.map((r) => r.querySelector('.pg-no').textContent + r.querySelector('.pg-name').textContent)), ['1TVBS 新聞', '2TVBS 娛樂', '3TVBS 少康戰情室']);

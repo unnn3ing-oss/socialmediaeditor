@@ -307,9 +307,9 @@ test('錯誤說明標出步驟：確認是否已留被擋（#10）→「確認�
   assert.equal(comments(f).length, 0, '讀不到不能直接再留（可能重複）');
 });
 
-test('錯誤說明標出步驟：確認發布被擋 →「確認發布：」；留言本身失敗 →「留言：」', async (t) => {
+test('錯誤說明標出步驟：確認發布失敗 →「確認發布：」；留言本身失敗 →「留言：」', async (t) => {
   const deny = () => Response.json({ error: { code: 10, message: 'denied' } }, { status: 400 });
-  const a = await mk(t, { 'GET /111_5': deny });
+  const a = await mk(t, { 'GET /111_5': () => gErr(2, 500, '(#2) temporary') });
   await a.post('arm', REC(nowSec() - 60));
   await a.obj.alarm();
   assert.match((await a.post('status')).error, /^確認發布：/);
@@ -318,6 +318,61 @@ test('錯誤說明標出步驟：確認發布被擋 →「確認發布：」；�
   await b.post('arm', REC(nowSec() - 60));
   await b.obj.alarm();
   assert.match((await b.post('status')).error, /^留言：/);
+});
+
+test('確認發布被擋（#10）：不卡住，直接留言，以臉書回應為準', async (t) => {
+  const { f, obj, post } = await mk(t, {
+    'GET /111_5': () => Response.json({ error: { code: 10, message: "(#10) requires the 'pages_read_engagement' permission" } }, { status: 400 }),
+    'POST /111_5/comments': () => ({ id: 'C9' })
+  });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  const s = await post('status');
+  assert.equal(s.status, 'done'); assert.equal(s.commentId, 'C9'); assert.equal(s.alert, null);
+  assert.equal(comments(f).length, 1);
+});
+
+test('arm 帶 published：立即發布不再問「發布了沒」；n＝第幾則（通知顯示第 2 則）', async (t) => {
+  const { f, obj, post } = await mk(t, { 'POST /111_5/comments': () => gErr(32, 400, 'page rate limit') });
+  await post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, published: true, items: [{ message: '第二則', offset: 0, n: 2 }] });
+  await obj.alarm();
+  const s = await post('status');
+  assert.ok(!f.calls.some((c) => c.method === 'GET' && c.path === '/111_5'), '不讀貼文發布狀態');
+  assert.equal(s.alert.seq, 2);
+});
+
+test('留言沒收到臉書回應（5xx）：下次先查留言清單，有就完成、不重留', async (t) => {
+  let n = 0;
+  const { f, obj, post } = await mk(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => (n++ === 0 ? gErr(1, 500, '(#1) unknown') : { id: 'X' }),
+    'GET /111_5/comments': () => ({ data: [{ id: 'C9', from: { id: '111' }, message: '看更多新聞內容\nhttps://x' }] })
+  });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal((await post('status')).items[0].status, 'posting');
+  await obj.alarm();
+  const s = await post('status');
+  assert.equal(s.status, 'done'); assert.equal(s.commentId, 'C9');
+  assert.equal(comments(f).length, 1, '只送過一次');
+});
+
+test('提醒後自動重試成功：通知消失，錯誤日誌保留並由系統結案', async (t) => {
+  let fail = true;
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => (fail ? gErr(100, 400, 'bad') : { id: 'C1' })
+  });
+  await post('arm', REC(nowSec() - 60));
+  for (let i = 0; i < 3; i++) await obj.alarm();
+  assert.equal(notices(env).length, 1);
+  assert.equal(failLogs(env).length, 1);
+  fail = false;
+  await obj.alarm();
+  assert.equal((await post('status')).status, 'done');
+  assert.equal(notices(env).length, 0, '通知消失');
+  assert.equal(failLogs(env).length, 1, '錯誤日誌保留');
+  assert.equal(failLogs(env)[0].st, 'closed');
 });
 
 test('armTimer：計時器拒收（資料不完整）會丟錯，不能當成排好了', async () => {
@@ -462,13 +517,14 @@ async function mkEnvTimer(t, handlers) {
   return { f, state, obj, post, env };
 }
 
-test('提醒：第 1 次失敗不提醒；第 2 次失敗起 alert＋通知；最後失敗寫一次錯誤日誌（含粉專 ID 與錯誤碼）', async (t) => {
+test('提醒：第 1、2 次失敗不提醒；第 3 次失敗（約 1.5 分鐘）起 alert＋通知＋寫一次錯誤日誌（含粉專 ID 與錯誤碼）', async (t) => {
   const { obj, post, env } = await mkEnvTimer(t, {
     'GET /111_5': () => ({ id: '111_5', is_published: true }),
     'POST /111_5/comments': () => gErr(2, 500, '(#2) temporary'),
     'GET /111_5/comments': () => ({ data: [] })
   });
   await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
   await obj.alarm();
   assert.equal((await post('status')).alert, null);
   assert.equal(notices(env).length, 0);
@@ -477,8 +533,8 @@ test('提醒：第 1 次失敗不提醒；第 2 次失敗起 alert＋通知；�
   assert.deepEqual({ seq: s.alert.seq, failed: s.alert.failed }, { seq: 1, failed: false });
   const n = notices(env);
   assert.equal(n.length, 1); assert.equal(n[0].post_id, '111_5'); assert.equal(n[0].page, '111'); assert.equal(n[0].kind, 'post'); assert.equal(n[0].failed, 0);
-  assert.equal(failLogs(env).length, 0, '還在重試不寫錯誤日誌');
-  for (let i = 0; i < 3; i++) await obj.alarm();
+  assert.equal(failLogs(env).length, 1, '跳出提醒就寫錯誤日誌');
+  for (let i = 0; i < 2; i++) await obj.alarm();
   assert.equal((await post('status')).alert.failed, true);
   assert.equal(notices(env)[0].failed, 1);
   const logs = failLogs(env);
@@ -501,7 +557,7 @@ test('提醒：限流直接失敗也提醒；後面「前一則失敗未留」�
   assert.equal(failLogs(env)[0].code, 'comment_failed:32');
 });
 
-test('重新留言：粉專不符拒絕；失敗的那則起歸零、先查再留，成功後通知刪除', async (t) => {
+test('重新留言：粉專不符拒絕；失敗的那則起歸零；臉書明確回錯誤的直接重留（不讀留言），成功後通知刪除', async (t) => {
   let fail = true;
   const { f, state, obj, post, env } = await mkEnvTimer(t, {
     'GET /111_5': () => ({ is_published: true }),
@@ -515,14 +571,14 @@ test('重新留言：粉專不符拒絕；失敗的那則起歸零、先查再�
   fail = false;
   assert.equal((await post('retry', { pageId: '111' })).ok, true);
   const mid = await post('status');
-  assert.deepEqual(mid.items.map((x) => x.status), ['done', 'posting', 'pending']);
+  assert.deepEqual(mid.items.map((x) => x.status), ['done', 'pending', 'pending']);
   assert.equal(mid.alert, null);
   assert.deepEqual(notices(env).map((n) => [n.state, n.how]), [['handled', 'retry']], '重新留言＝已補留言，留給看全部的人（黃框）');
   assert.ok((await state.storage.getAlarm()) <= Date.now());
   await obj.alarm();
   const s = await post('status');
   assert.deepEqual(s.items.map((x) => x.status), ['done', 'done', 'done']);
-  assert.ok(f.calls.some((c) => c.method === 'GET' && c.path === '/111_5/comments'), '留過一半的先查');
+  assert.ok(!f.calls.some((c) => c.method === 'GET' && c.path === '/111_5/comments'), '確定沒留的不用讀留言清單');
   assert.equal((await post('retry', { pageId: '111' })).ok, false, '都完成就沒有可重試的');
 });
 

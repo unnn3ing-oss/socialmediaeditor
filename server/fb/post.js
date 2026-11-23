@@ -18,6 +18,8 @@ export const timeOk = (at, now = Math.floor(Date.now() / 1000)) => Number.isInte
 // 驗證表單；不合法回 null
 // 第 2、3 則留言：[{ message, delay（距上一則幾分鐘，5 的倍數，5～1440） }] → [{ message, offset（距發布幾分鐘） }]；不合法回 null
 export const MAX_EXTRAS = 2;
+// 第 2、3 則留言帶上「第幾則」（通知與列表顯示用）
+const numbered = (extras) => extras.map((x, i) => ({ ...x, n: i + 2 }));
 export function parseExtras(raw) {
   if (raw === null || raw === undefined || raw === '') return [];
   let list;
@@ -163,7 +165,7 @@ export async function createPosts(env, form, who = null) {
     const errText = (e) => String((e && e.message) || e).slice(0, 200);
     if (scheduled) {
       // 排程：第 1 則（有網址才有）與第 2、3 則一起交給計時器，發布後依序留
-      const items = [...(first ? [{ message: first, offset: 0 }] : []), ...extras];
+      const items = [...(first ? [{ message: first, offset: 0, n: 1 }] : []), ...numbered(extras)];
       if (!items.length) continue;
       try {
         await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by, title, ptype: form.kind || undefined, pageName: p.name });
@@ -176,15 +178,17 @@ export async function createPosts(env, form, who = null) {
       continue;
     }
     // 立即：第 1 則最重要，先馬上留；失敗就連同第 2、3 則交給計時器，由計時器先重試第 1 則，成功後才留後面的
-    let firstOk = false;
+    let firstOk = false, firstUnsure = false;
     if (first) {
       try { await postComment(env, p.token, r.postId, first); r.comment = 'done'; firstOk = true; }
-      catch (e) { r.comment = 'failed'; r.commentError = errText(e); }
+      catch (e) { r.comment = 'failed'; r.commentError = errText(e); firstUnsure = !(e instanceof GraphError) || !!e.uncertain; }
     }
-    const items = [...(first && !firstOk ? [{ message: first, offset: 0, recheck: true }] : []), ...extras];
+    // 第 1 則：臉書明確回錯誤＝確定沒留，計時器直接重留；沒收到回應＝可能已留，計時器先查再留（recheck）
+    const items = [...(first && !firstOk ? [{ message: first, offset: 0, n: 1, ...(firstUnsure ? { recheck: true } : {}) }] : []), ...numbered(extras)];
     if (items.length) {
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items, by, title, ptype: form.kind || undefined, pageName: p.name });
+        // published：貼文剛剛由臉書回應成功發出，計時器不用再問「發布了沒」（那一步需要讀取權限，可能被擋）
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), published: true, items, by, title, ptype: form.kind || undefined, pageName: p.name });
         if (first && !firstOk) r.comment = 'retry';
         if (extras.length) r.extra = extras.length;
       } catch (e) {

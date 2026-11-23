@@ -272,23 +272,24 @@ export async function tokenStatus(env) {
   const autoExtend = !!(await appCred(env));
   if (!ut) return { configured: false, valid: false, userValid: false, expires: null, missing: NEEDED_PERMS.slice(), pages: 0, source: null, app: '', autoExtend, stored: null, broken: null, warn: null };
   const st = await storedPageTokens(env);
-  let userValid = true, missing = NEEDED_PERMS.slice(), expires = null, pages = 0, app = '';
+  let userValid = true, missing = NEEDED_PERMS.slice(), expires = null, pages = 0, app = '', appId = '';
+  let granted = [], pageScopes = null;   // 使用者權杖已取得的權限；存好的粉專權杖本身的權限（debug_token scopes）
   try {
     const d = await graph(env, 'GET', '/me/permissions', {}, ut);
-    const granted = new Set((d.data || []).filter((x) => x.status === 'granted').map((x) => x.permission));
-    missing = NEEDED_PERMS.filter((p) => !granted.has(p));
+    granted = (d.data || []).filter((x) => x.status === 'granted').map((x) => String(x.permission)).sort();
+    missing = NEEDED_PERMS.filter((p) => !granted.includes(p));
   } catch (e) { if (isTokenError(e)) userValid = false; }
-  if (userValid) { try { const i = await tokenInfo(env, ut); expires = i.expires; app = i.app; } catch { expires = null; } }
+  if (userValid) { try { const i = await tokenInfo(env, ut); expires = i.expires; app = i.app; appId = i.appId || ''; } catch { expires = null; } }
   let valid = userValid;
   if (st) {
     pages = st.pages.length;
     if (!userValid) missing = [];   // 使用者權杖過期查不到權限，不代表粉專權杖缺權限
     notePageTokens(env, st.pages, await profileId(env));
-    try { const pi = await tokenInfo(env, st.pages[0].token); valid = pi.valid; if (!app) app = pi.app; } catch (e) { if (isTokenError(e)) valid = false; }
+    try { const pi = await tokenInfo(env, st.pages[0].token); valid = pi.valid; if (!app) app = pi.app; if (!appId) appId = pi.appId || ''; pageScopes = pi.scopes.slice().sort(); } catch (e) { if (isTokenError(e)) valid = false; }
   } else if (userValid) {
     try { pages = (await activePageTokens(env)).size; } catch (e) { if (e.code === 'fb_token') valid = false; else if (e.code !== 'fb_no_pages') throw e; }
   }
   const broken = await brokenAt(env);
   const stored = st ? { pages: st.pages.length, expires: st.expires, dataExpires: st.dataExpires, savedAt: st.savedAt } : null;
-  return { configured: true, valid, userValid, expires, missing, pages, source, app, autoExtend, stored, broken, warn: tokenWarn({ stored, userExpires: expires, valid, broken }) };
+  return { configured: true, valid, userValid, expires, missing, granted, pageScopes, needed: NEEDED_PERMS.slice(), pages, source, app, appId, autoExtend, stored, broken, warn: tokenWarn({ stored, userExpires: expires, valid, broken }) };
 }

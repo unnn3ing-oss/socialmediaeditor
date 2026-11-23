@@ -90,7 +90,7 @@ test('有圖排程：暫存照片 → /feed attached_media＋SCHEDULED；不留�
   assert.ok(!f.calls.some((c) => /comments/.test(c.path)));
   assert.equal(RecTimer.log.length, 1);
   assert.equal(RecTimer.log[0][0], '/arm');
-  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, by: 'SYS1', title: '內文', pageName: '新聞', items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }] });
+  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, by: 'SYS1', title: '內文', pageName: '新聞', items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0, n: 1 }] });
 });
 
 test('純文字（無圖）排程走 /feed；沒有文章網址 → 400', async (t) => {
@@ -170,6 +170,18 @@ test('立即發布第 1 則留言失敗：交給計時器重試，第 2、3 則�
   assert.equal(arm.items[0].recheck, true, '第 1 則可能其實已留成功：計時器先查再留');
 });
 
+test('立即發布第 1 則留言臉書明確回錯誤：確定沒留，計時器直接重留（不帶 recheck）', async (t) => {
+  const { env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => gErr(100, 400, 'bad')
+  });
+  await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
+  const arm = RecTimer.log[0][1];
+  assert.equal(arm.items[0].recheck, undefined);
+  assert.equal(arm.items[0].n, 1);
+  assert.equal(arm.published, true);
+});
+
 test('第一個粉專失敗不影響第二個；時間超出範圍不呼叫臉書', async (t) => {
   const { f, env, headers } = await setup(t, {
     'POST /111/photos': () => gErr(200, 403, 'no permission'),
@@ -247,14 +259,15 @@ test('第 2、3 則留言：立即發布＝第 1 則馬上留、其餘交給計�
   assert.equal(RecTimer.log.length, 1);
   const arm = RecTimer.log[0][1];
   assert.ok(arm.at >= before && arm.at <= nowSec());
-  assert.deepEqual(arm.items, [{ message: '第二則', offset: 5 }, { message: '第三則', offset: 15 }]);
+  assert.deepEqual(arm.items, [{ message: '第二則', offset: 5, n: 2 }, { message: '第三則', offset: 15, n: 3 }]);
+  assert.equal(arm.published, true, '立即發布：計時器不用再問發布了沒');
 });
 
 test('第 2、3 則留言：排程＝三則一起交給計時器', async (t) => {
   const at = nowSec() + 3600;
   const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_7' }) });
   await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]), comments: JSON.stringify([{ message: '二', delay: 5 }]) });
-  assert.deepEqual(RecTimer.log[0][1].items, [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticletext', offset: 0 }, { message: '二', offset: 5 }]);
+  assert.deepEqual(RecTimer.log[0][1].items, [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticletext', offset: 0, n: 1 }, { message: '二', offset: 5, n: 2 }]);
   assert.equal(RecTimer.log[0][1].at, at);
 
 });

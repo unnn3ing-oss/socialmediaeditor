@@ -290,6 +290,7 @@ if (window.top !== window.self) {
     return api('/admin/fb/status' + tpQ()).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var d = res.data, ul = $('fbMissing'); ul.textContent = ''; ul.hidden = true;
+      var pm = $('fbPerms'); pm.textContent = ''; pm.hidden = true;
       $('fbTokClear').hidden = d.source !== 'admin';
       var dl = $('fbDetail'); dl.textContent = ''; dl.hidden = true;
       var w = $('fbWarn'); w.hidden = !d.warn; w.textContent = d.warn ? d.warn.text : ''; w.className = 'fb-warn' + (d.warn && d.warn.level === 'bad' ? ' bad' : '');
@@ -309,6 +310,23 @@ if (window.top !== window.self) {
       dl.hidden = !lines.length;
       (d.missing || []).forEach(function (m) { var li = document.createElement('li'); li.textContent = '缺少權限：' + m; ul.appendChild(li); });
       ul.hidden = !(d.missing && d.missing.length);
+      // 權杖實際拿到的權限：工具需要的標粗；App ID 一起列，方便到 Explorer／存取權杖偵錯工具選同一個 App 對照
+      var need = d.needed || [];
+      function permRow(label, list) {
+        if (!list) return;
+        pm.appendChild(sfEl('dt', '', label));
+        var dd = document.createElement('dd');
+        if (!list.length) dd.textContent = '（讀不到）';
+        list.forEach(function (p, i) {
+          if (i) dd.appendChild(document.createTextNode('、'));
+          dd.appendChild(sfEl(need.indexOf(p) >= 0 ? 'b' : 'span', '', p));
+        });
+        pm.appendChild(dd);
+      }
+      if (d.app || d.appId) { pm.appendChild(sfEl('dt', '', 'App')); pm.appendChild(sfEl('dd', '', (d.app || '') + (d.appId ? '（ID ' + d.appId + '）' : ''))); }
+      if (d.userValid) permRow('使用者權杖權限', d.granted || []);
+      permRow('粉專權杖權限', d.pageScopes);
+      pm.hidden = !pm.children.length;
     });
   }
 

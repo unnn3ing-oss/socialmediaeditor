@@ -390,11 +390,12 @@
         <h2>臉書連線</h2>
         <label for="tpPick">設定中的組別（下面的權杖與 App 密鑰都存在這一組）</label>
         <select id="tpPick"></select>
-        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限與缺少的權限（不會顯示權杖本身）。</p>
+        <p>後端用「使用者權杖」換好各粉專權杖並存起來（存在上方選的組別），之後發文都用粉專權杖（不會過期）；沒換過就用 Secret <code>FB_USER_TOKEN</code>。這裡看連線狀態、期限、App、權杖實際拿到的權限與缺少的權限（不會顯示權杖本身）。</p>
         <p class="fb-state" id="fbState">狀態：尚未讀取</p>
         <p class="fb-warn" id="fbWarn" role="alert" hidden></p>
         <ul class="fb-detail" id="fbDetail" hidden></ul>
         <ul class="fb-missing" id="fbMissing" hidden></ul>
+        <dl class="fb-perms" id="fbPerms" hidden></dl>
         <div class="row"><button id="fbRefresh" type="button">重新讀取粉專</button></div>
         <p class="msg" id="fbMsg" role="status"></p>
         <div class="fb-tok">

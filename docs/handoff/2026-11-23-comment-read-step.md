@@ -9,7 +9,7 @@
 ## 已定案的決定
 | 項目 | 決定 |
 |---|---|
-| A1／A2（略過確認、讀不到改待確認） | 不做（使用者只選 B+C） |
+| 第二輪（使用者「開始，加做 5」） | R1 每則記第幾則 `n`；R2 立即發布 arm 帶 `published:true`；R3 確認發布被擋（#10／#200 系列）直接留言；R4 留言臉書明確錯誤＝pending 直接重留、沒收到回應＝posting＋`unsure` 下次先查；R5 `ALERT_AT=3`（約 1.5 分鐘）；R6 提醒出現就寫錯誤日誌，自動成功後通知刪除、日誌系統結案；5 管理頁「臉書連線」列 App／使用者權杖權限／粉專權杖權限 |
 | B | 錯誤說明前面加步驟名稱（取得粉專權杖／確認發布／確認是否已留／留言） |
 | C | 開啟貼文連結：`<粉專>_<貼文>` 改 `facebook.com/<粉專>/posts/<貼文>` |
 
@@ -21,7 +21,10 @@
 | 測試 | `fb-timer.test.js` 加 2 項、`test/notices-link.test.js`、admin／company e2e 網址更新 | ✅ npm test 794、admin＋company e2e 52、build --check |
 
 ## 下一步
-- [x] B、C 實作＋測試（改動小，未另派審查）
+- [x] B、C 實作＋測試
+- [x] R1～R6＋5：`timer.js`、`post.js`、`pages.js` `tokenStatus`（granted／pageScopes／appId／needed）、`admin/index.html`＋`admin.js`＋`admin.css` `#fbPerms`；npm test 799、admin／company／fbpost／fbvideo e2e 114
+- [ ] 獨立審查
+- [ ] 下一件（使用者新需求，待列做法確認）：系統管理員手動發通知給使用者（黃色閃爍）
 - [ ] 使用者確認後推 main、更新 CLAUDE.md 目前進度
 
 ## 注意

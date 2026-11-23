@@ -56,16 +56,21 @@ function summary(rec) {
 }
 
 // 要提醒的留言：第一則「失敗」或「失敗累計 ≥ ALERT_AT 次還在重試」的；沒有＝null
-export const ALERT_AT = 2;
+// 到點第 1 次、30 秒後第 2 次、60 秒後第 3 次都沒成功（約 1.5 分鐘）就提醒；之後照常自動重試，成功就撤掉提醒
+export const ALERT_AT = 3;
 const CASCADE = '前一則留言失敗，未留';
+// 讀取被擋（權限不足）：(#10)、(#200～299)
+const isReadDenied = (e) => e instanceof GraphError && (e.code === 10 || (e.code >= 200 && e.code < 300));
 // 計時器每一步的名稱（錯誤說明前綴）：讀取類（確認發布、確認是否已留）被擋不代表留言沒留上
 export const STEP = { token: '取得粉專權杖', published: '確認發布', check: '確認是否已留', comment: '留言' };
+const seqOf = (it, i) => (Number.isInteger(it.n) && it.n > 0 ? it.n : i + 1);
 export function alertOf(rec) {
   if (rec.canceled) return null;   // 整則取消（貼文刪除）就不再提醒
   const i = rec.items.findIndex((x) => x.status === 'failed' || (open(x) && (x.attempts || 0) >= ALERT_AT));
   if (i < 0) return null;
   const it = rec.items[i];
-  return { seq: i + 1, error: String(it.error || ''), failed: it.status === 'failed', attempts: it.attempts || 0 };
+  // seq＝使用者看到的「第幾則」（立即發布第 1 則當場留好時，交給計時器的從第 2 則開始）；idx＝rec.items 位置
+  return { seq: seqOf(it, i), idx: i, error: String(it.error || ''), failed: it.status === 'failed', attempts: it.attempts || 0 };
 }
 
 function normCross(body) {
@@ -83,8 +88,10 @@ function normItems(body, allowEmpty) {
     const off = Number(x && x.offset);
     if (!x || typeof x.message !== 'string' || !x.message || !Number.isInteger(off) || off < 0 || off < prev) return null;
     prev = off;
-    // recheck：這則可能其實已經留成功（立即發布時回應錯誤），當成「留言途中」，到點先查再留，避免重複
-    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0 });
+    // recheck：這則可能其實已經留成功（立即發布時沒收到臉書回應），當成「留言途中」，到點先查再留，避免重複
+    // n：第幾則（顯示用）；沒給就照順序
+    const n = Number(x.n);
+    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0, ...(Number.isInteger(n) && n >= 1 && n <= MAX_ITEMS ? { n } : {}), ...(x.recheck ? { unsure: true } : {}) });
   }
   return out;
 }
@@ -103,7 +110,7 @@ export class FbCommentTimer {
       const cross = body.kind === 'video' ? normCross(body) : [];
       const items = normItems(body, !!(cross && cross.length));
       if (!body.pageId || !body.postId || !items || !cross || !Number.isInteger(at)) return reply({ ok: false, error: '資料不完整' });
-      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
+      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: body.published === true, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
       await s.put('rec', r);
       await this.schedule(r);
       return reply({ ok: true });
@@ -129,7 +136,7 @@ export class FbCommentTimer {
       if (i < 0) return reply({ ok: false, error: '沒有失敗的留言' });
       for (const x of rec.items.slice(i)) {
         if (x.status !== 'failed' && !open(x)) continue;
-        x.status = (x.attempts || 0) > 0 || x.status === 'posting' ? 'posting' : 'pending';
+        x.status = x.unsure || x.status === 'posting' ? 'posting' : 'pending';   // 上次沒收到臉書回應的先查再留
         x.attempts = 0; delete x.error; delete x.ecode; delete x.eraw; delete x.logged;
       }
       if (!rec.published) rec.retimes = 0;
@@ -156,7 +163,7 @@ export class FbCommentTimer {
   async note(rec) {
     let dirty = false;
     const a = alertOf(rec);
-    const it = a && a.failed ? rec.items[a.seq - 1] : null;   // 只記最先失敗的那則（後面「前一則失敗未留」的不另記）
+    const it = a ? rec.items[a.idx] : null;   // 提醒出現就記一次錯誤日誌（之後自動重試成功，日誌保留、由系統結案）；後面「前一則失敗未留」的不另記
     if (it && !it.logged) {
       try { await logCommentFail(this.env, rec, it.ecode, it.eraw); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
     }
@@ -207,7 +214,9 @@ export class FbCommentTimer {
           await s.put('rec', rec); return this.schedule(rec);
         }
         if (!rec.items.some(open)) return this.crossWait(rec, e);
-        return this.retry(rec, rec.items.find(open), e, STEP.published);
+        // 讀取被擋（權限碼 10／200 系列）：不卡在這步，直接試著留言，以臉書對留言的回應為準
+        if (isReadDenied(e)) post = { is_published: true };
+        else return this.retry(rec, rec.items.find(open), e, STEP.published);
       }
       if (!post.is_published) {
         rec.retimes = (rec.retimes || 0) + 1;
@@ -239,15 +248,21 @@ export class FbCommentTimer {
           // 同樣內容的另一則已經留過的不算（兩則可能一字不差）
           const used = new Set(rec.items.filter((x) => x !== it && x.commentId).map((x) => String(x.commentId)));
           const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && c.message === it.message && !used.has(String(c.id)));
-          if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); await s.put('rec', rec); continue; }
+          if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure; await s.put('rec', rec); continue; }
         }
         step = STEP.comment;
         it.status = 'posting';
         await s.put('rec', rec);
         const id = await postComment(this.env, page.token, rec.postId, it.message);
         Object.assign(it, { status: 'done', commentId: id });
+        delete it.unsure;
         await s.put('rec', rec);
       } catch (e) {
+        // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
+        if (step === STEP.comment) {
+          if (e instanceof GraphError && !e.uncertain) { it.status = 'pending'; delete it.unsure; }
+          else it.unsure = true;
+        }
         return this.retry(rec, it, e, step);
       }
     }
@@ -302,6 +317,7 @@ export class FbCommentTimer {
     const s = this.state.storage;
     const msg = ((step ? step + '：' : '') + String((e && e.message) || e)).slice(0, 200);
     if (!it) return;
+    if (it.status === 'posting') it.unsure = true;   // 標失敗後也記得「可能已留」，按重新留言時先查再留
     it.attempts = (it.attempts || 0) + 1;
     it.error = msg;
     if (e instanceof GraphError && Number.isInteger(e.code) && e.code > 0) it.ecode = e.code; else delete it.ecode;
