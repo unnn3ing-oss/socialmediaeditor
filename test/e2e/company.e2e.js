@@ -314,7 +314,7 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   const { page, api } = await open();
   const at = Date.now() - 60000;
   api.notices = { enabled: true, all: true, items: [
-    { postId: '111_5', page: '111', pageName: '新聞', kind: 'post', seq: 1, error: '(#32) page rate limit', failed: true, at, canRetry: true },
+    { postId: '111_5', page: '111', pageName: '新聞', kind: 'post', seq: 1, error: '(#32) page rate limit', failed: true, at, canRetry: true, title: '颱風最新：海上警報發布' },
     { postId: '222_9', page: '222', pageName: '娛樂', kind: 'video', seq: 2, error: 'temporary', failed: false, at, canRetry: false }
   ] };
   await unlock(page, 'S1');
@@ -326,6 +326,10 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   assert.equal(await notes.count(), 2);
   assert.match(await notes.nth(0).textContent(), /新聞｜第 1 則留言失敗.*\(#32\) page rate limit/);
   assert.match(await notes.nth(1).textContent(), /娛樂｜第 2 則留言重試中/);
+  assert.equal(await notes.nth(0).locator('.acct-note-title').textContent(), '颱風最新：海上警報發布');
+  assert.equal(await notes.nth(1).locator('.acct-note-title').count(), 0, '舊通知沒有摘要不顯示');
+  assert.equal(await notes.nth(0).locator('a', { hasText: '開啟貼文' }).getAttribute('href'), 'https://www.facebook.com/111_5');
+  assert.equal(await notes.nth(0).locator('a', { hasText: '開啟貼文' }).getAttribute('target'), '_blank');
   assert.equal(await notes.nth(1).locator('button', { hasText: '重新留言' }).count(), 0, '沒有權限不顯示重新留言');
   assert.equal(await page.isVisible('#acct-pop .acct-empty'), false);
   assert.match(await page.textContent('#acct-pop .acct-scope'), /全部人/);
@@ -333,7 +337,7 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   await page.waitForFunction(() => document.querySelectorAll('#acct-pop .acct-note').length === 1);
   assert.deepEqual(api.retries, [{ postId: '111_5', page: '111' }]);
   assert.match(await acctText(page), /有 1 則通知/);
-  await page.locator('#acct-pop .acct-note button', { hasText: '開影片發布' }).click();
+  await page.locator('#acct-pop .acct-note button', { hasText: '到影片發布' }).click();
   await page.waitForSelector('#acct-pop', { state: 'hidden' });
   assert.equal(await page.evaluate(() => location.hash), '#fbvideo');
 });

@@ -130,3 +130,13 @@ test('已發佈列表：留言失敗回 alert 物件；重新留言 API 驗證�
   await inst.obj.alarm();
   assert.equal((await call('/fb/published?page=111')).body.data.items[0].comment, 'done');
 });
+
+test('已發佈載入更多：長游標（800 字）可以翻頁；怪字元或超過 4000 字擋下', async (t) => {
+  const long = 'QVFI' + 'a'.repeat(796);
+  const { f, call } = await setup(t, { 'GET /111/published_posts': () => ({ data: [], paging: {} }) });
+  assert.equal((await call('/fb/published?page=111&after=' + long)).status, 200);
+  const req = f.calls.find((c) => c.path === '/111/published_posts');
+  assert.equal(req.query.after, long, '游標原樣轉給臉書');
+  assert.equal((await call('/fb/published?page=111&after=' + encodeURIComponent('a b<'))).status, 400);
+  assert.equal((await call('/fb/published?page=111&after=' + 'a'.repeat(4001))).status, 400);
+});

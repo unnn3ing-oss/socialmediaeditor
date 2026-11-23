@@ -537,3 +537,13 @@ test('發文者：arm 帶 by 寫進通知；沒帶就空白', async (t) => {
   await obj.alarm();
   assert.equal(notices(env)[0].by, 'P1');
 });
+
+test('通知帶貼文摘要：arm 帶 title 寫進 fb_notices', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => gErr(32, 400, 'rate limit')
+  });
+  await post('arm', { ...REC(nowSec() - 60), by: 'P1', title: '颱風最新' });
+  await obj.alarm();
+  assert.equal(notices(env)[0].title, '颱風最新');
+});

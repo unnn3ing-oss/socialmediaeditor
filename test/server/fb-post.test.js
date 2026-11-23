@@ -90,7 +90,7 @@ test('有圖排程：暫存照片 → /feed attached_media＋SCHEDULED；不留�
   assert.ok(!f.calls.some((c) => /comments/.test(c.path)));
   assert.equal(RecTimer.log.length, 1);
   assert.equal(RecTimer.log[0][0], '/arm');
-  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, by: 'SYS1', items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }] });
+  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, by: 'SYS1', title: '內文', items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }] });
 });
 
 test('純文字（無圖）排程走 /feed；沒有文章網址 → 400', async (t) => {
@@ -401,4 +401,12 @@ test('操作紀錄：發文類型 kind（套版／字圖／文字）寫進 detai
   assert.equal((await send(env, headers, { message: 'c', kind: 'evil', targets: JSON.stringify([{ page: '111', at: null }]) })).status, 200);
   const log = env.DB.raw.prepare('SELECT action, detail FROM fb_audit ORDER BY id').all().map((r) => [r.action, r.detail]);
   assert.deepEqual(log, [['schedule', 'at=' + at + ' kind=text'], ['publish', 'kind=textimg'], ['publish', '']]);
+});
+
+test('summaryOf：整行【標題】優先、否則第一行有字的、超過 40 字截斷', async () => {
+  const { summaryOf } = await import('../../server/fb/post.js');
+  assert.equal(summaryOf('\n【颱風最新】\n內文第一段'), '颱風最新');
+  assert.equal(summaryOf('\n\n小編文\n內文'), '小編文');
+  assert.equal(summaryOf(''), '');
+  assert.equal(summaryOf('字'.repeat(45)), '字'.repeat(40) + '…');
 });

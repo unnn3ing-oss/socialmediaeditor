@@ -52,8 +52,10 @@
 .acct-note-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .acct-note-top b { color: #b42318; font-size: 13px; }
 .acct-note-top small { color: var(--muted); flex: none; }
+.acct-note-title { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-note-act .btn { height: 32px; min-height: 32px; padding: 0 9px; font-size: 13px; }
 .acct-note-err { margin-top: 4px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acct-note-act { display: flex; gap: 8px; margin-top: 8px; }
+.acct-note-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .acct-empty { padding: 14px; border: 1px dashed var(--line); border-radius: var(--radius-control); color: var(--muted); text-align: center; font-size: 13px; }
 .acct-act { border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
 .acct-act .btn { flex: 1 1 0; height: 40px; font-size: 14px; }

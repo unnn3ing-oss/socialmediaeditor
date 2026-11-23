@@ -90,7 +90,8 @@ route('GET', /^\/fb\/published$/, async (request, env) => {
   const page = q.get('page') || '';
   const after = q.get('after') || '';
   const token = await pageToken(env, page);
-  if (!token || after.length > 500) return fail(request, env, 'bad_request');
+  // 臉書翻頁游標長度不固定（可能超過 500 字）：放寬到 4000，只收游標會用到的字元
+  if (!token || after.length > 4000 || !/^[A-Za-z0-9_\-=%]*$/.test(after)) return fail(request, env, 'bad_request');
   return ok(request, env, await listPublished(env, page, token, after));
 }, 'view');
 route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete)$/, async (request, env, ctx, m, me) => {

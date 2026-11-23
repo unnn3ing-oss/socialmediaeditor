@@ -37,6 +37,15 @@ export function parseExtras(raw) {
 }
 
 export const KINDS = ['template', 'textimg', 'text'];
+// 通知用的貼文摘要（≤40 字）：有整行【標題】用標題，沒有用第一行有字的
+export const TITLE_MAX = 40;
+export function summaryOf(message) {
+  const lines = String(message || '').replace(/\r\n/g, '\n').split('\n').map((l) => l.trim());
+  const t = lines.map((l) => /^【(.+)】$/.exec(l)).find(Boolean);
+  const s = t ? t[1].trim() : (lines.find(Boolean) || '');
+  const a = [...s];
+  return a.length > TITLE_MAX ? a.slice(0, TITLE_MAX).join('') + '…' : s;
+}
 export function parsePostForm(fd) {
   const message = String(fd.get('message') || '');
   const link = String(fd.get('link') || '').trim();
@@ -114,6 +123,7 @@ async function publishOne(env, page, token, { message, file, bg, at }) {
 // who：送出的人（{ uid }），記給留言計時器，留言失敗通知只給他（和看全部的人）
 export async function createPosts(env, form, who = null) {
   const by = who && who.uid ? String(who.uid).slice(0, 20) : '';
+  const title = summaryOf(form.message);
   const tokens = await pageTokens(env);
   const now = Math.floor(Date.now() / 1000);
   const results = [];
@@ -156,7 +166,7 @@ export async function createPosts(env, form, who = null) {
       const items = [...(first ? [{ message: first, offset: 0 }] : []), ...extras];
       if (!items.length) continue;
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by, title });
         if (first) r.comment = 'armed';
         if (extras.length) r.extra = extras.length;
       } catch (e) {
@@ -174,7 +184,7 @@ export async function createPosts(env, form, who = null) {
     const items = [...(first && !firstOk ? [{ message: first, offset: 0, recheck: true }] : []), ...extras];
     if (items.length) {
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items, by });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items, by, title });
         if (first && !firstOk) r.comment = 'retry';
         if (extras.length) r.extra = extras.length;
       } catch (e) {

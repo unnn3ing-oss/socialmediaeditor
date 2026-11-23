@@ -314,6 +314,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       const top = mk('div', 'acct-note-top');
       top.append(mk('b', null, `${n.pageName}｜第 ${n.seq} 則留言${n.failed ? '失敗' : '重試中'}`), mk('small', null, fmtNoteTime(n.at)));
       li.append(top);
+      // 哪篇文章（舊通知沒有摘要就不顯示這行）
+      if (n.title) { const tt = mk('div', 'acct-note-title', n.title); tt.title = n.title; li.append(tt); }
       if (n.error) { const er = mk('div', 'acct-note-err', n.error); er.title = n.error; li.append(er); }
       const acts = mk('div', 'acct-note-act');
       if (n.canRetry) {
@@ -330,7 +332,15 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
         });
         acts.append(rb);
       }
-      const go = mk('button', 'btn btn-secondary btn-sm', n.kind === 'video' ? '開影片發布' : '開排程發布');
+      // 開啟臉書上的貼文（跟管理頁操作紀錄一樣的網址）
+      if (/^\d{1,30}(_\d{1,30})?$/.test(String(n.postId || ''))) {
+        const op = mk('a', 'btn btn-secondary btn-sm', '開啟貼文 ↗');
+        op.href = 'https://www.facebook.com/' + n.postId;
+        op.target = '_blank'; op.rel = 'noopener noreferrer';
+        op.setAttribute('aria-label', '開啟貼文（另開分頁）');
+        acts.append(op);
+      }
+      const go = mk('button', 'btn btn-secondary btn-sm', n.kind === 'video' ? '到影片發布' : '到排程發布');
       go.type = 'button';
       go.addEventListener('click', () => openTool(TOOL_OF[n.kind] || 'fbpost'));
       acts.append(go);
