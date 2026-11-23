@@ -1,5 +1,5 @@
 # 管理頁首頁儀表板
-- 狀態：進行中　- 分支：claude/hopeful-mendel-ua729r　- 最後更新：2026-11-23
+- 狀態：已完成（2026-11-23 併入 main）　- 分支：claude/hopeful-mendel-ua729r　- 最後更新：2026-11-23
 - 使用者原始需求：「後台部分增加一個後台首頁，作為即時儀表板查看系統狀況。」要看「有沒有東西壞了、過期要處理」；進頁查一次＋手動刷新；進階設定項目只顯示狀態，可在進階設定選哪些顯示、權限組可調整誰看得到什麼。
 - 設計：`docs/superpowers/specs/2026-11-23-admin-dashboard-design.md`（已經使用者確認，含審查後補充）
 
@@ -28,7 +28,7 @@
 - [x] 後端（dash.js＋權限）＋單元測試
 - [x] 前端首頁＋設定卡片＋e2e
 - [x] 全部測試、截圖給使用者、獨立審查（npm test 791、admin e2e 38、build --check、審查通過）
-- [ ] 使用者說「推」→ 併入 main，更新 CLAUDE.md 目前進度
+- [x] 使用者說「推」→ 併入 main，更新 CLAUDE.md 目前進度
 
 ## 測試
 `npm test`；`npx playwright test test/e2e/admin.e2e.js`（沙盒 chromium `/opt/pw-browsers/chromium`）；`node build.js --check`。
