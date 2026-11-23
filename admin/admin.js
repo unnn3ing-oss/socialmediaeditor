@@ -65,11 +65,14 @@ if (window.top !== window.self) {
   function applyMe() {
     SECTIONS.forEach(function (el) { el.hidden = !can(el.getAttribute('data-card')); });
     TABS.forEach(function (t) {
+      if (t === 'home') return;
       var vis = Array.prototype.some.call($('panel-' + t).querySelectorAll('[data-card]'), function (el) { return !el.hidden; });
       $('tab-' + t).hidden = !vis;
     });
     // 進階設定：只有系統管理者看得到；沒解鎖時分類內只顯示密碼輸入
     $('tab-adv').hidden = me.role !== 'sys';
+    // 首頁儀表板：可看的項目（me.dash）有一項以上才顯示
+    $('tab-home').hidden = !(me.dash && me.dash.length);
     $('olCard').hidden = !(me.role === 'sys' && can('staff'));   // 目前在線：只有系統管理者
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
     recApply();
@@ -79,7 +82,7 @@ if (window.top !== window.self) {
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
-  function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; }
+  function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; }
   // 用目前的 token 讀身分；成功就進入管理頁
   function enter(msgEl) {
     return api('/admin/me').then(function (res) {
@@ -1343,7 +1346,79 @@ if (window.top !== window.self) {
     });
   });
 
-  var TABS = ['post', 'guard', 'people', 'conn', 'assets', 'rec', 'adv'];
+  // ---- 首頁儀表板（GET /admin/dash）：進到首頁查一次；「重新整理」帶 fresh=1 ----
+  var dashLoaded = false, dashSeq = 0;
+  var DASH_TABS = { adv: '進階設定', rec: '使用紀錄', conn: '連接狀態', people: '人員與權限', post: '發文設定' };
+  function dashLoad(fresh) {
+    dashLoaded = true;
+    var seq = ++dashSeq;
+    $('dashNeed').setAttribute('aria-busy', 'true'); $('dashRefresh').disabled = true;
+    if (!$('dashGrid').childElementCount) $('dashSkel').hidden = false;
+    api('/admin/dash' + (fresh ? '?fresh=1' : '')).then(function (res) {
+      if (seq !== dashSeq) return;
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      dashRender(res.data); say($('dashMsg'), '');
+    }).catch(function (e) {
+      if (seq !== dashSeq) return;
+      dashLoaded = false;
+      say($('dashMsg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請按「重新整理」再試一次。', 'err');
+    }).then(function () {
+      if (seq !== dashSeq) return;
+      $('dashSkel').hidden = true; $('dashNeed').setAttribute('aria-busy', 'false'); $('dashRefresh').disabled = false;
+    });
+  }
+  function dashGo(tab) { return function () { if (!$('tab-' + tab).hidden) showTab(tab, true); }; }
+  function dashRender(d) {
+    var p = function (v) { return String(v).padStart(2, '0'); }, at = new Date(d.at);
+    $('dashAt').textContent = '資料時間 ' + p(at.getHours()) + ':' + p(at.getMinutes());
+    $('dashAt').title = fmtTime(d.at);
+    var need = d.items.filter(function (x) { return x.level === 'bad'; }).concat(d.items.filter(function (x) { return x.level === 'warn'; }));
+    var ul = $('dashList'); ul.textContent = '';
+    need.forEach(function (x) {
+      var li = document.createElement('li'), b = document.createElement('button'), dot = document.createElement('span'), t = document.createElement('span'), go = document.createElement('span');
+      b.type = 'button'; dot.className = 'dot ' + x.level; dot.setAttribute('aria-label', x.level === 'bad' ? '壞了' : '快過期或要注意');
+      t.textContent = x.name + '：' + x.text; go.className = 'go'; go.textContent = DASH_TABS[x.tab] || '';
+      b.appendChild(dot); b.appendChild(t); b.appendChild(go); b.onclick = dashGo(x.tab);
+      li.appendChild(b); ul.appendChild(li);
+    });
+    $('dashAllOk').hidden = !!need.length;
+    var grid = $('dashGrid'); grid.textContent = '';
+    d.items.forEach(function (x) {
+      var b = document.createElement('button'), nm = document.createElement('span'), dot = document.createElement('span'), tx = document.createElement('span');
+      b.type = 'button'; b.className = 'dash-tile ' + x.level; b.title = '到「' + (DASH_TABS[x.tab] || '') + '」';
+      dot.className = 'dot ' + x.level; nm.className = 'nm'; nm.appendChild(dot); nm.appendChild(document.createTextNode(x.name));
+      tx.className = 'tx'; tx.textContent = x.text;
+      b.appendChild(nm); b.appendChild(tx); b.onclick = dashGo(x.tab);
+      grid.appendChild(b);
+    });
+  }
+  $('dashRefresh').onclick = function () { dashLoad(true); };
+
+  // ---- 進階設定「儀表板顯示項目」（GET／POST /admin/dash/config，只有已解鎖系統管理者）----
+  var dcLoaded = false;
+  function dcLoad() {
+    dcLoaded = true; $('dcSave').disabled = true; say($('dcMsg'), '讀取中…');
+    api('/admin/dash/config').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      var box = $('dcList'); box.textContent = '';
+      res.data.all.forEach(function (x) {
+        var l = document.createElement('label'), c = document.createElement('input');
+        c.type = 'checkbox'; c.value = x.key; c.checked = res.data.items.indexOf(x.key) >= 0;
+        l.appendChild(c); l.appendChild(document.createTextNode(x.name)); box.appendChild(l);
+      });
+      $('dcSave').disabled = false; say($('dcMsg'), '');
+    }).catch(function (e) { dcLoaded = false; say($('dcMsg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請切換分類再回來。', 'err'); });
+  }
+  $('dcSave').onclick = function () {
+    var items = Array.prototype.filter.call($('dcList').querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+    $('dcSave').disabled = true; say($('dcMsg'), '儲存中…');
+    api('/admin/dash/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      say($('dcMsg'), '已儲存，首頁重新整理後生效。', 'good'); dashLoaded = false;
+    }).catch(function (e) { say($('dcMsg'), '儲存失敗' + (e && e.message ? '：' + e.message : ''), 'err'); }).then(function () { $('dcSave').disabled = false; });
+  };
+
+  var TABS = ['home', 'post', 'guard', 'people', 'conn', 'assets', 'rec', 'adv'];
   // 舊網址（分類改版前）轉到新分類
   var OLD_TABS = { fb: 'post', staff: 'people', rd: 'conn', logs: 'rec' };
   var assetsLoaded = false;
@@ -1364,6 +1439,8 @@ if (window.top !== window.self) {
     if ((id === 'people' || id === 'adv') && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
     if (id === 'conn' && !rdLoaded && token && can('rundown')) rdLoad();
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
+    if (id === 'home' && !dashLoaded && token && me && me.dash && me.dash.length) dashLoad(false);
+    if (id === 'adv' && !dcLoaded && token && can('dashcfg')) dcLoad();
   }
   TABS.forEach(function (t) {
     var b = $('tab-' + t);

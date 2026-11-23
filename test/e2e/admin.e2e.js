@@ -50,7 +50,18 @@ function usageNow() {
   const n = Date.now();
   return { ...USAGE, app: { ...USAGE.app, at: n - 3 * 60000 }, pages: USAGE.pages.map((p, i) => ({ ...p, at: n - (i + 1) * 60000 })) };
 }
+// 首頁儀表板替身
+const DASH = { fresh: [], cfgSaved: null };
+const DASH_ITEMS = [
+  { key: 'access', name: '排程發布', level: 'info', text: '關閉中（只有管理員可用）', tab: 'adv' },
+  { key: 'fbtoken', name: '臉書權杖', level: 'warn', text: '9 天後到期', tab: 'adv' },
+  { key: 'logs', name: '未處理錯誤', level: 'bad', text: '2 則未處理', tab: 'rec' },
+  { key: 'rundown', name: 'Rundown 連線', level: 'ok', text: '已設定', tab: 'conn' },
+  { key: 'online', name: '目前在線', level: 'info', text: '3 人', tab: 'people' }];
 const DATA = {
+  'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
+  'GET /admin/dash/config': () => ({ items: ['access', 'fbtoken', 'logs'], all: [{ key: 'access', name: '排程發布' }, { key: 'fbtoken', name: '臉書權杖' }, { key: 'logs', name: '未處理錯誤' }, { key: 'online', name: '目前在線' }] }),
+  'POST /admin/dash/config': (b) => { DASH.cfgSaved = b; return b; },
   // 時間以「回應當下」往前推（測試跑很久時「3 分鐘前」才不會變成 4 分鐘前）
   'GET /admin/fb/usage': () => usageNow(),
   'POST /admin/fb/usage/refresh': () => ({ ...usageNow(), asked: 3, failed: 1 }),
@@ -203,7 +214,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   assert.equal(await page.isVisible('#logout'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/assets'), '沒進素材分類前不讀素材');
   // 5 個分類；沒有後端 API 的卡片（預設文字、嘗試次數）不出現
-  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.map((e) => e.textContent)), ['發文設定', '留言管理', '人員與權限', '連接狀態', '素材設定', '使用紀錄', '進階設定']);
+  assert.deepEqual(await page.$$eval('nav.side [role=tab]', (els) => els.filter((e) => !e.hidden).map((e) => e.textContent)), ['發文設定', '留言管理', '人員與權限', '連接狀態', '素材設定', '使用紀錄', '進階設定']);
   await page.waitForSelector('#pgWrap:not([hidden])');
   await page.fill('.pg-short >> nth=0', '填到一半');
 
@@ -1027,4 +1038,56 @@ test('表格欄寬：拖表頭右緣改寬、重新整理還在、雙擊恢復�
   // 手機：把手隱藏
   await page.setViewportSize({ width: 390, height: 800 });
   assert.equal(await page.isVisible(th + ' .col-grip'), false);
+});
+
+test('首頁儀表板：預設打開、需要處理（紅在前黃在後）、小卡、點了跳分類、重新整理帶 fresh；進階設定可選顯示項目', async () => {
+  DASH.fresh = []; DASH.cfgSaved = null;
+  const me = { ...SYS, cards: [...ALL_CARDS, 'dashcfg'], dash: DASH_ITEMS.map((x) => x.key) };
+  const { page, calls } = await open({ width: 1280, height: 860 }, '', { token: 'F9', me });
+  await page.waitForSelector('#dashGrid .dash-tile');
+  assert.equal(await page.getAttribute('#tab-home', 'aria-selected'), 'true', '沒有網址分類時預設首頁');
+  assert.equal((await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)))[0], 'home');
+  assert.deepEqual(await page.$$eval('#dashList li', (l) => l.map((x) => x.textContent)), ['未處理錯誤：2 則未處理使用紀錄', '臉書權杖：9 天後到期進階設定']);
+  assert.equal(await page.isVisible('#dashAllOk'), false);
+  assert.equal(await page.locator('#dashGrid .dash-tile').count(), 5);
+  assert.match(await page.textContent('#dashAt'), /^資料時間 \d\d:\d\d$/);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-dash-desktop.png'), fullPage: true });
+  await page.click('#dashRefresh');
+  await page.waitForFunction(() => !document.getElementById('dashRefresh').disabled);
+  assert.deepEqual(DASH.fresh, [null, '1']);
+  // 點需要處理的項目：跳到使用紀錄
+  await page.click('#dashList li >> nth=0');
+  assert.equal(await page.getAttribute('#tab-rec', 'aria-selected'), 'true');
+  // 切回首頁不重查（內容保留）
+  await page.click('#tab-home');
+  assert.deepEqual(DASH.fresh, [null, '1']);
+  // 進階設定：顯示項目
+  await page.click('#tab-adv');
+  await page.waitForSelector('#dcList input');
+  assert.deepEqual(await page.$$eval('#dcList input', (l) => l.map((c) => c.checked)), [true, true, true, false]);
+  await page.check('#dcList input >> nth=3');
+  await page.uncheck('#dcList input >> nth=0');
+  await page.click('#dcSave');
+  await page.waitForFunction(() => /已儲存/.test(document.getElementById('dcMsg').textContent));
+  assert.deepEqual(DASH.cfgSaved, { items: ['fbtoken', 'logs', 'online'] });
+  assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
+});
+
+test('首頁儀表板：只有 dash 權限的員工只看到首頁；全部正常顯示綠字；手機 390px 不橫向捲動', async () => {
+  const saved = DASH_ITEMS.splice(0, DASH_ITEMS.length, { key: 'rundown', name: 'Rundown 連線', level: 'ok', text: '已設定', tab: 'conn' });
+  try {
+    const me = { role: 'staff', roleName: '值班', unlocked: false, cards: [], dash: ['rundown'], name: '王小明', id: 'A001' };
+    const { page } = await open({ width: 390, height: 800 }, '', { token: 'F8', me });
+    await page.waitForSelector('#dashGrid .dash-tile');
+    assert.deepEqual(await page.$$eval('nav.side [role=tab]', (b) => b.filter((x) => !x.hidden).map((x) => x.dataset.tab)), ['home']);
+    assert.equal(await page.isVisible('#dashAllOk'), true);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert.ok(overflow <= 0, '頁面不能橫向捲動：' + overflow);
+  } finally { DASH_ITEMS.splice(0, DASH_ITEMS.length, ...saved); }
+  if (SHOT) {
+    const me = { ...SYS, cards: [...ALL_CARDS, 'dashcfg'], dash: DASH_ITEMS.map((x) => x.key) };
+    const { page } = await open({ width: 390, height: 800 }, '', { token: 'F7', me });
+    await page.waitForSelector('#dashGrid .dash-tile');
+    await page.screenshot({ path: path.join(SHOT, 'admin-dash-mobile.png'), fullPage: true });
+  }
 });

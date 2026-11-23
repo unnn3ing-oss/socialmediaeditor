@@ -39,6 +39,7 @@
 
 <div id="app" class="layout" hidden>
   <nav class="side" role="tablist" aria-label="後台分類">
+    <button type="button" role="tab" id="tab-home" data-tab="home" aria-controls="panel-home" hidden>首頁</button>
     <button type="button" role="tab" id="tab-post" data-tab="post" aria-controls="panel-post">發文設定</button>
     <button type="button" role="tab" id="tab-guard" data-tab="guard" aria-controls="panel-guard">留言管理</button>
     <button type="button" role="tab" id="tab-people" data-tab="people" aria-controls="panel-people">人員與權限</button>
@@ -50,6 +51,23 @@
   </nav>
 
   <main>
+
+    <!-- 首頁儀表板（GET /admin/dash；進頁查一次，手動重新整理） -->
+    <div class="panel" id="panel-home" role="tabpanel" aria-labelledby="tab-home" hidden>
+      <div class="dash-head">
+        <h1>首頁</h1>
+        <span class="dash-at" id="dashAt"></span>
+        <button type="button" id="dashRefresh">重新整理</button>
+      </div>
+      <section class="card dash-need" id="dashNeed" aria-busy="true">
+        <h2>需要處理</h2>
+        <ul class="dash-list" id="dashList"></ul>
+        <p class="dash-ok" id="dashAllOk" hidden>目前沒有需要處理的項目。</p>
+        <div id="dashSkel"><div class="sk"></div><div class="sk"></div></div>
+      </section>
+      <div class="dash-grid" id="dashGrid"></div>
+      <p class="msg" id="dashMsg" role="status"></p>
+    </div>
 
     <!-- 發文設定 -->
     <div class="panel" id="panel-post" role="tabpanel" aria-labelledby="tab-post" hidden>
@@ -333,7 +351,7 @@
       <p>只有系統管理者能用，要先輸入管理員密碼解鎖。</p>
       <section class="card unlock" id="unlockBar" hidden>
         <h2>進階設定已鎖住</h2>
-        <p>排程發布開關、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
+        <p>排程發布開關、儀表板顯示項目、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
         <form id="unlockForm" class="sf-add">
           <label class="sf-f">管理員密碼<input id="unlockPw" type="password" autocomplete="current-password" required></label>
           <button class="primary" type="submit" id="unlockBtn">解鎖</button>
@@ -349,6 +367,14 @@
         <input id="acReason" type="text" maxlength="100" placeholder="例如：臉書權杖更換中">
         <div class="row" id="acReasonRow" hidden><button id="acReasonSave" type="button">儲存原因</button></div>
         <p class="msg" id="acMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="dcCard" data-card="dashcfg">
+        <h2>儀表板顯示項目</h2>
+        <p>勾選的項目才會出現在「首頁」。其他人還要在權限組勾了對應的「管理頁：首頁儀表板」項目才看得到。</p>
+        <div class="dc-list" id="dcList"></div>
+        <div class="row"><button class="primary" id="dcSave" type="button" disabled>儲存</button></div>
+        <p class="msg" id="dcMsg" role="status"></p>
       </section>
 
       <section class="card" id="tpCard" data-card="profiles">

@@ -15,18 +15,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/dash.js`（新） | `DASH_ITEMS`、`collect(env)`、各項等級規則、暫存、`readDashCfg`／`saveDashCfg`、`adminDash` 路由 | ⬜ |
-| `server/core/staff.js` | `dash:*` 權限、`PERM_SECTIONS` 新區、`dashOf()`、`perms_v3` 補權限（名稱「管理」或有 `card:staff`） | ⬜ |
-| `server/core/levels.js` | 卡片 `dashcfg`（sensitive） | ⬜ |
-| `server/core/adminperm.js` | `adminWho` 加 `dash`、`meInfo` 回 `dash`、ROUTES `/admin/dash/config`→`dashcfg`；`/admin/dash` 由 handler 自己判斷 | ⬜ |
-| `server/core/admin.js` | `/admin/me` 允許只有 dash 的人；`/admin/dash` 在 gate 前處理 | ⬜ |
-| `server/core/auth.js` | `manage` 也算 dash 權限 | ⬜ |
-| `admin/index.html`、`admin.js`、`admin.css` | 分類「首頁」（panel-home，預設）、進階設定「儀表板顯示項目」卡片 | ⬜ |
-| 測試 | `test/server/dash.test.js`（新）、`test/e2e/admin.e2e.js` 加首頁 | ⬜ |
+| `server/core/dash.js`（新） | `DASH_ITEMS`、`collect(env)`、各項等級規則、暫存、`readDashCfg`／`saveDashCfg`、`adminDash` 路由 | ✅ |
+| `server/core/staff.js` | `dash:*` 權限、`PERM_SECTIONS` 新區、`dashOf()`、`perms_v3` 補權限（名稱「管理」或有 `card:staff`） | ✅ |
+| `server/core/levels.js` | 卡片 `dashcfg`（sensitive） | ✅ |
+| `server/core/adminperm.js` | `adminWho` 加 `dash`、`meInfo` 回 `dash`、ROUTES `/admin/dash/config`→`dashcfg`；`/admin/dash` 由 handler 自己判斷 | ✅ |
+| `server/core/admin.js` | `/admin/me` 允許只有 dash 的人；`/admin/dash` 在 gate 前處理 | ✅ |
+| `server/core/auth.js` | `manage` 也算 dash 權限 | ✅ |
+| `admin/index.html`、`admin.js`、`admin.css` | 分類「首頁」（panel-home，預設）、進階設定「儀表板顯示項目」卡片 | ✅ |
+| 測試 | `test/server/dash.test.js`（新）、`test/e2e/admin.e2e.js` 加首頁 | ✅ |
 
 ## 下一步
-- [ ] 後端（dash.js＋權限）＋單元測試
-- [ ] 前端首頁＋設定卡片＋e2e
+- [x] 後端（dash.js＋權限）＋單元測試
+- [x] 前端首頁＋設定卡片＋e2e
 - [ ] 全部測試、截圖給使用者、獨立審查
 - [ ] 使用者說「推」→ 併入 main，更新 CLAUDE.md 目前進度
 

@@ -222,3 +222,26 @@ table.col-fixed th,table.col-fixed td{overflow:hidden;text-overflow:ellipsis}
 /* 拖過欄寬：欄內輸入框、下拉選單跟著欄寬伸縮 */
 table.col-fixed td input[type=text],table.col-fixed td input[type=number],table.col-fixed td select{width:100% !important;min-width:0 !important;max-width:100% !important}
 @media (max-width:820px){.col-grip{display:none}}
+
+/* 首頁儀表板 */
+.dash-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dash-head h1{margin:0}
+.dash-at{margin-left:auto;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.dash-list{list-style:none;margin:0;padding:0}
+.dash-list li+li{border-top:1px solid var(--line)}
+.dash-list button{width:100%;justify-content:flex-start;gap:10px;min-height:40px;padding:6px 4px;border:0;border-radius:8px;background:transparent;color:var(--text);text-align:left;font-weight:400;line-height:1.4}
+.dash-list button:hover:not(:disabled){background:var(--fill);color:var(--text)}
+.dash-list .go{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}
+.dash-ok{margin:0;color:var(--ok-text);font-weight:500}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--line-strong)}
+.dot.ok{background:#12b76a}.dot.info{background:#98a2b3}.dot.warn{background:#f79009}.dot.bad{background:#d92d20}
+.dash-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px}
+.dash-tile{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px;min-height:84px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);text-align:left;font-weight:400;line-height:1.4}
+.dash-tile .nm{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:500}
+.dash-tile .tx{font-size:15px;font-weight:700;color:var(--text);word-break:break-word}
+.dash-tile.warn{border-color:#fec84b;background:var(--warn-bg)}
+.dash-tile.bad{border-color:var(--bad-line);background:var(--bad-bg)}
+.dc-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}
+.dc-list label{display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:400;font-size:14px}
+@media (max-width:820px){.dash-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:420px){.dash-grid{grid-template-columns:1fr}.dc-list{grid-template-columns:1fr}}
