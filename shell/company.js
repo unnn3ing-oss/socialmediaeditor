@@ -4,6 +4,7 @@
 import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
 import { API_ENV } from './config.js';
 import { switchApiEnv } from './apienv.js';
+import { createNotices, paintAlert } from './notices.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
 const ID_KEY = 'tbx.staffId';   // 記住上次登入的員工編號（這台瀏覽器）
@@ -237,14 +238,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     dd[k].dataset.k = k;
     dl.append(dd[k]);
   }
-  const notice = mk('div', 'acct-sec');
-  const noticeEmpty = mk('div', 'acct-empty', '目前沒有通知');
-  const noticeList = mk('ul', 'acct-notes');
-  noticeList.hidden = true;
-  const noticeScope = mk('small', 'acct-scope', '');
-  const noticeH = mk('h3', null, '通知');
-  noticeH.append(noticeScope);
-  notice.append(noticeH, noticeEmpty, noticeList);
+  // 留言失敗通知（shell/notices.js，管理頁頁首共用）
+  const TOOL_OF = { post: 'fbpost', video: 'fbvideo' };
+  const noticeBox = createNotices({ api, openTool: (k) => openTool(TOOL_OF[k] || 'fbpost'), toast: (t) => showToast(t), onChange: () => renderButton() });
+  const notice = noticeBox.section;
   const act = mk('div', 'acct-act');
   const manageBtn = mk('a', 'btn btn-primary acct-manage', '管理頁');
   manageBtn.href = new URL('admin/', document.baseURI).href;
@@ -289,76 +286,16 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       if (my === contactReq) dd.contact.textContent = (p && p.contact) || '未填';
     } catch { if (my === contactReq) dd.contact.textContent = '—'; }
   }
-  // ---- 留言失敗通知（/staff/me/notices，權限組有 notify 才有；只查 D1）：開彈窗、登入後、每 30 分鐘各讀一次 ----
-  let notes = [];
-  let notesAll = false;   // true＝看得到所有人的（系統管理者或權限組有 notify）；false＝只有自己發的
-  let noteReq = 0;
+  // ---- 留言失敗通知：開彈窗、登入後、每 30 分鐘各讀一次 ----
   const NOTE_INTERVAL = 30 * 60 * 1000;
-  const TOOL_OF = { post: 'fbpost', video: 'fbvideo' };
-  function fmtNoteTime(ms) {
-    const d = new Date(ms);
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
   function openTool(id) {
     closePop(false);
     try { history.pushState(null, '', '#' + id); } catch { location.hash = id; return; }
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
-  function renderNotes() {
-    noticeScope.textContent = notesAll ? '（全部人的留言失敗）' : '（你發的貼文）';
-    noticeList.textContent = '';
-    noticeEmpty.hidden = notes.length > 0;
-    noticeList.hidden = !notes.length;
-    for (const n of notes) {
-      const li = mk('li', 'acct-note');
-      const top = mk('div', 'acct-note-top');
-      top.append(mk('b', null, `${n.pageName}｜第 ${n.seq} 則留言${n.failed ? '失敗' : '重試中'}`), mk('small', null, fmtNoteTime(n.at)));
-      li.append(top);
-      // 哪篇文章（舊通知沒有摘要就不顯示這行）
-      if (n.title) { const tt = mk('div', 'acct-note-title', n.title); tt.title = n.title; li.append(tt); }
-      if (n.error) { const er = mk('div', 'acct-note-err', n.error); er.title = n.error; li.append(er); }
-      const acts = mk('div', 'acct-note-act');
-      if (n.canRetry) {
-        const rb = mk('button', 'btn btn-secondary btn-sm', '重新留言');
-        rb.type = 'button';
-        rb.addEventListener('click', async () => {
-          rb.disabled = true;
-          try {
-            await api.call('/fb/comment/retry', { method: 'POST', body: { postId: n.postId, page: n.page } });
-            notes = notes.filter((x) => x !== n);
-            renderNotes(); renderButton();
-            showToast('已要求重新留言，稍後會再試一次');
-          } catch (ex) { rb.disabled = false; showToast((ex && ex.message) || '重新留言失敗'); }
-        });
-        acts.append(rb);
-      }
-      // 開啟臉書上的貼文（跟管理頁操作紀錄一樣的網址）
-      if (/^\d{1,30}(_\d{1,30})?$/.test(String(n.postId || ''))) {
-        const op = mk('a', 'btn btn-secondary btn-sm', '開啟貼文 ↗');
-        op.href = 'https://www.facebook.com/' + n.postId;
-        op.target = '_blank'; op.rel = 'noopener noreferrer';
-        op.setAttribute('aria-label', '開啟貼文（另開分頁）');
-        acts.append(op);
-      }
-      const go = mk('button', 'btn btn-secondary btn-sm', n.kind === 'video' ? '到影片發布' : '到排程發布');
-      go.type = 'button';
-      go.addEventListener('click', () => openTool(TOOL_OF[n.kind] || 'fbpost'));
-      acts.append(go);
-      li.append(acts);
-      noticeList.append(li);
-    }
-  }
-  async function loadNotes() {
+  function loadNotes() {
     if (!account || !(shell.company().staff || {}).id) return;
-    const my = ++noteReq;
-    try {
-      const d = await api.call('/staff/me/notices');
-      if (my !== noteReq) return;
-      notes = (d && d.enabled && Array.isArray(d.items)) ? d.items : [];
-      notesAll = !!(d && d.all);
-    } catch { return; /* 讀不到維持原本 */ }
-    renderNotes();
-    renderButton();
+    noticeBox.load();
   }
   setInterval(() => { if (shell.company().unlocked) loadNotes(); }, NOTE_INTERVAL);
 
@@ -411,9 +348,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     const dot = mk('span', 'acct-dot');
     dot.setAttribute('aria-hidden', 'true');
     button.append(dot, mk('span', 'acct-mode', '公司模式'), mk('span', 'acct-nm', s.name || (c.admin ? '管理員' : '')));
-    // 有通知：帳號框紅色光暈閃爍（不放紅點），讀屏念「有 N 則通知」
-    button.classList.toggle('acct-alert', notes.length > 0);
-    if (notes.length) button.append(mk('span', 'sr-only', `，有 ${notes.length} 則通知`));
+    // 有未處理通知：帳號框紅色光暈閃爍（不放紅點）；只有發文者已處理的：黃色外框（notices.js）
+    paintAlert(button, noticeBox.items());
   }
   button.addEventListener('click', () => {
     if (!shell.company().unlocked) { openLogin(false); return; }
@@ -438,8 +374,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   }
 
   function locked() {
-    notes = []; notesLoaded = false; noteReq++;
-    renderNotes();
+    notesLoaded = false;
+    noticeBox.clear();
     internal.setCompany({ unlocked: false, exp: null, admin: false, staff: null });
     manage = false;
     shell.setStatus('company', { state: 'hidden', text: '' });

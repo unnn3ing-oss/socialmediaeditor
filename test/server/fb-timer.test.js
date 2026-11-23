@@ -494,7 +494,7 @@ test('重新留言：粉專不符拒絕；失敗的那則起歸零、先查再�
   const mid = await post('status');
   assert.deepEqual(mid.items.map((x) => x.status), ['done', 'posting', 'pending']);
   assert.equal(mid.alert, null);
-  assert.equal(notices(env).length, 0, '重新留言就先收掉通知');
+  assert.deepEqual(notices(env).map((n) => [n.state, n.how]), [['handled', 'retry']], '重新留言＝已補留言，留給看全部的人（黃框）');
   assert.ok((await state.storage.getAlarm()) <= Date.now());
   await obj.alarm();
   const s = await post('status');

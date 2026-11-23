@@ -315,3 +315,85 @@ test('操作紀錄：粉專 ID 換成粉專設定的簡稱；對不到只給 ID�
   assert.equal(by('999').pageName, undefined);
   assert.equal(by('').pageName, undefined);
 });
+
+test('通知已讀：發文者已讀＝handled（自己看不到、看全部的人看到黃）；看全部的人已讀＝結案；錯誤紀錄同步狀態', async (t) => {
+  const { env, adm } = await setup(t);
+  const { setNotice, logCommentFail } = await import('../../server/fb/notices.js');
+  const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
+  await post(env, adm, '/admin/staff', { id: 'P1', name: '小編甲', group: groupId(d, '發文') });
+  await post(env, adm, '/admin/staff', { id: 'P2', name: '小編乙', group: groupId(d, '發文') });
+  const rec = { postId: '111_1', pageId: '111', kind: 'post', by: 'P1', title: '颱風', ptype: 'template', at: nowSec() - 60, pageName: 'TVBS 新聞' };
+  await setNotice(env, rec, { seq: 1, error: 'x', failed: true });
+  await logCommentFail(env, rec, 32, 'page rate limit');
+  const lg = env.DB.raw.prepare('SELECT post, title, ptype, pub_at, page_name, st, detail FROM logs').get();
+  assert.deepEqual({ ...lg }, { post: '111_1', title: '颱風', ptype: 'template', pub_at: rec.at, page_name: 'TVBS 新聞', st: 'open', detail: 'page rate limit' });
+  const tk = async (id) => bearer((await login(env, id)).body.data.token);
+  const p1 = await tk('P1'), p2 = await tk('P2');
+  const read = (h, postId) => call(env, '/staff/me/notices/read', { method: 'POST', headers: h, body: JSON.stringify({ postId }) });
+  assert.equal((await read(p2, '111_1')).status, 404, '不是自己的不能已讀');
+  assert.equal((await read(p1, 'x')).status, 400);
+  assert.equal((await read(p1, '111_1')).body.data.state, 'read');
+  assert.equal((await call(env, '/staff/me/notices', { headers: p1 })).body.data.items.length, 0, '發文者處理完就看不到');
+  assert.equal(env.DB.raw.prepare('SELECT st FROM logs').get().st, 'read');
+  // 自動重試成功：只刪未處理的；發文者已讀的留著
+  await setNotice(env, { ...rec, postId: '111_3' }, { seq: 1, error: 'z', failed: false });
+  await setNotice(env, { ...rec, postId: '111_4' }, { seq: 1, error: 'z', failed: false });
+  await read(p1, '111_4');
+  await setNotice(env, { ...rec, postId: '111_3' }, null);
+  await setNotice(env, { ...rec, postId: '111_4' }, null);
+  assert.deepEqual(env.DB.raw.prepare("SELECT post_id, state FROM fb_notices WHERE post_id IN ('111_3', '111_4')").all().map((x) => [x.post_id, x.state]), [['111_4', 'handled']]);
+  // 新的失敗：回到未處理
+  await setNotice(env, { ...rec, postId: '111_4' }, { seq: 2, error: 'w', failed: true });
+  assert.equal(env.DB.raw.prepare("SELECT state FROM fb_notices WHERE post_id = '111_4'").get().state, 'open');
+  // 系統管理者（notify 權限）看到黃（handled）
+  const g = d.groups.find((x) => x.name === '發文');
+  await post(env, adm, '/admin/staff-groups', { id: g.id, name: g.name, perms: [...g.perms, 'notify'] });
+  const it = (await call(env, '/staff/me/notices', { headers: p2 })).body.data.items;
+  assert.deepEqual(it.filter((x) => x.postId === '111_1').map((x) => [x.state, x.how, x.hby, x.hname]), [['handled', 'read', 'P1', '小編甲']]);
+  assert.deepEqual(it.find((x) => x.postId === '111_4').state, 'open');
+  assert.equal((await read(p2, '111_1')).body.data.state, 'closed');
+  assert.equal((await call(env, '/staff/me/notices', { headers: p2 })).body.data.items.filter((x) => x.postId === '111_1').length, 0);
+  assert.deepEqual({ ...env.DB.raw.prepare('SELECT st, st_by, st_name FROM logs').get() }, { st: 'closed', st_by: 'P2', st_name: '小編乙' });
+  // 1A：發文者還沒處理，看全部的人已讀也直接結案
+  await setNotice(env, { ...rec, postId: '111_2' }, { seq: 1, error: 'y', failed: true });
+  assert.equal((await read(p2, '111_2')).body.data.state, 'closed');
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) n FROM fb_notices WHERE post_id = '111_2'").get().n, 0);
+});
+
+test('錯誤紀錄：分頁 limit／offset、狀態篩選；管理頁已讀＝結案（連同通知）；要錯誤紀錄卡片權限', async (t) => {
+  const { env, adm } = await setup(t);
+  const { logEvent } = await import('../../server/core/logs.js');
+  const { setNotice } = await import('../../server/fb/notices.js');
+  for (let i = 0; i < 5; i++) await logEvent(env, 'sample', 'e' + i);
+  await setNotice(env, { postId: '111_9', pageId: '111', kind: 'post', by: 'P1' }, { seq: 1, error: 'x', failed: true });
+  await logEvent(env, 'fbpost', 'comment_failed:32', '111', 'raw', { post: '111_9', st: 'open' });
+  const get = async (q) => (await call(env, '/admin/logs?' + q, { headers: adm })).body.data;
+  assert.equal((await get('limit=3&offset=0')).length, 3);
+  assert.deepEqual((await get('limit=3&offset=3')).map((r) => r.code), ['e2', 'e1', 'e0']);
+  assert.equal((await get('limit=999')).length, 6, 'limit 上限 101');
+  assert.deepEqual((await get('st=open')).map((r) => r.code), ['comment_failed:32']);
+  const id = (await get('st=open'))[0].id;
+  const r = await call(env, '/admin/logs/read', { method: 'POST', headers: adm, body: JSON.stringify({ id }) });
+  assert.equal(r.status, 200);
+  assert.deepEqual((await get('st=closed')).map((x) => x.code), ['comment_failed:32']);
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) n FROM fb_notices').get().n, 0, '首頁通知一起結案');
+  assert.equal((await call(env, '/admin/logs/read', { method: 'POST', headers: adm, body: JSON.stringify({ id: 99999 }) })).status, 404);
+  assert.equal((await call(env, '/admin/logs/read', { method: 'POST', headers: adm, body: '{}' })).status, 400);
+  // 一般員工沒有錯誤紀錄卡片 → 403
+  const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
+  await post(env, adm, '/admin/staff', { id: 'P3', name: '丙', group: groupId(d, '發文') });
+  const tk = bearer((await login(env, 'P3')).body.data.token);
+  assert.equal((await call(env, '/admin/logs/read', { method: 'POST', headers: tk, body: JSON.stringify({ id }) })).status, 403);
+});
+
+test('操作紀錄：分頁 limit／offset、類別 src（工具／後台）在後端篩選', async (t) => {
+  const { env, adm } = await setup(t);
+  const { audit } = await import('../../server/core/staff.js');
+  await audit(env, { uid: 'T1', name: '甲' }, 'publish', '111', '111_1');
+  await audit(env, { uid: 'T1', name: '甲' }, 'add', '', '', 'X1');
+  await audit(env, { uid: 'T1', name: '甲' }, 'schedule', '111', '111_2');
+  const get = async (q) => (await call(env, '/admin/audit?' + q, { headers: adm })).body.data.filter((r) => r.uid === 'T1').map((r) => r.action);
+  assert.deepEqual(await get('src=tool'), ['schedule', 'publish']);
+  assert.deepEqual(await get('src=admin'), ['add']);
+  assert.deepEqual(await get('src=tool&limit=1&offset=1'), ['publish']);
+});

@@ -11,12 +11,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap">
 <link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="../shell/company.css">
 <link rel="stylesheet" href="admin.css">
 </head>
 <body>
 <header class="top">
   <a class="brand" href="../"><span class="logo" aria-hidden="true">編</span><span class="word">小編<b>工具箱</b></span></a><span class="sub">後台</span><span class="env-dev" id="envTag" hidden>測試後端</span><span class="who" id="whoTag" hidden></span>
   <span class="right">
+    <span class="pill" id="hdExt" hidden></span>
+    <button type="button" class="acct-pill" id="hdAcct" aria-haspopup="dialog" aria-expanded="false" hidden></button>
     <a class="back" href="../">回工具箱</a>
     <button id="logout" type="button" hidden>登出</button>
   </span>
@@ -276,6 +279,10 @@
     <!-- 使用紀錄 -->
     <div class="panel" id="panel-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
       <h1>使用紀錄</h1>
+      <div class="rec-tabs" role="tablist" aria-label="使用紀錄" id="recTabs">
+        <button type="button" role="tab" id="recTab-audit" data-rec="audit" aria-controls="auCard">操作紀錄</button>
+        <button type="button" role="tab" id="recTab-logs" data-rec="logs" aria-controls="lgCard">錯誤紀錄</button>
+      </div>
 
       <section class="card" id="auCard" data-card="audit">
         <h2>操作紀錄</h2>
@@ -284,6 +291,7 @@
           <label class="sf-f">期間<select id="auDays"><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select></label>
           <label class="sf-f">員工編號或姓名（選填）<input id="auUid" type="text" maxlength="30" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
           <label class="sf-f">類別<select id="auSrc"><option value="">全部</option><option value="tool">工具</option><option value="admin">後台</option></select></label>
+          <label class="sf-f">每頁<select id="auSize" class="pg-size"><option value="20">20 筆</option><option value="50">50 筆</option><option value="100">100 筆</option></select></label>
           <button id="auBtn" type="button">查詢</button>
         </div>
         <p class="msg" id="auMsg" role="status"></p>
@@ -293,16 +301,23 @@
             <tbody id="auRows"></tbody>
           </table>
         </div>
+        <div class="pager" id="auPager" hidden><button type="button" id="auPrev">‹ 上一頁</button><span id="auPage"></span><button type="button" id="auNext">下一頁 ›</button></div>
       </section>
 
-      <section class="card" data-card="logs">
-        <h2>最近的紀錄</h2>
-        <p>只記錄工具名稱、錯誤代碼、版本（留言失敗另記粉專 ID），不含任何內容，保留 30 天。</p>
-        <div class="row"><button id="logBtn" type="button">查看最近 7 天</button></div>
+      <section class="card" id="lgCard" data-card="logs">
+        <h2>錯誤紀錄</h2>
+        <p>工具回報的錯誤只記工具名稱、錯誤代碼、版本；留言失敗另記粉專、貼文 ID 與摘要、類型、發布時間，保留 30 天。按「已讀」＝結案，首頁的留言失敗通知也一起收掉。</p>
+        <div class="sf-add">
+          <label class="sf-f">期間<select id="lgDays"><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label>
+          <label class="sf-f">狀態<select id="lgSt"><option value="">全部</option><option value="open">未處理</option><option value="handled">發文者已處理</option><option value="closed">已結案</option></select></label>
+          <label class="sf-f">每頁<select id="lgSize" class="pg-size"><option value="20">20 筆</option><option value="50">50 筆</option><option value="100">100 筆</option></select></label>
+          <button id="logBtn" type="button">查詢</button>
+        </div>
         <p class="msg" id="logMsg" role="status"></p>
         <div class="scroll" id="logWrap" hidden>
-          <table><thead><tr><th>時間</th><th>工具</th><th>代碼</th><th>粉專</th><th>版本</th></tr></thead><tbody id="logRows"></tbody></table>
+          <table class="lg-table"><thead><tr><th>時間</th><th>工具</th><th>錯誤說明</th><th>粉專</th><th>貼文</th><th>狀態</th></tr></thead><tbody id="logRows"></tbody></table>
         </div>
+        <div class="pager" id="lgPager" hidden><button type="button" id="lgPrev">‹ 上一頁</button><span id="lgPage"></span><button type="button" id="lgNext">下一頁 ›</button></div>
       </section>
     </div>
     <!-- 進階設定（只有系統管理者；要解鎖） -->
@@ -403,5 +418,6 @@
   </main>
 </div>
 <script type="module" src="admin.js"></script>
+<script type="module" src="header.js"></script>
 </body>
 </html>

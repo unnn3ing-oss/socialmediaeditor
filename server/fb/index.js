@@ -121,7 +121,7 @@ route('POST', /^\/fb\/comment\/retry$/, async (request, env, ctx, m, me) => {
   // 影片的留言要 vpost、貼文的要 post
   const st = await timerStatus(env, postId);
   if (!me.perms.includes(st && st.kind === 'video' ? 'vpost' : 'post')) return fail(request, env, 'fb_no_perm');
-  const d = await retryTimer(env, postId, page);
+  const d = await retryTimer(env, postId, page, me.who);
   if (!d || !d.ok) return fail(request, env, 'bad_request', (d && d.error) || '沒有失敗的留言');
   await audit(env, me.who, 'comment_retry', page, postId);
   return ok(request, env, { ok: true });

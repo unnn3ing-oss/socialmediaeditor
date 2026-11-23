@@ -166,7 +166,7 @@ export async function createPosts(env, form, who = null) {
       const items = [...(first ? [{ message: first, offset: 0 }] : []), ...extras];
       if (!items.length) continue;
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by, title });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by, title, ptype: form.kind || undefined, pageName: p.name });
         if (first) r.comment = 'armed';
         if (extras.length) r.extra = extras.length;
       } catch (e) {
@@ -184,7 +184,7 @@ export async function createPosts(env, form, who = null) {
     const items = [...(first && !firstOk ? [{ message: first, offset: 0, recheck: true }] : []), ...extras];
     if (items.length) {
       try {
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items, by, title });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), items, by, title, ptype: form.kind || undefined, pageName: p.name });
         if (first && !firstOk) r.comment = 'retry';
         if (extras.length) r.extra = extras.length;
       } catch (e) {

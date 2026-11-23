@@ -57,6 +57,7 @@ if (window.top !== window.self) {
     // 進階設定：只有系統管理者看得到；沒解鎖時分類內只顯示密碼輸入
     $('tab-adv').hidden = me.role !== 'sys';
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
+    recApply();
     $('whoTag').hidden = false;
     $('whoTag').textContent = (me.role === 'sys' ? '' : me.name + '・') + me.roleName + (me.role === 'sys' && !me.unlocked ? '（進階設定已鎖）' : '');
     // 首頁憑證進來且沒解鎖：不顯示（「回工具箱」就是離開）；解鎖過＝鎖定；管理密碼登入＝登出
@@ -156,26 +157,109 @@ if (window.top !== window.self) {
       .then(function () { $('cfYes').disabled = false; });
   };
 
-  $('logBtn').onclick = function () {
-    $('logBtn').disabled = true; say($('logMsg'), '讀取中');
-    api('/admin/logs?days=7').then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      var tb = $('logRows'); tb.textContent = '';
-      res.data.forEach(function (r) {
-        var tr = document.createElement('tr');
-        [fmtTime(r.at), r.tool, r.code, r.pageName || r.page || '', r.ver || ''].forEach(function (t, i) {
-          var c = document.createElement('td'); c.textContent = t; if (i === 0) c.className = 'num';
-          if (i === 3 && r.pageName) c.title = '粉專 ID ' + r.page;   // 顯示簡稱，游標移上去看 ID
-          if (i === 2 && r.detail) c.title = '臉書原文：' + r.detail;   // 錯誤碼游標移上去看臉書英文原文
-          tr.appendChild(c);
-        });
-        tb.appendChild(tr);
+  // ---- 分頁（操作紀錄、錯誤紀錄共用）：每頁筆數記在瀏覽器；後端多要 1 筆判斷有沒有下一頁 ----
+  var PG_KEY = 'tbx.admin.pageSize';
+  function pgSize() { var n = 20; try { n = Number(localStorage.getItem(PG_KEY)) || 20; } catch (e) { /* 預設 */ } return [20, 50, 100].indexOf(n) >= 0 ? n : 20; }
+  Array.prototype.forEach.call(document.querySelectorAll('.pg-size'), function (sel) {
+    sel.value = String(pgSize());
+    sel.addEventListener('change', function () {
+      try { localStorage.setItem(PG_KEY, sel.value); } catch (e) { /* 不記 */ }
+      Array.prototype.forEach.call(document.querySelectorAll('.pg-size'), function (o) { o.value = sel.value; });
+    });
+  });
+  // load(offset, limit) → Promise<rows|null>；render(rows) 畫表格；回 { go(page) }
+  var msgId = { lg: 'logMsg', au: 'auMsg' };
+  function pager(prefix, load, render, emptyText) {
+    var st = { page: 0, more: false, busy: false };
+    function go(page) {
+      if (st.busy) return Promise.resolve();
+      var size = pgSize();
+      st.busy = true; $(prefix + 'Prev').disabled = true; $(prefix + 'Next').disabled = true;
+      return load(page * size, size + 1).then(function (rows) {
+        if (!rows) return;
+        st.page = page; st.more = rows.length > size;
+        render(rows.slice(0, size));
+        $(prefix + 'Pager').hidden = !(page > 0 || st.more);
+        $(prefix + 'Page').textContent = '第 ' + (page + 1) + ' 頁';
+        if (!rows.length) say($(msgId[prefix]), page ? '沒有更多了。' : emptyText);
+      }).then(function () {
+        st.busy = false; $(prefix + 'Prev').disabled = st.page === 0; $(prefix + 'Next').disabled = !st.more;
       });
-      $('logWrap').hidden = !res.data.length;
-      say($('logMsg'), res.data.length ? '共 ' + res.data.length + ' 筆。' : '最近 7 天沒有任何錯誤。', 'good');
-    }).catch(function () { say($('logMsg'), '讀取日誌失敗。', 'err'); })
-      .then(function () { $('logBtn').disabled = false; });
-  };
+    }
+    $(prefix + 'Prev').onclick = function () { if (st.page > 0) go(st.page - 1); };
+    $(prefix + 'Next').onclick = function () { if (st.more) go(st.page + 1); };
+    return { go: go, reload: function () { return go(st.page); } };
+  }
+
+  // ---- 錯誤紀錄（/admin/logs）：留言失敗帶粉專、貼文摘要、類型、發布時間；狀態＝與首頁留言失敗通知同一套 ----
+  var LG_TOOL = { fbpost: '排程發布', fbvideo: '影片發布' };
+  var LG_TYPE = { template: '套版', textimg: '字圖', text: '文字', video: '橫式影片', reels: 'Reels' };
+  function lgCode(code) {
+    var m = /^comment_failed(?::(\d+))?$/.exec(code || '');
+    return m ? '留言失敗' + (m[1] ? '（臉書碼 ' + m[1] + '）' : '') : code;
+  }
+  function lgState(r) {
+    var who = r.st_name || r.st_by || '', at = r.st_at ? fmtTime(r.st_at) : '';
+    if (r.st === 'open') return { cls: 'is-open', text: '未處理' };
+    if (r.st === 'read') return { cls: 'is-handled', text: (who || '發文者') + ' 已讀', tip: at };
+    if (r.st === 'retry') return { cls: 'is-handled', text: (who || '發文者') + ' 已補留言', tip: at };
+    if (r.st === 'closed') return { cls: 'is-closed', text: '已結案', tip: (who ? who + '・' : '') + at };
+    return { cls: '', text: '—' };
+  }
+  function lgRender(rows) {
+    var tb = $('logRows'); tb.textContent = '';
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.appendChild(sfEl('td', 'num', fmtTime(r.at)));
+      tr.appendChild(sfEl('td', 'lg-nw', LG_TOOL[r.tool] || r.tool));
+      var tc = sfEl('td', 'lg-code', lgCode(r.code)); tc.title = r.detail ? '臉書原文：' + r.detail : r.code; tr.appendChild(tc);
+      // 粉專：簡稱（完整名稱），游標移上去看 ID
+      var pg = r.pageName && r.page_name && r.page_name !== r.pageName ? r.pageName + '（' + r.page_name + '）' : (r.pageName || r.page_name || r.page || '');
+      var tdPg = sfEl('td', r.pageName || r.page_name ? '' : 'num', pg); if (r.page) tdPg.title = '粉專 ID ' + r.page; tr.appendChild(tdPg);
+      // 貼文：摘要／類型・發布時間／開啟貼文
+      var tp = document.createElement('td');
+      if (r.post) {
+        tp.className = 'lg-post';
+        if (r.title) { var tt = sfEl('div', 'lg-title', r.title); tt.title = r.title; tp.appendChild(tt); }
+        var meta = [LG_TYPE[r.ptype] || '', r.pub_at ? '發布 ' + fmtTime(r.pub_at * 1000) : ''].filter(Boolean).join('・');
+        if (meta) tp.appendChild(sfEl('div', 'lg-meta', meta));
+        if (/^\d{1,30}(_\d{1,30})?$/.test(r.post)) {
+          var a = document.createElement('a'); a.className = 'au-open'; a.href = 'https://www.facebook.com/' + r.post; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.textContent = '開啟貼文 ↗'; a.title = r.post; a.setAttribute('aria-label', '開啟貼文 ' + r.post + '（另開分頁）');
+          tp.appendChild(a);
+        }
+      } else tp.textContent = '—';
+      tr.appendChild(tp);
+      // 狀態＋已讀（結案）
+      var ts = document.createElement('td'), stv = lgState(r);
+      var chip = sfEl('span', 'lg-st ' + stv.cls, stv.text); if (stv.tip) chip.title = stv.tip; ts.appendChild(chip);
+      if (r.st !== 'closed') {
+        var rb = sfEl('button', 'lg-read', '已讀'); rb.type = 'button';
+        rb.title = r.post ? '結案：首頁的留言失敗通知也一起收掉' : '標記已處理';
+        rb.onclick = function () {
+          rb.disabled = true;
+          api('/admin/logs/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: r.id }) }).then(function (res) {
+            if (!res.ok) { if (res.code === 'unauthorized') return expired(); rb.disabled = false; say($('logMsg'), res.error || '標記失敗。', 'err'); return; }
+            lgPager.reload();
+          }).catch(function () { rb.disabled = false; say($('logMsg'), '連不上後端，請稍後再試。', 'err'); });
+        };
+        ts.appendChild(rb);
+      }
+      tr.appendChild(ts);
+      tb.appendChild(tr);
+    });
+    $('logWrap').hidden = !rows.length;
+    if (rows.length) say($('logMsg'), '');
+  }
+  var lgPager = pager('lg', function (offset, limit) {
+    var q = 'days=' + encodeURIComponent($('lgDays').value) + '&limit=' + limit + '&offset=' + offset + ($('lgSt').value ? '&st=' + encodeURIComponent($('lgSt').value) : '');
+    say($('logMsg'), '讀取中');
+    return api('/admin/logs?' + q).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') { expired(); return null; } say($('logMsg'), res.error || '讀取失敗。', 'err'); return null; }
+      return res.data || [];
+    }).catch(function () { say($('logMsg'), '讀取錯誤紀錄失敗。', 'err'); return null; });
+  }, lgRender, '這段期間沒有錯誤。');
+  $('logBtn').onclick = function () { $('logBtn').disabled = true; lgPager.go(0).then(function () { $('logBtn').disabled = false; }); };
 
   // ---- 臉書連線（/admin/fb/status）----
   function fmtExp(sec) {
@@ -1160,11 +1244,10 @@ if (window.top !== window.self) {
   var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };
   var AU_OPEN = { publish: 1, schedule: 1, reschedule: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };   // 這些的 post 是貼文／影片 ID
   var AU_KIND = { template: '套版', textimg: '字圖', text: '文字' };
-  var auRows = [];
   function auKind(detail) { var m = /(?:^|\s)kind=(\w+)/.exec(detail || ''); return m && AU_KIND[m[1]] ? AU_KIND[m[1]] : ''; }
-  function auRender() {
-    var src = $('auSrc').value, tb = $('auRows'); tb.textContent = '';
-    var list = auRows.filter(function (r) { return !src || (src === 'tool') === !!AU_TOOL[r.action]; });
+  // 類別篩選在後端（?src=），這裡只畫這一頁
+  function auRender(list) {
+    var tb = $('auRows'); tb.textContent = '';
     list.forEach(function (r) {
       var tr = document.createElement('tr'), tool = !!AU_TOOL[r.action];
       tr.appendChild(sfEl('td', 'num', fmtTime(r.at)));
@@ -1183,20 +1266,49 @@ if (window.top !== window.self) {
       tb.appendChild(tr);
     });
     $('auWrap').hidden = !list.length;
-    say($('auMsg'), !auRows.length ? '這段期間沒有紀錄。' : list.length === auRows.length ? '共 ' + list.length + ' 筆。' : '共 ' + auRows.length + ' 筆，顯示' + (src === 'tool' ? '工具' : '後台') + ' ' + list.length + ' 筆。');
+    if (list.length) say($('auMsg'), '');
   }
-  $('auSrc').onchange = function () { if (auRows.length) auRender(); };
-  $('auUid').onkeydown = function (e) { if (e.key === 'Enter') $('auBtn').click(); };
-  $('auBtn').onclick = function () {
-    var q = 'days=' + encodeURIComponent($('auDays').value), who = $('auUid').value.trim();
+  var auPager = pager('au', function (offset, limit) {
+    var q = 'days=' + encodeURIComponent($('auDays').value) + '&limit=' + limit + '&offset=' + offset, who = $('auUid').value.trim();
     if (who) q += '&q=' + encodeURIComponent(who);
-    $('auBtn').disabled = true; say($('auMsg'), '查詢中');
-    api('/admin/audit?' + q).then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('auMsg'), res.error || '查詢失敗。', 'err'); return; }
-      auRows = res.data || []; auRender();
-    }).catch(function () { say($('auMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('auBtn').disabled = false; });
-  };
+    if ($('auSrc').value) q += '&src=' + encodeURIComponent($('auSrc').value);
+    say($('auMsg'), '查詢中');
+    return api('/admin/audit?' + q).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') { expired(); return null; } say($('auMsg'), res.error || '查詢失敗。', 'err'); return null; }
+      return res.data || [];
+    }).catch(function () { say($('auMsg'), '連不上後端，請稍後再試。', 'err'); return null; });
+  }, auRender, '這段期間沒有紀錄。');
+  $('auSrc').onchange = function () { if (!$('auWrap').hidden || $('auPager').hidden === false) auPager.go(0); };
+  $('auUid').onkeydown = function (e) { if (e.key === 'Enter') $('auBtn').click(); };
+  $('auBtn').onclick = function () { $('auBtn').disabled = true; auPager.go(0).then(function () { $('auBtn').disabled = false; }); };
+
+  // ---- 使用紀錄分頁：操作紀錄｜錯誤紀錄（隱藏切換，內容保留）；只顯示有權限的，只有一個時不顯示切換鈕 ----
+  var REC_KEY = 'tbx.admin.recTab';
+  function recShow(k) {
+    ['audit', 'logs'].forEach(function (x) {
+      var on = x === k;
+      $('recTab-' + x).setAttribute('aria-selected', String(on));
+      $('recTab-' + x).tabIndex = on ? 0 : -1;
+      $(x === 'audit' ? 'auCard' : 'lgCard').classList.toggle('rec-off', !on);
+    });
+    try { localStorage.setItem(REC_KEY, k); } catch (e) { /* 不記 */ }
+  }
+  function recApply() {
+    var vis = ['audit', 'logs'].filter(function (k) { return can(k); });
+    $('recTabs').hidden = vis.length < 2;
+    ['audit', 'logs'].forEach(function (k) { $('recTab-' + k).hidden = vis.indexOf(k) < 0; });
+    var cur = ''; try { cur = localStorage.getItem(REC_KEY) || ''; } catch (e) { /* 預設 */ }
+    recShow(vis.indexOf(cur) >= 0 ? cur : (vis[0] || 'audit'));
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#recTabs [role=tab]'), function (b) {
+    b.addEventListener('click', function () { recShow(b.getAttribute('data-rec')); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      var other = $(b.getAttribute('data-rec') === 'audit' ? 'recTab-logs' : 'recTab-audit');
+      if (!other.hidden) { recShow(other.getAttribute('data-rec')); other.focus(); }
+      e.preventDefault();
+    });
+  });
 
   var TABS = ['post', 'guard', 'people', 'conn', 'assets', 'rec', 'adv'];
   // 舊網址（分類改版前）轉到新分類

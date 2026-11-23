@@ -90,7 +90,7 @@ test('有圖排程：暫存照片 → /feed attached_media＋SCHEDULED；不留�
   assert.ok(!f.calls.some((c) => /comments/.test(c.path)));
   assert.equal(RecTimer.log.length, 1);
   assert.equal(RecTimer.log[0][0], '/arm');
-  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, by: 'SYS1', title: '內文', items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }] });
+  assert.deepEqual(RecTimer.log[0][1], { pageId: '111', postId: '111_77', at, by: 'SYS1', title: '內文', pageName: '新聞', items: [{ message: '看更多新聞內容\n' + LINK + '?&utm_source=facebook&utm_medium=fbarticlepic', offset: 0 }] });
 });
 
 test('純文字（無圖）排程走 /feed；沒有文章網址 → 400', async (t) => {

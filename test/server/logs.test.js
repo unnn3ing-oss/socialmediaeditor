@@ -23,7 +23,7 @@ test('logs strips content fields', async () => {
   assert.equal(res.status, 200);
   const rows = env.DB.raw.prepare('SELECT * FROM logs').all();
   assert.equal(rows.length, 1);
-  assert.deepEqual(Object.keys(rows[0]).sort(), ['at', 'code', 'detail', 'id', 'page', 'tool', 'ua', 'ver']);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['at', 'code', 'detail', 'id', 'page', 'page_name', 'post', 'pub_at', 'st', 'st_at', 'st_by', 'st_name', 'title', 'ptype', 'tool', 'ua', 'ver'].sort());
   assert.equal(rows[0].page, null, '前端送來的不記粉專');
   assert.equal(rows[0].tool, 'sample');
   assert.equal(rows[0].code, 'save_failed');

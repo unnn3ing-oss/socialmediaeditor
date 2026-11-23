@@ -55,6 +55,8 @@ export const MAX_STAFF = 500;
 export const MAX_GROUPS = 20;
 export const AUDIT_KEEP_DAYS = 90;
 export const MAX_AUDIT = 500;
+// 工具送出的動作（操作紀錄「類別」＝工具；其他＝後台）。管理頁 admin.js AU_TOOL 同一份
+export const TOOL_ACTIONS = ['publish', 'schedule', 'reschedule', 'delete', 'video_publish', 'video_schedule', 'video_draft', 'comment_retry'];
 const DAY = 86400000;
 
 // 員工編號一律大寫、去空白；不合格回 ''
@@ -396,7 +398,8 @@ export async function adminStaff(request, env, path, who) {
     return ok(request, env, await state(env, who));
   }
 
-  // 操作紀錄：?days=1～90（預設 7）、?q=員工編號或姓名（選填；舊參數 ?uid= 相容），最多 500 筆
+  // 操作紀錄：?days=1～90（預設 7）、?q=員工編號或姓名（選填；舊參數 ?uid= 相容）、?src=tool／admin（類別）、
+  //   ?limit=（≤101，前端多要 1 筆判斷下一頁；沒帶＝最多 500 筆）&offset=
   //   員工編號完全相同，或紀錄當時姓名包含，或目前名單姓名包含（改名後用新名字也查得到）；% _ 跳脫
   if (path === '/admin/audit' && method === 'GET') {
     const q = new URL(request.url).searchParams;
@@ -404,14 +407,21 @@ export async function adminStaff(request, env, path, who) {
     const days = Number.isFinite(d) && d >= 1 ? Math.min(Math.floor(d), AUDIT_KEEP_DAYS) : 7;
     const raw = String(q.get('q') || q.get('uid') || '').trim().slice(0, 30);
     const uid = raw ? normId(raw) : '';
+    const lim = Number(q.get('limit')), off = Number(q.get('offset'));
+    const limit = Number.isInteger(lim) && lim >= 1 ? Math.min(lim, 101) : MAX_AUDIT;
+    const offset = Number.isInteger(off) && off >= 0 ? Math.min(off, 100000) : 0;
+    const src = String(q.get('src') || '');
+    const inTool = '(' + TOOL_ACTIONS.map(() => '?').join(', ') + ')';
+    const srcSql = src === 'tool' ? ' AND action IN ' + inTool : src === 'admin' ? ' AND action NOT IN ' + inTool : '';
+    const srcArgs = src === 'tool' || src === 'admin' ? TOOL_ACTIONS : [];
     const since = Date.now() - days * DAY;
-    const cols = 'SELECT id, at, uid, name, action, page, post, detail FROM fb_audit WHERE at >= ?';
+    const cols = 'SELECT id, at, uid, name, action, page, post, detail FROM fb_audit WHERE at >= ?' + srcSql;
     let rows;
-    if (!raw) rows = await all(env, cols + ' ORDER BY at DESC, id DESC LIMIT ?', since, MAX_AUDIT);
+    if (!raw) rows = await all(env, cols + ' ORDER BY at DESC, id DESC LIMIT ? OFFSET ?', since, ...srcArgs, limit, offset);
     else {
       const like = '%' + raw.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
-      rows = await all(env, cols + " AND (uid = ? OR name LIKE ? ESCAPE '\\' OR uid IN (SELECT id FROM staff WHERE name LIKE ? ESCAPE '\\')) ORDER BY at DESC, id DESC LIMIT ?",
-        since, uid || '\u0000', like, like, MAX_AUDIT);
+      rows = await all(env, cols + " AND (uid = ? OR name LIKE ? ESCAPE '\\' OR uid IN (SELECT id FROM staff WHERE name LIKE ? ESCAPE '\\')) ORDER BY at DESC, id DESC LIMIT ? OFFSET ?",
+        since, ...srcArgs, uid || '\u0000', like, like, limit, offset);
     }
     return ok(request, env, await withPageNames(env, rows));   // 粉專 ID 換成簡稱（pagenames.js）
   }

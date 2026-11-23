@@ -48,7 +48,7 @@
         <tr><td>待發留言（貼文 ID、留言文字、發送狀態）</td><td>Cloudflare Durable Objects</td><td>該貼文的留言全部完成、取消或失敗後 14 天自動刪除</td></tr>
         <tr><td>授權名單（員工編號、姓名、權限組、分機或手機、最後登入時間；登入密碼只存加鹽雜湊（PBKDF2），不存原本的密碼；連續輸入錯誤次數）</td><td>Cloudflare D1</td><td>直到管理員將該員工移除</td></tr>
         <tr><td>排程發布操作紀錄（員工編號、姓名、動作、粉專 ID、貼文 ID、時間）</td><td>Cloudflare D1</td><td>90 天後自動刪除</td></tr>
-        <tr><td>錯誤紀錄（工具名稱、錯誤代碼、版本、瀏覽器版本字串；留言失敗另記粉專 ID；不含貼文內容）</td><td>Cloudflare D1</td><td>30 天後自動刪除</td></tr>
+        <tr><td>錯誤紀錄（工具名稱、錯誤代碼、版本、瀏覽器版本字串；留言失敗另記粉專 ID 與名稱、貼文 ID、貼文摘要（≤60 字）、貼文類型、發布時間、臉書回應原文、處理狀態與處理人員；不含完整貼文內容）</td><td>Cloudflare D1</td><td>30 天後自動刪除</td></tr>
         <tr><td>留言失敗通知（粉專 ID、貼文 ID、貼文標題摘要（最多 40 字）、發文者員工編號、第幾則留言、錯誤原因、時間；問題解決即刪除）</td><td>Cloudflare D1</td><td>7 天後自動刪除</td></tr>
         <tr><td>數據報表查詢結果</td><td>貼文摘要（最多 80 字）、發布時間、原文連結與成效數字，只在後端短期快取供同條件重查，不寫入資料庫；畫面上的報表在重新整理、登出或權限變更時清除</td><td>快取最長 10 分鐘自動失效</td></tr>
         <tr><td>臉書文字背景樣式</td><td>管理員匯入的背景清單（代號、名稱、顏色）與從臉書下載的背景圖樣，存在後端資料庫與檔案儲存，僅登入的使用者可讀取；不含任何使用者資料</td><td>管理員刪除或重新匯入時刪除</td></tr>
@@ -119,7 +119,7 @@
         <tr><td>Pending comments (post ID, comment text, status)</td><td>Cloudflare Durable Objects</td><td>Deleted automatically 14 days after all comments for that post are completed, canceled, or failed</td></tr>
         <tr><td>Staff allowlist (employee ID, name, permission group, extension or mobile number, last sign-in time; sign-in passwords are stored only as salted PBKDF2 hashes, never in plain text; failed sign-in count)</td><td>Cloudflare D1</td><td>Until an administrator removes that employee</td></tr>
         <tr><td>Scheduling activity log (employee ID, name, action, Page ID, post ID, time)</td><td>Cloudflare D1</td><td>Deleted automatically after 90 days</td></tr>
-        <tr><td>Error logs (tool name, error code, version, browser user-agent; Page ID for failed comments; no post content)</td><td>Cloudflare D1</td><td>Deleted automatically after 30 days</td></tr>
+        <tr><td>Error logs (tool name, error code, version, browser user-agent; for failed comments also the Page ID and name, post ID, post excerpt (≤60 chars), post type, publish time, Facebook's raw response, handling status and who handled it; no full post content)</td><td>Cloudflare D1</td><td>Deleted automatically after 30 days</td></tr>
         <tr><td>Failed-comment notices (Page ID, post ID, post title excerpt (up to 40 characters), poster's staff ID, comment number, error reason, time; removed once resolved)</td><td>Cloudflare D1</td><td>Deleted automatically after 7 days</td></tr>
         <tr><td>Data report query results</td><td>Post summaries (up to 80 characters), publish time, post link and performance numbers are only cached briefly on the backend for repeated queries with the same conditions and are not written to the database; the report on screen is cleared on reload, logout or permission change</td><td>Cache expires automatically within 10 minutes</td></tr>
         <tr><td>Facebook text background styles</td><td>The background list imported by an administrator (ID, name, colors) and background pattern images downloaded from Facebook, stored in the back-end database and file storage and readable only by signed-in users; contains no user data</td><td>Deleted when an administrator deletes or re-imports them</td></tr>

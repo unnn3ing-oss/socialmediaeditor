@@ -3,6 +3,7 @@ import { graph, isRateLimit, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
 import { postComment } from './comment.js';
 import { setNotice, logCommentFail } from './notices.js';
+import { PTYPES } from '../core/logs.js';
 async function callTimer(env, postId, action, body) {
   if (!env.FB_TIMER) throw new Error('FB_TIMER 未綁定');
   const stub = env.FB_TIMER.get(env.FB_TIMER.idFromName(String(postId)));
@@ -15,7 +16,7 @@ export const armTimer = (env, rec) => callTimer(env, rec.postId, 'arm', rec);
 export const retimeTimer = (env, postId, at) => callTimer(env, postId, 'retime', { at });
 export const cancelTimer = (env, postId) => callTimer(env, postId, 'cancel');
 export const timerStatus = (env, postId) => callTimer(env, postId, 'status');
-export const retryTimer = (env, postId, pageId) => callTimer(env, postId, 'retry', { pageId: String(pageId) });
+export const retryTimer = (env, postId, pageId, by = null) => callTimer(env, postId, 'retry', { pageId: String(pageId), ...(by ? { by: { uid: String(by.uid || '').slice(0, 20), name: String(by.name || '').slice(0, 30) } } : {}) });
 
 
 const FIRST_DELAY = 60;                    // 排定時間後 60 秒第一次檢查
@@ -100,7 +101,7 @@ export class FbCommentTimer {
       const cross = body.kind === 'video' ? normCross(body) : [];
       const items = normItems(body, !!(cross && cross.length));
       if (!body.pageId || !body.postId || !items || !cross || !Number.isInteger(at)) return reply({ ok: false, error: '資料不完整' });
-      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(cross.length ? { cross } : {}) };
+      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: false, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
       await s.put('rec', r);
       await this.schedule(r);
       return reply({ ok: true });
@@ -131,6 +132,8 @@ export class FbCommentTimer {
       }
       if (!rec.published) rec.retimes = 0;
       delete rec.purgeAt;
+      // 誰按了重新留言：通知改「已補留言」（notices.js），系統管理者看得到黃框
+      rec.retryBy = body.by && body.by.uid ? { uid: body.by.uid, name: body.by.name || '' } : { uid: '', name: '' };
       await s.put('rec', rec);
       await this.note(rec);
       await s.setAlarm(Date.now());
@@ -156,8 +159,10 @@ export class FbCommentTimer {
       try { await logCommentFail(this.env, rec, it.ecode, it.eraw); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
     }
     const sig = a ? [a.seq, a.failed ? 1 : 0, a.error].join('|') : '';
-    if (sig !== (rec.noticeSig || '')) {
-      try { await setNotice(this.env, rec, a); rec.noticeSig = sig; dirty = true; } catch { /* 下次再寫 */ }
+    if (sig !== (rec.noticeSig || '') || (!a && rec.retryBy)) {
+      // 提醒消失時：重新留言造成的＝已補留言；整則取消＝刪除；自動重試成功＝只刪未處理的
+      const opts = a ? {} : { retry: rec.retryBy || null, canceled: !!rec.canceled };
+      try { await setNotice(this.env, rec, a, opts); rec.noticeSig = sig; if (!a) delete rec.retryBy; dirty = true; } catch { /* 下次再寫 */ }
     }
     if (dirty) await this.state.storage.put('rec', rec);
   }

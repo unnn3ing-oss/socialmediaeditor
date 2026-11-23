@@ -1,7 +1,7 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
 import { findStaff, cardsOf, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
-import { listNotices } from '../fb/notices.js';
+import { listNotices, readNotice } from '../fb/notices.js';
 import { pwProblem, hashPassword, verifyPassword, codeHash, safeEqual, MAX_FAILS, LOCK_MS } from './password.js';
 
 export const MIN_SECRET = 32;
@@ -152,6 +152,20 @@ async function myNotices(request, env) {
   return ok(request, env, { enabled: true, all, items: items.map((x) => ({ ...x, canRetry: x.kind === 'video' ? can.video : can.post })) });
 }
 
+// 已讀：發文者＝自己處理完（handled）；看全部的人（系統管理者／notify）＝結案。body { postId }
+async function readMyNotice(request, env) {
+  const t = await bearer(request, env, 'company');
+  if (!t) return fail(request, env, 'unauthorized');
+  if (!t.staff) return fail(request, env, 'fb_need_staff', '需要用員工編號登入。');
+  const b = await readLogin(request);
+  const postId = b && typeof b.postId === 'string' ? b.postId : '';
+  if (!/^\d{1,30}(?:_\d{1,30})?$/.test(postId)) return fail(request, env, 'bad_request');
+  const all = t.staff.level === 'sys' || (t.staff.perms || []).includes('notify');
+  const r = await readNotice(env, postId, { uid: t.staff.id, name: t.staff.name }, all);
+  if (!r) return fail(request, env, 'not_found');
+  return ok(request, env, { state: r });
+}
+
 async function staffMe(request, env) {
   const t = await bearer(request, env, 'company');
   if (!t) return fail(request, env, 'unauthorized');
@@ -170,6 +184,7 @@ export async function handleAuth(request, env, path) {
   if (path === '/staff/me' && (request.method === 'GET' || request.method === 'POST')) return staffMe(request, env);
   if (path === '/staff/me/password' && request.method === 'POST') return changePassword(request, env);
   if (path === '/staff/me/notices' && request.method === 'GET') return myNotices(request, env);
+  if (path === '/staff/me/notices/read' && request.method === 'POST') return readMyNotice(request, env);
   if (path === '/auth/status' && request.method === 'GET') {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');

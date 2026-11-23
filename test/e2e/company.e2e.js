@@ -319,7 +319,7 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   ] };
   await unlock(page, 'S1');
   await page.waitForSelector('#company-btn.acct-alert');
-  assert.match(await acctText(page), /有 2 則通知/);
+  assert.match(await acctText(page), /有 2 則未處理通知/);
   await page.click('#company-btn');
   await page.waitForSelector('#acct-pop .acct-note');
   const notes = page.locator('#acct-pop .acct-note');
@@ -333,10 +333,13 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   assert.equal(await notes.nth(1).locator('button', { hasText: '重新留言' }).count(), 0, '沒有權限不顯示重新留言');
   assert.equal(await page.isVisible('#acct-pop .acct-empty'), false);
   assert.match(await page.textContent('#acct-pop .acct-scope'), /全部人/);
+  // 看全部的人：重新留言後重讀，這則變「已補留言」（黃）
+  api.notices = { enabled: true, all: true, items: [{ ...api.notices.items[0], state: 'handled', how: 'retry', hby: 'S1', hname: '莊鈞評', hat: at }, api.notices.items[1]] };
   await notes.nth(0).locator('button', { hasText: '重新留言' }).click();
-  await page.waitForFunction(() => document.querySelectorAll('#acct-pop .acct-note').length === 1);
+  await page.waitForSelector('#acct-pop .acct-note.is-handled');
   assert.deepEqual(api.retries, [{ postId: '111_5', page: '111' }]);
-  assert.match(await acctText(page), /有 1 則通知/);
+  assert.match(await page.textContent('#acct-pop .acct-note.is-handled'), /莊鈞評 已補留言/);
+  assert.match(await acctText(page), /有 1 則未處理通知/);
   await page.locator('#acct-pop .acct-note button', { hasText: '到影片發布' }).click();
   await page.waitForSelector('#acct-pop', { state: 'hidden' });
   assert.equal(await page.evaluate(() => location.hash), '#fbvideo');

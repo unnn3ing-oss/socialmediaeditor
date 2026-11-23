@@ -126,7 +126,8 @@ test('已發佈列表：留言失敗回 alert 物件；重新留言 API 驗證�
   const ok = await call('/fb/comment/retry', { method: 'POST', body: JSON.stringify({ postId: '111_7', page: '111' }) });
   assert.equal(ok.status, 200);
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) n FROM fb_audit WHERE action = 'comment_retry'").get().n, 1);
-  assert.equal((await call('/staff/me/notices')).body.data.items.length, 0, '重新留言後通知收掉');
+  const after = (await call('/staff/me/notices')).body.data.items;
+  assert.deepEqual(after.map((x) => [x.state, x.how, x.hby]), [['handled', 'retry', 'SYS1']], '重新留言後改「已補留言」，系統管理者看得到（黃框）');
   await inst.obj.alarm();
   assert.equal((await call('/fb/published?page=111')).body.data.items[0].comment, 'done');
 });

@@ -222,8 +222,9 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   await page.focus('#tab-assets');
   await page.keyboard.press('ArrowDown');
   assert.equal(await page.getAttribute('#tab-rec', 'aria-selected'), 'true');
+  await page.click('#recTab-logs');
   await page.click('#logBtn');
-  await page.waitForFunction(() => /共 1 筆/.test(document.getElementById('logMsg').textContent));
+  await page.waitForSelector('#logWrap:not([hidden])');
 
   const api = calls.filter((c) => typeof c === 'object' && c.key !== 'POST /admin/login');
   assert.ok(api.length >= 3);
@@ -639,10 +640,10 @@ test('操作紀錄：查詢帶期間與員工編號或姓名；來源欄與篩�
   await page.selectOption('#auDays', '30'); await page.fill('#auUid', 'a001');
   await page.click('#auBtn');
   await page.waitForSelector('#auWrap:not([hidden])');
-  assert.equal(SF.audit.pop(), '?days=30&q=a001');
+  assert.equal(SF.audit.pop(), '?days=30&limit=21&offset=0&q=a001');
   await page.fill('#auUid', '王小明'); await page.press('#auUid', 'Enter');
-  await page.waitForFunction(() => document.getElementById('auMsg').textContent === '共 4 筆。');
-  assert.equal(SF.audit.pop(), '?days=30&q=' + encodeURIComponent('王小明'));
+  await page.waitForFunction(() => document.getElementById('auBtn').disabled === false && document.querySelectorAll('#auRows tr').length === 4);
+  assert.equal(SF.audit.pop(), '?days=30&limit=21&offset=0&q=' + encodeURIComponent('王小明'));
   const rows = await page.$$eval('#auRows tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent)));
   assert.deepEqual(rows.map((r) => [r[3], r[4]]), [['後台', '重置密碼'], ['工具', '立即發布（字圖）'], ['工具', '排程（套版）'], ['工具', '刪除']]);
   const links = await page.$$eval('#auRows a.au-open', (as) => as.map((a) => [a.href, a.target, a.rel, a.textContent]));
@@ -651,13 +652,11 @@ test('操作紀錄：查詢帶期間與員工編號或姓名；來源欄與篩�
   const hs = await page.$$eval('#auRows tr', (trs) => trs.map((tr) => Math.round(tr.getBoundingClientRect().height)));
   assert.ok(Math.max(...hs) - Math.min(...hs) <= 2, '有按鈕的列和沒按鈕的列一樣高：' + hs);
   if (SHOT) await page.locator('#auCard').screenshot({ path: path.join(SHOT, 'admin-audit.png') });
-  // 來源篩選：不重查
+  // 類別篩選：交給後端（?src=），從第 1 頁重查
   await page.selectOption('#auSrc', 'admin');
-  assert.equal(await page.$$eval('#auRows tr', (r) => r.length), 1);
-  assert.equal(await page.textContent('#auMsg'), '共 4 筆，顯示後台 1 筆。');
-  await page.selectOption('#auSrc', 'tool');
-  assert.equal(await page.$$eval('#auRows tr', (r) => r.length), 3);
-  assert.equal(SF.audit.length, 0);
+  await page.waitForFunction(() => document.getElementById('auBtn').disabled === false);
+  await page.waitForTimeout(100);
+  assert.equal(SF.audit.pop(), '?days=30&limit=21&offset=0&q=' + encodeURIComponent('王小明') + '&src=admin');
 });
 
 test('授權名單：320px 頁面不橫向捲動（表格自己橫捲）', async () => {

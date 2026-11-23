@@ -27,7 +27,7 @@ export const ROUTES = [
   [/^\/admin\/audit$/, 'audit'],
   [/^\/admin\/rundown(\/ping)?$/, 'rundown'],
   [/^\/admin\/assets(\/[^/]+)?$/, 'assets'],
-  [/^\/admin\/logs$/, 'logs']
+  [/^\/admin\/logs(\/read)?$/, 'logs']
 ];
 export function cardFor(path) {
   for (const [re, key] of ROUTES) if (re.test(path)) return key;
