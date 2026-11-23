@@ -1453,7 +1453,9 @@ if (window.top !== window.self) {
       $('dashSkel').hidden = true; $('dashNeed').setAttribute('aria-busy', 'false'); $('dashRefresh').disabled = false;
     });
   }
-  function dashGo(tab) { return function () { if (!$('tab-' + tab).hidden) showTab(tab, true); }; }
+  // 儀表板項目 → 該分類裡對應的功能（跳過去直接看到那張卡片）
+  var DASH_SUB = { access: 'access', profile: 'profiles', fbtoken: 'fbconn', webhook: 'webhook', groups: 'groups', logs: 'logs', rundown: 'rd', usage: 'usage', online: 'online', bg: 'bg' };
+  function dashGo(tab, key) { return function () { if (!$('tab-' + tab).hidden) showTab(tab, true, DASH_SUB[key]); }; }
   function dashRender(d) {
     var p = function (v) { return String(v).padStart(2, '0'); }, at = new Date(d.at);
     $('dashAt').textContent = '資料時間 ' + p(at.getHours()) + ':' + p(at.getMinutes());
@@ -1464,7 +1466,7 @@ if (window.top !== window.self) {
       var li = document.createElement('li'), b = document.createElement('button'), dot = document.createElement('span'), t = document.createElement('span'), go = document.createElement('span');
       b.type = 'button'; dot.className = 'dot ' + x.level; dot.setAttribute('aria-label', x.level === 'bad' ? '壞了' : '快過期或要注意');
       t.textContent = x.name + '：' + x.text; go.className = 'go'; go.textContent = DASH_TABS[x.tab] || '';
-      b.appendChild(dot); b.appendChild(t); b.appendChild(go); b.onclick = dashGo(x.tab);
+      b.appendChild(dot); b.appendChild(t); b.appendChild(go); b.onclick = dashGo(x.tab, x.key);
       li.appendChild(b); ul.appendChild(li);
     });
     $('dashAllOk').hidden = !!need.length;
@@ -1474,7 +1476,7 @@ if (window.top !== window.self) {
       b.type = 'button'; b.className = 'dash-tile ' + x.level; b.title = '到「' + (DASH_TABS[x.tab] || '') + '」';
       dot.className = 'dot ' + x.level; nm.className = 'nm'; nm.appendChild(dot); nm.appendChild(document.createTextNode(x.name));
       tx.className = 'tx'; tx.textContent = x.text;
-      b.appendChild(nm); b.appendChild(tx); b.onclick = dashGo(x.tab);
+      b.appendChild(nm); b.appendChild(tx); b.onclick = dashGo(x.tab, x.key);
       grid.appendChild(b);
     });
   }

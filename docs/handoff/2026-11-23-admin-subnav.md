@@ -17,13 +17,18 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `admin/admin.js` | `SUBS` 對照、`subApply`／`showSub`、浮出清單、hash 解析；移除 recShow/recApply | ⬜ |
-| `admin/index.html` | 移除 `#recTabs` | ⬜ |
-| `admin/admin.css` | `.sub-tabs`、`.fly`、`.card.sub-off` | ⬜ |
-| `test/e2e/admin.e2e.js` | 舊測試改成點功能；新增浮出／hash／權限測試 | ⬜ |
+| `admin/admin.js` | `SUBS` 對照、`subApply`／`showSub`、浮出清單、hash 解析；移除 recShow/recApply | ✅ |
+| `admin/index.html` | 移除 `#recTabs` | ✅ |
+| `admin/admin.css` | `.sub-tabs`、`.fly`、`.card.sub-off` | ✅ |
+| `test/e2e/admin.e2e.js` | 舊測試改成點功能；新增浮出／hash／權限測試 | ✅ |
 
 ## 下一步
-- [ ] 實作 → admin e2e → 截圖 → 獨立審查 → 給使用者看
+- [x] 實作 → admin e2e → 截圖 → 獨立審查（通過；修：首頁儀表板跳轉帶功能 `DASH_SUB`）
+- [ ] 使用者確認畫面；說「推」才併入 main（同時更新 CLAUDE.md 目前進度）
+
+## 結果
+admin＋company e2e 56 過（新增「分類浮出功能清單」測試、儀表板跳到錯誤紀錄斷言）、npm test 806、build --check。審查 Minor 未修：`#subFly` 放在 role=tablist 內、卡片沒有 role=tabpanel、方向鍵換分類每次都浮出。
+注意：系統管理者進「人員與權限」預設是第一個功能「目前在線」；「權杖組別」與「臉書連線」（含設定中的組別下拉）是兩個功能，要切換。
 
 ## 測試
 `npm test`、`node --test test/e2e/admin.e2e.js`（Playwright 用 /opt/pw-browsers/chromium）、`node build.js --check`。

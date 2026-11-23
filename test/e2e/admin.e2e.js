@@ -1103,6 +1103,8 @@ test('首頁儀表板：預設打開、需要處理（紅在前黃在後）、�
   // 點需要處理的項目：跳到使用紀錄
   await page.click('#dashList li >> nth=0');
   assert.equal(await page.getAttribute('#tab-rec', 'aria-selected'), 'true');
+  assert.equal(await page.isVisible('#lgCard'), true, '跳到錯誤紀錄那個功能');
+  assert.equal(await page.isVisible('#auCard'), false);
   // 切回首頁不重查（內容保留）
   await page.click('#tab-home');
   assert.deepEqual(DASH.fresh, [null, '1']);
