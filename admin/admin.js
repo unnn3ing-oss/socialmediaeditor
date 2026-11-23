@@ -1573,7 +1573,6 @@ if (window.top !== window.self) {
     return k;
   }
   function showTab(id, focus, sub) {
-    closeFly(true);
     TABS.forEach(function (t) {
       var on = t === id, b = $('tab-' + t);
       b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
@@ -1582,6 +1581,7 @@ if (window.top !== window.self) {
     var k = SUBS[id] ? markSub(id, sub || curSub[id]) : '';
     var h = id + (k && visSubs(id).length > 1 ? '/' + k : '');
     if (location.hash.slice(1) !== h) history.replaceState(null, '', '#' + h);
+    renderSide();
     if (focus) $('tab-' + id).focus();
     // 手機版分類列會橫向捲動：把目前分類捲進畫面
     var tb = $('tab-' + id); if (tb.scrollIntoView && window.matchMedia && window.matchMedia('(max-width:820px)').matches) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -1596,68 +1596,62 @@ if (window.top !== window.self) {
   }
   function showHash() { var h = parseHash(); showTab(h.tab, false, h.sub); }
 
-  // ---- 電腦版：游標移到左側分類 150ms 後往下浮出功能清單（蓋住下方，不推擠）；離開 200ms 關 ----
-  var fly = document.createElement('div');
-  fly.className = 'fly'; fly.id = 'subFly'; fly.hidden = true;
-  $('tab-adv').parentNode.appendChild(fly);
-  var flyTab = '', flyOpenT = 0, flyCloseT = 0, flySkip = false;
+  // ---- 電腦版：左側分類手風琴。目前分類一直展開；游標停 150ms（或鍵盤聚焦）展開其他分類，把下面往下推。
+  //      游標還在左側時展開過的都不收（收合會讓下方往上縮、游標底下換人）；離開左側才收回只剩目前分類 ----
+  var nav = $('tab-adv').parentNode, sideOpen = {}, sideT = 0, sideSkip = false;
   var wide = window.matchMedia ? window.matchMedia('(min-width:821px)') : { matches: true };
-  function openFly(t) {
-    clearTimeout(flyOpenT); clearTimeout(flyCloseT);
-    var v = visSubs(t);
-    if (!wide.matches || v.length < 2) { closeFly(true); return; }
-    var btn = $('tab-' + t);
-    if (flyTab !== t) {
-      fly.textContent = '';
-      fly.setAttribute('aria-label', btn.textContent + '的功能');
-      v.forEach(function (s) {
-        var b = document.createElement('button');
-        b.type = 'button'; b.textContent = s[1]; b.setAttribute('data-sub', s[0]);
-        if ($('tab-' + t).getAttribute('aria-selected') === 'true' && curSub[t] === s[0]) b.setAttribute('aria-current', 'true');
-        b.onclick = function () { showTab(t, false, s[0]); var sb = $('sub-' + t + '-' + s[0]); if (sb && !sb.hidden && sb.offsetParent) sb.focus(); };
-        fly.appendChild(b);
-      });
-      flyTab = t;
-    }
-    fly.style.top = (btn.offsetTop + btn.offsetHeight + 2) + 'px';
-    fly.hidden = false; btn.setAttribute('aria-expanded', 'true');
-  }
-  function closeFly(now) {
-    clearTimeout(flyOpenT); clearTimeout(flyCloseT);
-    var done = function () {
-      fly.hidden = true;
-      if (flyTab) $('tab-' + flyTab).removeAttribute('aria-expanded');
-      flyTab = '';
-    };
-    if (now) done(); else flyCloseT = setTimeout(done, 200);
-  }
-  fly.addEventListener('mouseenter', function () { clearTimeout(flyCloseT); });
-  fly.addEventListener('mouseleave', function () { closeFly(); });
-  fly.addEventListener('keydown', function (e) {
-    var bs = Array.prototype.slice.call(fly.querySelectorAll('button')), i = bs.indexOf(document.activeElement);
-    if (e.key === 'Escape') { var t = flyTab; closeFly(true); if (t) { flySkip = true; $('tab-' + t).focus(); flySkip = false; } e.preventDefault(); return; }
-    var d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
-    if (d === undefined || i < 0) return;
-    e.preventDefault(); bs[(i + d + bs.length) % bs.length].focus();
+  Object.keys(SUBS).forEach(function (t) {
+    var g = document.createElement('div');
+    g.className = 'side-sub'; g.id = 'side-' + t; g.hidden = true; g.setAttribute('role', 'group'); g.setAttribute('aria-label', $('tab-' + t).textContent + '的功能');
+    SUBS[t].forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = s[1]; b.setAttribute('data-sub', s[0]); b.id = 'side-' + t + '-' + s[0];
+      b.onclick = function () { showTab(t, false, s[0]); };
+      g.appendChild(b);
+    });
+    var tb = $('tab-' + t); tb.parentNode.insertBefore(g, tb.nextSibling);
   });
-  // 焦點離開分類列與清單就關
-  $('tab-adv').parentNode.addEventListener('focusout', function (e) {
-    if (!e.relatedTarget || !this.contains(e.relatedTarget)) closeFly(true);
+  function curTab() { var c = ''; TABS.forEach(function (t) { if ($('tab-' + t).getAttribute('aria-selected') === 'true') c = t; }); return c; }
+  function renderSide() {
+    var cur = curTab();
+    Object.keys(SUBS).forEach(function (t) {
+      var v = visSubs(t), g = $('side-' + t), on = wide.matches && v.length > 1 && !$('tab-' + t).hidden && (t === cur || !!sideOpen[t]);
+      g.hidden = !on;
+      if (t === cur) $('tab-' + t).removeAttribute('aria-expanded'); else $('tab-' + t).setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (v.length < 2 || !wide.matches) $('tab-' + t).removeAttribute('aria-expanded');
+      SUBS[t].forEach(function (s) {
+        var b = $('side-' + t + '-' + s[0]);
+        b.hidden = v.indexOf(s) < 0;
+        if (t === cur && curSub[t] === s[0]) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+      });
+    });
+  }
+  function sideClose() { clearTimeout(sideT); sideOpen = {}; renderSide(); }
+  nav.addEventListener('mouseleave', sideClose);
+  nav.addEventListener('focusout', function (e) { if (!e.relatedTarget || !nav.contains(e.relatedTarget)) sideClose(); });
+  if (wide.addEventListener) wide.addEventListener('change', renderSide);
+  // 子功能按鈕：上下鍵移動、Esc 收起（目前分類不收）並回到分類
+  nav.addEventListener('keydown', function (e) {
+    var g = e.target.parentNode; if (!g || !g.classList || !g.classList.contains('side-sub')) return;
+    var t = g.id.slice(5), bs = Array.prototype.filter.call(g.querySelectorAll('button'), function (x) { return !x.hidden; }), i = bs.indexOf(e.target);
+    if (e.key === 'Escape') { delete sideOpen[t]; renderSide(); sideSkip = true; $('tab-' + t).focus(); sideSkip = false; e.preventDefault(); return; }
+    var d = { ArrowDown: 1, ArrowUp: -1 }[e.key]; if (d === undefined) return;
+    e.preventDefault(); bs[(i + d + bs.length) % bs.length].focus();
   });
 
   TABS.forEach(function (t) {
     var b = $('tab-' + t);
     b.onclick = function () { showTab(t); };
     b.addEventListener('mouseenter', function () {
-      clearTimeout(flyOpenT); clearTimeout(flyCloseT);
-      if (flyTab === t) return;
-      flyOpenT = setTimeout(function () { openFly(t); }, flyTab ? 0 : 150);
+      clearTimeout(sideT);
+      if (!SUBS[t] || sideOpen[t]) return;
+      sideT = setTimeout(function () { sideOpen[t] = true; renderSide(); }, 150);
     });
-    b.addEventListener('mouseleave', function () { clearTimeout(flyOpenT); if (flyTab) closeFly(); });
-    // 鍵盤聚焦（不是滑鼠點）也浮出；Esc 關
-    b.addEventListener('focus', function () { if (!flySkip && b.matches && b.matches(':focus-visible')) openFly(t); });
+    b.addEventListener('mouseleave', function () { clearTimeout(sideT); });
+    // 鍵盤聚焦（不是滑鼠點）也展開
+    b.addEventListener('focus', function () { if (!sideSkip && SUBS[t] && b.matches && b.matches(':focus-visible')) { sideOpen[t] = true; renderSide(); } });
     b.onkeydown = function (e) {
-      if (e.key === 'Escape' && flyTab) { closeFly(true); e.preventDefault(); return; }
+      if (e.key === 'Escape' && sideOpen[t]) { delete sideOpen[t]; renderSide(); e.preventDefault(); return; }
       var v = visTabs(), i = v.indexOf(t);
       var d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
       if (e.key === 'Home') d = -i; else if (e.key === 'End') d = v.length - 1 - i;

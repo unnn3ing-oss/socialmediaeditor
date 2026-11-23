@@ -1200,7 +1200,7 @@ test('發送通知（系統管理者）：選收件方式、確認人數、送�
   assert.equal(await p2.isVisible('#msCard'), false);
 });
 
-test('分類浮出功能清單：游標移上浮出、點功能只顯示該卡片、上方功能分頁、網址記功能；手機不浮出', async () => {
+test('左側分類手風琴：目前分類展開、游標移上展開並往下推、離開左側收回；點功能只顯示該卡片、上方功能分頁、網址記功能；手機不展開', async () => {
   const { page } = await open({ width: 1280, height: 860 }, '#post/video');
   await login(page);
   // 網址帶功能：直接打開影片設定，同分類其他卡片隱藏
@@ -1208,49 +1208,58 @@ test('分類浮出功能清單：游標移上浮出、點功能只顯示該卡�
   assert.equal(await page.isVisible('#pgCard'), false);
   assert.equal(await page.getAttribute('#sub-post-video', 'aria-selected'), 'true');
   assert.deepEqual(await page.$$eval('#subs-post button', (b) => b.filter((x) => !x.hidden).map((x) => x.textContent)), ['粉專設定', '活動留言', '文字背景', '影片設定']);
-  // 游標移到「使用紀錄」：浮出清單，蓋在下方分類上（不推擠）
+  // 目前分類一直展開，標出目前功能
+  assert.equal(await page.isVisible('#side-post'), true);
+  assert.equal(await page.getAttribute('#side-post-video', 'aria-current'), 'true');
+  assert.equal(await page.isVisible('#side-rec'), false);
+  // 游標移到「使用紀錄」：在下方展開，把「進階設定」往下推
   const advY = (await page.locator('#tab-adv').boundingBox()).y;
   await page.hover('#tab-rec');
-  await page.waitForSelector('#subFly:not([hidden])');
-  assert.deepEqual(await page.$$eval('#subFly button', (b) => b.map((x) => x.textContent)), ['操作紀錄', '錯誤紀錄']);
-  assert.equal((await page.locator('#tab-adv').boundingBox()).y, advY, '不推擠下方分類');
+  await page.waitForSelector('#side-rec:not([hidden])');
+  assert.deepEqual(await page.$$eval('#side-rec button', (b) => b.map((x) => x.textContent)), ['操作紀錄', '錯誤紀錄']);
+  assert.ok((await page.locator('#tab-adv').boundingBox()).y > advY + 40, '往下推');
+  // 游標往上移到別的分類：已展開的不收（游標底下不會換掉）
+  const recY = (await page.locator('#tab-rec').boundingBox()).y;
+  await page.hover('#tab-conn'); await page.waitForSelector('#side-conn:not([hidden])');
+  assert.equal(await page.isVisible('#side-rec'), true);
+  assert.equal((await page.locator('#tab-conn').boundingBox()).y < recY, true);
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-fly.png') });
-  await page.click('#subFly button:has-text("錯誤紀錄")');
-  assert.equal(await page.isVisible('#subFly'), false);
+  await page.click('#side-rec-logs');
   assert.equal(await page.isVisible('#lgCard'), true);
   assert.equal(await page.isVisible('#auCard'), false);
   assert.ok(page.url().endsWith('#rec/logs'));
+  // 離開左側：收回，只剩目前分類展開
+  await page.mouse.move(900, 600);
+  await page.waitForSelector('#side-conn', { state: 'hidden' });
+  assert.equal(await page.isVisible('#side-rec'), true);
+  assert.equal(await page.isVisible('#side-post'), false);
+  assert.equal(await page.getAttribute('#side-rec-logs', 'aria-current'), 'true');
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-one.png') });
-  // 上方功能分頁切換
+  // 上方功能分頁切換，左側跟著標
   await page.click('#sub-rec-audit');
   assert.equal(await page.isVisible('#auCard'), true);
   assert.equal(await page.isVisible('#lgCard'), false);
   assert.ok(page.url().endsWith('#rec/audit'));
+  assert.equal(await page.getAttribute('#side-rec-audit', 'aria-current'), 'true');
   // 填到一半切走再回來，內容還在
   await page.fill('#auUid', '填到一半');
   await page.click('#sub-rec-logs'); await page.click('#sub-rec-audit');
   assert.equal(await page.inputValue('#auUid'), '填到一半');
-  // 素材設定不拆：不浮出、沒有功能分頁
-  await page.hover('#tab-assets');
-  await page.waitForTimeout(300);
-  assert.equal(await page.isVisible('#subFly'), false);
-  // 游標離開就關
-  await page.hover('#tab-conn'); await page.waitForSelector('#subFly:not([hidden])');
-  await page.mouse.move(900, 600); await page.waitForSelector('#subFly', { state: 'hidden' });
-  // 鍵盤：Esc 關閉
-  await page.hover('#tab-conn'); await page.waitForSelector('#subFly:not([hidden])');
-  await page.focus('#subFly button'); await page.keyboard.press('Escape');
-  assert.equal(await page.isVisible('#subFly'), false);
-  assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-conn', 'Esc 後焦點回分類');
+  // 素材設定不拆：沒有子功能
+  assert.equal(await page.$('#side-assets'), null);
+  // 鍵盤：Esc 收起並回到分類
+  await page.hover('#tab-guard'); await page.waitForSelector('#side-guard:not([hidden])');
+  await page.focus('#side-guard button'); await page.keyboard.press('Escape');
+  assert.equal(await page.isVisible('#side-guard'), false);
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-guard');
   // 舊網址只寫分類：開第一個功能
   await page.evaluate(() => { location.hash = '#guard'; });
   await page.waitForFunction(() => location.hash === '#guard/set');
   assert.equal(await page.isVisible('#gdCard'), true);
   assert.equal(await page.isVisible('#gdLogCard'), false);
-  // 手機：不浮出，功能分頁在
+  // 手機：左側不展開，功能分頁在
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.hover('#tab-rec'); await page.waitForTimeout(300);
-  assert.equal(await page.isVisible('#subFly'), false);
+  assert.equal(await page.isVisible('#side-guard'), false);
   assert.equal(await page.isVisible('#subs-guard'), true);
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-phone.png') });
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
