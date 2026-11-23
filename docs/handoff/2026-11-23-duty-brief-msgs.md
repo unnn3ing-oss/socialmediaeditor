@@ -13,13 +13,14 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `tools/fbpost/duty.js`＋測試 | 早晚班與到期 | ⬜ |
-| `server/fb/timer.js`、`server/fb/notices.js`、`server/fb/manage.js`、`admin/admin.js` 錯誤紀錄欄 | 概述 `brief`／完整說明進錯誤紀錄 | ⬜ |
-| `tools/fbpost/live.js`＋css | 即時狀態小視窗 | ⬜ |
-| `server/core/msgs.js`（新）、`server/core/auth.js` 路由、`shell/notices.js`、`shell/company.*`、`admin/header.js`、`admin/` 卡片、隱私權政策 | 手動通知（子代理） | ⬜ |
+| `tools/fbpost/duty.js`＋測試 | 早晚班與到期 | ✅ |
+| `server/fb/timer.js`、`server/fb/notices.js`、`server/fb/manage.js`、`admin/admin.js` 錯誤紀錄欄 | 概述 `briefOf`／完整說明＋臉書原文進錯誤紀錄 detail（500 字） | ✅ |
+| `tools/fbpost/live.js`＋css | 即時狀態小視窗 `#liveTip` | ✅ |
+| `server/core/msgs.js`（新）、`server/core/auth.js` 路由、`shell/notices.js`、`shell/company.*`、`admin/header.js`、`admin/` 卡片、隱私權政策 | 手動通知（子代理 95ad9bc，審查 16b281a） | ✅ |
 
 ## 下一步
-- [ ] 上表逐項＋測試＋獨立審查 → 給使用者看 → 使用者說「推」才併 main
+- [x] 上表逐項＋測試＋獨立審查（npm test 806、admin／company／legal／fbpost e2e 113、build --check）
+- [ ] 給使用者看 → 使用者說「推」才併 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 注意
 - 手動通知需後端重新部署（正式＋測試），外掛不升版。
