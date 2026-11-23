@@ -1006,6 +1006,9 @@ test('表格欄寬：拖表頭右緣改寬、重新整理還在、雙擊恢復�
   await page.mouse.up();
   const w1 = await page.$eval(th, (e) => e.getBoundingClientRect().width);
   assert.ok(Math.abs(w1 - (w0 + 80)) <= 3, `拖了 80px：${w0} → ${w1}`);
+  // 欄內輸入框跟著欄寬（不超出、不被裁）
+  const fit = await page.$eval('#sfRows tr:first-child td:nth-child(2)', (td) => [td.getBoundingClientRect().width, td.querySelector('input').getBoundingClientRect().width]);
+  assert.ok(fit[1] <= fit[0] && fit[1] >= fit[0] - 20, '姓名框跟著欄寬：' + fit);
   const saved = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('tbx.admin.colw.')));
   assert.deepEqual(saved, ['tbx.admin.colw.sfCard.0']);
   // 重新整理：欄寬還在
