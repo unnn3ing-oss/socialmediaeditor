@@ -1,5 +1,5 @@
 # 留言失敗通知已讀＋錯誤紀錄貼文資訊＋使用紀錄分頁
-- 狀態：待使用者確認　- 分支：claude/modest-bohr-dxn17c　- 最後更新：2026-11-23
+- 狀態：已完成　- 分支：claude/modest-bohr-dxn17c　- 最後更新：2026-11-23
 - 使用者原始需求：「留言失敗通知在後台的錯誤訊息也要有顯示完整的發布粉專、貼文概覽、貼文類型、貼文發布時間，且保留可以標記處理狀態的功能」「使用記錄的操作紀錄跟錯誤紀錄（最近的紀錄改名）變為分頁切換，可調整單頁顯示清單數（20/50/100）並且可以查看上/下一頁」「處理狀態要有已讀…發文者完成處理（已讀或補留言），系統管理者顯示黃色外框」→「開始，1A 2A 3 一起」
 
 ## 已定案的決定
@@ -15,9 +15,9 @@
 | 推 main | 和「錯誤訊息改中文」（bf595ec）一起 |
 
 ## 下一步
-- [ ] 後端：timer 存 ptype；notices 狀態欄＋read API；logs 補欄＋分頁＋狀態；audit 分頁
-- [ ] 前端：shell 通知已讀＋黃框；admin 分頁切換＋錯誤紀錄欄位＋翻頁
-- [ ] 測試、截圖給使用者
+- [x] 後端：timer 存 ptype；notices 狀態欄＋read API；logs 補欄＋分頁＋狀態；audit 分頁
+- [x] 前端：shell 通知已讀＋黃框；admin 分頁切換＋錯誤紀錄欄位＋翻頁
+- [x] 測試、截圖給使用者
 
 ## 實作結果（2026-11-23）
 - 後端：`fb_notices` 加 state／how／hby／hname／hat；`logs` 加 post／title／ptype／pub_at／page_name／st／st_by／st_name／st_at（自動補欄）；`POST /staff/me/notices/read`、`POST /admin/logs/read`；`/admin/logs`、`/admin/audit` 支援 limit／offset（與 st、src 篩選）。

@@ -38,13 +38,15 @@ export async function setNotice(env, { postId, pageId, kind, by, title }, a, { r
   await ensure(env);
   const id = String(postId);
   if (!a) {
-    if (canceled) { await run(env, 'DELETE FROM fb_notices WHERE post_id = ?', id); return; }
+    // 整則取消、自動恢復：錯誤紀錄還沒處理的一起結案（記「系統」），管理頁才不會一直顯示未處理
+    if (canceled) { await run(env, 'DELETE FROM fb_notices WHERE post_id = ?', id); await setLogState(env, id, 'closed', { uid: 'system', name: '系統（貼文已取消）' }, ['open']); return; }
     if (retry) {
       await run(env, "UPDATE fb_notices SET state = 'handled', how = 'retry', hby = ?, hname = ?, hat = ? WHERE post_id = ?", String(retry.uid || ''), String(retry.name || ''), Date.now(), id);
       await setLogState(env, id, 'retry', retry, ['open', 'read']);
       return;
     }
     await run(env, "DELETE FROM fb_notices WHERE post_id = ? AND state = 'open'", id);
+    await setLogState(env, id, 'closed', { uid: 'system', name: '系統（自動重試成功）' }, ['open']);
     return;
   }
   await run(env, "INSERT INTO fb_notices (post_id, page, kind, seq, error, failed, at, by, title, state, how, hby, hname, hat) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', '', '', '', 0) ON CONFLICT(post_id) DO UPDATE SET page = excluded.page, kind = excluded.kind, seq = excluded.seq, error = excluded.error, failed = excluded.failed, at = excluded.at, by = excluded.by, title = excluded.title, state = 'open', how = '', hby = '', hname = '', hat = 0",

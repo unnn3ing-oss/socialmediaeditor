@@ -342,6 +342,15 @@ test('通知已讀：發文者已讀＝handled（自己看不到、看全部的�
   await setNotice(env, { ...rec, postId: '111_3' }, null);
   await setNotice(env, { ...rec, postId: '111_4' }, null);
   assert.deepEqual(env.DB.raw.prepare("SELECT post_id, state FROM fb_notices WHERE post_id IN ('111_3', '111_4')").all().map((x) => [x.post_id, x.state]), [['111_4', 'handled']]);
+  // 錯誤紀錄：自動恢復的未處理列結案（系統），發文者已完成的維持
+  const { logCommentFail: lcf } = await import('../../server/fb/notices.js');
+  await lcf(env, { ...rec, postId: '111_5' }, 32, 'x');
+  await setNotice(env, { ...rec, postId: '111_5' }, { seq: 1, error: 'z', failed: false });
+  await setNotice(env, { ...rec, postId: '111_5' }, null);
+  assert.deepEqual({ ...env.DB.raw.prepare("SELECT st, st_by FROM logs WHERE post = '111_5'").get() }, { st: 'closed', st_by: 'system' });
+  await lcf(env, { ...rec, postId: '111_6' }, 32, 'x');
+  await setNotice(env, { ...rec, postId: '111_6' }, null, { canceled: true });
+  assert.equal(env.DB.raw.prepare("SELECT st FROM logs WHERE post = '111_6'").get().st, 'closed');
   // 新的失敗：回到未處理
   await setNotice(env, { ...rec, postId: '111_4' }, { seq: 2, error: 'w', failed: true });
   assert.equal(env.DB.raw.prepare("SELECT state FROM fb_notices WHERE post_id = '111_4'").get().state, 'open');
