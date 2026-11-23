@@ -47,10 +47,18 @@
 @keyframes acct-glow { 0%, 100% { box-shadow: 0 0 0 2px rgba(217, 45, 32, .25), 0 0 6px 1px rgba(217, 45, 32, .25); } 50% { box-shadow: 0 0 0 4px rgba(217, 45, 32, .45), 0 0 16px 4px rgba(217, 45, 32, .55); } }
 @media (prefers-reduced-motion: reduce) { .acct-pill.acct-alert { animation: none; box-shadow: 0 0 0 3px rgba(217, 45, 32, .4), 0 0 12px 3px rgba(217, 45, 32, .45); } }
 /* 只有發文者已處理的通知（看全部的人）：黃色外框、不閃 */
+.acct-pill.acct-msg { border-color: #f5b700; animation: acct-glow-y 1.2s ease-in-out infinite; }
+@keyframes acct-glow-y { 0%, 100% { box-shadow: 0 0 0 2px rgba(245, 183, 0, .25), 0 0 6px 1px rgba(245, 183, 0, .25); } 50% { box-shadow: 0 0 0 4px rgba(245, 183, 0, .45), 0 0 16px 4px rgba(245, 183, 0, .6); } }
+@media (prefers-reduced-motion: reduce) { .acct-pill.acct-msg { animation: none; box-shadow: 0 0 0 3px rgba(245, 183, 0, .45), 0 0 12px 3px rgba(245, 183, 0, .5); } }
 .acct-pill.acct-warn { border-color: #f79009; box-shadow: 0 0 0 3px rgba(247, 144, 9, .35); }
 .acct-note.is-handled { border-color: #fedf89; background: #fffaeb; }
 .acct-note.is-handled .acct-note-top b { color: #b54708; }
 .acct-note-who { margin-top: 4px; font-size: 12px; color: #b54708; font-weight: 600; }
+.acct-note.acct-msgcard { border-color: #fde272; background: #fffbe6; }
+.acct-msgcard .acct-note-top b { color: #854a0e; }
+.acct-msg-body { margin-top: 4px; font-size: 13px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.acct-note.acct-msgcard.is-read { border-color: var(--line, #d0d5dd); background: #f2f4f7; }
+.acct-msgcard.is-read .acct-note-top b, .acct-msgcard.is-read .acct-msg-body { color: var(--muted); }
 .acct-notes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .acct-notes[hidden] { display: none; }
 .acct-note { padding: 10px 12px; border: 1px solid #fecdca; border-radius: var(--radius-control); background: #fef3f2; }

@@ -75,6 +75,7 @@ if (window.top !== window.self) {
     // 首頁儀表板：可看的項目（me.dash）有一項以上才顯示
     $('tab-home').hidden = !(me.dash && me.dash.length);
     $('olCard').hidden = !(me.role === 'sys' && can('staff'));   // 目前在線：只有系統管理者
+    $('msCard').hidden = me.role !== 'sys';   // 發送通知：只有系統管理者（不用解鎖）
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
     recApply();
     $('whoTag').hidden = false;
@@ -83,7 +84,7 @@ if (window.top !== window.self) {
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
-  function resetLoaded() { fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; }
+  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; }
   // 用目前的 token 讀身分；成功就進入管理頁
   function enter(msgEl) {
     return api('/admin/me').then(function (res) {
@@ -1113,7 +1114,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言', comment_retry: '重新留言' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言', comment_retry: '重新留言', msg_send: '發送通知', msg_recall: '撤回通知' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };
@@ -1157,6 +1158,7 @@ if (window.top !== window.self) {
   }
   function sfRender() {
     if (!sfState) return;
+    msFill();
     var keep = $('sfGroup').value;
     $('sfGroup').textContent = '';
     sfState.groups.forEach(function (g) { if (g.assignable === false) return; var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('sfGroup').appendChild(o); });
@@ -1261,6 +1263,94 @@ if (window.top !== window.self) {
     if (!sfState) return;
     var r = sgRow({ id: '', name: '', perms: [], used: 0 }); $('sgRows').appendChild(r); r.querySelector('input').focus();
   };
+
+  // ---- 發送通知（只有系統管理者；後端 server/core/msgs.js）----
+  var msLoaded = false, msBusy = false;
+  function msStaff() { return ((sfState && sfState.staff) || []).filter(function (s) { return s.enabled; }); }
+  function msFill() {
+    if (!me || me.role !== 'sys') return;
+    var st = msStaff(), keepOne = $('msOne').value, keepGrp = $('msGroup').value;
+    var checked = {}; Array.prototype.forEach.call($('msMany').querySelectorAll('input:checked'), function (c) { checked[c.value] = 1; });
+    $('msOne').textContent = ''; $('msMany').textContent = ''; $('msGroup').textContent = '';
+    st.forEach(function (s) {
+      var o = document.createElement('option'); o.value = s.id; o.textContent = s.name + '（' + s.id + '）'; $('msOne').appendChild(o);
+      var l = sfEl('label'), c = document.createElement('input'); c.type = 'checkbox'; c.value = s.id; c.checked = !!checked[s.id];
+      l.appendChild(c); l.appendChild(document.createTextNode(s.name + '（' + s.id + '）')); $('msMany').appendChild(l);
+    });
+    ((sfState && sfState.groups) || []).forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; $('msGroup').appendChild(o); });
+    if (keepOne) $('msOne').value = keepOne;
+    if (keepGrp) $('msGroup').value = keepGrp;
+  }
+  function msApplyMode() {
+    var m = $('msMode').value;
+    $('msOneBox').hidden = m !== 'one'; $('msManyBox').hidden = m !== 'many'; $('msGroupBox').hidden = m !== 'group';
+    $('msConfirm').hidden = true;
+  }
+  // 目前選的收件人 → { body, n }（n＝預計收到的人數）
+  function msPayload() {
+    var m = $('msMode').value, st = msStaff(), b = { mode: m, body: $('msBody').value.trim() }, n = 0;
+    if (m === 'one') { b.uids = $('msOne').value ? [$('msOne').value] : []; n = b.uids.length; }
+    else if (m === 'many') { b.uids = Array.prototype.map.call($('msMany').querySelectorAll('input:checked'), function (c) { return c.value; }); n = b.uids.length; }
+    else if (m === 'all') n = st.length;
+    else { var gv = $('msGroup').value; b.group = /^\d+$/.test(gv) ? Number(gv) : gv; n = st.filter(function (s) { return String(s.group) === String(b.group); }).length; }
+    return { body: b, n: n };
+  }
+  $('msMode').onchange = msApplyMode;
+  $('msBody').oninput = function () { $('msCount').textContent = $('msBody').value.length + '／200 字'; $('msConfirm').hidden = true; };
+  $('msSend').onclick = function () {
+    var p = msPayload();
+    if (!p.body.body) return say($('msMsg'), '請輸入通知內容。', 'err');
+    if (!p.n) return say($('msMsg'), '沒有可收件的人，請選擇收件人。', 'err');
+    say($('msMsg'), '');
+    $('msCfText').textContent = '要發送給 ' + p.n + ' 人嗎？';
+    $('msConfirm').hidden = false;
+  };
+  $('msCfNo').onclick = function () { $('msConfirm').hidden = true; };
+  $('msCfYes').onclick = function () {
+    if (msBusy) return;
+    var p = msPayload(); msBusy = true; $('msCfYes').disabled = true;
+    api('/admin/msgs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p.body) }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('msMsg'), res.error || '發送失敗。', 'err'); return; }
+      $('msBody').value = ''; $('msCount').textContent = '0／200 字';
+      say($('msMsg'), '已發送給 ' + res.data.count + ' 人。', 'good'); return msLoad();
+    }).catch(function (e) { say($('msMsg'), '發送失敗：' + (e && e.message || ''), 'err'); })
+      .then(function () { msBusy = false; $('msCfYes').disabled = false; $('msConfirm').hidden = true; });
+  };
+  function msLoad() {
+    return api('/admin/msgs').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      msRender(res.data.items || []);
+    }).catch(function (e) { msLoaded = false; say($('msMsg'), '讀取已發送清單失敗：' + (e && e.message || ''), 'err'); });
+  }
+  function msRender(items) {
+    var ul = $('msList'); ul.textContent = '';
+    items.forEach(function (m) {
+      var li = sfEl('li', 'ms-item' + (m.recalled ? ' is-recalled' : ''));
+      var top = sfEl('div', 'ms-top'); top.appendChild(sfEl('span', '', fmtTime(m.at))); top.appendChild(sfEl('span', '', '收件 ' + m.count + ' 人'));
+      if (m.recalled) top.appendChild(sfEl('b', '', '已撤回'));
+      var body = sfEl('div', 'ms-body', m.body);
+      var ops = sfEl('div', 'ms-ops');
+      var tg = sfEl('button', '', '已讀 ' + m.read + '／' + m.count); tg.type = 'button'; tg.setAttribute('aria-expanded', 'false');
+      var to = sfEl('ul', 'ms-to'); to.hidden = true;
+      (m.to || []).forEach(function (t) { var x = sfEl('li', t.readAt ? 'is-read' : 'is-unread', t.name + (t.readAt ? '　已讀 ' + fmtShort(t.readAt) : '　未讀')); to.appendChild(x); });
+      tg.onclick = function () { to.hidden = !to.hidden; tg.setAttribute('aria-expanded', String(!to.hidden)); };
+      ops.appendChild(tg);
+      if (!m.recalled) {
+        var rc = sfEl('button', 'danger', '撤回'); rc.type = 'button';
+        rc.onclick = function () {
+          rc.disabled = true;
+          api('/admin/msgs/' + m.id + '/recall', { method: 'POST' }).then(function (res) {
+            if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('msMsg'), res.error || '撤回失敗。', 'err'); rc.disabled = false; return; }
+            say($('msMsg'), '已撤回，收件人不會再看到這則通知。', 'good'); return msLoad();
+          }).catch(function (e) { rc.disabled = false; say($('msMsg'), '撤回失敗：' + (e && e.message || ''), 'err'); });
+        };
+        ops.appendChild(rc);
+      }
+      li.appendChild(top); li.appendChild(body); li.appendChild(ops); li.appendChild(to); ul.appendChild(li);
+    });
+    $('msEmpty').hidden = items.length > 0; ul.hidden = !items.length;
+  }
+  msApplyMode();
   // 目前在線（只有系統管理者）：名單的最後使用時間在 5 分鐘內＝在線（後端每 5 分鐘最多記一次，不另打 API）
   var ONLINE_MS = 5 * 60 * 1000;
   function olRender() {
@@ -1461,6 +1551,7 @@ if (window.top !== window.self) {
     // 臉書相關卡片（發文設定、留言管理、連接狀態、進階設定）共用一次讀取
     if ((id === 'post' || id === 'guard' || id === 'conn' || id === 'adv') && !fbLoaded && token) fbLoad();
     if ((id === 'people' || id === 'adv') && !staffLoaded && token && (can('staff') || can('groups'))) { staffLoaded = true; sfLoad(); }
+    if (id === 'people' && me && me.role === 'sys' && !msLoaded && token) { msLoaded = true; msLoad(); }
     if (id === 'conn' && !rdLoaded && token && can('rundown')) rdLoad();
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
     if (id === 'home' && !dashLoaded && token && me && me.dash && me.dash.length) dashLoad(false);

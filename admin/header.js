@@ -36,7 +36,7 @@ export function initHeader({ storage = window.localStorage } = {}) {
   pop.setAttribute('aria-label', '通知');
   pop.hidden = true;
   const TOOL_OF = { post: 'fbpost', video: 'fbvideo' };
-  const box = createNotices({ api, toast, openTool: (k) => { location.href = '../#' + (TOOL_OF[k] || 'fbpost'); }, onChange: (items) => paintAlert(btn, items) });
+  const box = createNotices({ api, toast, openTool: (k) => { location.href = '../#' + (TOOL_OF[k] || 'fbpost'); }, onChange: (items, msgs) => paintAlert(btn, items, msgs) });
   pop.append(box.section);
   document.body.append(pop);
   function place() {

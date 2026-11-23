@@ -19,14 +19,19 @@ export function fmtNoteTime(ms) {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 // 帳號框外觀：有未處理＝紅色光暈閃爍；只有已處理＝黃色外框（不閃）
-export function paintAlert(button, items) {
+//   msgs＝系統管理者發的通知：有未讀＝黃色光暈閃爍（紅色優先，沒有紅色才閃黃色）
+export function paintAlert(button, items, msgs = []) {
   const red = items.filter((n) => n.state !== 'handled').length;
   const yellow = items.length - red;
+  const unread = msgs.filter((m) => !m.readAt).length;
   button.classList.toggle('acct-alert', red > 0);
-  button.classList.toggle('acct-warn', red === 0 && yellow > 0);
+  button.classList.toggle('acct-msg', red === 0 && unread > 0);
+  button.classList.toggle('acct-warn', red === 0 && unread === 0 && yellow > 0);
   const old = button.querySelector('.sr-only');
   if (old) old.remove();
-  if (items.length) button.append(mk('span', 'sr-only', red ? `，有 ${red} 則未處理通知` : `，有 ${yellow} 則已處理通知待確認`));
+  if (red) button.append(mk('span', 'sr-only', `，有 ${red} 則未處理通知`));
+  else if (unread) button.append(mk('span', 'sr-only', `，有 ${unread} 則未讀通知`));
+  else if (items.length) button.append(mk('span', 'sr-only', `，有 ${yellow} 則已處理通知待確認`));
 }
 
 // openTool(kind)：kind＝'post'／'video'；toast(text)：顯示提示；onChange(items)：清單變動（給帳號框上色）
@@ -40,15 +45,44 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
   h.append(scope);
   section.append(h, empty, list);
   let items = [];
+  let msgs = [];   // 系統管理者發的通知（GET /staff/me/msgs）
   let all = false;
   let req = 0;
+  let mreq = 0;
 
-  function drop(n) { items = items.filter((x) => x !== n); render(); onChange(items); }
+  function drop(n) { items = items.filter((x) => x !== n); render(); onChange(items, msgs); }
+  // 手動通知卡片：未讀黃色（知道了）、已讀灰色；排在留言失敗卡片之後，已讀在最下面
+  function msgCard(m) {
+    const read = !!m.readAt;
+    const li = mk('li', 'acct-note acct-msgcard' + (read ? ' is-read' : ''));
+    const top = mk('div', 'acct-note-top');
+    top.append(mk('b', null, (m.fromName || '系統管理者') + ' 的通知'), mk('small', null, fmtNoteTime(m.at)));
+    li.append(top, mk('div', 'acct-msg-body', m.body));
+    if (!read) {
+      const acts = mk('div', 'acct-note-act');
+      const ok = mk('button', 'btn btn-secondary btn-sm acct-done', '知道了');
+      ok.type = 'button';
+      ok.addEventListener('click', async () => {
+        ok.disabled = true;
+        try {
+          await api.call('/staff/me/msgs/read', { method: 'POST', body: { id: m.id } });
+          m.readAt = Date.now();
+          render(); onChange(items, msgs);
+        } catch (ex) {
+          if (ex && ex.code === 'not_found') { msgs = msgs.filter((x) => x !== m); render(); onChange(items, msgs); return; }
+          ok.disabled = false; toast((ex && ex.message) || '標記已讀失敗');
+        }
+      });
+      acts.append(ok);
+      li.append(acts);
+    }
+    return li;
+  }
   function render() {
     scope.textContent = all ? '（全部人的留言失敗）' : '（你發的貼文）';
     list.textContent = '';
-    empty.hidden = items.length > 0;
-    list.hidden = !items.length;
+    empty.hidden = items.length > 0 || msgs.length > 0;
+    list.hidden = !items.length && !msgs.length;
     for (const n of items) {
       const done = n.state === 'handled';
       const li = mk('li', 'acct-note' + (done ? ' is-handled' : ''));
@@ -104,8 +138,13 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
       li.append(acts);
       list.append(li);
     }
+    const byTime = (a, b) => b.at - a.at;
+    for (const m of msgs.filter((x) => !x.readAt).sort(byTime)) list.append(msgCard(m));
+    // 已讀的依按下時間由舊到新：剛按「知道了」的卡片落在清單最下方
+    for (const m of msgs.filter((x) => x.readAt).sort((a, b) => a.readAt - b.readAt)) list.append(msgCard(m));
   }
   async function load() {
+    loadMsgs();
     const my = ++req;
     try {
       const d = await api.call('/staff/me/notices');
@@ -114,10 +153,21 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
       all = !!(d && d.all);
     } catch { return items; /* 讀不到維持原本 */ }
     render();
-    onChange(items);
+    onChange(items, msgs);
     return items;
   }
-  function clear() { req++; items = []; render(); onChange(items); }
+  // 手動通知另外讀；讀不到（舊後端、沒登入員工）維持原本
+  async function loadMsgs() {
+    const my = ++mreq;
+    try {
+      const d = await api.call('/staff/me/msgs');
+      if (my !== mreq) return;
+      msgs = d && Array.isArray(d.items) ? d.items : [];
+    } catch { return; }
+    render();
+    onChange(items, msgs);
+  }
+  function clear() { req++; mreq++; items = []; msgs = []; render(); onChange(items, msgs); }
   render();
-  return { section, load, clear, items: () => items };
+  return { section, load, clear, items: () => items, msgs: () => msgs };
 }

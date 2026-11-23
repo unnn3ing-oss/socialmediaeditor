@@ -22,7 +22,7 @@ const STAFF = { A123: { name: '王小明', group: '小編組', level: 'staff', p
 async function open(vp = { width: 1280, height: 820 }) {
   const ctx = await browser.newContext({ viewport: vp });
   const page = await ctx.newPage();
-  const api = { statusCode: 200, authDown: false, bodies: [], hosts: [], pwBodies: [], notices: null, retries: [] };
+  const api = { statusCode: 200, authDown: false, bodies: [], hosts: [], pwBodies: [], notices: null, retries: [], msgs: null, msgReads: [] };
   const staff = JSON.parse(JSON.stringify(STAFF));
   await page.route('**/shell/catalog.json', (r) => r.fulfill({ json: CATALOG }));
   await page.route(/^https:\/\/toolbox-api(-dev)?\.19jpz-3\.workers\.dev\//, async (r) => {
@@ -58,6 +58,8 @@ async function open(vp = { width: 1280, height: 820 }) {
     }
     if (p === '/staff/me') { const id = who(); return id ? r.fulfill({ headers: CORS, json: { ok: true, data: { id, name: staff[id].name, group: staff[id].group, contact: '#12345' } } }) : fail('unauthorized', 'x', 401); }
     if (p === '/staff/me/notices' && api.notices) return who() ? r.fulfill({ headers: CORS, json: { ok: true, data: api.notices } }) : fail('unauthorized', 'x', 401);
+    if (p === '/staff/me/msgs' && api.msgs) return who() ? r.fulfill({ headers: CORS, json: { ok: true, data: { items: api.msgs } } }) : fail('unauthorized', 'x', 401);
+    if (p === '/staff/me/msgs/read') { const b = JSON.parse(req.postData()); api.msgReads.push(b); const m = (api.msgs || []).find((x) => x.id === b.id); if (m) m.readAt = Date.now(); return r.fulfill({ headers: CORS, json: { ok: true, data: { id: b.id } } }); }
     if (p === '/fb/comment/retry') { api.retries.push(JSON.parse(req.postData())); return r.fulfill({ headers: CORS, json: { ok: true, data: { ok: true } } }); }
     if (p === '/staff/me/password') {
       const id = who(); const body = JSON.parse(req.postData()); api.pwBodies.push(body);
@@ -368,4 +370,49 @@ test('留言失敗通知：一般員工只看自己發的，標題註明', async
   await page.click('#company-btn');
   await page.waitForSelector('#acct-pop .acct-note');
   assert.match(await page.textContent('#acct-pop .acct-scope'), /你發的貼文/);
+});
+
+test('系統管理者的通知：未讀＝帳號框黃色閃爍、彈窗黃卡；知道了後卡片移到最下方變灰、不再閃；紅色（留言失敗）優先', async () => {
+  const { page, api } = await open();
+  const now = Date.now();
+  api.msgs = [
+    { id: 1, at: now - 3600000, fromName: '莊鈞評', body: '已讀的舊通知', readAt: now - 600000 },
+    { id: 2, at: now - 60000, fromName: '莊鈞評', body: '下午三點開會\n請準時', readAt: 0 }
+  ];
+  await unlock(page, 'A123');
+  await page.waitForSelector('#company-btn.acct-msg');
+  assert.equal(await page.locator('#company-btn.acct-alert').count(), 0);
+  assert.match(await acctText(page), /有 1 則未讀通知/);
+  await page.click('#company-btn');
+  await page.waitForSelector('#acct-pop .acct-msgcard');
+  const cards = page.locator('#acct-pop .acct-msgcard');
+  assert.equal(await cards.count(), 2);
+  assert.match(await cards.nth(0).textContent(), /莊鈞評 的通知.*下午三點開會/);
+  assert.equal(await cards.nth(0).locator('button', { hasText: '知道了' }).count(), 1);
+  assert.ok(await cards.nth(1).evaluate((e) => e.classList.contains('is-read')));
+  assert.equal(await cards.nth(1).locator('button').count(), 0);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/msgs-popup.png' });
+  await cards.nth(0).locator('button', { hasText: '知道了' }).click();
+  await page.waitForFunction(() => !document.querySelector('#company-btn.acct-msg'));
+  assert.deepEqual(api.msgReads, [{ id: 2 }]);
+  const after = page.locator('#acct-pop .acct-msgcard');
+  assert.equal(await after.count(), 2);
+  assert.ok(await after.nth(0).evaluate((e) => e.classList.contains('is-read')) && await after.nth(1).evaluate((e) => e.classList.contains('is-read')));
+  assert.match(await after.nth(1).textContent(), /下午三點開會/, '剛按知道了的卡片在最下方');
+  assert.match(await after.nth(0).textContent(), /已讀的舊通知/);
+  assert.equal(await page.isVisible('#acct-pop .acct-empty'), false);
+});
+
+test('系統管理者的通知：同時有留言失敗未處理＝紅色優先；黃卡排在失敗卡片之後', async () => {
+  const { page, api } = await open();
+  const at = Date.now() - 60000;
+  api.notices = { enabled: true, all: false, items: [{ postId: '111_5', page: '111', pageName: '新聞', kind: 'post', seq: 1, error: 'x', failed: true, at, canRetry: false }] };
+  api.msgs = [{ id: 7, at, fromName: '莊鈞評', body: '請看一下', readAt: 0 }];
+  await unlock(page, 'A123');
+  await page.waitForSelector('#company-btn.acct-alert');
+  assert.equal(await page.locator('#company-btn.acct-msg').count(), 0);
+  await page.click('#company-btn');
+  await page.waitForSelector('#acct-pop .acct-msgcard');
+  const order = await page.$$eval('#acct-pop .acct-notes > li', (els) => els.map((e) => e.classList.contains('acct-msgcard') ? 'msg' : 'fail'));
+  assert.deepEqual(order, ['fail', 'msg']);
 });

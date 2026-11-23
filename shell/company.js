@@ -349,7 +349,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     dot.setAttribute('aria-hidden', 'true');
     button.append(dot, mk('span', 'acct-mode', '公司模式'), mk('span', 'acct-nm', s.name || (c.admin ? '管理員' : '')));
     // 有未處理通知：帳號框紅色光暈閃爍（不放紅點）；只有發文者已處理的：黃色外框（notices.js）
-    paintAlert(button, noticeBox.items());
+    paintAlert(button, noticeBox.items(), noticeBox.msgs());
   }
   button.addEventListener('click', () => {
     if (!shell.company().unlocked) { openLogin(false); return; }

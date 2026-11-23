@@ -2,6 +2,7 @@ import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
 import { findStaff, touchSeen, cardsOf, dashOf, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
 import { listNotices, readNotice } from '../fb/notices.js';
+import { myMsgs, readMyMsg } from './msgs.js';
 import { pwProblem, hashPassword, verifyPassword, codeHash, safeEqual, MAX_FAILS, LOCK_MS } from './password.js';
 
 export const MIN_SECRET = 32;
@@ -186,6 +187,12 @@ export async function handleAuth(request, env, path) {
   if (path === '/staff/me/password' && request.method === 'POST') return changePassword(request, env);
   if (path === '/staff/me/notices' && request.method === 'GET') return myNotices(request, env);
   if (path === '/staff/me/notices/read' && request.method === 'POST') return readMyNotice(request, env);
+  if ((path === '/staff/me/msgs' && request.method === 'GET') || (path === '/staff/me/msgs/read' && request.method === 'POST')) {
+    const t = await bearer(request, env, 'company');
+    if (!t) return fail(request, env, 'unauthorized');
+    if (!t.staff) return ok(request, env, { items: [] });
+    return path === '/staff/me/msgs' ? myMsgs(request, env, t.staff) : readMyMsg(request, env, t.staff);
+  }
   if (path === '/auth/status' && request.method === 'GET') {
     if (!secretOk(env)) return fail(request, env, 'misconfigured');
     const t = await bearer(request, env, 'company');

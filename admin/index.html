@@ -189,6 +189,42 @@
         <p id="olEmpty" class="ol-empty">目前沒有人在線。</p>
       </section>
 
+      <section class="card" id="msCard" hidden>
+        <h2>發送通知</h2>
+        <p>手動發一則文字通知給員工。收件人下次開啟首頁或管理頁時，帳號框會黃色閃爍，在帳號彈窗按「知道了」就算已讀。只有系統管理者看得到；通知保存 30 天。</p>
+        <div class="sf-add">
+          <label class="sf-f">收件方式
+            <select id="msMode">
+              <option value="one">單人</option>
+              <option value="many">多人</option>
+              <option value="all">全部</option>
+              <option value="group">權限組</option>
+            </select>
+          </label>
+          <label class="sf-f" id="msOneBox">收件人<select id="msOne"></select></label>
+          <label class="sf-f" id="msGroupBox" hidden>權限組<select id="msGroup"></select></label>
+        </div>
+        <fieldset class="ms-many" id="msManyBox" hidden>
+          <legend>勾選收件人（啟用中的員工）</legend>
+          <div id="msMany" class="ms-checks"></div>
+        </fieldset>
+        <label for="msBody">通知內容（最多 200 字）</label>
+        <textarea id="msBody" maxlength="200" rows="3"></textarea>
+        <div class="row">
+          <button class="primary" id="msSend" type="button">發送</button>
+          <span class="ms-count" id="msCount">0／200 字</span>
+        </div>
+        <div id="msConfirm" class="ms-confirm" role="alertdialog" aria-label="確認發送" hidden>
+          <span id="msCfText"></span>
+          <button class="primary" id="msCfYes" type="button">確定發送</button>
+          <button id="msCfNo" type="button">取消</button>
+        </div>
+        <p class="msg" id="msMsg" role="status"></p>
+        <h3 class="ms-h">已發送（最近 30 天）</h3>
+        <p class="ol-empty" id="msEmpty">還沒有發送過通知。</p>
+        <ul id="msList" class="ms-list" hidden></ul>
+      </section>
+
       <section class="card" id="sfCard" data-card="staff">
         <h2>授權名單</h2>
         <p>只有名單內的人能用員工編號＋自己的密碼登入。新增或按「重置密碼」後會顯示一組 6 碼設定碼（24 小時內有效），請私下交給本人，他第一次登入時用它自己設密碼。停用、移除或重置後，對方下一次操作就會被擋。</p>

@@ -52,6 +52,8 @@ export const meInfo = (who) => ({ role: who.role, roleName: who.role === 'sys' ?
 // 通過回 null；擋下回錯誤 Response
 export function gate(request, env, who, path) {
   const card = cardFor(path);
+  // 發送通知（msgs.js）：只有系統管理者，不用解鎖進階設定；不在 CARDS 裡，所以權限組勾不到
+  if (/^\/admin\/msgs(\/|$)/.test(path)) return who.role === 'sys' ? null : fail(request, env, 'forbidden');
   if (card ? who.cards.has(card) : who.role === 'sys' && who.unlocked) return null;
   // 權限組卡片要讀名單資料（權限組清單與使用人數）：只有權限組卡片的人也能 GET /admin/staff
   if (card === 'staff' && path === '/admin/staff' && request.method === 'GET' && who.cards.has('groups')) return null;

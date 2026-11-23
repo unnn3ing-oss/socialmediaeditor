@@ -109,6 +109,7 @@ const DATA = {
 
 // 授權名單的假後端：記錄收到的 body／query，回整份最新狀態
 const SF = { bodies: [], audit: [], withCode: false };
+const MS = { bodies: [], items: [] };
 const PERMS = [{ key: 'view', label: '檢視已排程／已發佈' }, { key: 'post', label: '新增發文（含排入 Rundown）' }, { key: 'edit', label: '改排程時間' }, { key: 'delete', label: '刪除貼文' },
   { key: 'vview', label: '檢視影片發布' }, { key: 'vpost', label: '上傳發布影片（含改時間、刪除）' }, { key: 'report', label: '檢視數據報表' }, { key: 'bypass', label: '關閉時仍可使用排程發布／影片發布' },
   { key: 'card:pages', label: '粉專設定' }, { key: 'card:guard', label: '留言管理' }, { key: 'card:staff', label: '授權名單' }];
@@ -183,6 +184,15 @@ async function open(viewport, hash = '', front = null) {
       return r.fulfill({ json: { ok: false, code: 'unauthorized' } });
     }
     if (/^\/admin\/fb\/backgrounds\/\d+\/img$/.test(u.pathname)) return r.fulfill({ contentType: 'image/png', body: Buffer.from(PNG1, 'base64') });
+    const rcm = /^\/admin\/msgs\/(\d+)\/recall$/.exec(u.pathname);
+    if (rcm && req.method() === 'POST') { MS.bodies.push({ key, id: Number(rcm[1]) }); MS.items.find((x) => x.id === Number(rcm[1])).recalled = true; return r.fulfill({ json: { ok: true, data: { id: Number(rcm[1]), recalled: true } } }); }
+    if (key === 'GET /admin/msgs') return r.fulfill({ json: { ok: true, data: { items: MS.items } } });
+    if (key === 'POST /admin/msgs') {
+      const b = JSON.parse(req.postData()); MS.bodies.push({ key, body: b });
+      const n = b.mode === 'all' ? 2 : b.mode === 'group' ? 1 : b.uids.length;
+      MS.items.unshift({ id: 10 + MS.items.length, at: Date.now(), fromName: '莊鈞評', body: b.body, recalled: false, count: n, read: 1, to: [{ uid: 'A001', name: '王小明', readAt: Date.now() }, { uid: 'A002', name: '陳大華', readAt: 0 }].slice(0, n) });
+      return r.fulfill({ json: { ok: true, data: { id: 10, count: n } } });
+    }
     const sf = staffRoute(req, u, key);
     if (sf) return r.fulfill({ json: sf });
     if (typeof DATA[key] === 'function') return r.fulfill({ json: { ok: true, data: DATA[key](req.postData() ? JSON.parse(req.postData()) : null, u) } });
@@ -1015,6 +1025,7 @@ test('表格欄寬：拖表頭右緣改寬、重新整理還在、雙擊恢復�
   const th = '.sf-table thead th:nth-child(2)';
   const w0 = await page.$eval(th, (e) => e.getBoundingClientRect().width);
   const g = await page.$(th + ' .col-grip');
+  await g.scrollIntoViewIfNeeded();   // 上方有「發送通知」卡片，表格可能在畫面外
   const b = await g.boundingBox();
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
   await page.mouse.down();
@@ -1095,4 +1106,65 @@ test('首頁儀表板：只有 dash 權限的員工只看到首頁；全部正�
     await page.waitForSelector('#dashGrid .dash-tile');
     await page.screenshot({ path: path.join(SHOT, 'admin-dash-mobile.png'), fullPage: true });
   }
+});
+
+test('發送通知（系統管理者）：選收件方式、確認人數、送出 body 正確；已發送清單可展開已讀、撤回；非系統管理者看不到', async () => {
+  resetStaff();
+  MS.bodies = []; MS.items = [];
+  const { page } = await open({ width: 1280, height: 900 }, '#people');
+  await login(page);
+  await page.waitForSelector('#sfWrap:not([hidden])');
+  assert.equal(await page.isVisible('#msCard'), true);
+  // 單人下拉只列啟用中的人（林主管停用）
+  assert.deepEqual(await page.$$eval('#msOne option', (o) => o.map((x) => x.value)), ['A001', 'A002']);
+  assert.equal(await page.isVisible('#msOne'), true);
+  assert.equal(await page.isVisible('#msMany'), false);
+  // 空內容
+  await page.click('#msSend');
+  assert.match(await page.textContent('#msMsg'), /請輸入通知內容/);
+  // 多人
+  await page.selectOption('#msMode', 'many');
+  assert.equal(await page.isVisible('#msMany'), true);
+  await page.check('#msMany input[value=A001]');
+  await page.check('#msMany input[value=A002]');
+  await page.fill('#msBody', '下午三點開會');
+  assert.equal(await page.textContent('#msCount'), '6／200 字');
+  await page.click('#msSend');
+  assert.equal(await page.textContent('#msCfText'), '要發送給 2 人嗎？');
+  await page.click('#msCfNo');
+  assert.equal(MS.bodies.length, 0, '取消不送出');
+  await page.click('#msSend');
+  await page.click('#msCfYes');
+  await page.waitForSelector('#msList .ms-item');
+  assert.deepEqual(MS.bodies.pop(), { key: 'POST /admin/msgs', body: { mode: 'many', body: '下午三點開會', uids: ['A001', 'A002'] } });
+  assert.equal(await page.inputValue('#msBody'), '');
+  // 權限組、全部的人數
+  await page.selectOption('#msMode', 'group');
+  await page.selectOption('#msGroup', 'editor');
+  await page.fill('#msBody', '編輯組請注意');
+  await page.click('#msSend');
+  assert.equal(await page.textContent('#msCfText'), '要發送給 1 人嗎？');
+  await page.click('#msCfYes');
+  await page.waitForFunction(() => document.querySelectorAll('#msList .ms-item').length === 2);
+  assert.deepEqual(MS.bodies.pop(), { key: 'POST /admin/msgs', body: { mode: 'group', body: '編輯組請注意', group: 'editor' } });
+  await page.selectOption('#msMode', 'all');
+  await page.fill('#msBody', '全體');
+  await page.click('#msSend');
+  assert.equal(await page.textContent('#msCfText'), '要發送給 2 人嗎？', '全部＝啟用中員工');
+  await page.click('#msCfNo');
+  // 清單：展開已讀、撤回
+  const item = page.locator('#msList .ms-item').nth(1);
+  assert.match(await item.textContent(), /下午三點開會/);
+  assert.equal(await item.locator('.ms-ops button').first().textContent(), '已讀 1／2');
+  assert.equal(await item.locator('.ms-to').isVisible(), false);
+  await item.locator('.ms-ops button').first().click();
+  assert.deepEqual(await item.locator('.ms-to li').allTextContents().then((a) => a.map((t) => t.replace(/\s+/g, ' ').replace(/已讀 .*/, '已讀'))), ['王小明 已讀', '陳大華 未讀']);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/msgs-admin.png' });
+  await item.locator('button.danger').click();
+  await page.waitForFunction(() => document.querySelectorAll('#msList .ms-item.is-recalled').length === 1);
+  assert.deepEqual(MS.bodies.pop(), { key: 'POST /admin/msgs/10/recall', id: 10 });
+  // 非系統管理者看不到
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people', { token: 'F2', me: { role: 'staff', roleName: '主管', name: '林', uid: 'A003', cards: ['staff'] } });
+  await p2.waitForSelector('#sfWrap:not([hidden])');
+  assert.equal(await p2.isVisible('#msCard'), false);
 });

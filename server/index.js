@@ -12,8 +12,9 @@ import { adminGuard, cleanupGuard } from './fb/guard.js';
 import { cleanupSends } from './fb/sends.js';
 import { cleanupNotices } from './fb/notices.js';
 import { adminStaff, cleanupAudit } from './core/staff.js';
+import { adminMsgs, cleanupMsgs } from './core/msgs.js';
 
-adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff);
+adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff, adminMsgs);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
@@ -53,7 +54,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     // 每天 03:17（UTC 19:17）清理日誌與排程發布操作紀錄（90 天）、防重複發文紀錄（7 天）、留言守門紀錄（30 天）
-    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now()), cleanupSends(env, Date.now()), cleanupGuard(env, Date.now()), cleanupNotices(env, Date.now()).catch(() => {})]));
+    ctx.waitUntil(Promise.all([cleanup(env, Date.now()), cleanupAudit(env, Date.now()), cleanupSends(env, Date.now()), cleanupGuard(env, Date.now()), cleanupNotices(env, Date.now()).catch(() => {}), cleanupMsgs(env, Date.now())]));
   }
 };
 export { FbCommentTimer } from './fb/timer.js';
