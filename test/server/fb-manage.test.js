@@ -112,7 +112,7 @@ test('已發佈列表：留言失敗回 alert 物件；重新留言 API 驗證�
   await inst.obj.alarm();
   const r = await call('/fb/published?page=111');
   const c = r.body.data.items[0].comment;
-  assert.equal(c.alert, true); assert.equal(c.failed, true); assert.equal(c.seq, 1); assert.match(c.error, /粉專呼叫太頻繁.*臉書碼 32/);
+  assert.equal(c.alert, true); assert.equal(c.failed, true); assert.equal(c.seq, 1); assert.equal(c.error, '臉書限流', '使用者只看簡短概述，完整說明在錯誤紀錄');
 
   const n = await call('/staff/me/notices');
   assert.equal(n.body.data.enabled, true, '系統管理者一律收通知');

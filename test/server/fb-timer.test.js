@@ -375,6 +375,29 @@ test('提醒後自動重試成功：通知消失，錯誤日誌保留並由系�
   assert.equal(failLogs(env)[0].st, 'closed');
 });
 
+test('通知只放簡短概述；錯誤日誌 detail 放完整說明（含步驟）＋臉書原文', async (t) => {
+  const { obj, post, env } = await mkEnvTimer(t, {
+    'GET /111_5': () => ({ is_published: true }),
+    'POST /111_5/comments': () => Response.json({ error: { code: 10, message: '(#10) Permission denied' } }, { status: 400 })
+  });
+  await post('arm', REC(nowSec() - 60));
+  for (let i = 0; i < 3; i++) await obj.alarm();
+  assert.equal(notices(env)[0].error, '權限不足');
+  assert.equal((await post('status')).alert.error, '權限不足');
+  const d = failLogs(env)[0].detail;
+  assert.match(d, /^留言：/); assert.match(d, /臉書原文：\(#10\) Permission denied/);
+});
+
+test('briefOf：各種錯誤的概述', async () => {
+  const { briefOf } = await lm();
+  assert.equal(briefOf({ ecode: 32 }), '臉書限流');
+  assert.equal(briefOf({ ecode: 190 }), '權杖失效');
+  assert.equal(briefOf({ ecode: 2 }), '臉書暫時無法服務');
+  assert.equal(briefOf({ error: '前一則留言失敗，未留' }), '前一則失敗，未留');
+  assert.equal(briefOf({ status: 'failed', unsure: true, ecode: 10 }), '可能已留上，請到臉書確認');
+  assert.equal(briefOf({}), '留言沒有成功');
+});
+
 test('舊紀錄（部署前已失敗、沒有 v）按重新留言：有試過的先查再留', async (t) => {
   const { state, post } = await mk(t, {});
   await state.storage.put('rec', { pageId: '111', postId: '111_5', at: nowSec() - 600, published: true, retimes: 0, items: [{ message: 'm', offset: 0, status: 'failed', attempts: 5, error: 'x' }] });

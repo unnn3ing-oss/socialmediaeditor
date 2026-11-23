@@ -63,6 +63,20 @@ const CASCADE = '前一則留言失敗，未留';
 const isReadDenied = (e) => e instanceof GraphError && (e.code === 10 || (e.code >= 200 && e.code < 300));
 // 計時器每一步的名稱（錯誤說明前綴）：讀取類（確認發布、確認是否已留）被擋不代表留言沒留上
 export const STEP = { token: '取得粉專權杖', published: '確認發布', check: '確認是否已留', comment: '留言' };
+// 留言失敗的簡短概述（依臉書錯誤碼／步驟）
+export function briefOf(it) {
+  const c = it.ecode, msg = String(it.error || '');
+  if (msg === CASCADE) return '前一則失敗，未留';
+  if (msg.includes('找不到粉專 token')) return '找不到粉專權杖';
+  if (msg.includes('貼文遲遲未發布')) return '貼文還沒發布';
+  if (it.status === 'failed' && it.unsure) return '可能已留上，請到臉書確認';
+  if ([4, 17, 32, 613, 80001].includes(c)) return '臉書限流';
+  if (c === 190 || c === 102) return '權杖失效';
+  if (c === 10 || (c >= 200 && c < 300)) return '權限不足';
+  if (c === 803 || c === 100) return '找不到貼文或欄位';
+  if (c === 1 || c === 2 || c === 368) return '臉書暫時無法服務';
+  return '留言沒有成功';
+}
 const seqOf = (it, i) => (Number.isInteger(it.n) && it.n > 0 ? it.n : i + 1);
 export function alertOf(rec) {
   if (rec.canceled) return null;   // 整則取消（貼文刪除）就不再提醒
@@ -70,7 +84,8 @@ export function alertOf(rec) {
   if (i < 0) return null;
   const it = rec.items[i];
   // seq＝使用者看到的「第幾則」（立即發布第 1 則當場留好時，交給計時器的從第 2 則開始）；idx＝rec.items 位置
-  return { seq: seqOf(it, i), idx: i, error: String(it.error || ''), failed: it.status === 'failed', attempts: it.attempts || 0 };
+  // error＝給使用者看的簡短概述（通知卡、列表、即時狀態）；完整說明（含步驟）與臉書原文只進錯誤日誌
+  return { seq: seqOf(it, i), idx: i, error: briefOf(it), failed: it.status === 'failed', attempts: it.attempts || 0 };
 }
 
 function normCross(body) {
@@ -166,7 +181,9 @@ export class FbCommentTimer {
     const a = alertOf(rec);
     const it = a ? rec.items[a.idx] : null;   // 提醒出現就記一次錯誤日誌（之後自動重試成功，日誌保留、由系統結案）；後面「前一則失敗未留」的不另記
     if (it && !it.logged) {
-      try { await logCommentFail(this.env, rec, it.ecode, it.eraw); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
+      // 錯誤日誌 detail：完整說明（含步驟）＋臉書原文
+      const detail = [it.error, it.eraw ? '臉書原文：' + it.eraw : ''].filter(Boolean).join('\n');
+      try { await logCommentFail(this.env, rec, it.ecode, detail); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
     }
     const sig = a ? [a.seq, a.failed ? 1 : 0, a.error].join('|') : '';
     if (sig !== (rec.noticeSig || '') || (!a && rec.retryBy)) {

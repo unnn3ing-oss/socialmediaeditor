@@ -231,7 +231,12 @@ if (window.top !== window.self) {
       var tr = document.createElement('tr');
       tr.appendChild(sfEl('td', 'num', fmtTime(r.at)));
       tr.appendChild(sfEl('td', 'lg-nw', LG_TOOL[r.tool] || r.tool));
-      var tc = sfEl('td', 'lg-code', lgCode(r.code)); tc.title = r.detail ? '臉書原文：' + r.detail : r.code; tr.appendChild(tc);
+      // 留言失敗：detail 第一行＝完整說明（含哪一步），其後「臉書原文：…」；舊紀錄 detail 只有臉書原文
+      var tc = sfEl('td', 'lg-code', lgCode(r.code)), det = String(r.detail || '');
+      var hasDesc = det.indexOf('臉書原文：') > 0;
+      if (hasDesc) tc.appendChild(sfEl('div', 'lg-desc', det.split('\n')[0]));
+      tc.title = det ? (hasDesc || det.indexOf('臉書原文：') === 0 ? det : '臉書原文：' + det) : r.code;
+      tr.appendChild(tc);
       // 粉專：簡稱（完整名稱），游標移上去看 ID
       var pg = r.pageName && r.page_name && r.page_name !== r.pageName ? r.pageName + '（' + r.page_name + '）' : (r.pageName || r.page_name || r.page || '');
       var tdPg = sfEl('td', r.pageName || r.page_name ? '' : 'num', pg); if (r.page) tdPg.title = '粉專 ID ' + r.page; tr.appendChild(tdPg);

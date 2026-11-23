@@ -26,7 +26,7 @@ export async function logEvent(env, tool, code, page = '', detail = '', info = {
   await ensurePageCol(env);
   const t = (v, n) => (v ? String(v).slice(0, n) : null);
   await run(env, 'INSERT INTO logs (at, tool, code, ver, ua, page, detail, post, title, ptype, pub_at, page_name, st) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    Date.now(), tool, String(code).slice(0, 60), null, 'server', t(page, 30), t(detail, 200),
+    Date.now(), tool, String(code).slice(0, 60), null, 'server', t(page, 30), t(detail, 500),
     t(info.post, 40), t(info.title, 60), PTYPES.includes(info.ptype) ? info.ptype : null,
     Number.isInteger(info.pubAt) && info.pubAt > 0 ? info.pubAt : null, t(info.pageName, 80), LOG_STATES.includes(info.st) ? info.st : null);
 }
