@@ -1,5 +1,5 @@
 # 臉書錯誤訊息改中文
-- 狀態：進行中　- 分支：claude/modest-bohr-dxn17c　- 最後更新：2026-11-23
+- 狀態：待使用者確認　- 分支：claude/modest-bohr-dxn17c　- 最後更新：2026-11-23
 - 使用者原始需求：「再幫我把錯誤訊息改為中文顯示」→ 選方案 A
 
 ## 已定案的決定
@@ -12,12 +12,13 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/errzh.js` | 新檔：`zhError(code, subcode, raw)` 對照表 | ⬜ |
-| `server/fb/graph.js` | GraphError 訊息改中文、`raw` 原文 | ⬜ |
-| `server/fb/video.js` | 影片處理失敗原文套對照 | ⬜ |
-| `server/fb/timer.js`、`notices.js`、`server/core/logs.js` | 留言失敗記 `eraw` → 錯誤日誌 `detail` 欄 | ⬜ |
-| `admin/admin.js` | 錯誤日誌錯誤碼游標移上看原文 | ⬜ |
-| 測試 | errzh 單元、logs detail、既有測試期望改中文 | ⬜ |
+| `server/fb/errzh.js` | 新檔：`zhError(code, subcode, raw)` 對照表 | ✅ |
+| `server/fb/graph.js` | GraphError 訊息改中文、`raw` 原文 | ✅ |
+| `server/fb/video.js` | 影片處理失敗原文套對照 | ✅ |
+| `server/fb/timer.js`、`notices.js`、`server/core/logs.js` | 留言失敗記 `eraw` → 錯誤日誌 `detail` 欄 | ✅ |
+| `admin/admin.js` | 錯誤日誌錯誤碼游標移上看原文 | ✅ |
+| 測試 | errzh 單元、logs detail、既有測試期望改中文 | ✅ |
 
 ## 下一步
-- [ ] 依上表實作 → npm test、admin e2e、build --check → 給使用者看
+- [x] 實作完成：npm test 783、全部 e2e 278、build --check 通過（未另派審查）
+- [ ] 使用者說「推」→ 併入 main、更新 CLAUDE.md 目前進度

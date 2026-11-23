@@ -2,22 +2,24 @@ import { ok, fail, readBody } from './http.js';
 import { all, run } from './db.js';
 import { withPageNames } from './pagenames.js';
 
-// page 欄位（2026-11-22，留言失敗記粉專 ID）：舊表自動補欄位；同一執行個體只試一次，並發 ALTER 失敗吞掉
+// page 欄位（2026-11-22，留言失敗記粉專 ID）、detail 欄位（2026-11-23，臉書英文原文）：舊表自動補欄位；同一執行個體只試一次，並發 ALTER 失敗吞掉
 const pageCol = new WeakMap();   // D1 綁定 → Promise
+const COLS = ['ALTER TABLE logs ADD COLUMN page TEXT', 'ALTER TABLE logs ADD COLUMN detail TEXT'];
 export function ensurePageCol(env) {
   let p = pageCol.get(env.DB);
   if (!p) {
     // 欄位已存在＝成功；其他錯誤（暫時性）不記住，下次再試
-    p = env.DB.prepare('ALTER TABLE logs ADD COLUMN page TEXT').run()
-      .catch((e) => { if (!/duplicate column/i.test(String(e && e.message))) pageCol.delete(env.DB); }).then(() => true);
+    p = Promise.all(COLS.map((sql) => env.DB.prepare(sql).run()
+      .catch((e) => { if (!/duplicate column/i.test(String(e && e.message))) pageCol.delete(env.DB); }))).then(() => true);
     pageCol.set(env.DB, p);
   }
   return p;
 }
 // 後端自己記的事件（例：留言失敗），不經過 /logs
-export async function logEvent(env, tool, code, page = '') {
+// detail：臉書英文原文（管理頁游標移到錯誤碼看），≤200 字
+export async function logEvent(env, tool, code, page = '', detail = '') {
   await ensurePageCol(env);
-  await run(env, 'INSERT INTO logs (at, tool, code, ver, ua, page) VALUES (?, ?, ?, ?, ?, ?)', Date.now(), tool, String(code).slice(0, 60), null, 'server', page ? String(page).slice(0, 30) : null);
+  await run(env, 'INSERT INTO logs (at, tool, code, ver, ua, page, detail) VALUES (?, ?, ?, ?, ?, ?, ?)', Date.now(), tool, String(code).slice(0, 60), null, 'server', page ? String(page).slice(0, 30) : null, detail ? String(detail).slice(0, 200) : null);
 }
 
 const TOOL_ID_RE = /^[a-z][a-z0-9-]{1,30}$/;
@@ -49,7 +51,7 @@ export async function adminLogs(request, env, path) {
   const days = Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), LOG_KEEP_DAYS) : 7;
   await ensurePageCol(env);
   const rows = await all(env,
-    'SELECT id, at, tool, code, ver, ua, page FROM logs WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?',
+    'SELECT id, at, tool, code, ver, ua, page, detail FROM logs WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?',
     Date.now() - days * DAY, MAX_LOGS);
   return ok(request, env, await withPageNames(env, rows));   // 粉專 ID 換成簡稱（pagenames.js）
 }

@@ -161,7 +161,7 @@ test('立即發布第 1 則留言失敗：交給計時器重試，第 2、3 則�
   const before = nowSec();
   const r = await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: null }]), comments: JSON.stringify([{ message: '二', delay: 5 }]) });
   const x = r.body.data.results[0];
-  assert.equal(x.comment, 'retry'); assert.match(x.commentError, /temporary/);
+  assert.equal(x.comment, 'retry'); assert.match(x.commentError, /臉書服務暫時無法使用/);
   assert.equal(x.extra, 1);
   assert.equal(RecTimer.log.length, 1);
   const arm = RecTimer.log[0][1];
@@ -178,8 +178,8 @@ test('第一個粉專失敗不影響第二個；時間超出範圍不呼叫臉�
   });
   const r = await send(env, headers, { message: 'm', link: LINK, image: img(), targets: JSON.stringify([{ page: '111', at: null }, { page: '222', at: null }]) });
   const [a, b] = r.body.data.results;
-  assert.equal(a.ok, false); assert.match(a.error, /no permission/);
-  assert.equal(b.ok, true); assert.equal(b.comment, 'retry', '第 1 則失敗交給計時器重試'); assert.match(b.commentError, /boom/);
+  assert.equal(a.ok, false); assert.match(a.error, /權限不足.*臉書碼 200/);
+  assert.equal(b.ok, true); assert.equal(b.comment, 'retry', '第 1 則失敗交給計時器重試'); assert.match(b.commentError, /未知錯誤/);
   assert.deepEqual(env.DB.raw.prepare('SELECT uid, action, page, post FROM fb_audit').all().map((x) => ({ ...x })),
     [{ uid: 'SYS1', action: 'publish', page: '222', post: '222_1' }], '操作紀錄只記成功的粉專');
   const n = f.calls.length;

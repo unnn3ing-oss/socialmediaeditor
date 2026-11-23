@@ -1,14 +1,16 @@
 // 臉書 Graph API 呼叫（集中一處）。版本以 Meta 官方文件最新版為準。
 import { isPageToken, markBroken } from './tokenstore.js';
 import { noteUsage, noteThrottle } from './usage.js';
+import { zhError } from './errzh.js';
 export const GRAPH = 'https://graph.facebook.com/v27.0';
 export const GRAPH_VIDEO = 'https://graph-video.facebook.com/v27.0';   // 影片分段上傳（start／transfer／finish）
 
 export class GraphError extends Error {
   // uncertain：連不上臉書或讀不到回應，臉書可能已經處理（發文類請求要當「待確認」，不能直接重送）
-  constructor(code, message, status, subcode, uncertain = false) {
+  // raw：臉書回傳的英文原文（message 已轉中文，見 errzh.js）
+  constructor(code, message, status, subcode, uncertain = false, raw = '') {
     super(message || '臉書回應錯誤');
-    this.code = code; this.status = status; this.subcode = subcode; this.uncertain = uncertain;
+    this.code = code; this.status = status; this.subcode = subcode; this.uncertain = uncertain; this.raw = raw;
   }
 }
 
@@ -48,8 +50,10 @@ export async function graph(env, method, path, params, token, base = GRAPH, { fo
     // 5xx／讀不到內容／臉書的「未知錯誤」(1)、「暫時無法服務」(2)：請求可能已被處理，發文要當待確認
     const uncertain = !res.ok && (res.status >= 500 || data == null || code === 1 || code === 2);
     if (isTokenError({ code }) && isPageToken(env, token)) await markBroken(env, token);   // 粉專權杖失效：管理頁與工具顯示提醒
-    if (isRateLimit({ code })) { try { await noteThrottle(env, code, err.message); } catch { /* 記不了就算了 */ } }   // 管理頁「速率限制」顯示最近一次
-    throw new GraphError(code, err.message || '臉書回應錯誤（HTTP ' + res.status + '）', res.status, err.error_subcode, uncertain);
+    const raw = String(err.message || '');
+    const msg = raw || code > 0 ? zhError(code, err.error_subcode, raw) : '臉書回應錯誤（HTTP ' + res.status + '）';
+    if (isRateLimit({ code })) { try { await noteThrottle(env, code, msg); } catch { /* 記不了就算了 */ } }   // 管理頁「速率限制」顯示最近一次
+    throw new GraphError(code, msg, res.status, err.error_subcode, uncertain, raw);
   }
   return data;
 }

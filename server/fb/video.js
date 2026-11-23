@@ -5,6 +5,7 @@
 //   「影片傳完」＋「使用者按送出」兩個都成立才 finish（誰後到誰觸發；用 D1 搶 finishing 狀態，不會 finish 兩次）。
 //   發布方式：立即／排程／草稿（橫式 unpublished_content_type=DRAFT、Reels video_state=DRAFT；不排留言）／
 //   多文發佈（只限橫式、立即：發布後由計時器 allow_crossposting_for_pages → 各目標粉專 crossposted_video_id；目標不排留言）
+import { zhError } from './errzh.js';
 import { graph, graphVideo, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
 import { armTimer, timerStatus } from './timer.js';
@@ -157,7 +158,9 @@ async function ruploadPart(r, token, start, bytes) {
   } catch { throw new GraphError(-1, '連不上臉書', 0, undefined, true); }
   if (!res.ok || !data || data.error || data.success === false) {
     const err = (data && data.error) || {};
-    throw new GraphError(Number(err.code) || -1, err.message || err.description || '臉書上傳失敗（HTTP ' + res.status + '）', res.status);
+    const raw = String(err.message || err.description || '');
+    const c = Number(err.code) || -1;
+    throw new GraphError(c, raw || c > 0 ? zhError(c, err.error_subcode, raw) : '臉書上傳失敗（HTTP ' + res.status + '）', res.status, err.error_subcode, false, raw);
   }
 }
 
@@ -319,7 +322,10 @@ export function stateFromStatus(s) {
   const pp = s.processing_phase || {};
   const pub = s.publishing_phase || {};
   if (['error', 'expired', 'upload_failed'].includes(vs) || pp.status === 'error' || pub.status === 'error' || pub.publish_status === 'error') {
-    return { state: 'failed', error: String((pp.error && pp.error.message) || (pub.error && pub.error.message) || '臉書處理失敗').slice(0, 200) };
+    const e = pp.error || pub.error || null;   // 處理失敗原文轉中文（errzh.js）；沒有錯誤碼＝「臉書處理影片失敗：原文」
+    const raw = String((e && e.message) || '');
+    const error = e && Number(e.code) > 0 ? zhError(e.code, e.error_subcode, raw) : raw ? '臉書處理影片失敗：' + raw : '臉書處理影片失敗';
+    return { state: 'failed', error: error.slice(0, 200) };
   }
   if (pub.publish_status === 'published' || (vs === 'ready' && pub.status === 'complete' && pub.publish_status !== 'scheduled')) return { state: 'published' };
   if (pub.publish_status === 'scheduled') return { state: 'scheduled' };

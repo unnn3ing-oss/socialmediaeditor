@@ -127,7 +127,7 @@ export class FbCommentTimer {
       for (const x of rec.items.slice(i)) {
         if (x.status !== 'failed' && !open(x)) continue;
         x.status = (x.attempts || 0) > 0 || x.status === 'posting' ? 'posting' : 'pending';
-        x.attempts = 0; delete x.error; delete x.ecode; delete x.logged;
+        x.attempts = 0; delete x.error; delete x.ecode; delete x.eraw; delete x.logged;
       }
       if (!rec.published) rec.retimes = 0;
       delete rec.purgeAt;
@@ -153,7 +153,7 @@ export class FbCommentTimer {
     const a = alertOf(rec);
     const it = a && a.failed ? rec.items[a.seq - 1] : null;   // 只記最先失敗的那則（後面「前一則失敗未留」的不另記）
     if (it && !it.logged) {
-      try { await logCommentFail(this.env, rec, it.ecode); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
+      try { await logCommentFail(this.env, rec, it.ecode, it.eraw); it.logged = true; dirty = true; } catch { /* 下次再記 */ }
     }
     const sig = a ? [a.seq, a.failed ? 1 : 0, a.error].join('|') : '';
     if (sig !== (rec.noticeSig || '')) {
@@ -294,6 +294,7 @@ export class FbCommentTimer {
     it.attempts = (it.attempts || 0) + 1;
     it.error = msg;
     if (e instanceof GraphError && Number.isInteger(e.code) && e.code > 0) it.ecode = e.code; else delete it.ecode;
+    if (e instanceof GraphError && e.raw) it.eraw = String(e.raw).slice(0, 200); else delete it.eraw;   // 英文原文，只進錯誤日誌
     if (isRateLimit(e) || it.attempts >= MAX_ATTEMPTS) {
       it.status = 'failed';
       // 留言要依序：前一則失敗，後面還沒留的也不留

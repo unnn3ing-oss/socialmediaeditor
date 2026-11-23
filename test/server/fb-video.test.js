@@ -199,7 +199,7 @@ test('stateFromStatus', async () => {
   assert.equal(stateFromStatus(null), null);
   assert.deepEqual(stateFromStatus({ video_status: 'ready', publishing_phase: { status: 'complete', publish_status: 'published' } }), { state: 'published' });
   assert.equal(stateFromStatus({ video_status: 'processing', processing_phase: { status: 'in_progress' } }), null);
-  assert.equal(stateFromStatus({ video_status: 'error', processing_phase: { status: 'error', error: { message: '格式錯' } } }).error, '格式錯');
+  assert.equal(stateFromStatus({ video_status: 'error', processing_phase: { status: 'error', error: { message: '格式錯' } } }).error, '臉書處理影片失敗：格式錯');
 });
 
 test('影片設定：管理頁存讀、驗證；工具讀得到', async (t) => {

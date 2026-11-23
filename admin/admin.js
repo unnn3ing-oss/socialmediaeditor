@@ -166,6 +166,7 @@ if (window.top !== window.self) {
         [fmtTime(r.at), r.tool, r.code, r.pageName || r.page || '', r.ver || ''].forEach(function (t, i) {
           var c = document.createElement('td'); c.textContent = t; if (i === 0) c.className = 'num';
           if (i === 3 && r.pageName) c.title = '粉專 ID ' + r.page;   // 顯示簡稱，游標移上去看 ID
+          if (i === 2 && r.detail) c.title = '臉書原文：' + r.detail;   // 錯誤碼游標移上去看臉書英文原文
           tr.appendChild(c);
         });
         tb.appendChild(tr);

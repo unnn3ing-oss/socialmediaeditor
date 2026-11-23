@@ -36,9 +36,10 @@ export async function setNotice(env, { postId, pageId, kind, by, title }, a) {
 
 // 錯誤碼：臉書錯誤碼（數字）；沒有就只寫 comment_failed
 export const failCode = (code) => 'comment_failed' + (Number.isInteger(code) && code > 0 ? ':' + code : '');
-export async function logCommentFail(env, { pageId, kind }, code) {
+// raw：臉書英文原文（錯誤日誌 detail 欄）
+export async function logCommentFail(env, { pageId, kind }, code, raw = '') {
   if (!env.DB) return;
-  await logEvent(env, kind === 'video' ? 'fbvideo' : 'fbpost', failCode(code), String(pageId));
+  await logEvent(env, kind === 'video' ? 'fbvideo' : 'fbpost', failCode(code), String(pageId), raw);
 }
 
 // uid：只看這個人發的；null＝看全部

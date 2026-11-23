@@ -106,7 +106,7 @@ test('一般錯誤重試 30/60/120/240 秒，第 5 次失敗 → failed', async 
   assert.deepEqual(gaps, [30, 60, 120, 240]);
   await obj.alarm();
   const s = await post('status');
-  assert.equal(s.status, 'failed'); assert.equal(s.attempts, 5); assert.match(s.error, /temporary/);
+  assert.equal(s.status, 'failed'); assert.equal(s.attempts, 5); assert.match(s.error, /暫時無法使用/);
 });
 
 test('限流錯誤 → 立刻 failed', async (t) => {
@@ -114,7 +114,7 @@ test('限流錯誤 → 立刻 failed', async (t) => {
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   const s = await post('status');
-  assert.equal(s.status, 'failed'); assert.match(s.error, /rate limit/);
+  assert.equal(s.status, 'failed'); assert.match(s.error, /限流/);
 });
 
 test('cancel 後觸發不呼叫臉書；retime 只在 pending 有效', async (t) => {
@@ -459,7 +459,7 @@ test('提醒：第 1 次失敗不提醒；第 2 次失敗起 alert＋通知；�
   assert.equal((await post('status')).alert.failed, true);
   assert.equal(notices(env)[0].failed, 1);
   const logs = failLogs(env);
-  assert.equal(logs.length, 1); assert.equal(logs[0].tool, 'fbpost'); assert.equal(logs[0].code, 'comment_failed:2'); assert.equal(logs[0].page, '111');
+  assert.equal(logs.length, 1); assert.equal(logs[0].tool, 'fbpost'); assert.equal(logs[0].code, 'comment_failed:2'); assert.equal(logs[0].page, '111'); assert.ok(logs[0].detail, '錯誤日誌保留臉書英文原文');
   await obj.alarm(); await post('status');
   assert.equal(failLogs(env).length, 1, '同一則只記一次');
 });
