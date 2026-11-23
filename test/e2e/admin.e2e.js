@@ -163,7 +163,7 @@ const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate'
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 // front：首頁登入存在 localStorage 的憑證（{ token, me }），/admin/me 依 Authorization 回身分；'T'＝管理頁密碼登入（系統管理者已解鎖）
 async function open(viewport, hash = '', front = null) {
-  const ctx = await browser.newContext({ viewport });
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: Number(process.env.SHOT_DSF) || 1 });
   const page = await ctx.newPage();
   if (front) await page.addInitScript((t) => { localStorage.setItem('tbx.company', JSON.stringify({ token: t, exp: Math.floor(Date.now() / 1000) + 3600 })); }, front.token);
   const calls = [];
@@ -1129,6 +1129,7 @@ test('發送通知（系統管理者）：選收件方式、確認人數、送�
   await page.check('#msMany input[value=A002]');
   await page.fill('#msBody', '下午三點開會');
   assert.equal(await page.textContent('#msCount'), '6／200 字');
+  if (process.env.SHOT_DIR) await page.locator('#msCard').screenshot({ path: process.env.SHOT_DIR + '/msgs-admin.png' });
   await page.click('#msSend');
   assert.equal(await page.textContent('#msCfText'), '要發送給 2 人嗎？');
   await page.click('#msCfNo');
@@ -1159,7 +1160,6 @@ test('發送通知（系統管理者）：選收件方式、確認人數、送�
   assert.equal(await item.locator('.ms-to').isVisible(), false);
   await item.locator('.ms-ops button').first().click();
   assert.deepEqual(await item.locator('.ms-to li').allTextContents().then((a) => a.map((t) => t.replace(/\s+/g, ' ').replace(/已讀 .*/, '已讀'))), ['王小明 已讀', '陳大華 未讀']);
-  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/msgs-admin.png' });
   await item.locator('button.danger').click();
   await page.waitForFunction(() => document.querySelectorAll('#msList .ms-item.is-recalled').length === 1);
   assert.deepEqual(MS.bodies.pop(), { key: 'POST /admin/msgs/10/recall', id: 10 });

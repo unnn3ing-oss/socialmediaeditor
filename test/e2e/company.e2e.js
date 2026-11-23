@@ -387,6 +387,7 @@ test('系統管理者的通知：未讀＝帳號框黃色閃爍、彈窗黃卡�
   await page.waitForSelector('#acct-pop .acct-msgcard');
   const cards = page.locator('#acct-pop .acct-msgcard');
   assert.equal(await cards.count(), 2);
+  assert.equal(await page.textContent('#acct-pop .acct-scope'), '', '只有手動通知時不顯示留言失敗的括號說明');
   assert.match(await cards.nth(0).textContent(), /莊鈞評 的通知.*下午三點開會/);
   assert.equal(await cards.nth(0).locator('button', { hasText: '知道了' }).count(), 1);
   assert.ok(await cards.nth(1).evaluate((e) => e.classList.contains('is-read')));

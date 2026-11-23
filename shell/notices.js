@@ -79,7 +79,7 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
     return li;
   }
   function render() {
-    scope.textContent = all ? '（全部人的留言失敗）' : '（你發的貼文）';
+    scope.textContent = !items.length ? '' : all ? '（全部人的留言失敗）' : '（你發的貼文）';   // 只有留言失敗卡片才加說明，手動通知不誤導
     list.textContent = '';
     empty.hidden = items.length > 0 || msgs.length > 0;
     list.hidden = !items.length && !msgs.length;
