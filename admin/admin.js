@@ -38,6 +38,16 @@ if (window.top !== window.self) {
     var d = new Date(ms), p = function (v) { return String(v).padStart(2, '0'); };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  // 相對時間：剛剛／N 分鐘前／今天 HH:MM／M/D HH:MM（游標看 fmtTime 完整時間）
+  function fmtAgo(ms, now) {
+    now = now || Date.now();
+    var m = Math.floor((now - ms) / 60000), d = new Date(ms), n = new Date(now), p = function (v) { return String(v).padStart(2, '0'); };
+    if (m < 1) return '剛剛';
+    if (m < 60) return m + ' 分鐘前';
+    var hm = p(d.getHours()) + ':' + p(d.getMinutes());
+    if (d.toDateString() === n.toDateString()) return '今天 ' + hm;
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+  }
   function expired() {
     // 解鎖用的管理員憑證過期：退回首頁憑證（重新鎖住），不用整個登出
     if (frontToken && token !== frontToken) { token = frontToken; enter($('loginMsg')).then(function (ok) { if (ok) say($('unlockMsg'), '解鎖已過期，需要時請再輸入一次管理員密碼。', 'err'); else expired(); }); return; }
@@ -56,6 +66,7 @@ if (window.top !== window.self) {
     });
     // 進階設定：只有系統管理者看得到；沒解鎖時分類內只顯示密碼輸入
     $('tab-adv').hidden = me.role !== 'sys';
+    $('olCard').hidden = !(me.role === 'sys' && can('staff'));   // 目前在線：只有系統管理者
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
     recApply();
     $('whoTag').hidden = false;
@@ -1149,6 +1160,7 @@ if (window.top !== window.self) {
       var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
       var tp = sfEl('td'); tp.appendChild(sfPwTag(s)); tr.appendChild(tp);
       tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
+      var ls = sfEl('td', 'num', s.lastSeen ? fmtAgo(s.lastSeen) : '—'); if (s.lastSeen) ls.title = fmtTime(s.lastSeen); tr.appendChild(ls);
       var ac = sfEl('td', 'sf-ops');
       var tgl = sfEl('button', '', s.enabled ? '停用' : '啟用'); tgl.type = 'button';
       tgl.onclick = function () { tgl.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { enabled: !s.enabled }, $('sfMsg'), s.enabled ? '已停用「' + s.name + '」。' : '已啟用「' + s.name + '」。'); };
@@ -1168,6 +1180,7 @@ if (window.top !== window.self) {
       tb.appendChild(tr);
     });
     $('sfWrap').hidden = !sfState.staff.length; $('sfEmpty').hidden = !!sfState.staff.length;
+    olRender();
     sgRender();
   }
   function sgRow(g) {   // g：{ id, name, perms, used }；id 空白＝新增中的一組
@@ -1216,6 +1229,21 @@ if (window.top !== window.self) {
     if (!sfState) return;
     var r = sgRow({ id: '', name: '', perms: [], used: 0 }); $('sgRows').appendChild(r); r.querySelector('input').focus();
   };
+  // 目前在線（只有系統管理者）：名單的最後使用時間在 5 分鐘內＝在線（後端每 5 分鐘最多記一次，不另打 API）
+  var ONLINE_MS = 5 * 60 * 1000;
+  function olRender() {
+    var now = Date.now(), on = sfState.staff.filter(function (s) { return s.enabled && s.lastSeen && now - s.lastSeen <= ONLINE_MS; })
+      .sort(function (a, b) { return b.lastSeen - a.lastSeen; });
+    $('olCount').textContent = on.length + ' 人';
+    var ul = $('olList'); ul.textContent = '';
+    on.forEach(function (s) {
+      var li = sfEl('li', 'ol-item'); li.appendChild(sfEl('span', 'ol-dot')); li.appendChild(sfEl('b', '', s.name));
+      var t = sfEl('small', '', fmtAgo(s.lastSeen, now)); t.title = fmtTime(s.lastSeen); li.appendChild(t); ul.appendChild(li);
+    });
+    $('olEmpty').hidden = on.length > 0; ul.hidden = !on.length;
+    $('olAt').textContent = '更新於 ' + fmtTime(now).slice(11);
+  }
+  $('olRefresh').onclick = function () { $('olRefresh').disabled = true; sfLoad().then(function () { $('olRefresh').disabled = false; }); };
   function sfLoad() {
     say($('sfMsg'), '讀取中');
     return api('/admin/staff').then(function (res) {

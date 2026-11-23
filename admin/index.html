@@ -164,6 +164,13 @@
       <h1>人員與權限</h1>
       <p>誰能用員工編號登入、屬於哪個權限組。權限組決定能用哪些功能，以及管理頁能看到哪些卡片。</p>
 
+      <section class="card" id="olCard" data-card="staff" hidden>
+        <div class="ol-head"><h2>目前在線 <span id="olCount" class="ol-count">0 人</span></h2><span class="ol-at" id="olAt"></span><button id="olRefresh" type="button">刷新</button></div>
+        <p>5 分鐘內有用過工具或管理頁的員工（用員工編號登入的人才算）。只有系統管理者看得到。</p>
+        <ul id="olList" class="ol-list" hidden></ul>
+        <p id="olEmpty" class="ol-empty">目前沒有人在線。</p>
+      </section>
+
       <section class="card" id="sfCard" data-card="staff">
         <h2>授權名單</h2>
         <p>只有名單內的人能用員工編號＋自己的密碼登入。新增或按「重置密碼」後會顯示一組 6 碼設定碼（24 小時內有效），請私下交給本人，他第一次登入時用它自己設密碼。停用、移除或重置後，對方下一次操作就會被擋。</p>
@@ -176,7 +183,7 @@
         </form>
         <div class="scroll" id="sfWrap" hidden>
           <table class="sf-table">
-            <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>分機／手機</th><th>狀態</th><th>密碼</th><th>最後登入</th><th>操作</th></tr></thead>
+            <thead><tr><th>員工編號</th><th>姓名</th><th>權限組</th><th>分機／手機</th><th>狀態</th><th>密碼</th><th>最後登入</th><th>最後使用</th><th>操作</th></tr></thead>
             <tbody id="sfRows"></tbody>
           </table>
         </div>
@@ -419,5 +426,6 @@
 </div>
 <script type="module" src="admin.js"></script>
 <script type="module" src="header.js"></script>
+<script type="module" src="colresize.js"></script>
 </body>
 </html>

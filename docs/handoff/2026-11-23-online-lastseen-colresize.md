@@ -1,6 +1,6 @@
 # 交接：線上人數＋名單「最後使用」＋管理頁表格欄寬可拖曳
 
-- 狀態：進行中
+- 狀態：待使用者確認
 - 分支：`claude/modest-bohr-dxn17c`（接在通知完成／錯誤紀錄分頁那批後面，尚未推 main）
 - 使用者決定（2026-11-23）：線上人數用方案 A；欄寬套用管理頁全部表格；通知「開列表 ↗」維持原頁切換。
 
@@ -11,7 +11,9 @@
 4. 欄寬：新檔 `admin/colresize.js`，管理頁所有 `table`（有 thead）表頭右緣可拖曳、雙擊恢復；欄寬存 localStorage `tbx.admin.colw.<key>`（每張表分開）；≤820px 不啟用。
 
 ## 進度
-- [ ] 後端 last_seen＋測試
-- [ ] 名單欄＋在線卡片
-- [ ] 欄寬拖曳＋e2e
-- [ ] 截圖、隱私權政策（最後使用時間）
+- [x] 後端 last_seen＋測試（`touchSeen`，staff.js）
+- [x] 名單欄＋在線卡片（`olCard`，`fmtAgo`）
+- [x] 欄寬拖曳＋e2e（`admin/colresize.js`，凍結時寬度無條件進位＋1px 避免文字被截）
+- [x] 截圖、隱私權政策（最後使用時間）
+- 測試：npm test 787、admin e2e 36、company／legal 20、build --check 通過；未另派獨立審查。
+- 部署：後端需重新部署（正式＋測試），`last_seen` 自動補欄；外掛不升版號。

@@ -119,7 +119,9 @@ async function migratePerms(env, seeded) {
 }
 
 // 密碼相關欄位：雜湊、鹽、密碼版本、設定碼（HMAC）與到期、連錯次數、鎖到何時
-const PW_COLS = [['pw_hash', 'TEXT'], ['pw_salt', 'TEXT'], ['pw_ver', 'INTEGER NOT NULL DEFAULT 1'], ['setup_hash', 'TEXT'], ['setup_exp', 'INTEGER'], ['fails', 'INTEGER NOT NULL DEFAULT 0'], ['lock_until', 'INTEGER']];
+const PW_COLS = [['pw_hash', 'TEXT'], ['pw_salt', 'TEXT'], ['pw_ver', 'INTEGER NOT NULL DEFAULT 1'], ['setup_hash', 'TEXT'], ['setup_exp', 'INTEGER'], ['fails', 'INTEGER NOT NULL DEFAULT 0'], ['lock_until', 'INTEGER'],
+  // last_seen：最後使用時間（ms，2026-11-23）；員工憑證打後端時最多每 5 分鐘記一次（auth.js bearer），管理頁名單「最後使用」與「目前在線」用
+  ['last_seen', 'INTEGER']];
 
 // 系統管理者的員工編號（後端設定 SYS_STAFF_ID；沒設＝沒有）
 export const sysId = (env) => normId(env && env.SYS_STAFF_ID);
@@ -140,17 +142,23 @@ async function ensureSys(env) {
 }
 
 // 名單內且啟用 → { id, name, group, groupName, perms, level（sys／staff）, pwVer }；系統管理者的 perms 一律全部；否則 null（讀不到資料庫也是 null＝擋下）
+// 記最後使用時間：上次記的早於 SEEN_EVERY 才寫（同一人最多每 5 分鐘寫一次 D1）
+export const SEEN_EVERY = 5 * 60 * 1000;
+export async function touchSeen(env, staff, nowMs = Date.now()) {
+  if (!staff || !env.DB || nowMs - (staff.lastSeen || 0) < SEEN_EVERY) return;
+  try { await run(env, 'UPDATE staff SET last_seen = ? WHERE id = ?', nowMs, staff.id); staff.lastSeen = nowMs; } catch { /* 記不了不影響使用 */ }
+}
 export async function findStaff(env, id) {
   const uid = normId(id);
   if (!uid || !env.DB) return null;
   try {
     await ensureStaff(env);
     if (uid === sysId(env)) await ensureSys(env);
-    const r = await first(env, 'SELECT s.id, s.name, s.grp, s.enabled, s.level, s.pw_ver, g.name AS gname, g.perms FROM staff s LEFT JOIN staff_groups g ON g.id = s.grp WHERE s.id = ?', uid);
+    const r = await first(env, 'SELECT s.id, s.name, s.grp, s.enabled, s.level, s.pw_ver, s.last_seen, g.name AS gname, g.perms FROM staff s LEFT JOIN staff_groups g ON g.id = s.grp WHERE s.id = ?', uid);
     if (!r || !r.enabled) return null;
     const level = levelOf(env, r);
     const perms = level === 'sys' ? PERMS.slice() : r.gname ? parsePerms(r.perms) : [];
-    return { id: r.id, name: r.name, group: r.grp, groupName: r.gname || '', perms, level, pwVer: Number(r.pw_ver) || 1 };
+    return { id: r.id, name: r.name, group: r.grp, groupName: r.gname || '', perms, level, pwVer: Number(r.pw_ver) || 1, lastSeen: Number(r.last_seen) || 0 };
   } catch { return null; }
 }
 
@@ -245,8 +253,8 @@ async function listGroups(env) {
 async function listStaff(env) {
   await ensureSys(env);
   const now = Date.now();
-  const rows = await all(env, 'SELECT id, name, grp, contact, level, enabled, created, last_login, pw_hash, setup_exp, lock_until FROM staff ORDER BY id');
-  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, contact: s.contact || '', sys: levelOf(env, s) === 'sys', enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null,
+  const rows = await all(env, 'SELECT id, name, grp, contact, level, enabled, created, last_login, last_seen, pw_hash, setup_exp, lock_until FROM staff ORDER BY id');
+  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, contact: s.contact || '', sys: levelOf(env, s) === 'sys', enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null, lastSeen: s.last_seen || null,
     pw: s.pw_hash ? 'set' : (s.setup_exp && s.setup_exp > now ? 'setup' : 'none'), setupExp: !s.pw_hash && s.setup_exp > now ? s.setup_exp : null, locked: !!(s.lock_until && s.lock_until > now) }));
 }
 

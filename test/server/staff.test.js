@@ -397,3 +397,22 @@ test('操作紀錄：分頁 limit／offset、類別 src（工具／後台）在�
   assert.deepEqual(await get('src=admin'), ['add']);
   assert.deepEqual(await get('src=tool&limit=1&offset=1'), ['publish']);
 });
+
+test('最後使用時間：員工憑證打後端時記 last_seen，5 分鐘內不重寫；名單回 lastSeen', async (t) => {
+  const { env, adm } = await setup(t);
+  const d = (await call(env, '/admin/staff', { headers: adm })).body.data;
+  await post(env, adm, '/admin/staff', { id: 'S1', name: '甲', group: groupId(d, '發文') });
+  const tk = bearer((await login(env, 'S1')).body.data.token);
+  const seen = () => env.DB.raw.prepare("SELECT last_seen FROM staff WHERE id = 'S1'").get().last_seen;
+  await call(env, '/auth/status', { headers: tk });
+  const a = seen();
+  assert.ok(a > Date.now() - 5000, '有記');
+  env.DB.raw.prepare("UPDATE staff SET last_seen = ? WHERE id = 'S1'").run(a - 60000);   // 1 分鐘前
+  await call(env, '/auth/status', { headers: tk });
+  assert.equal(seen(), a - 60000, '5 分鐘內不重寫');
+  env.DB.raw.prepare("UPDATE staff SET last_seen = ? WHERE id = 'S1'").run(a - 6 * 60000);
+  await call(env, '/auth/status', { headers: tk });
+  assert.ok(seen() > a - 5000, '超過 5 分鐘重寫');
+  const row = (await call(env, '/admin/staff', { headers: adm })).body.data.staff.find((x) => x.id === 'S1');
+  assert.equal(row.lastSeen, seen());
+});

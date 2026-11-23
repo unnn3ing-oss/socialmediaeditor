@@ -1,6 +1,6 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
-import { findStaff, cardsOf, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
+import { findStaff, touchSeen, cardsOf, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
 import { listNotices, readNotice } from '../fb/notices.js';
 import { pwProblem, hashPassword, verifyPassword, codeHash, safeEqual, MAX_FAILS, LOCK_MS } from './password.js';
 
@@ -26,6 +26,7 @@ export async function bearer(request, env, kind) {
     const staff = await findStaff(env, t.uid);
     if (!staff || staff.pwVer !== t.pv) return null;
     t.staff = staff;
+    await touchSeen(env, staff);   // 最後使用時間（管理頁名單、目前在線）
   }
   return t;
 }

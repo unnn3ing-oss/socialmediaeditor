@@ -961,3 +961,67 @@ test('文字背景：圖樣網址到期（未下載：剩幾天／一天內黃�
   assert.match(await page.textContent('#bgExp'), /^3 張未下載，最早 .+ 已過期（請重新擷取匯入）$/);
   if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg-exp.png') });
 });
+
+test('目前在線（系統管理者）＋名單「最後使用」欄；非系統管理者看不到在線卡片', async () => {
+  resetStaff();
+  const now = Date.now();
+  STAFF[0].lastSeen = now - 2 * 60000;          // 在線
+  STAFF[1].lastSeen = now - 3 * 3600000;        // 不在線
+  STAFF[2].lastSeen = now - 60000;              // 停用：不算在線
+  const { page } = await open({ width: 1280, height: 860 }, '#people');
+  await login(page);
+  await page.waitForSelector('#sfWrap:not([hidden])');
+  assert.equal(await page.isVisible('#olCard'), true);
+  assert.equal(await page.textContent('#olCount'), '1 人');
+  assert.deepEqual(await page.$$eval('#olList .ol-item b', (e) => e.map((x) => x.textContent)), ['王小明']);
+  assert.match(await page.textContent('#olList .ol-item small'), /^2 分鐘前$/);
+  const heads = await page.$$eval('.sf-table thead th', (e) => e.map((x) => x.textContent));
+  assert.ok(heads.includes('最後使用'));
+  const col = heads.indexOf('最後使用') + 1;
+  assert.equal(await page.textContent(`#sfRows tr:nth-child(1) td:nth-child(${col})`), '2 分鐘前');
+  assert.match(await page.getAttribute(`#sfRows tr:nth-child(1) td:nth-child(${col})`, 'title'), /^\d{4}-\d\d-\d\d \d\d:\d\d$/);
+  assert.match(await page.textContent(`#sfRows tr:nth-child(2) td:nth-child(${col})`), /^(今天 \d\d:\d\d|\d{1,2}\/\d{1,2} \d\d:\d\d)$/);
+  // 刷新：重讀名單
+  STAFF[1].lastSeen = Date.now() - 30000;
+  await page.click('#olRefresh');
+  await page.waitForFunction(() => document.getElementById('olCount').textContent === '2 人');
+  // 非系統管理者（有授權名單卡片）：沒有在線卡片
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people', { token: 'F2', me: { role: 'staff', roleName: '主管', name: '林', uid: 'A003', cards: ['staff'] } });
+  await p2.waitForSelector('#sfWrap:not([hidden])');
+  assert.equal(await p2.isVisible('#olCard'), false);
+});
+
+test('表格欄寬：拖表頭右緣改寬、重新整理還在、雙擊恢復；方向鍵可調；手機沒有把手', async () => {
+  resetStaff();
+  const { page } = await open({ width: 1280, height: 860 }, '#people');
+  await login(page);
+  await page.waitForSelector('#sfWrap:not([hidden])');
+  const th = '.sf-table thead th:nth-child(2)';
+  const w0 = await page.$eval(th, (e) => e.getBoundingClientRect().width);
+  const g = await page.$(th + ' .col-grip');
+  const b = await g.boundingBox();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 80, b.y + b.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const w1 = await page.$eval(th, (e) => e.getBoundingClientRect().width);
+  assert.ok(Math.abs(w1 - (w0 + 80)) <= 3, `拖了 80px：${w0} → ${w1}`);
+  const saved = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('tbx.admin.colw.')));
+  assert.deepEqual(saved, ['tbx.admin.colw.sfCard.0']);
+  // 重新整理：欄寬還在
+  await page.reload(); await login(page);
+  await page.waitForSelector('#sfWrap:not([hidden])');
+  assert.ok(Math.abs(await page.$eval(th, (e) => e.getBoundingClientRect().width) - w1) <= 2);
+  // 方向鍵：+16
+  await page.focus(th + ' .col-grip'); await page.keyboard.press('ArrowRight');
+  assert.ok(Math.abs(await page.$eval(th, (e) => e.getBoundingClientRect().width) - (w1 + 16)) <= 2);
+  // 雙擊恢復預設
+  await page.dblclick(th + ' .col-grip');
+  assert.ok(Math.abs(await page.$eval(th, (e) => e.getBoundingClientRect().width) - w0) <= 3);
+  assert.equal(await page.evaluate(() => localStorage.getItem('tbx.admin.colw.sfCard.0')), null);
+  // 其他表格也有把手（錯誤紀錄）
+  assert.ok(await page.$$eval('.lg-table thead .col-grip', (e) => e.length) >= 5);
+  // 手機：把手隱藏
+  await page.setViewportSize({ width: 390, height: 800 });
+  assert.equal(await page.isVisible(th + ' .col-grip'), false);
+});
