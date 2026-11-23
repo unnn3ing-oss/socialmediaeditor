@@ -3,6 +3,7 @@
 //   可見卡片依 GET /admin/me 的 cards（卡片由權限組決定，見 server/core/adminperm.js）；敏感卡片要輸入管理員密碼解鎖。
 import { API_BASE, API_ENV } from '../shell/config.js';
 import { companyKey } from '../sdk/api.js';
+import { fbPostUrl } from '../shell/notices.js';
 
 // 不讓別的網站把後台嵌進框架（GitHub Pages 不能設 x-frame-options）
 if (window.top !== window.self) {
@@ -242,7 +243,7 @@ if (window.top !== window.self) {
         var meta = [LG_TYPE[r.ptype] || '', r.pub_at ? '發布 ' + fmtTime(r.pub_at * 1000) : ''].filter(Boolean).join('・');
         if (meta) tp.appendChild(sfEl('div', 'lg-meta', meta));
         if (/^\d{1,30}(_\d{1,30})?$/.test(r.post)) {
-          var a = document.createElement('a'); a.className = 'au-open'; a.href = 'https://www.facebook.com/' + r.post; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          var a = document.createElement('a'); a.className = 'au-open'; a.href = fbPostUrl(r.post); a.target = '_blank'; a.rel = 'noopener noreferrer';
           a.textContent = '開啟貼文 ↗'; a.title = r.post; a.setAttribute('aria-label', '開啟貼文 ' + r.post + '（另開分頁）');
           tp.appendChild(a);
         }
@@ -1294,7 +1295,7 @@ if (window.top !== window.self) {
       var tdPg = sfEl('td', r.pageName ? '' : 'num', r.pageName || r.page || ''); if (r.pageName) tdPg.title = '粉專 ID ' + r.page; tr.appendChild(tdPg);   // 顯示簡稱，游標移上去看 ID
       var tp = document.createElement('td');
       if (r.post && AU_OPEN[r.action] && /^\d{1,30}(_\d{1,30})?$/.test(r.post)) {
-        var a = document.createElement('a'); a.className = 'au-open'; a.href = 'https://www.facebook.com/' + r.post; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        var a = document.createElement('a'); a.className = 'au-open'; a.href = fbPostUrl(r.post); a.target = '_blank'; a.rel = 'noopener noreferrer';
         a.textContent = '開啟貼文 ↗'; a.title = r.post; a.setAttribute('aria-label', '開啟貼文 ' + r.post + '（另開分頁）');
         tp.appendChild(a);
       } else if (r.post) { tp.className = 'num'; tp.textContent = r.post; tp.style.color = '#5b6472'; }

@@ -16,12 +16,12 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/timer.js` | `retry(rec,it,e,step)` 錯誤前加步驟 | ⬜ |
-| `shell/notices.js`、`admin/admin.js`（兩處） | 共用連結格式 | ⬜ |
-| 測試 | timer 單元測試、admin／company e2e | ⬜ |
+| `server/fb/timer.js` | `STEP`＋`retry(rec,it,e,step)` 錯誤前加步驟 | ✅ |
+| `shell/notices.js` `fbPostUrl`、`admin/admin.js`（錯誤紀錄、操作紀錄） | 共用連結格式 | ✅ |
+| 測試 | `fb-timer.test.js` 加 2 項、`test/notices-link.test.js`、admin／company e2e 網址更新 | ✅ npm test 794、admin＋company e2e 52、build --check |
 
 ## 下一步
-- [ ] B、C 實作＋測試＋審查
+- [x] B、C 實作＋測試（改動小，未另派審查）
 - [ ] 使用者確認後推 main、更新 CLAUDE.md 目前進度
 
 ## 注意

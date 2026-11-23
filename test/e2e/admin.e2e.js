@@ -658,7 +658,7 @@ test('操作紀錄：查詢帶期間與員工編號或姓名；來源欄與篩�
   const rows = await page.$$eval('#auRows tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent)));
   assert.deepEqual(rows.map((r) => [r[3], r[4]]), [['後台', '重置密碼'], ['工具', '立即發布（字圖）'], ['工具', '排程（套版）'], ['工具', '刪除']]);
   const links = await page.$$eval('#auRows a.au-open', (as) => as.map((a) => [a.href, a.target, a.rel, a.textContent]));
-  assert.deepEqual(links, [['https://www.facebook.com/111_444', '_blank', 'noopener noreferrer', '開啟貼文 ↗'], ['https://www.facebook.com/111_222', '_blank', 'noopener noreferrer', '開啟貼文 ↗']]);
+  assert.deepEqual(links, [['https://www.facebook.com/111/posts/444', '_blank', 'noopener noreferrer', '開啟貼文 ↗'], ['https://www.facebook.com/111/posts/222', '_blank', 'noopener noreferrer', '開啟貼文 ↗']]);
   assert.equal(rows[3][6], '111_333', '刪除的貼文只顯示 ID');
   const hs = await page.$$eval('#auRows tr', (trs) => trs.map((tr) => Math.round(tr.getBoundingClientRect().height)));
   assert.ok(Math.max(...hs) - Math.min(...hs) <= 2, '有按鈕的列和沒按鈕的列一樣高：' + hs);

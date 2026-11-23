@@ -58,6 +58,8 @@ function summary(rec) {
 // 要提醒的留言：第一則「失敗」或「失敗累計 ≥ ALERT_AT 次還在重試」的；沒有＝null
 export const ALERT_AT = 2;
 const CASCADE = '前一則留言失敗，未留';
+// 計時器每一步的名稱（錯誤說明前綴）：讀取類（確認發布、確認是否已留）被擋不代表留言沒留上
+export const STEP = { token: '取得粉專權杖', published: '確認發布', check: '確認是否已留', comment: '留言' };
 export function alertOf(rec) {
   if (rec.canceled) return null;   // 整則取消（貼文刪除）就不再提醒
   const i = rec.items.findIndex((x) => x.status === 'failed' || (open(x) && (x.attempts || 0) >= ALERT_AT));
@@ -189,7 +191,7 @@ export class FbCommentTimer {
       return this.schedule(rec);
     }
     let page, tokens;
-    try { tokens = await pageTokens(this.env); page = tokens.get(rec.pageId); } catch (e) { return rec.items.some(open) ? this.retry(rec, rec.items.find(open), e) : this.crossWait(rec, e); }
+    try { tokens = await pageTokens(this.env); page = tokens.get(rec.pageId); } catch (e) { return rec.items.some(open) ? this.retry(rec, rec.items.find(open), e, STEP.token) : this.crossWait(rec, e); }
     if (!page) { [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '找不到粉專 token'; } }); await s.put('rec', rec); return this.schedule(rec); }
 
     // 先確認貼文已發布（確認過就不再查）
@@ -205,7 +207,7 @@ export class FbCommentTimer {
           await s.put('rec', rec); return this.schedule(rec);
         }
         if (!rec.items.some(open)) return this.crossWait(rec, e);
-        return this.retry(rec, rec.items.find(open), e);
+        return this.retry(rec, rec.items.find(open), e, STEP.published);
       }
       if (!post.is_published) {
         rec.retimes = (rec.retimes || 0) + 1;
@@ -228,8 +230,10 @@ export class FbCommentTimer {
     for (const it of rec.items) {
       if (!open(it)) continue;
       if (dueOf(rec, it) > Date.now()) break;
+      let step = STEP.comment;
       try {
         if (it.status === 'posting') {
+          step = STEP.check;
           // 上次留言途中中斷：先確認是否已經留過，避免重複
           const d = await graph(this.env, 'GET', '/' + rec.postId + '/comments', { fields: 'from{id},message', limit: 100 }, page.token);
           // 同樣內容的另一則已經留過的不算（兩則可能一字不差）
@@ -237,13 +241,14 @@ export class FbCommentTimer {
           const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && c.message === it.message && !used.has(String(c.id)));
           if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); await s.put('rec', rec); continue; }
         }
+        step = STEP.comment;
         it.status = 'posting';
         await s.put('rec', rec);
         const id = await postComment(this.env, page.token, rec.postId, it.message);
         Object.assign(it, { status: 'done', commentId: id });
         await s.put('rec', rec);
       } catch (e) {
-        return this.retry(rec, it, e);
+        return this.retry(rec, it, e, step);
       }
     }
     return this.schedule(rec);
@@ -292,9 +297,10 @@ export class FbCommentTimer {
   }
 
   // 失敗：限流立刻標失敗；其他重試（30/60/120/240 秒），第 5 次失敗標失敗。posting 狀態保留，下次先查再留
-  async retry(rec, it, e) {
+  // step：哪一步失敗（STEP），寫在錯誤說明最前面，通知、列表、錯誤紀錄都看得到
+  async retry(rec, it, e, step = '') {
     const s = this.state.storage;
-    const msg = String((e && e.message) || e).slice(0, 200);
+    const msg = ((step ? step + '：' : '') + String((e && e.message) || e)).slice(0, 200);
     if (!it) return;
     it.attempts = (it.attempts || 0) + 1;
     it.error = msg;

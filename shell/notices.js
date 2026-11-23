@@ -7,6 +7,13 @@ const mk = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
+// 臉書貼文網址：「粉專_貼文」格式臉書網頁常顯示「目前無法查看此內容」，改用 /粉專/posts/貼文；
+// 沒有底線（影片、照片 ID）照舊 /ID。格式不對回空字串（不顯示連結）
+export function fbPostUrl(id) {
+  const m = /^(\d{1,30})(?:_(\d{1,30}))?$/.exec(String(id || ''));
+  if (!m) return '';
+  return 'https://www.facebook.com/' + (m[2] ? m[1] + '/posts/' + m[2] : m[1]);
+}
 export function fmtNoteTime(ms) {
   const d = new Date(ms);
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -67,9 +74,9 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
         });
         acts.append(rb);
       }
-      if (/^\d{1,30}(_\d{1,30})?$/.test(String(n.postId || ''))) {
+      if (fbPostUrl(n.postId)) {
         const op = mk('a', 'btn btn-secondary btn-sm', '看貼文');
-        op.href = 'https://www.facebook.com/' + n.postId;
+        op.href = fbPostUrl(n.postId);
         op.target = '_blank'; op.rel = 'noopener noreferrer';
         op.setAttribute('aria-label', '看貼文（另開分頁）');
         acts.append(op);

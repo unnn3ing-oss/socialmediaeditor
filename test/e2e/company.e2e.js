@@ -328,7 +328,7 @@ test('留言失敗通知：帳號框紅色光暈閃爍；彈窗列出粉專／�
   assert.match(await notes.nth(1).textContent(), /娛樂｜第 2 則留言重試中/);
   assert.equal(await notes.nth(0).locator('.acct-note-title').textContent(), '颱風最新：海上警報發布');
   assert.equal(await notes.nth(1).locator('.acct-note-title').count(), 0, '舊通知沒有摘要不顯示');
-  assert.equal(await notes.nth(0).locator('a', { hasText: '看貼文' }).getAttribute('href'), 'https://www.facebook.com/111_5');
+  assert.equal(await notes.nth(0).locator('a', { hasText: '看貼文' }).getAttribute('href'), 'https://www.facebook.com/111/posts/5');
   assert.equal(await notes.nth(0).locator('a', { hasText: '看貼文' }).getAttribute('target'), '_blank');
   // 按鈕一列：重留言／看貼文／看列表／完成
   assert.deepEqual(await notes.nth(0).locator('.acct-note-act > *').allTextContents(), ['重留言', '看貼文', '看列表', '完成']);

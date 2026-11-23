@@ -297,6 +297,29 @@ test('arm 帶 recheck：第 1 則可能已留過（回應錯誤但其實成功�
   assert.equal(comments(f).length, 0);
 });
 
+test('錯誤說明標出步驟：確認是否已留被擋（#10）→「確認是否已留：」，不是「留言：」', async (t) => {
+  const deny = () => Response.json({ error: { code: 10, message: "(#10) This endpoint requires the 'pages_read_engagement' permission" } }, { status: 400 });
+  const { f, obj, post } = await mk(t, { 'GET /111_5': () => ({ is_published: true }), 'GET /111_5/comments': deny });
+  await post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: [{ message: '看更多\nhttps://x', offset: 0, recheck: true }] });
+  await obj.alarm();
+  const s = await post('status');
+  assert.match(s.items[0].error, /^確認是否已留：/);
+  assert.equal(comments(f).length, 0, '讀不到不能直接再留（可能重複）');
+});
+
+test('錯誤說明標出步驟：確認發布被擋 →「確認發布：」；留言本身失敗 →「留言：」', async (t) => {
+  const deny = () => Response.json({ error: { code: 10, message: 'denied' } }, { status: 400 });
+  const a = await mk(t, { 'GET /111_5': deny });
+  await a.post('arm', REC(nowSec() - 60));
+  await a.obj.alarm();
+  assert.match((await a.post('status')).error, /^確認發布：/);
+  a.f.restore();
+  const b = await mk(t, { 'GET /111_5': () => ({ is_published: true }), 'POST /111_5/comments': deny });
+  await b.post('arm', REC(nowSec() - 60));
+  await b.obj.alarm();
+  assert.match((await b.post('status')).error, /^留言：/);
+});
+
 test('armTimer：計時器拒收（資料不完整）會丟錯，不能當成排好了', async () => {
   const { armTimer } = await lm();
   const env = { FB_TIMER: { idFromName: (n) => ({ name: n }), get: () => ({ fetch: async () => Response.json({ ok: false, error: '資料不完整' }) }) } };
