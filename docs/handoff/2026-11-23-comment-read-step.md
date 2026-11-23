@@ -23,7 +23,7 @@
 ## 下一步
 - [x] B、C 實作＋測試
 - [x] R1～R6＋5：`timer.js`、`post.js`、`pages.js` `tokenStatus`（granted／pageScopes／appId／needed）、`admin/index.html`＋`admin.js`＋`admin.css` `#fbPerms`；npm test 799、admin／company／fbpost／fbvideo e2e 114
-- [ ] 獨立審查
+- [x] 獨立審查通過（Minor：部署前已失敗的舊紀錄重新留言改先查再留，已修，rec.v=2）
 - [ ] 下一件（使用者新需求，待列做法確認）：系統管理員手動發通知給使用者（黃色閃爍）
 - [ ] 使用者確認後推 main、更新 CLAUDE.md 目前進度
 

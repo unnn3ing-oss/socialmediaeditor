@@ -375,6 +375,13 @@ test('提醒後自動重試成功：通知消失，錯誤日誌保留並由系�
   assert.equal(failLogs(env)[0].st, 'closed');
 });
 
+test('舊紀錄（部署前已失敗、沒有 v）按重新留言：有試過的先查再留', async (t) => {
+  const { state, post } = await mk(t, {});
+  await state.storage.put('rec', { pageId: '111', postId: '111_5', at: nowSec() - 600, published: true, retimes: 0, items: [{ message: 'm', offset: 0, status: 'failed', attempts: 5, error: 'x' }] });
+  assert.equal((await post('retry', { pageId: '111' })).ok, true);
+  assert.equal((await post('status')).items[0].status, 'posting');
+});
+
 test('armTimer：計時器拒收（資料不完整）會丟錯，不能當成排好了', async () => {
   const { armTimer } = await lm();
   const env = { FB_TIMER: { idFromName: (n) => ({ name: n }), get: () => ({ fetch: async () => Response.json({ ok: false, error: '資料不完整' }) }) } };

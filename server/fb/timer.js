@@ -110,7 +110,7 @@ export class FbCommentTimer {
       const cross = body.kind === 'video' ? normCross(body) : [];
       const items = normItems(body, !!(cross && cross.length));
       if (!body.pageId || !body.postId || !items || !cross || !Number.isInteger(at)) return reply({ ok: false, error: '資料不完整' });
-      const r = { pageId: String(body.pageId), postId: String(body.postId), at, published: body.published === true, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
+      const r = { v: 2, pageId: String(body.pageId), postId: String(body.postId), at, published: body.published === true, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
       await s.put('rec', r);
       await this.schedule(r);
       return reply({ ok: true });
@@ -136,7 +136,8 @@ export class FbCommentTimer {
       if (i < 0) return reply({ ok: false, error: '沒有失敗的留言' });
       for (const x of rec.items.slice(i)) {
         if (x.status !== 'failed' && !open(x)) continue;
-        x.status = x.unsure || x.status === 'posting' ? 'posting' : 'pending';   // 上次沒收到臉書回應的先查再留
+        // 上次沒收到臉書回應的先查再留；舊紀錄（沒有 v，分不出是哪種失敗）有試過的一律先查，避免重複
+        x.status = x.unsure || x.status === 'posting' || (!rec.v && (x.attempts || 0) > 0) ? 'posting' : 'pending';
         x.attempts = 0; delete x.error; delete x.ecode; delete x.eraw; delete x.logged;
       }
       if (!rec.published) rec.retimes = 0;
