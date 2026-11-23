@@ -1024,7 +1024,7 @@ test('值班粉專：班段第一次開啟要先選（不能略過），選好�
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await page.waitForSelector('#dutyDlg[open]');
   assert.equal(await page.isHidden('#dutyCancel'), true, '第一次不能取消');
-  assert.match(await page.textContent('#dutyShift'), /^(早班|晚班|大夜)/);
+  assert.match(await page.textContent('#dutyShift'), /^(早班|晚班)/);
   assert.equal(await page.isDisabled('#dutyOk'), true, '至少選 1 個');
   if (SHOT) { await page.check('#dutyList input[value="111"]'); await page.screenshot({ path: path.join(SHOT, 'fbpost-duty.png') }); await page.uncheck('#dutyList input[value="111"]'); }
   await page.keyboard.press('Escape');
@@ -1344,7 +1344,14 @@ test('即時狀態（側邊欄）：留言失敗紅燈閃爍；點一下關新�
   await openPost(page);
   await page.waitForSelector('#liveState.is-bad');
   assert.notEqual(await page.$eval('#liveState', (e) => getComputedStyle(e).animationName), 'none');
-  assert.match(await page.getAttribute('#liveState', 'aria-label'), /留言失敗 1 則（娛樂）/);
+  assert.match(await page.getAttribute('#liveState', 'aria-label'), /留言有問題 1 則（娛樂）/);
+  assert.equal(await page.isVisible('#liveTip'), false, '沒移上去不顯示小視窗');
+  await page.hover('#liveState');
+  await page.waitForSelector('#liveTip:not([hidden])');
+  assert.match(await page.textContent('#liveTip'), /娛樂｜第 \d 則留言/);
+  assert.equal(await page.isVisible('#postDlg'), true, '只移上去不跳列表');
+  await page.mouse.move(0, 0);
+  await page.waitForSelector('#liveTip', { state: 'hidden' });
   await page.click('#liveState');
   await page.waitForSelector('#postDlg', { state: 'hidden' });
   await page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));

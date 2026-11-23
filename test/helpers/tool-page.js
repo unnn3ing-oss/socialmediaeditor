@@ -50,7 +50,7 @@ async function openTool(browser, srvUrl, id, { company = false, admin = false, s
 async function presetDuty(page, ids = []) {
   await page.addInitScript((list) => {
     const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), p = (n) => String(n).padStart(2, '0');
-    const key = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${m < 450 ? 'night' : m < 960 ? 'am' : 'pm'}`;
+    const key = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${m < 870 ? 'am' : 'pm'}`;
     try { if (!sessionStorage.getItem('test.noDuty')) localStorage.setItem('tbx.fbpost.duty', JSON.stringify({ shift: key, pages: list })); } catch {}
   }, ids);
 }

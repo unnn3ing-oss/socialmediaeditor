@@ -1,23 +1,36 @@
-// 值班粉專：每個班段（早班 07:30–15:59、晚班 16:00–23:59、大夜 00:00–07:29，以本機時間計）第一次開啟要先選（至少 1 個，不能略過），
-// 選好的粉專在「新增發文」一開始、清空、送出完成後自動勾選。選擇記在這個瀏覽器（localStorage），換班段就失效重選。
+// 值班粉專：只有早班、晚班（以本機時間計）。依「選好的當下」歸班：14:30 前＝早班，選擇有效到當天 16:30；
+// 14:30 起＝晚班，有效到隔天 00:00（晚班最晚 00:00 下班）。每個班段第一次開啟要先選（至少 1 個，不能略過），
+// 選好的粉專在「新增發文」一開始、清空、送出完成後自動勾選。選擇記在這個瀏覽器（localStorage），過期就重選。
 import { $ } from './util.js';
 
 export const DUTY_KEY = 'tbx.fbpost.duty';
-export const SHIFTS = { am: '早班（07:30–16:30）', pm: '晚班（16:00–24:00）', night: '大夜（00:00–07:30）' };
+export const SHIFTS = { am: '早班（到 16:30）', pm: '晚班（到 24:00）' };
+const PM_FROM = 14 * 60 + 30;   // 14:30 起選的算晚班
 
-// 時間 → { key: 'YYYY-MM-DD-am|pm|night', name }
+// 選好的時間 → { key: 'YYYY-MM-DD-am|pm', name }
 export function shiftOf(ms) {
   const d = new Date(ms), m = d.getHours() * 60 + d.getMinutes();
-  const s = m < 450 ? 'night' : m < 960 ? 'am' : 'pm';
+  const s = m < PM_FROM ? 'am' : 'pm';
   const p = (n) => String(n).padStart(2, '0');
   return { key: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${s}`, name: SHIFTS[s] };
 }
 
-// 這個班段選過的粉專 id；沒選過（或換班段、資料壞掉）回 null
+// 班段 key → 選擇失效的時間（毫秒）：早班當天 16:30、晚班隔天 00:00；舊版大夜（night）當天 07:30；格式不對回 0
+export function untilOf(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})-(am|pm|night)$/.exec(String(key || ''));
+  if (!m) return 0;
+  const [y, mo, d] = [+m[1], +m[2] - 1, +m[3]];
+  if (m[4] === 'am') return new Date(y, mo, d, 16, 30).getTime();
+  if (m[4] === 'pm') return new Date(y, mo, d + 1, 0, 0).getTime();
+  return new Date(y, mo, d, 7, 30).getTime();
+}
+const alive = (key, ms) => ms < untilOf(key) && ms >= untilOf(key) - 2 * 86400 * 1000;   // 還沒過期（也擋未來日期的怪資料）
+
+// 目前還有效的值班粉專 id；沒選過（或過期、資料壞掉）回 null
 export function readDuty(storage, ms) {
   try {
     const v = JSON.parse(storage.getItem(DUTY_KEY));
-    if (v && v.shift === shiftOf(ms).key && Array.isArray(v.pages) && v.pages.every((x) => typeof x === 'string')) return v.pages;
+    if (v && alive(v.shift, ms) && Array.isArray(v.pages) && v.pages.every((x) => typeof x === 'string')) return v.pages;
   } catch { /* 沒有 */ }
   return null;
 }
@@ -29,7 +42,7 @@ export function writeDuty(storage, ms, pages) {
 export function createDuty({ pages, onChange, canAsk = () => true, storage = globalThis.localStorage, now = () => Date.now() }) {
   const dlg = $('dutyDlg');
   let mem = null;   // localStorage 不能用時，記在記憶體
-  const current = () => readDuty(storage, now()) || (mem && mem.shift === shiftOf(now()).key ? mem.pages : null);
+  const current = () => readDuty(storage, now()) || (mem && alive(mem.shift, now()) ? mem.pages : null);
   const valid = () => { const ids = new Set(pages().map((p) => p.id)); return (current() || []).filter((id) => ids.has(id)); };
 
   function paintBtn() {
@@ -68,8 +81,7 @@ export function createDuty({ pages, onChange, canAsk = () => true, storage = glo
   });
   $('dutyBtn').addEventListener('click', () => open(false));
 
-  // 換班段：開著頁面跨過 07:30／16:00／00:00 時，回到頁面或每分鐘檢查一次
-  let lastKey = '';
+  // 選擇過期（早班 16:30、晚班 00:00）：頁面開著每分鐘檢查一次，回到頁面也檢查
   function check() {
     paintBtn();
     if (!pages().length || !canAsk() || current()) return;
@@ -77,8 +89,8 @@ export function createDuty({ pages, onChange, canAsk = () => true, storage = glo
     open(true);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
-  setInterval(() => { const k = shiftOf(now()).key; if (k !== lastKey) { lastKey = k; check(); } }, 60000);
-  lastKey = shiftOf(now()).key;
+  let had = !!current();
+  setInterval(() => { const has = !!current(); if (had && !has) check(); had = has; }, 60000);
 
   return { check, ids: valid, paint: paintBtn };
 }
