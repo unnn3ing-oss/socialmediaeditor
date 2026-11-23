@@ -203,6 +203,15 @@ async function open(viewport, hash = '', front = null) {
   return { page, calls };
 }
 
+// 切到某張卡片所在的分類與功能（管理頁一次只顯示一個功能）
+async function show(page, card) {
+  await page.evaluate((id) => {
+    const t = document.getElementById(id).closest('.panel').id.slice(6);
+    const tb = document.getElementById('tab-' + t); if (tb.getAttribute('aria-selected') !== 'true') tb.click();
+    const sb = document.querySelector('.sub-tabs [aria-controls="' + id + '"]'); if (sb) sb.click();
+  }, card);
+}
+
 async function login(page) {
   await page.fill('#pw', 'pw-123');
   await page.click('#loginBtn');
@@ -220,7 +229,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
 
   // 預設在臉書發文
   assert.equal(await page.getAttribute('#tab-post', 'aria-selected'), 'true');
-  assert.ok(page.url().endsWith('#post'));
+  assert.ok(page.url().endsWith('#post/pages'));
   assert.equal(await page.isVisible('#logout'), true);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/assets'), '沒進素材分類前不讀素材');
   // 5 個分類；沒有後端 API 的卡片（預設文字、嘗試次數）不出現
@@ -243,7 +252,7 @@ test('登入後依分類切換，按鈕打到後端 API 並帶 token', async () 
   await page.focus('#tab-assets');
   await page.keyboard.press('ArrowDown');
   assert.equal(await page.getAttribute('#tab-rec', 'aria-selected'), 'true');
-  await page.click('#recTab-logs');
+  await page.click('#sub-rec-logs');
   await page.click('#logBtn');
   await page.waitForSelector('#logWrap:not([hidden])');
 
@@ -280,6 +289,7 @@ test('頁面不用 emoji 或箭頭', async () => {
 test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯示', async () => {
   const { page, calls } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
+  await show(page, 'fbCard');
   await page.waitForFunction(() => /可以發文/.test(document.getElementById('fbState').textContent));
   const st = await page.textContent('#fbState');
   assert.match(st, /可以發文/);
@@ -313,7 +323,7 @@ test('臉書發文：狀態、到期日與缺少權限；粉專表依順序顯�
   assert.deepEqual(fit, [true, true, true]);
   assert.ok(calls.filter((c) => c.key === 'GET /admin/fb/status' || c.key === 'GET /admin/fb/pages').every((c) => c.auth === 'Bearer T'));
   // 重新讀取粉專：先清快取再重讀
-  await page.click('#tab-adv');
+  await show(page, 'fbCard');
   await page.click('#fbRefresh');
   await page.waitForFunction(() => document.getElementById('fbMsg').textContent === '已重新讀取。');
   assert.ok(calls.some((c) => c.key === 'POST /admin/fb/refresh'));
@@ -365,6 +375,7 @@ test('臉書發文與 Rundown：手機 390px 頁面不橫向捲動', async () =>
 test('Rundown 分類：測試連線打 /admin/rundown/ping 並顯示試算表名稱', async () => {
   const { page, calls } = await open({ width: 1280, height: 860 }, '#rd');
   await login(page);
+  await show(page, 'rdCard');
   assert.equal(await page.isVisible('#panel-conn'), true);
   await page.waitForFunction(() => document.getElementById('rdState').textContent === '狀態：已設定');
   await page.click('#rdPing');
@@ -376,6 +387,7 @@ test('影片設定：讀到既有設定；每行一個，儲存時去空白行',
   VS_SAVED = null;
   const { page } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
+  await show(page, 'vsCard');
   await page.waitForFunction(() => document.getElementById('vsReels').value === '#焦點新聞影音都在TVBS');
   assert.equal(await page.inputValue('#vsPre'), '1118_');
   await page.fill('#vsSuf', '_v2\n\n_final ');
@@ -389,6 +401,7 @@ test('活動留言：顯示既有兩則；新增、刪除後儲存，body 依順
   PS_SAVED = null;
   const { page, calls } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
+  await show(page, 'psCard');
   await page.waitForSelector('#psRows .ps-row');
   assert.match(await page.textContent('#psCard'), /第 2、3 則留言可以選這裡的內容帶入/);
   assert.ok(calls.some((c) => c.key === 'GET /admin/fb/presets' && c.auth === 'Bearer T'));
@@ -406,6 +419,7 @@ test('活動留言：名稱空白不送出並標出哪一則；滿 20 則停用�
   PS_SAVED = null;
   const { page } = await open({ width: 1280, height: 860 }, '#fb');
   await login(page);
+  await show(page, 'psCard');
   await page.waitForSelector('#psRows .ps-row');
   await page.fill('#psRows .ps-row:nth-child(2) .ps-name', '  ');
   await page.click('#psSave');
@@ -424,6 +438,7 @@ test('活動留言：名稱空白不送出並標出哪一則；滿 20 則停用�
 test('活動留言：手機 390px 不橫向捲動', async () => {
   const { page } = await open({ width: 390, height: 800 }, '#fb');
   await login(page);
+  await show(page, 'psCard');
   await page.waitForSelector('#psRows .ps-row');
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(over <= 0, '橫向捲動 ' + over);
@@ -433,6 +448,7 @@ test('Webhook 卡片：顯示回呼網址、驗證權杖、簽章狀態、最後
   const { page, calls } = await open({ width: 1280, height: 900 }, '#adv');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page);
+  await show(page, 'whCard');
   await page.waitForFunction(() => /fbhook/.test(document.getElementById('whUrl').textContent));
   assert.equal(await page.textContent('#whUrl'), 'https://api.example/fbhook');
   assert.equal(await page.textContent('#whTok'), '0123456789abcdef0123456789abcdef');
@@ -453,6 +469,7 @@ test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成�
   APP = { configured: false, appId: '', source: null, savedAt: null };
   const { page, calls } = await open({ width: 1280, height: 900 }, '#adv');
   await login(page);
+  await show(page, 'fbCard');
   await page.waitForFunction(() => /未設定/.test(document.getElementById('appState').textContent));
   assert.equal(await page.isVisible('#appClear'), false);
   assert.equal(await page.getAttribute('#appSecret', 'type'), 'password');
@@ -477,6 +494,7 @@ test('App 密鑰：未設定提示、驗證並儲存（送 ID 與 Secret、成�
 test('臉書連線：貼上權杖→驗證並儲存（body 帶權杖、成功後清空輸入框）；改回 Secret 打 DELETE', async () => {
   const { page, calls } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
+  await show(page, 'fbCard');
   await page.waitForFunction(() => /可以發文/.test(document.getElementById('fbState').textContent));
   assert.equal(await page.isVisible('#fbTokClear'), false, '來源不是管理頁時不顯示「改回 Secret」');
   await page.click('#fbTokSave');
@@ -550,7 +568,7 @@ test('授權名單：切進分類才讀、顯示預設 3 組；新增、改權�
   const { page, calls } = await open({ width: 1280, height: 860 });
   await login(page);
   assert.ok(!calls.some((c) => c.key === 'GET /admin/staff'), '沒進分類前不讀名單');
-  await page.click('#tab-people');
+  await page.click('#tab-people'); await show(page, 'sfCard');
   await page.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await page.$$eval('#sfRows tr', (r) => r.length), 3);
   assert.deepEqual(await page.$$eval('#sgRows .sg-row > input', (e) => e.map((i) => i.value)), ['唯讀', '小編', '主管']);
@@ -602,7 +620,7 @@ test('授權名單密碼：密碼欄狀態；新增與重置後顯示設定碼�
   const { page } = await open({ width: 1280, height: 860 });
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await login(page);
-  await page.click('#tab-people');
+  await page.click('#tab-people'); await show(page, 'sfCard');
   await page.waitForSelector('#sfWrap:not([hidden])');
   const pwCol = await page.$$eval('#sfRows tr', (rows) => rows.map((r) => r.children[5].textContent));
   assert.deepEqual(pwCol, ['已設定', '未設定', '鎖定中', '已設定']);
@@ -641,6 +659,7 @@ test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增�
   resetStaff();
   const { page } = await open({ width: 1280, height: 860 }, '#adv');
   await login(page);
+  await show(page, 'sgCard');
   await page.waitForSelector('#sgRows .sg-row');
   const del = await page.$$eval('#sgRows .sg-row', (rs) => rs.map((r) => [r.querySelector('.danger').disabled, r.querySelector('.danger').title]));
   assert.deepEqual(del, [[true, '還有 1 人使用'], [true, '還有 1 人使用'], [true, '還有 1 人使用']]);
@@ -659,7 +678,7 @@ test('權限組：儲存帶 id／名稱／權限、使用中不能刪、新增�
 
 test('操作紀錄：查詢帶期間與員工編號或姓名；來源欄與篩選、發文類型、開啟貼文按鈕', async () => {
   resetStaff();
-  const { page } = await open({ width: 1280, height: 860 }, '#staff');
+  const { page } = await open({ width: 1280, height: 860 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
   await page.click('#tab-rec');
@@ -687,7 +706,7 @@ test('操作紀錄：查詢帶期間與員工編號或姓名；來源欄與篩�
 
 test('授權名單：320px 頁面不橫向捲動（表格自己橫捲）', async () => {
   resetStaff();
-  const { page } = await open({ width: 320, height: 800 }, '#staff');
+  const { page } = await open({ width: 320, height: 800 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -722,6 +741,7 @@ test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 
   const urls = [];
   page.on('request', (r) => { if (/\/admin\/fb\/(status|app|token)/.test(r.url())) urls.push(r.url()); });
   await login(page);
+  await show(page, 'tpCard');
   await page.waitForSelector('#tpList li');
   assert.equal(await page.locator('#tpList li').count(), 3);
   assert.match(await page.textContent('#tpList li.on'), /主管權杖使用中/);
@@ -735,9 +755,11 @@ test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 
   await page.waitForFunction(() => document.querySelector('#tpPick').value === 'p11112222');
   await page.waitForFunction(() => /已新增/.test(document.querySelector('#tpMsg').textContent));
   urls.length = 0;
+  await show(page, 'fbCard');
   await page.selectOption('#tpPick', 'pabcdef12');
   await new Promise((r) => setTimeout(r, 200));
   assert.ok(urls.some((u) => u.endsWith('/admin/fb/status?p=pabcdef12')) && urls.some((u) => u.endsWith('/admin/fb/app?p=pabcdef12')), urls.join(' '));
+  await show(page, 'tpCard');
   await page.click('#tpList li:nth-child(2) button:has-text("切換為使用中")');
   await page.waitForFunction(() => /已切換到「鈞評測試」/.test(document.querySelector('#tpMsg').textContent));
   assert.match(await page.textContent('#tpList li.on'), /鈞評測試/);
@@ -747,6 +769,7 @@ test('權杖組別：列出、新增後設定中的組別換成新組（API 帶 
 test('速率限制：App 與各粉專三個 % 長條（≥75 黃、≥90 紅）、被暫停顯示恢復時間、最近一次限流；立即查詢', async () => {
   const { page, calls } = await open({ width: 1280, height: 900 }, '#conn');
   await login(page);
+  await show(page, 'usCard');
   await page.waitForSelector('#usList li .us-bars');
   assert.equal(await page.locator('#usList > li').count(), 3);
   assert.match(await page.textContent('#usList > li:nth-child(1)'), /App（使用者權杖）.*3 分鐘前/);
@@ -776,7 +799,7 @@ test('首頁員工（管理者）直接進入：只看到權限組有的卡片�
   // 沒有權限的卡片不打 API；帶的是首頁憑證
   assert.ok(!calls.some((c) => c.key && /\/admin\/fb\/(status|profiles|webhook)$/.test(c.key)));
   assert.ok(calls.filter((c) => c.key && c.key.startsWith('GET /admin/')).every((c) => c.auth === 'Bearer F1'));
-  await page.click('#tab-people');
+  await page.click('#tab-people'); await show(page, 'sfCard');
   await page.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await page.isVisible('#sgCard'), false);
   await page.click('#tab-rec');
@@ -806,8 +829,11 @@ test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖�
   await page.fill('#unlockPw', 'wrong'); await page.click('#unlockBtn');
   await page.waitForFunction(() => /密碼不正確/.test(document.getElementById('unlockMsg').textContent));
   await page.fill('#unlockPw', 'pw-123'); await page.click('#unlockBtn');
-  await page.waitForSelector('#tpCard:not([hidden])');
-  assert.equal(await page.isVisible('#acCard'), true);
+  await page.waitForSelector('#sub-adv-profiles:not([hidden])');
+  assert.equal(await page.isVisible('#acCard'), true, '解鎖後顯示第一個功能');
+  await show(page, 'tpCard');
+  assert.equal(await page.isVisible('#tpCard'), true);
+  assert.equal(await page.isVisible('#acCard'), false, '一次只顯示一個功能');
   assert.equal(await page.isVisible('#unlockBar'), false);
   assert.equal(await page.textContent('#logout'), '鎖定');
   await page.click('#logout');
@@ -817,7 +843,7 @@ test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖�
 
 test('姓名：系統管理者看到輸入框（Enter／離開欄位存、失敗還原）；其他人唯讀', async () => {
   resetStaff();
-  const { page } = await open({ width: 1280, height: 860 }, '#people');
+  const { page } = await open({ width: 1280, height: 860 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await page.inputValue('#sfRows tr:nth-child(1) input.sf-name'), '王小明');
@@ -835,7 +861,7 @@ test('姓名：系統管理者看到輸入框（Enter／離開欄位存、失敗
   // 非系統管理者：唯讀
   STAFF_AS = { id: 'A001' };
   const me = { role: 'staff', roleName: '主管組', unlocked: false, cards: ['staff'], name: '王小明', id: 'A001' };
-  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people', { token: 'F4', me });
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people/staff', { token: 'F4', me });
   await p2.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await p2.locator('input.sf-name').count(), 0);
   assert.equal(await p2.textContent('#sfRows tr:nth-child(2) td:nth-child(2)'), '陳大華');
@@ -861,7 +887,7 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   if (!SHOT) return;
   resetStaff();
   const shot = async (page, name) => { await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOT, name), fullPage: true }); };
-  const { page } = await open({ width: 1280, height: 860 }, '#staff');
+  const { page } = await open({ width: 1280, height: 860 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
   await shot(page, 'admin-sys-staff.png');
@@ -906,6 +932,7 @@ test('留言守門卡片：打開不查權限、按了才查、儲存規則、�
   assert.deepEqual(GD_SAVED, { mode: 'observe', profile: 'pabcdef12', rules: { names: ['寶爸', '寳爸'], leads: ['老師', '進群', '帶單'], allow: [], auto: { r1: true, r2: false } } });
   await page.check('#gdPg111');
   await page.waitForFunction(() => /已開啟/.test(document.getElementById('gdPgMsg').textContent));
+  await show(page, 'gdLogCard');
   // 單行表格：一列一則，內容截一行；點內容展開全文、標註、留言者 ID
   assert.match(await page.textContent('#gdLog tr.gd-row'), /觀察.*Eliza Paredes.*幸好一直看/);
   assert.equal(await page.isVisible('#gdLog tr.gd-exp'), false);
@@ -929,6 +956,7 @@ test('文字背景：列表與預覽圖；預覽匯入勾選刪除後套用；�
   bgReset();
   const { page, calls } = await open({ width: 1280, height: 900 }, '#post');
   await login(page);
+  await show(page, 'bgCard');
   await page.waitForSelector('#bgRows tr');
   assert.match(await page.textContent('#bgSum'), /已存 4 個：純色 1．漸層 1．圖樣 2（圖已下載 1／2）/);
   assert.equal(await page.textContent('#bgFetch'), '下載圖樣（1 張）');
@@ -978,6 +1006,7 @@ test('文字背景：圖樣網址到期（未下載：剩幾天／一天內黃�
   BG.list.push({ id: '303063890126419', name: '過期了', type: 'image', bg: '#000000', text: '#FFFFFF', img: false, hasUrl: true, exp: now - 60, err: '', show: true });
   const { page } = await open({ width: 1280, height: 900 }, '#post');
   await login(page);
+  await show(page, 'bgCard');
   await page.waitForSelector('#bgRows tr');
   const st = await page.$$eval('#bgRows tr td:nth-child(4)', (tds) => tds.map((td) => [td.textContent, td.className, (td.querySelector('.bg-sub') || {}).className || '']));
   assert.match(st[2][0], /^已下載原網址到期 \d+\/\d+ \d\d:\d\d$/);
@@ -994,10 +1023,10 @@ test('目前在線（系統管理者）＋名單「最後使用」欄；非系�
   STAFF[0].lastSeen = now - 2 * 60000;          // 在線
   STAFF[1].lastSeen = now - 3 * 3600000;        // 不在線
   STAFF[2].lastSeen = now - 60000;              // 停用：不算在線
-  const { page } = await open({ width: 1280, height: 860 }, '#people');
+  const { page } = await open({ width: 1280, height: 860 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
-  assert.equal(await page.isVisible('#olCard'), true);
+  await show(page, 'olCard'); assert.equal(await page.isVisible('#olCard'), true);
   assert.equal(await page.textContent('#olCount'), '1 人');
   assert.deepEqual(await page.$$eval('#olList .ol-item b', (e) => e.map((x) => x.textContent)), ['王小明']);
   assert.match(await page.textContent('#olList .ol-item small'), /^2 分鐘前$/);
@@ -1012,14 +1041,14 @@ test('目前在線（系統管理者）＋名單「最後使用」欄；非系�
   await page.click('#olRefresh');
   await page.waitForFunction(() => document.getElementById('olCount').textContent === '2 人');
   // 非系統管理者（有授權名單卡片）：沒有在線卡片
-  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people', { token: 'F2', me: { role: 'staff', roleName: '主管', name: '林', uid: 'A003', cards: ['staff'] } });
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people/staff', { token: 'F2', me: { role: 'staff', roleName: '主管', name: '林', uid: 'A003', cards: ['staff'] } });
   await p2.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await p2.isVisible('#olCard'), false);
 });
 
 test('表格欄寬：拖表頭右緣改寬、重新整理還在、雙擊恢復；方向鍵可調；手機沒有把手', async () => {
   resetStaff();
-  const { page } = await open({ width: 1280, height: 860 }, '#people');
+  const { page } = await open({ width: 1280, height: 860 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
   const th = '.sf-table thead th:nth-child(2)';
@@ -1078,7 +1107,7 @@ test('首頁儀表板：預設打開、需要處理（紅在前黃在後）、�
   await page.click('#tab-home');
   assert.deepEqual(DASH.fresh, [null, '1']);
   // 進階設定：顯示項目
-  await page.click('#tab-adv');
+  await page.click('#tab-adv'); await show(page, 'dcCard');
   await page.waitForSelector('#dcList input');
   assert.deepEqual(await page.$$eval('#dcList input', (l) => l.map((c) => c.checked)), [true, true, true, false]);
   await page.check('#dcList input >> nth=3');
@@ -1111,10 +1140,10 @@ test('首頁儀表板：只有 dash 權限的員工只看到首頁；全部正�
 test('發送通知（系統管理者）：選收件方式、確認人數、送出 body 正確；已發送清單可展開已讀、撤回；非系統管理者看不到', async () => {
   resetStaff();
   MS.bodies = []; MS.items = [];
-  const { page } = await open({ width: 1280, height: 900 }, '#people');
+  const { page } = await open({ width: 1280, height: 900 }, '#people/staff');
   await login(page);
   await page.waitForSelector('#sfWrap:not([hidden])');
-  assert.equal(await page.isVisible('#msCard'), true);
+  await show(page, 'msCard'); assert.equal(await page.isVisible('#msCard'), true);
   // 單人下拉只列啟用中的人（林主管停用）
   assert.deepEqual(await page.$$eval('#msOne option', (o) => o.map((x) => x.value)), ['A001', 'A002']);
   assert.equal(await page.isVisible('#msOne'), true);
@@ -1164,7 +1193,64 @@ test('發送通知（系統管理者）：選收件方式、確認人數、送�
   await page.waitForFunction(() => document.querySelectorAll('#msList .ms-item.is-recalled').length === 1);
   assert.deepEqual(MS.bodies.pop(), { key: 'POST /admin/msgs/10/recall', id: 10 });
   // 非系統管理者看不到
-  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people', { token: 'F2', me: { role: 'staff', roleName: '主管', name: '林', uid: 'A003', cards: ['staff'] } });
+  const { page: p2 } = await open({ width: 1280, height: 860 }, '#people/staff', { token: 'F2', me: { role: 'staff', roleName: '主管', name: '林', uid: 'A003', cards: ['staff'] } });
   await p2.waitForSelector('#sfWrap:not([hidden])');
   assert.equal(await p2.isVisible('#msCard'), false);
+});
+
+test('分類浮出功能清單：游標移上浮出、點功能只顯示該卡片、上方功能分頁、網址記功能；手機不浮出', async () => {
+  const { page } = await open({ width: 1280, height: 860 }, '#post/video');
+  await login(page);
+  // 網址帶功能：直接打開影片設定，同分類其他卡片隱藏
+  assert.equal(await page.isVisible('#vsCard'), true);
+  assert.equal(await page.isVisible('#pgCard'), false);
+  assert.equal(await page.getAttribute('#sub-post-video', 'aria-selected'), 'true');
+  assert.deepEqual(await page.$$eval('#subs-post button', (b) => b.filter((x) => !x.hidden).map((x) => x.textContent)), ['粉專設定', '活動留言', '文字背景', '影片設定']);
+  // 游標移到「使用紀錄」：浮出清單，蓋在下方分類上（不推擠）
+  const advY = (await page.locator('#tab-adv').boundingBox()).y;
+  await page.hover('#tab-rec');
+  await page.waitForSelector('#subFly:not([hidden])');
+  assert.deepEqual(await page.$$eval('#subFly button', (b) => b.map((x) => x.textContent)), ['操作紀錄', '錯誤紀錄']);
+  assert.equal((await page.locator('#tab-adv').boundingBox()).y, advY, '不推擠下方分類');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-fly.png') });
+  await page.click('#subFly button:has-text("錯誤紀錄")');
+  assert.equal(await page.isVisible('#subFly'), false);
+  assert.equal(await page.isVisible('#lgCard'), true);
+  assert.equal(await page.isVisible('#auCard'), false);
+  assert.ok(page.url().endsWith('#rec/logs'));
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-one.png') });
+  // 上方功能分頁切換
+  await page.click('#sub-rec-audit');
+  assert.equal(await page.isVisible('#auCard'), true);
+  assert.equal(await page.isVisible('#lgCard'), false);
+  assert.ok(page.url().endsWith('#rec/audit'));
+  // 填到一半切走再回來，內容還在
+  await page.fill('#auUid', '填到一半');
+  await page.click('#sub-rec-logs'); await page.click('#sub-rec-audit');
+  assert.equal(await page.inputValue('#auUid'), '填到一半');
+  // 素材設定不拆：不浮出、沒有功能分頁
+  await page.hover('#tab-assets');
+  await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('#subFly'), false);
+  // 游標離開就關
+  await page.hover('#tab-conn'); await page.waitForSelector('#subFly:not([hidden])');
+  await page.mouse.move(900, 600); await page.waitForSelector('#subFly', { state: 'hidden' });
+  // 鍵盤：Esc 關閉
+  await page.hover('#tab-conn'); await page.waitForSelector('#subFly:not([hidden])');
+  await page.focus('#subFly button'); await page.keyboard.press('Escape');
+  assert.equal(await page.isVisible('#subFly'), false);
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-conn', 'Esc 後焦點回分類');
+  // 舊網址只寫分類：開第一個功能
+  await page.evaluate(() => { location.hash = '#guard'; });
+  await page.waitForFunction(() => location.hash === '#guard/set');
+  assert.equal(await page.isVisible('#gdCard'), true);
+  assert.equal(await page.isVisible('#gdLogCard'), false);
+  // 手機：不浮出，功能分頁在
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.hover('#tab-rec'); await page.waitForTimeout(300);
+  assert.equal(await page.isVisible('#subFly'), false);
+  assert.equal(await page.isVisible('#subs-guard'), true);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-phone.png') });
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert.ok(over <= 0, '橫向捲動 ' + over);
 });

@@ -77,7 +77,7 @@ if (window.top !== window.self) {
     $('olCard').hidden = !(me.role === 'sys' && can('staff'));   // 目前在線：只有系統管理者
     $('msCard').hidden = me.role !== 'sys';   // 發送通知：只有系統管理者（不用解鎖）
     $('unlockBar').hidden = !(me.role === 'sys' && !me.unlocked);
-    recApply();
+    subApply();
     $('whoTag').hidden = false;
     $('whoTag').textContent = (me.role === 'sys' ? '' : me.name + '・') + me.roleName + (me.role === 'sys' && !me.unlocked ? '（進階設定已鎖）' : '');
     // 首頁憑證進來且沒解鎖：不顯示（「回工具箱」就是離開）；解鎖過＝鎖定；管理密碼登入＝登出
@@ -95,7 +95,7 @@ if (window.top !== window.self) {
       }
       me = res.data; resetLoaded();
       $('login').hidden = true; $('app').hidden = false; say($('loginMsg'), '');
-      applyMe(); showTab(tabFromHash());
+      applyMe(); showHash();
       return true;
     });
   }
@@ -1432,34 +1432,6 @@ if (window.top !== window.self) {
   $('auUid').onkeydown = function (e) { if (e.key === 'Enter') $('auBtn').click(); };
   $('auBtn').onclick = function () { $('auBtn').disabled = true; auPager.go(0).then(function () { $('auBtn').disabled = false; }); };
 
-  // ---- 使用紀錄分頁：操作紀錄｜錯誤紀錄（隱藏切換，內容保留）；只顯示有權限的，只有一個時不顯示切換鈕 ----
-  var REC_KEY = 'tbx.admin.recTab';
-  function recShow(k) {
-    ['audit', 'logs'].forEach(function (x) {
-      var on = x === k;
-      $('recTab-' + x).setAttribute('aria-selected', String(on));
-      $('recTab-' + x).tabIndex = on ? 0 : -1;
-      $(x === 'audit' ? 'auCard' : 'lgCard').classList.toggle('rec-off', !on);
-    });
-    try { localStorage.setItem(REC_KEY, k); } catch (e) { /* 不記 */ }
-  }
-  function recApply() {
-    var vis = ['audit', 'logs'].filter(function (k) { return can(k); });
-    $('recTabs').hidden = vis.length < 2;
-    ['audit', 'logs'].forEach(function (k) { $('recTab-' + k).hidden = vis.indexOf(k) < 0; });
-    var cur = ''; try { cur = localStorage.getItem(REC_KEY) || ''; } catch (e) { /* 預設 */ }
-    recShow(vis.indexOf(cur) >= 0 ? cur : (vis[0] || 'audit'));
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('#recTabs [role=tab]'), function (b) {
-    b.addEventListener('click', function () { recShow(b.getAttribute('data-rec')); });
-    b.addEventListener('keydown', function (e) {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      var other = $(b.getAttribute('data-rec') === 'audit' ? 'recTab-logs' : 'recTab-audit');
-      if (!other.hidden) { recShow(other.getAttribute('data-rec')); other.focus(); }
-      e.preventDefault();
-    });
-  });
-
   // ---- 首頁儀表板（GET /admin/dash）：進到首頁查一次；「重新整理」帶 fresh=1 ----
   var dashLoaded = false, dashSeq = 0;
   var DASH_TABS = { adv: '進階設定', rec: '使用紀錄', conn: '連接狀態', people: '人員與權限', post: '發文設定' };
@@ -1535,16 +1507,79 @@ if (window.top !== window.self) {
   var TABS = ['home', 'post', 'guard', 'people', 'conn', 'assets', 'rec', 'adv'];
   // 舊網址（分類改版前）轉到新分類
   var OLD_TABS = { fb: 'post', staff: 'people', rd: 'conn', logs: 'rec' };
+  // 各分類的功能（＝右側上方分頁）：[代號, 名稱, 卡片 id]；首頁、素材設定不拆
+  var SUBS = {
+    post: [['pages', '粉專設定', 'pgCard'], ['presets', '活動留言', 'psCard'], ['bg', '文字背景', 'bgCard'], ['video', '影片設定', 'vsCard']],
+    guard: [['set', '設定', 'gdCard'], ['log', '紀錄', 'gdLogCard']],
+    people: [['online', '目前在線', 'olCard'], ['msg', '發送通知', 'msCard'], ['staff', '授權名單', 'sfCard']],
+    conn: [['fb', '臉書粉專連線狀態', 'fsCard'], ['rd', 'Rundown 連線', 'rdCard'], ['usage', '速率限制', 'usCard']],
+    rec: [['audit', '操作紀錄', 'auCard'], ['logs', '錯誤紀錄', 'lgCard']],
+    adv: [['access', '排程發布', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
+  };
+  var curSub = {};   // 每個分類目前的功能
   var assetsLoaded = false;
   function visTabs() { return TABS.filter(function (t) { return !$('tab-' + t).hidden; }); }
-  function tabFromHash() { var t = location.hash.slice(1), v = visTabs(); t = OLD_TABS[t] || t; return v.indexOf(t) >= 0 ? t : v[0]; }
-  function showTab(id, focus) {
+  // 分類內看得到的功能（卡片沒被權限隱藏）
+  function visSubs(t) { return (SUBS[t] || []).filter(function (s) { return !$(s[2]).hidden; }); }
+  function parseHash() {
+    var h = decodeURIComponent(location.hash.slice(1)).split('/'), t = OLD_TABS[h[0]] || h[0], v = visTabs();
+    if (v.indexOf(t) < 0) return { tab: v[0], sub: '' };
+    return { tab: t, sub: h[1] || '' };
+  }
+  function tabFromHash() { return parseHash().tab; }
+  // 每個分類上方建一排功能分頁（隱藏切換）
+  Object.keys(SUBS).forEach(function (t) {
+    var bar = document.createElement('div');
+    bar.className = 'sub-tabs'; bar.id = 'subs-' + t; bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', $('tab-' + t).textContent + '的功能');
+    SUBS[t].forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'tab'); b.id = 'sub-' + t + '-' + s[0]; b.setAttribute('data-sub', s[0]);
+      b.setAttribute('aria-controls', s[2]); b.textContent = s[1];
+      b.onclick = function () { showTab(t, false, s[0]); };
+      b.onkeydown = function (e) {
+        var v = visSubs(t).map(function (x) { return x[0]; }), i = v.indexOf(s[0]);
+        var d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (e.key === 'Home') d = -i; else if (e.key === 'End') d = v.length - 1 - i;
+        if (d === undefined) return;
+        e.preventDefault();
+        showTab(t, false, v[(i + d + v.length) % v.length]); $('sub-' + t + '-' + v[(i + d + v.length) % v.length]).focus();
+      };
+      bar.appendChild(b);
+    });
+    var first = $(SUBS[t][0][2]);
+    first.parentNode.insertBefore(bar, first);
+  });
+  // 權限變了（登入、解鎖）：重算每排看得到的功能
+  function subApply() {
+    Object.keys(SUBS).forEach(function (t) {
+      var v = visSubs(t);
+      SUBS[t].forEach(function (s) { $('sub-' + t + '-' + s[0]).hidden = v.indexOf(s) < 0; });
+      $('subs-' + t).hidden = v.length < 2;
+      markSub(t, curSub[t]);
+    });
+  }
+  // 只顯示 t 分類的 k 功能（其他卡片加 sub-off 隱藏，內容保留）
+  function markSub(t, k) {
+    var v = visSubs(t);
+    if (!v.some(function (s) { return s[0] === k; })) k = v.length ? v[0][0] : '';
+    curSub[t] = k;
+    SUBS[t].forEach(function (s) {
+      var on = s[0] === k, b = $('sub-' + t + '-' + s[0]);
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+      $(s[2]).classList.toggle('sub-off', !on);
+    });
+    return k;
+  }
+  function showTab(id, focus, sub) {
+    closeFly(true);
     TABS.forEach(function (t) {
       var on = t === id, b = $('tab-' + t);
       b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
       $('panel-' + t).hidden = !on;
     });
-    if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
+    var k = SUBS[id] ? markSub(id, sub || curSub[id]) : '';
+    var h = id + (k && visSubs(id).length > 1 ? '/' + k : '');
+    if (location.hash.slice(1) !== h) history.replaceState(null, '', '#' + h);
     if (focus) $('tab-' + id).focus();
     // 手機版分類列會橫向捲動：把目前分類捲進畫面
     var tb = $('tab-' + id); if (tb.scrollIntoView && window.matchMedia && window.matchMedia('(max-width:820px)').matches) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -1557,10 +1592,70 @@ if (window.top !== window.self) {
     if (id === 'home' && !dashLoaded && token && me && me.dash && me.dash.length) dashLoad(false);
     if (id === 'adv' && !dcLoaded && token && can('dashcfg')) dcLoad();
   }
+  function showHash() { var h = parseHash(); showTab(h.tab, false, h.sub); }
+
+  // ---- 電腦版：游標移到左側分類 150ms 後往下浮出功能清單（蓋住下方，不推擠）；離開 200ms 關 ----
+  var fly = document.createElement('div');
+  fly.className = 'fly'; fly.id = 'subFly'; fly.hidden = true;
+  $('tab-adv').parentNode.appendChild(fly);
+  var flyTab = '', flyOpenT = 0, flyCloseT = 0, flySkip = false;
+  var wide = window.matchMedia ? window.matchMedia('(min-width:821px)') : { matches: true };
+  function openFly(t) {
+    clearTimeout(flyOpenT); clearTimeout(flyCloseT);
+    var v = visSubs(t);
+    if (!wide.matches || v.length < 2) { closeFly(true); return; }
+    var btn = $('tab-' + t);
+    if (flyTab !== t) {
+      fly.textContent = '';
+      fly.setAttribute('aria-label', btn.textContent + '的功能');
+      v.forEach(function (s) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = s[1]; b.setAttribute('data-sub', s[0]);
+        if ($('tab-' + t).getAttribute('aria-selected') === 'true' && curSub[t] === s[0]) b.setAttribute('aria-current', 'true');
+        b.onclick = function () { showTab(t, false, s[0]); var sb = $('sub-' + t + '-' + s[0]); if (sb && !sb.hidden && sb.offsetParent) sb.focus(); };
+        fly.appendChild(b);
+      });
+      flyTab = t;
+    }
+    fly.style.top = (btn.offsetTop + btn.offsetHeight + 2) + 'px';
+    fly.hidden = false; btn.setAttribute('aria-expanded', 'true');
+  }
+  function closeFly(now) {
+    clearTimeout(flyOpenT); clearTimeout(flyCloseT);
+    var done = function () {
+      fly.hidden = true;
+      if (flyTab) $('tab-' + flyTab).removeAttribute('aria-expanded');
+      flyTab = '';
+    };
+    if (now) done(); else flyCloseT = setTimeout(done, 200);
+  }
+  fly.addEventListener('mouseenter', function () { clearTimeout(flyCloseT); });
+  fly.addEventListener('mouseleave', function () { closeFly(); });
+  fly.addEventListener('keydown', function (e) {
+    var bs = Array.prototype.slice.call(fly.querySelectorAll('button')), i = bs.indexOf(document.activeElement);
+    if (e.key === 'Escape') { var t = flyTab; closeFly(true); if (t) { flySkip = true; $('tab-' + t).focus(); flySkip = false; } e.preventDefault(); return; }
+    var d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+    if (d === undefined || i < 0) return;
+    e.preventDefault(); bs[(i + d + bs.length) % bs.length].focus();
+  });
+  // 焦點離開分類列與清單就關
+  $('tab-adv').parentNode.addEventListener('focusout', function (e) {
+    if (!e.relatedTarget || !this.contains(e.relatedTarget)) closeFly(true);
+  });
+
   TABS.forEach(function (t) {
     var b = $('tab-' + t);
     b.onclick = function () { showTab(t); };
+    b.addEventListener('mouseenter', function () {
+      clearTimeout(flyOpenT); clearTimeout(flyCloseT);
+      if (flyTab === t) return;
+      flyOpenT = setTimeout(function () { openFly(t); }, flyTab ? 0 : 150);
+    });
+    b.addEventListener('mouseleave', function () { clearTimeout(flyOpenT); if (flyTab) closeFly(); });
+    // 鍵盤聚焦（不是滑鼠點）也浮出；Esc 關
+    b.addEventListener('focus', function () { if (!flySkip && b.matches && b.matches(':focus-visible')) openFly(t); });
     b.onkeydown = function (e) {
+      if (e.key === 'Escape' && flyTab) { closeFly(true); e.preventDefault(); return; }
       var v = visTabs(), i = v.indexOf(t);
       var d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
       if (e.key === 'Home') d = -i; else if (e.key === 'End') d = v.length - 1 - i;
@@ -1569,7 +1664,7 @@ if (window.top !== window.self) {
       showTab(v[(i + d + v.length) % v.length], true);
     };
   });
-  window.addEventListener('hashchange', function () { if (me) showTab(tabFromHash()); });
+  window.addEventListener('hashchange', function () { if (me) showHash(); });
   // 首頁已登入（員工編號）就直接進；否則顯示密碼登入
   frontToken = readFront();
   if (frontToken) {
