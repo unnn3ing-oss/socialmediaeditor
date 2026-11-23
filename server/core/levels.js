@@ -16,12 +16,28 @@ export const CARDS = [
   { key: 'bg', name: '文字背景' },
   { key: 'staff', name: '授權名單' },
   { key: 'groups', name: '權限組', sensitive: true },
+  { key: 'dashcfg', name: '儀表板顯示項目', sensitive: true },
   { key: 'audit', name: '操作紀錄' },
   { key: 'rundown', name: 'Rundown 連線' },
   { key: 'assets', name: '素材設定' },
   { key: 'logs', name: '錯誤日誌' }
 ];
 export const CARD_KEYS = CARDS.map((c) => c.key);
+// 管理頁首頁儀表板的項目（2026-11-23）：權限組可勾 dash:<key>；進階設定「儀表板顯示項目」決定全站要不要顯示
+//   tab＝點了跳到的管理頁分類
+export const DASH_ITEMS = [
+  { key: 'access', name: '排程發布', tab: 'adv' },
+  { key: 'profile', name: '使用中權杖組別', tab: 'adv' },
+  { key: 'fbtoken', name: '臉書權杖', tab: 'adv' },
+  { key: 'webhook', name: 'Webhook', tab: 'adv' },
+  { key: 'groups', name: '權限組', tab: 'adv' },
+  { key: 'logs', name: '未處理錯誤', tab: 'rec' },
+  { key: 'rundown', name: 'Rundown 連線', tab: 'conn' },
+  { key: 'usage', name: '速率用量', tab: 'conn' },
+  { key: 'online', name: '目前在線', tab: 'people' },
+  { key: 'bg', name: '文字背景圖樣', tab: 'post' }
+];
+export const DASH_KEYS = DASH_ITEMS.map((d) => d.key);
 export const SENSITIVE = CARDS.filter((c) => c.sensitive).map((c) => c.key);
 // 可以勾進權限組的卡片（非敏感、非 locked）；敏感卡片只有系統管理者
 export const GRANTABLE = CARDS.filter((c) => !c.locked && !c.sensitive).map((c) => c.key);

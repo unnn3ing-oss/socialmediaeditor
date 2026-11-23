@@ -46,7 +46,7 @@ async function saveLast(env, rec) {
   await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
     .bind(LAST_KEY, JSON.stringify(rec), Date.now()).run();
 }
-async function readLast(env) {
+export async function readLast(env) {
   try {
     const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(LAST_KEY).first();
     const o = r ? JSON.parse(r.v) : null;

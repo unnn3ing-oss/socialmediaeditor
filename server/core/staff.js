@@ -8,7 +8,7 @@ import { withPageNames } from './pagenames.js';
 import { ok, fail, readBody } from './http.js';
 import { all, first, run } from './db.js';
 import { newSetupCode, codeHash, SETUP_MS } from './password.js';
-import { CARDS, GRANTABLE, readOldLevels } from './levels.js';
+import { CARDS, GRANTABLE, DASH_ITEMS, readOldLevels } from './levels.js';
 import { ensureSettings } from './once.js';
 
 // 權限 key：排程發布 view／post／edit／delete；影片發布 vview／vpost（vpost 含改時間、刪除）；數據報表 report；
@@ -18,12 +18,16 @@ export const CARD_PREFIX = 'card:';
 // 卡片權限依管理頁分類順序排列（和 PERM_SECTIONS 一致）
 const CARD_ORDER = ['pages', 'presets', 'video', 'bg', 'guard', 'staff', 'fbstate', 'rundown', 'usage', 'assets', 'audit', 'logs'];
 export const CARD_PERMS = CARD_ORDER.filter((k) => GRANTABLE.includes(k)).map((k) => CARD_PREFIX + k);
-export const PERMS = [...BASE_PERMS, ...CARD_PERMS];
+// 首頁儀表板項目 dash:<key>（2026-11-23）
+export const DASH_PREFIX = 'dash:';
+export const DASH_PERMS = DASH_ITEMS.map((d) => DASH_PREFIX + d.key);
+export const PERMS = [...BASE_PERMS, ...CARD_PERMS, ...DASH_PERMS];
 const CARD_NAME = Object.fromEntries(CARDS.map((c) => [c.key, c.name]));
 export const PERM_LABELS = {
   view: '檢視已排程／已發佈', post: '新增發文（含排入 Rundown）', edit: '改排程時間', delete: '刪除貼文',
   vview: '檢視影片發布', vpost: '上傳發布影片（含改時間、刪除）', report: '檢視數據報表', bypass: '關閉時仍可使用排程發布／影片發布', notify: '接收所有人的留言失敗通知（發文者本來就收得到自己的）',
-  ...Object.fromEntries(GRANTABLE.map((k) => [CARD_PREFIX + k, CARD_NAME[k]]))
+  ...Object.fromEntries(GRANTABLE.map((k) => [CARD_PREFIX + k, CARD_NAME[k]])),
+  ...Object.fromEntries(DASH_ITEMS.map((d) => [DASH_PREFIX + d.key, d.name]))
 };
 // 權限組卡片的分區（管理頁依此分組顯示）
 export const PERM_SECTIONS = [
@@ -36,7 +40,8 @@ export const PERM_SECTIONS = [
   { name: '管理頁：人員與權限', keys: ['card:staff'] },
   { name: '管理頁：連接狀態', keys: ['card:fbstate', 'card:rundown', 'card:usage'] },
   { name: '管理頁：素材設定', keys: ['card:assets'] },
-  { name: '管理頁：使用紀錄', keys: ['card:audit', 'card:logs'] }
+  { name: '管理頁：使用紀錄', keys: ['card:audit', 'card:logs'] },
+  { name: '管理頁：首頁儀表板', keys: DASH_PERMS }
 ];
 export const DEFAULT_GROUPS = [
   { name: '管理', perms: PERMS.filter((p) => p !== 'notify') },   // 留言失敗通知預設只給系統管理者（2026-11-22 使用者選），要的權限組自己勾
@@ -45,6 +50,8 @@ export const DEFAULT_GROUPS = [
 ];
 // 權限（陣列）裡的管理頁卡片 key
 export const cardsOf = (perms) => (perms || []).filter((p) => p.startsWith(CARD_PREFIX)).map((p) => p.slice(CARD_PREFIX.length));
+// 權限（陣列）裡的首頁儀表板項目 key
+export const dashOf = (perms) => (perms || []).filter((p) => p.startsWith(DASH_PREFIX)).map((p) => p.slice(DASH_PREFIX.length));
 export const STAFF_ID_RE = /^[A-Za-z0-9_-]{1,20}$/;
 export const MAX_NAME = 20;
 export const MAX_CONTACT = 30;
@@ -90,6 +97,7 @@ export async function ensureStaff(env) {
     await env.DB.batch(DEFAULT_GROUPS.map((g, i) => env.DB.prepare('INSERT OR IGNORE INTO staff_groups (name, perms, ord, updated) VALUES (?, ?, ?, ?)').bind(g.name, JSON.stringify(g.perms), i, now)));
   }
   try { await migratePerms(env, seeded); } catch { /* 搬移失敗不擋登入；下次重啟再試 */ }
+  try { await migrateDash(env, seeded); } catch { /* 同上 */ }
   ready.add(env.DB);
 }
 
@@ -116,6 +124,25 @@ async function migratePerms(env, seeded) {
     if (stmts.length) await env.DB.batch(stmts);
   }
   await run(env, 'INSERT OR IGNORE INTO fb_settings (k, v, updated) VALUES (?, ?, ?)', MIGRATE_KEY, '1', Date.now());
+}
+
+// 首頁儀表板權限補發（2026-11-23，標記 fb_settings k='perms_v3'，只跑一次）：
+//   名稱是「管理」或已有 card:staff 的權限組補全部 dash:*；其他組不動。全新安裝（預設組已含 dash:*）只寫標記。
+export const DASH_MIGRATE_KEY = 'perms_v3';
+async function migrateDash(env, seeded) {
+  await ensureSettings(env);
+  if (await first(env, 'SELECT k FROM fb_settings WHERE k = ?', DASH_MIGRATE_KEY)) return;
+  if (!seeded) {
+    const now = Date.now();
+    const stmts = (await all(env, 'SELECT id, name, perms FROM staff_groups')).flatMap((g) => {
+      const set = new Set(parsePerms(g.perms));
+      if (g.name !== '管理' && !set.has(CARD_PREFIX + 'staff')) return [];
+      for (const p of DASH_PERMS) set.add(p);
+      return [env.DB.prepare('UPDATE staff_groups SET perms = ?, updated = ? WHERE id = ?').bind(JSON.stringify(PERMS.filter((p) => set.has(p))), now, g.id)];
+    });
+    if (stmts.length) await env.DB.batch(stmts);
+  }
+  await run(env, 'INSERT OR IGNORE INTO fb_settings (k, v, updated) VALUES (?, ?, ?)', DASH_MIGRATE_KEY, '1', Date.now());
 }
 
 // 密碼相關欄位：雜湊、鹽、密碼版本、設定碼（HMAC）與到期、連錯次數、鎖到何時

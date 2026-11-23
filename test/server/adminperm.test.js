@@ -161,9 +161,10 @@ async function oldEnv(t, levelsJson) {
 
 test('舊資料搬移：post→vpost、view→vview＋report、有 mgr 成員的組補舊管理者卡片、其他補舊普通卡片；只做一次', async (t) => {
   const env = await oldEnv(t, JSON.stringify({ mgr: ['logs', 'staff', 'fbconn', 'levels'], user: ['assets'] }));
-  const { findStaff, MIGRATE_KEY } = await stm();
+  const { findStaff, MIGRATE_KEY, DASH_PERMS } = await stm();
   const a1 = await findStaff(env, 'A1'), b1 = await findStaff(env, 'B1'), c1 = await findStaff(env, 'C1');
-  assert.deepEqual(a1.perms, ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report', 'bypass', 'card:staff', 'card:logs'], '敏感卡片 fbconn 與 levels 不搬');
+  // 首頁儀表板（perms_v3）：有 card:staff 的組補全部 dash:*，其他組不動
+  assert.deepEqual(a1.perms, ['view', 'post', 'edit', 'delete', 'vview', 'vpost', 'report', 'bypass', 'card:staff', 'card:logs', ...DASH_PERMS], '敏感卡片 fbconn 與 levels 不搬');
   assert.deepEqual(b1.perms, ['view', 'vview', 'report', 'card:assets']);
   assert.deepEqual(c1.perms, ['card:assets']);
   assert.equal(a1.level, 'staff');
