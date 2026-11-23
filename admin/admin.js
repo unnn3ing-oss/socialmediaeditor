@@ -39,6 +39,10 @@ if (window.top !== window.self) {
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   // 相對時間：剛剛／N 分鐘前／今天 HH:MM／M/D HH:MM（游標看 fmtTime 完整時間）
+  function fmtShort(ms) {
+    var d = new Date(ms), p = function (v) { return String(v).padStart(2, '0'); };
+    return d.getFullYear() === new Date().getFullYear() ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) : fmtTime(ms);
+  }
   function fmtAgo(ms, now) {
     now = now || Date.now();
     var m = Math.floor((now - ms) / 60000), d = new Date(ms), n = new Date(now), p = function (v) { return String(v).padStart(2, '0'); };
@@ -1159,7 +1163,8 @@ if (window.top !== window.self) {
       tc.appendChild(ct); tr.appendChild(tc);
       var st = sfEl('td'); st.appendChild(sfEl('span', 'tag' + (s.enabled ? ' company' : ''), s.enabled ? '啟用' : '停用')); tr.appendChild(st);
       var tp = sfEl('td'); tp.appendChild(sfPwTag(s)); tr.appendChild(tp);
-      tr.appendChild(sfEl('td', 'num', s.lastLogin ? fmtTime(s.lastLogin) : '從未'));
+      // 最後登入：今年只寫「月/日 時:分」（游標看完整時間），省欄寬
+      var ll = sfEl('td', 'num', s.lastLogin ? fmtShort(s.lastLogin) : '從未'); if (s.lastLogin) ll.title = fmtTime(s.lastLogin); tr.appendChild(ll);
       var ls = sfEl('td', 'num', s.lastSeen ? fmtAgo(s.lastSeen) : '—'); if (s.lastSeen) ls.title = fmtTime(s.lastSeen); tr.appendChild(ls);
       var ac = sfEl('td', 'sf-ops');
       var tgl = sfEl('button', '', s.enabled ? '停用' : '啟用'); tgl.type = 'button';

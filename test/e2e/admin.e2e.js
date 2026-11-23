@@ -530,7 +530,7 @@ test('授權名單：切進分類才讀、顯示預設 3 組；新增、改權�
   assert.deepEqual(await page.$$eval('#sgRows .sg-row > input', (e) => e.map((i) => i.value)), ['唯讀', '小編', '主管']);
   assert.deepEqual(await page.$$eval('#sfGroup option', (e) => e.map((o) => o.textContent)), ['唯讀', '小編', '主管']);
   assert.match(await page.textContent('#sfRows tr:nth-child(2)'), /從未/);
-  assert.match(await page.textContent('#sfRows tr:nth-child(1)'), /\d{4}-\d\d-\d\d \d\d:\d\d/);
+  assert.match(await page.textContent('#sfRows tr:nth-child(1)'), /(\d{4}-\d\d-\d\d|\d{1,2}\/\d{1,2}) \d\d:\d\d/);
 
   // 新增
   await page.fill('#sfId', 'B009'); await page.fill('#sfName', '新同仁'); await page.fill('#sfContact', '#12345'); await page.selectOption('#sfGroup', 'editor');
