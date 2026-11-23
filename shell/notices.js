@@ -1,6 +1,6 @@
 // 留言失敗通知清單（首頁帳號彈窗 shell/company.js 與管理頁頁首 admin/header.js 共用）
-//   資料：GET /staff/me/notices（只查 D1）。狀態：open＝未處理（紅）；handled＝發文者已讀或已補留言（只有看全部的人看得到，黃）
-//   已讀：POST /staff/me/notices/read。發文者＝自己處理完；系統管理者／notify＝結案（未處理的也直接結案）
+//   資料：GET /staff/me/notices（只查 D1）。狀態：open＝未處理（紅）；handled＝發文者按完成或已補留言（只有看全部的人看得到，黃）
+//   完成：POST /staff/me/notices/read。發文者＝自己處理完；系統管理者／notify＝結案（未處理的也直接結案）
 const mk = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -51,22 +51,9 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
       if (n.title) { const tt = mk('div', 'acct-note-title', n.title); tt.title = n.title; li.append(tt); }
       if (n.error) { const er = mk('div', 'acct-note-err', n.error); er.title = n.error; li.append(er); }
       // 發文者處理過（只有看全部的人看得到）：誰、怎麼處理、何時
-      if (done) li.append(mk('div', 'acct-note-who', `${n.hname || n.hby || '發文者'} ${n.how === 'retry' ? '已補留言' : '已讀'}・${fmtNoteTime(n.hat)}`));
+      if (done) li.append(mk('div', 'acct-note-who', `${n.hname || n.hby || '發文者'} ${n.how === 'retry' ? '已補留言' : '已完成'}・${fmtNoteTime(n.hat)}`));
+      // 按鈕一列：重新留言／看貼文↗／開列表↗／完成
       const acts = mk('div', 'acct-note-act');
-      const rd = mk('button', 'btn btn-secondary btn-sm', '已讀');
-      rd.type = 'button';
-      rd.title = all ? '結案：大家的通知都收掉' : '我處理好了，收掉這則通知';
-      rd.addEventListener('click', async () => {
-        rd.disabled = true;
-        try {
-          await api.call('/staff/me/notices/read', { method: 'POST', body: { postId: n.postId } });
-          drop(n);
-        } catch (ex) {
-          if (ex && ex.code === 'not_found') { drop(n); return; }   // 別人已經結案
-          rd.disabled = false; toast((ex && ex.message) || '標記已讀失敗');
-        }
-      });
-      acts.append(rd);
       if (n.canRetry && !done) {
         const rb = mk('button', 'btn btn-secondary btn-sm', '重新留言');
         rb.type = 'button';
@@ -81,16 +68,32 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
         acts.append(rb);
       }
       if (/^\d{1,30}(_\d{1,30})?$/.test(String(n.postId || ''))) {
-        const op = mk('a', 'btn btn-secondary btn-sm', '開啟貼文 ↗');
+        const op = mk('a', 'btn btn-secondary btn-sm', '看貼文 ↗');
         op.href = 'https://www.facebook.com/' + n.postId;
         op.target = '_blank'; op.rel = 'noopener noreferrer';
-        op.setAttribute('aria-label', '開啟貼文（另開分頁）');
+        op.setAttribute('aria-label', '看貼文（另開分頁）');
         acts.append(op);
       }
-      const go = mk('button', 'btn btn-secondary btn-sm', n.kind === 'video' ? '到影片發布' : '到排程發布');
+      const go = mk('button', 'btn btn-secondary btn-sm', '開列表 ↗');
       go.type = 'button';
+      go.title = n.kind === 'video' ? '開影片發布' : '開排程發布的已發佈列表';
+      go.setAttribute('aria-label', n.kind === 'video' ? '開列表（影片發布）' : '開列表（排程發布）');
       go.addEventListener('click', () => openTool(n.kind === 'video' ? 'video' : 'post'));
       acts.append(go);
+      const rd = mk('button', 'btn btn-secondary btn-sm acct-done', '完成');
+      rd.type = 'button';
+      rd.title = all ? '結案：大家的通知都收掉' : '我處理好了，收掉這則通知';
+      rd.addEventListener('click', async () => {
+        rd.disabled = true;
+        try {
+          await api.call('/staff/me/notices/read', { method: 'POST', body: { postId: n.postId } });
+          drop(n);
+        } catch (ex) {
+          if (ex && ex.code === 'not_found') { drop(n); return; }   // 別人已經結案
+          rd.disabled = false; toast((ex && ex.message) || '標記完成失敗');
+        }
+      });
+      acts.append(rd);
       li.append(acts);
       list.append(li);
     }

@@ -201,7 +201,7 @@ if (window.top !== window.self) {
   function lgState(r) {
     var who = r.st_name || r.st_by || '', at = r.st_at ? fmtTime(r.st_at) : '';
     if (r.st === 'open') return { cls: 'is-open', text: '未處理' };
-    if (r.st === 'read') return { cls: 'is-handled', text: (who || '發文者') + ' 已讀', tip: at };
+    if (r.st === 'read') return { cls: 'is-handled', text: (who || '發文者') + ' 已完成', tip: at };
     if (r.st === 'retry') return { cls: 'is-handled', text: (who || '發文者') + ' 已補留言', tip: at };
     if (r.st === 'closed') return { cls: 'is-closed', text: '已結案', tip: (who ? who + '・' : '') + at };
     return { cls: '', text: '—' };
@@ -230,11 +230,11 @@ if (window.top !== window.self) {
         }
       } else tp.textContent = '—';
       tr.appendChild(tp);
-      // 狀態＋已讀（結案）
+      // 狀態＋完成（結案）
       var ts = document.createElement('td'), stv = lgState(r);
       var chip = sfEl('span', 'lg-st ' + stv.cls, stv.text); if (stv.tip) chip.title = stv.tip; ts.appendChild(chip);
       if (r.st !== 'closed') {
-        var rb = sfEl('button', 'lg-read', '已讀'); rb.type = 'button';
+        var rb = sfEl('button', 'lg-read', '完成'); rb.type = 'button';
         rb.title = r.post ? '結案：首頁的留言失敗通知也一起收掉' : '標記已處理';
         rb.onclick = function () {
           rb.disabled = true;
