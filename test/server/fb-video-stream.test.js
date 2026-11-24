@@ -143,3 +143,38 @@ test('串流：明確錯誤只讓那個粉專失敗；宣告長度和實際不�
   assert.deepEqual(states(r), [['111', 'uploaded'], ['222', 'failed']]);
   assert.match(r.body.data.jobs.find((j) => j.page === '222').error, /^0MB 處上傳失敗/);
 });
+
+test('Workers 路徑：用內建 FixedLengthStream（Reels＝分段長度、橫式＝表單總長），資料原樣送到臉書', async (t) => {
+  const made = [];
+  globalThis.FixedLengthStream = class {
+    constructor(n) {
+      made.push(n);
+      let c = 0;
+      const ts = new TransformStream({ transform(ch, ctl) { c += ch.byteLength; if (c > n) ctl.error(new Error('長')); else ctl.enqueue(ch); }, flush(ctl) { if (c !== n) ctl.error(new Error('短')); } });
+      this.readable = ts.readable; this.writable = ts.writable;
+    }
+  };
+  t.after(() => { delete globalThis.FixedLengthStream; });
+  const recv = [];
+  const { env, headers, adm } = await setup(t, {
+    'POST /111/video_reels': (c) => c.body.upload_phase === 'start' ? { video_id: 'R1', upload_url: REEL('R1') } : { success: true },
+    [`POST ${REEL('R1')}`]: (c) => { recv.push(['reel', bin(c.body)]); return { success: true }; },
+    'POST video:/222/videos': async (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S2', video_id: 'V2', start_offset: '0', end_offset: '40' }
+      : c.body.upload_phase === 'transfer' ? (recv.push(['video', await fileBytes(c.body.video_file_chunk)]), { start_offset: '40', end_offset: '40' }) : { success: true }
+  });
+  const nodeFetch = globalThis.fetch;   // Node 的 fetch 送串流要 duplex；Workers 不用
+  globalThis.fetch = (input, init = {}) => nodeFetch(input, init.body instanceof ReadableStream ? { ...init, duplex: 'half' } : init);
+  t.after(() => { globalThis.fetch = nodeFetch; });
+  await turnOn(env, adm);
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'Reels_x.mp4', size: 30, kind: 'reel', pages: ['111'] });
+  let r = await chunk(env, headers, 0, seq(30));
+  assert.deepEqual(states(r), [['111', 'uploaded']]);
+  assert.deepEqual(made, [30]);
+  const U2 = 'c'.repeat(32);
+  await call(env, headers, '/fb/video/start', { uploadId: U2, name: 'a.mp4', size: 40, kind: 'video', pages: ['222'] });
+  r = await call(env, headers, `/fb/video/chunk?u=${U2}&start=0`, seq(40, 5));
+  assert.deepEqual(r.body.data.jobs.map((j) => [j.page, j.state]), [['222', 'uploaded']]);
+  assert.equal(made.length, 2);
+  assert.ok(made[1] > 40, '橫式：表單開頭＋40＋結尾');
+  assert.deepEqual(recv, [['reel', seq(30)], ['video', seq(40, 5)]]);
+});
