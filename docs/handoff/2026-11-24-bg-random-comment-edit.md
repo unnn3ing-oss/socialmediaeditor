@@ -34,3 +34,19 @@
 
 ## 注意事項
 - 沙盒連不到臉書，B 方案效果要使用者在測試後端打開開關實測。
+
+---
+## 第二段：實驗功能（使用者 2026-11-24「實驗功能開始」）
+- 需求：「2 放進進階設定內的『實驗功能』，並且可開給特定的使用者」。已確認＝只有指定員工發的貼文才再編輯；設定只有已解鎖系統管理者能改。
+
+| 檔案 | 內容 | 狀態 |
+|---|---|---|
+| `server/core/levels.js` | 新卡片 `labs`（實驗功能，sensitive） | ⬜ |
+| `server/core/adminperm.js` | `/admin/fb/comment-opts` 改掛 `labs` | ⬜ |
+| `server/fb/comment.js` | 設定 `{edit, who:'all'|'some', staff:[]}`（舊 `{edit:true}`＝all）；`editAfterPost(env, token, id, msg, by)` 判斷發文者 | ⬜ |
+| `server/fb/post.js`、`timer.js` | 傳 `by`（timer 用 `rec.by`） | ⬜ |
+| `admin/index.html`、`admin.js` | 活動留言卡片拿掉開關；進階設定新分頁「實驗功能」`labCard`（開關＋全部人／指定員工勾選名單） | ⬜ |
+| 測試 | comment／timer／post 單元、admin e2e | ⬜ |
+
+## 待確認（下一段）：影片發布「放待排 2359」
+使用者答：臉書排程到當天 23:59（C）；RD 找按送出當下最接近的時段（±1～2 小時）；日期欄右邊第 3～10 欄、#3c78d8 粗體「2359」或「排2359」標記下的 `reels/` 預留格；與原 Reels 草稿規則並存。最終做法待列給使用者確認。
