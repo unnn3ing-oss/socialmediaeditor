@@ -203,3 +203,8 @@ main.off { min-height: 100vh; display: flex; align-items: center; justify-conten
 .up-list { list-style: none; margin: 4px 0 0; padding: 0; color: var(--muted); }
 .up-list li { padding: 1px 0; overflow-wrap: anywhere; }
 .vq-err { display: block; font-size: 12px; color: var(--bad-text, #b42318); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 還沒選粉專：自動展開選擇區時的提示 */
+.pg-dd.need-pick { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft, #eaf1ff); }
+.pg-tip { margin: 0; padding: 8px 14px; background: var(--accent-soft, #eaf1ff); color: #0b3fb0; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--line, #dce2ea); }
+.cover-note { margin: 4px 0 0; }

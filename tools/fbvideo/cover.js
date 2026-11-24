@@ -64,7 +64,7 @@ export function pickCover(v) {
     (async () => {
       await loaded(vid);
       if (closed) return;
-      await seek(vid, v.cover ? v.cover.t : Math.min(1, (vid.duration || 0) / 3));
+      await seek(vid, v.cover && v.cover.t != null ? v.cover.t : Math.min(1, (vid.duration || 0) / 3));   // 上傳的圖片沒有時間點
       if (closed) return;
       sync();
       const d = vid.duration || 0;

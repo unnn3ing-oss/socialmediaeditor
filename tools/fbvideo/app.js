@@ -176,6 +176,14 @@ const edCtx = {
     v.cover = r === 'auto' ? null : r;
     v.ed.renderCover(); renderQueue();
   },
+  // 手動上傳的封面圖
+  setCover(v, c) {
+    if (v.sent) return;
+    if (v.cover) URL.revokeObjectURL(v.cover.url);
+    v.cover = c;
+    v.ed.renderCover(); renderQueue();
+  },
+  toast,
   // 切換類型：上傳中擋；已開始上傳（還沒送出）就停掉舊的、用新類型重傳
   setKind(v, k) {
     if (v.sent) return false;
@@ -239,7 +247,7 @@ function select(v) {
   S.cur = v;
   for (const x of S.videos) x.ed.el.hidden = x !== v;
   renderQueue();
-  if (v) v.ed.renderUpload();
+  if (v) { v.ed.renderUpload(); v.ed.openPicker(); }
   renderFoot();
 }
 // 底部只放總進度一行：「上傳中 42%・已上傳 1／3 支」；各粉專細節在每支影片自己的編輯區

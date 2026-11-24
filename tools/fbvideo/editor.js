@@ -24,6 +24,7 @@ export const CROSS_TEXT = { pending: '等待多文', posting: '多文中', done:
 // 發布方式：立即／排程／草稿／多文發佈（只限橫式）
 export const MODES = [['now', '立即'], ['sched', '排程'], ['draft', '草稿'], ['cross', '多文發佈'], ['q2359', '放待排 2359']];
 const Q_TEXT = '放待排 2359';
+const COVER_MAX = 10 * 1024 * 1024;
 // 自訂 hashtag：去空白、補 #
 export const normTag = (s) => { const t = String(s || '').replace(/\s+/g, '').replace(/^#+/, ''); return t ? '#' + t : ''; };
 
@@ -115,6 +116,7 @@ export function createEditor(v, ctx) {
       const xbtn = document.createElement('button'); xbtn.type = 'button'; xbtn.className = 'btn btn-secondary btn-sm pg-x'; xbtn.hidden = true;
       cb.addEventListener('change', () => {
         if (!cb.checked && !ctx.canUncheck(v, p.id)) { cb.checked = true; return; }
+        if (cb.checked) markPicked();
         if (cb.checked) dropTarget(p.id);
         sync1(p.id); ctx.pagesChanged(v, p.id, cb.checked);
       });
@@ -165,6 +167,23 @@ export function createEditor(v, ctx) {
       if (!r.cross.length && r.mode.value === 'cross') { r.mode.value = 'now'; r.prev = 'now'; ctx.toast(`${name(src)} 的多文粉專都改成直接上傳了，改回「立即」`); }
       sync1(src, true);
     }
+  }
+  // 還沒選過粉專：自動展開選擇區（藍框＋提示＋焦點第一個）；勾過任一粉專或被全套用過就不再自動跳出
+  const pgDd = q('.pg-dd'), pgTip = q('.pg-tip');
+  function markPicked() {
+    v.pagesPicked = true;
+    pgDd.classList.remove('need-pick'); pgTip.hidden = true;
+  }
+  function openPicker() {
+    if (v.sent || v.pagesPicked || [...rows.values()].some((r) => r.cb.checked)) return false;
+    pgDd.open = true; pgDd.classList.add('need-pick'); pgTip.hidden = false;
+    const first = pgList.querySelector('input[type=checkbox]:not(:disabled)');
+    pgDd.scrollIntoView({ block: 'nearest' });
+    // 正在其他欄位打字（例如加入／移除影片時）不搶焦點，只展開
+    const ae = document.activeElement;
+    const typing = ae && ae !== document.body && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable) && ae.type !== 'file' && ae.type !== 'checkbox';
+    if (first && !typing) first.focus({ preventScroll: true });
+    return true;
   }
   function sync1(id, quiet) {
     const r = rows.get(id);
@@ -289,14 +308,28 @@ export function createEditor(v, ctx) {
   }
 
   // ===== 封面：類型右側小圖＋從影片選封面 =====
-  const coverImg = q('.cover-img'), coverBtn = q('.cover-btn');
+  const coverImg = q('.cover-img'), coverBtn = q('.cover-btn'), coverUp = q('.cover-up'), coverFile = q('.cover-file'), coverNote = q('.cover-note');
   function renderCover() {
     coverImg.textContent = '';
     if (v.cover) { const img = document.createElement('img'); img.src = v.cover.url; img.alt = ''; coverImg.append(img); }
     else { const t = document.createElement('span'); t.textContent = '自動'; coverImg.append(t); }
-    coverBtn.textContent = v.cover ? '更換封面' : '從影片選封面';
+    const uploaded = !!(v.cover && v.cover.file);
+    coverBtn.textContent = v.cover && !uploaded ? '更換封面' : '從影片選封面';
+    coverUp.textContent = uploaded ? '換一張圖片' : '上傳圖片';
+    coverNote.hidden = !uploaded;
+    coverNote.textContent = uploaded ? `已上傳 ${v.cover.file}（JPG／PNG，最大 10MB）` : '';
   }
   coverBtn.addEventListener('click', () => ctx.pickCover(v));
+  // 手動上傳封面圖：JPG／PNG、最大 10MB（臉書封面上限；後端也會再檢查檔頭）
+  coverUp.addEventListener('click', () => coverFile.click());
+  coverFile.addEventListener('change', () => {
+    const f = coverFile.files && coverFile.files[0];
+    coverFile.value = '';
+    if (!f) return;
+    if (!/^image\/(jpeg|png)$/.test(f.type) && !/\.(jpe?g|png)$/i.test(f.name)) { ctx.toast('封面只收 JPG 或 PNG'); return; }
+    if (f.size > COVER_MAX) { ctx.toast(`封面圖片超過 10MB（這張 ${sizeText(f.size)}）`); return; }
+    ctx.setCover(v, { blob: f, url: URL.createObjectURL(f), t: null, file: f.name });
+  });
   renderCover();
 
   return {
@@ -309,7 +342,9 @@ export function createEditor(v, ctx) {
     selected: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([id]) => id),
     // 發布方式全套用：[{ page, mode, dt, cross }]
     getPages: () => [...rows.entries()].filter(([, r]) => r.cb.checked).map(([page, r]) => ({ page, mode: r.mode.value, dt: r.dt.value, cross: [...r.cross] })),
+    openPicker,
     setPages(list) {
+      if (list.length) markPicked();
       const own = new Set(list.map((y) => y.page));
       for (const [id, r] of rows) {
         const x = list.find((y) => y.page === id);

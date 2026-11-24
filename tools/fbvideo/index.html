@@ -103,6 +103,7 @@
       </div>
       <details class="pg-dd">
         <summary><span class="pg-sum">尚未選粉專</span><span class="caret" aria-hidden="true"></span></summary>
+        <p class="pg-tip" hidden>這支影片還沒選發布粉專，請先勾選（選過之後點開不會再跳出，可點上方這一列重選）</p>
         <ul class="pg-list"></ul>
       </details>
       <span class="lbl">類型</span>
@@ -117,8 +118,11 @@
           <span class="cover-lbl">封面</span>
           <span class="cover-img" aria-hidden="true"><span>自動</span></span>
           <button type="button" class="btn btn-secondary btn-sm cover-btn">從影片選封面</button>
+          <button type="button" class="btn btn-secondary btn-sm cover-up">上傳圖片</button>
+          <input type="file" class="cover-file" accept="image/jpeg,image/png" hidden>
         </span>
       </div>
+      <p class="cover-note hint" hidden></p>
       <p class="kind-warn warn" hidden></p>
       <label class="lbl">影片標題<span class="sub">（臉書標題欄位）</span><input type="text" class="title" maxlength="255"></label>
       <label class="lbl">影片內文<textarea class="msg" rows="7"></textarea></label>

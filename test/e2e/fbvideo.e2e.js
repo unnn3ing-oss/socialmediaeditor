@@ -99,6 +99,11 @@ test('沒權限：顯示停用頁與原因', async () => {
 });
 
 const ED = '.ed:not([hidden])';
+// 打開右欄「發布粉專」下拉（還沒選粉專時會自動展開，已開就不再點）
+async function openDd(page) {
+  const dd = page.locator(ED + ' .pg-dd');
+  if (!(await dd.evaluate((d) => d.open))) await page.click(ED + ' .pg-dd summary');
+}
 // 勾右欄「發布粉專」下拉裡的粉專
 async function pickPage(page, id, on = true) {
   const dd = page.locator(ED + ' .pg-dd');
@@ -331,7 +336,7 @@ test('發布方式：草稿＋多文發佈（跳選單選粉專）、RD 寫預�
   const box = await page.locator(ED + ' .cover-img').boundingBox();
   assert.equal(Math.round(box.width), Math.round(box.height));
   assert.equal(await page.textContent(ED + ' .apply-all'), '發布方式全套用');
-  await page.click(ED + ' .pg-dd summary');
+  await openDd(page);
   await page.check(ED + ' .pg-list input[data-page="111"]');
   // 多文：跳選單，只列沒直接上傳的粉專
   await page.selectOption(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode', 'cross');
@@ -360,7 +365,7 @@ test('發布方式：草稿＋多文發佈（跳選單選粉專）、RD 寫預�
   assert.deepEqual(es, [['news', '純影/橫式', '', ''], ['intl', '純影/橫式', 'cross', 'video'], ['ent', '純影/橫式', 'draft', 'video']]);
   // Reels：多文選項不能用
   await page.setInputFiles('#fileIn', [file('Reels_短.mp4', 'tall')]);
-  await page.click(ED + ' .pg-dd summary');
+  await openDd(page);
   await page.check(ED + ' .pg-list input[data-page="111"]');
   assert.equal(await page.$eval(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode option[value="cross"]', (o) => o.disabled), true);
   assert.deepEqual(errors, []);
@@ -416,13 +421,13 @@ test('放待排 2359：只有直式能選；排到今天 23:59；RD 用送出當
   await page.locator('.rd-switch .track').click();
   // 橫式：沒有這個選項
   await page.setInputFiles('#fileIn', [file('橫式.mp4', 'wide')]);
-  await page.click(ED + ' .pg-dd summary');
+  await openDd(page);
   await page.check(ED + ' .pg-list input[data-page="111"]');
   const opt = ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode option[value="q2359"]';
   assert.deepEqual(await page.$eval(opt, (o) => [o.hidden, o.disabled]), [true, true]);
   // 直式（Shorts_）
   await page.setInputFiles('#fileIn', [file('Shorts_短.mp4', 'tall')]);
-  await page.click(ED + ' .pg-dd summary');
+  await openDd(page);
   await page.check(ED + ' .pg-list input[data-page="111"]');
   assert.deepEqual(await page.$eval(opt, (o) => [o.hidden, o.disabled, o.textContent]), [false, false, '放待排 2359']);
   await page.selectOption(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode', 'q2359');
@@ -444,7 +449,7 @@ test('放待排 2359：只有直式能選；排到今天 23:59；RD 用送出當
   const t1 = new Date(t0); t1.setHours(23, 50, 0, 0);
   await page.clock.setFixedTime(t1);
   await page.setInputFiles('#fileIn', [file('Reels_晚.mp4', 'tall')]);
-  await page.click(ED + ' .pg-dd summary');
+  await openDd(page);
   await page.check(ED + ' .pg-list input[data-page="111"]');
   await page.focus(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode');
   assert.deepEqual(await page.$eval(opt, (o) => [o.disabled, o.textContent]), [true, '放待排 2359（已過 23:49）']);
@@ -485,6 +490,57 @@ test('超過 90 秒的直式影片：不擋送出，自動改走一般影片上�
   assert.equal(api.start.at(-1).kind, 'reel');
   assert.match(await page.textContent(ED + ' .kind-warn'), /上傳方式：Reels$/);
   if (SHOT) { await page.waitForSelector('#stText:has-text("已上傳"), #stText:has-text("上傳完成")'); await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOT, 'fbvideo-upload-a.png') }); }
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('還沒選粉專：點開影片自動展開粉專選擇（藍框、提示、焦點）；選過就不再自動展開；沒選就關掉下次會再跳出', async () => {
+  const { page, errors } = await newPage();
+  await page.waitForSelector('#app:not([hidden])');
+  await page.setInputFiles('#fileIn', [file('第一支.mp4', 'wide'), file('第二支.mp4', 'wide')]);
+  const dd = ED + ' .pg-dd';
+  await until(async () => page.$eval(dd, (d) => d.open));
+  assert.equal(await page.$eval(dd, (d) => d.classList.contains('need-pick')), true);
+  assert.equal(await page.isVisible(ED + ' .pg-tip'), true);
+  assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.dataset.page), '111', '焦點在第一個粉專');
+  // 第二支（目前這支）勾新聞 → 提示消失，自己收起
+  await page.check(`${ED} .pg input[data-page="111"]`);
+  assert.equal(await page.isVisible(ED + ' .pg-tip'), false);
+  await page.click(dd + ' summary');
+  // 切到第一支：沒選過 → 跳出；關掉不選
+  await page.click('.vq-item:nth-child(1) .vq-pick');
+  assert.equal(await page.$eval(dd, (d) => d.open), true);
+  await page.click(dd + ' summary');
+  // 切回第二支：選過 → 不跳出；點那一列可重選
+  await page.click('.vq-item:nth-child(2) .vq-pick');
+  assert.equal(await page.$eval(dd, (d) => d.open), false, '第二支選過，不再自動跳出');
+  await page.click(dd + ' summary');
+  assert.equal(await page.$eval(dd, (d) => d.open), true, '點選擇區可以重選');
+  await page.click(dd + ' summary');
+  // 第一支沒選過：再點開會再跳出
+  await page.click('.vq-item:nth-child(1) .vq-pick');
+  assert.equal(await page.$eval(dd, (d) => d.open), true, '第一支沒選過，再點開會再跳出');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('封面：上傳 PNG 圖片當封面（按鈕變「換一張圖片」、顯示檔名、送出時送到後端）；格式不對提示', async () => {
+  const { page, errors, api } = await newPage();
+  await page.waitForSelector('#app:not([hidden])');
+  await page.setInputFiles('#fileIn', file('橫式.mp4'));
+  await pickPage(page, '111');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.setInputFiles(ED + ' .cover-file', { name: 'a.gif', mimeType: 'image/gif', buffer: png });
+  await page.waitForSelector('#toast:has-text("封面只收 JPG 或 PNG")');
+  await page.setInputFiles(ED + ' .cover-file', { name: '封面.png', mimeType: 'image/png', buffer: png });
+  await page.waitForSelector(ED + ' .cover-note:has-text("已上傳 封面.png")');
+  assert.equal(await page.textContent(ED + ' .cover-up'), '換一張圖片');
+  assert.equal(await page.textContent(ED + ' .cover-btn'), '從影片選封面');
+  assert.ok(await page.$(ED + ' .cover-img img'));
+  await page.waitForSelector('#stText:has-text("上傳完成")', { timeout: 20000 });
+  await page.click('#sendBtn');
+  await until(() => api.cover.length === 1 && api.publish.length === 1);
+  assert.ok(api.cover.length === 1, '封面送到後端');
   assert.deepEqual(errors, []);
   await page.close();
 });

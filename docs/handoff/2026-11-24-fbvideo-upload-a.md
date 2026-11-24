@@ -43,3 +43,6 @@ npm test 815、fbvideo e2e 13（新增：單段失敗自動重試、95 秒直式
 - 介面維持現在的；影片還沒選過粉專 → 點開／切到時自動展開「發布粉專」（藍框＋提示條＋焦點第一個）；勾過任一粉專或被「發布方式全套用」套用過就不再自動跳出，仍可點那一列重選。
 - 封面：「從影片選封面」旁加「上傳圖片」（JPG／PNG ≤10MB），上傳後按鈕變「換一張圖片」、下方小字「已上傳 檔名（JPG／PNG，最大 10MB）」；後端不改（本來就收 JPG／PNG）。
 - 改：`tools/fbvideo/editor.js`、`index.html`、`fbvideo.css`、`app.js` select()；e2e 3 項。
+
+### 第二段結果
+fbvideo e2e 15＋sidepanel、npm test 815、build --check 通過；獨立審查無 Critical／Important，已修：正在打字時不搶焦點、上傳圖片後再「從影片選封面」從約 1 秒開始。未測：超過 10MB 提示。
