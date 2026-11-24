@@ -151,6 +151,7 @@ test('送出中按鈕轉圈（aria-busy）、完成後恢復', async () => {
   await page.click(chip(111) + ' .chip-l');
   await page.click('#sendBtn');
   await page.waitForSelector('#sendBtn[aria-busy="true"]');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fx-fbpost-sending.png') });
   assert.match(await page.textContent('#sendBtn'), /送出中（1 個粉專）/);
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(await page.getAttribute('#sendBtn', 'aria-busy'), null);

@@ -199,6 +199,7 @@ test('類型判斷；每支各自粉專與排程；套用到全部影片；RD �
   await page.click('#sendBtn');
   await until(() => api.publish.length === 2);
   await page.waitForSelector('#sendBtn.fx-ok .fx-chk');   // 送出成功：按鈕綠色打勾
+  if (SHOT) { await page.waitForTimeout(400); await page.locator('#foot').screenshot({ path: path.join(SHOT, 'fx-fbvideo-sent.png') }); }
   assert.match(await page.textContent('#sendBtn'), /已送出 2 支|全部上傳完成/);
   for (const b of api.publish) { assert.equal(b.pages[0].at, null); assert.ok(b.pages[1].at > Date.now() / 1000); }
   await until(() => api.rundown.length === 2);

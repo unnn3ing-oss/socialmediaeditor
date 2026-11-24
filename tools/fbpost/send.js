@@ -12,7 +12,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
   const unknown = new Set();   // 上次結果不明（可能已發出）的粉專
   function updateButton() {
     const n = targets.count(), noPhoto = composer.needsPhoto();
-    if ($('sendBtn').getAttribute('aria-busy') !== 'true') idle($('sendBtn'), `全部送出（${n} 個粉專）`, { disabled: n === 0 || noPhoto });
+    if ($('sendBtn').getAttribute('aria-busy') !== 'true' && !$('sendBtn').classList.contains('fx-bad')) idle($('sendBtn'), `全部送出（${n} 個粉專）`, { disabled: n === 0 || noPhoto });
     // 自動提示（沒勾粉專、選套版沒照片）：使用者送出時的錯誤訊息不蓋掉
     const auto = !n ? '請先勾選要發的粉專' : noPhoto ? '選套版需要照片，請貼上或選一張照片，或改用純文字' : '';
     if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = auto; $('sendErr').dataset.auto = auto ? '1' : ''; }
@@ -110,7 +110,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
     } finally {
       idle(btn, null);
       updateButton();
-      if (failed) { const back = btn.textContent; fail(btn, back); updateButton(); }
+      if (failed) fail(btn, btn.textContent, { disabled: btn.disabled });   // 放在 updateButton 之後，紅色抖動才不會馬上被洗掉
     }
   });
 

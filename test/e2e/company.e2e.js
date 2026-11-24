@@ -172,6 +172,7 @@ test('密碼錯誤顯示剩餘次數；查不到員工編號；連不上伺服�
   await page.waitForFunction(() => document.querySelector('#company-dialog [role=alert]').textContent.includes('密碼不對，還可以再試 4 次'));
   assert.equal(await page.isVisible('#company-dialog'), true);
   assert.equal(await page.locator('#company-dialog button[type=submit].fx-bad').count(), 1);   // 失敗：按鈕紅色回饋
+  if (process.env.SHOT_DIR) await page.locator('#company-dialog').screenshot({ path: path.join(process.env.SHOT_DIR, 'fx-login-fail.png') });
   assert.equal(await page.getAttribute('#company-dialog button[type=submit]', 'aria-busy'), null);
   await page.click('#company-dialog .login-link');
   await page.fill('#company-dialog input[name=staffId]', 'ZZZ');

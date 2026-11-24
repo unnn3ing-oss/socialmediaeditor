@@ -352,6 +352,7 @@ test('粉專設定：改簡稱、RD、上移後儲存，body 含新值與正確 
   await page.click('#pgSave');
   await page.waitForFunction(() => document.getElementById('pgMsg').textContent === '已儲存');
   await page.waitForSelector('#pgSave.fx-ok');
+  if (SHOT) await page.locator('#pgSave').locator('xpath=ancestor::section[1]').screenshot({ path: path.join(SHOT, 'fx-admin-saved.png') });
   assert.deepEqual(PG_SAVED.pages.map((p) => [p.id, p.short, p.rd, p.order, p.show]),
     [['1', '主粉', 'news', 0, 1], ['3', '少康', 'shaokang', 1, 1], ['2', '娛樂', 'ent', 2, 1]]);
   assert.equal(PG_SAVED.pages[2].utm, '?&utm_source=facebook');

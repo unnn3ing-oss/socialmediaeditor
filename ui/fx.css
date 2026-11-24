@@ -6,6 +6,7 @@
 /* 處理中：用 disabled 擋重複按，但不要看起來像「不能按」的灰色 */
 .fx-busy[disabled], .fx-busy[disabled]:hover { cursor: progress; background: var(--surface); border-color: var(--accent); color: var(--accent); }
 .btn-primary.fx-busy[disabled], .btn-primary.fx-busy[disabled]:hover, button.primary.fx-busy[disabled], button.primary.fx-busy[disabled]:hover { background: #3b78f2; border-color: #3b78f2; color: #fff; }
+button.danger.fx-busy[disabled], button.danger.fx-busy[disabled]:hover, .btn-danger.fx-busy[disabled], .btn-danger.fx-busy[disabled]:hover { background: var(--surface); border-color: var(--bad-line); color: var(--bad-text); }
 .fx-ok, .fx-ok:hover, .fx-ok[disabled] { background: var(--ok-bg, #ecfdf3) !important; border-color: var(--ok-line, #abefc6) !important; color: var(--ok-text, #067647) !important; }
 .fx-bad, .fx-bad:hover { background: var(--bad-bg, #fef3f2) !important; border-color: var(--bad-line, #fecdca) !important; color: var(--bad-text, #b42318) !important; }
 .fx-lbl { display: inline-block; animation: fx-in .15s ease; }

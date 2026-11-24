@@ -505,3 +505,8 @@ html:not(.is-side) .live { display: none; }
 .live-tip li span { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-tip p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 html:not(.is-side) .live-tip { display: none; }
+/* 按鈕回饋（ui/fx.css）：送出鈕不是 .btn，自己補；處理中不要變半透明（像不能按） */
+.send { transition: transform .1s ease, background-color .15s ease, color .15s ease; }
+.send:active:not(:disabled) { transform: scale(.97); }
+.send.fx-busy:disabled { opacity: 1; background: #3b78f2; color: #fff; cursor: progress; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .send { transition: none; } .send:active:not(:disabled) { transform: none; } }

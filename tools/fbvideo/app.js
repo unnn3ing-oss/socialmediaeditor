@@ -288,6 +288,7 @@ function renderQueue() {
   const list = $('vqList'); list.textContent = '';
   $('emptyHint').hidden = !!S.videos.length;
   S.videos.forEach((v, i) => {
+    if (v.removing && v.li && v.li.classList.contains('fx-gone')) { list.append(v.li); return; }   // 收合中：沿用正在收合的那一列，不重畫成完整高度
     const li = document.createElement('li'); li.className = 'vq-item' + (v === S.cur ? ' is-cur' : '') + (v.fxIn ? ' fx-enter' : '');
     v.fxIn = false; v.li = li;
     const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'vq-pick';
@@ -467,7 +468,9 @@ let sending = false;
 let waitSet = null;
 let hold = false;   // 打勾／抖動顯示中（1.5 秒）不要被重畫蓋掉
 const failedV = (v) => v.upload === 'error' || v.jobs.some((j) => ['failed', 'unknown'].includes(j.state));
-function holdFoot() { hold = true; setTimeout(() => { hold = false; updateFoot(); }, 1500); }
+let holdTimer = 0;
+function holdFoot() { hold = true; clearTimeout(holdTimer); holdTimer = setTimeout(() => { hold = false; updateFoot(); }, 1600); }
+const noReady = () => !S.videos.some((v) => v.checked && !v.sent);
 function updateFoot() {
   if (sending) return;   // 送出中由送出流程自己更新按鈕
   const btn = $('sendBtn');
@@ -479,8 +482,8 @@ function updateFoot() {
     if (!still.length) {
       waitSet = null;
       const bad = live.filter(failedV);
-      if (bad.length) { fx.fail(btn, '全部送出'); toast(`${bad.length} 支影片上傳失敗（看左側紅字），可以按「重新上傳」`, null, 10000); holdFoot(); }
-      else if (live.length) { fx.ok(btn, `全部上傳完成（${live.length} 支）`, '全部送出'); holdFoot(); }
+      if (bad.length) { fx.fail(btn, '全部送出', { disabled: !n }); toast(`${bad.length} 支影片上傳失敗（看左側紅字），可以按「重新上傳」`, null, 10000); holdFoot(); }
+      else if (live.length) { fx.ok(btn, `全部上傳完成（${live.length} 支）`, '全部送出', null, { disabled: !n }); holdFoot(); }
     } else if (!n && !hold) fx.busy(btn, `已送出，等上傳完成 ${still.length} 支`, { dots: true });
   }
   if (!hold && !(waitSet && !n)) fx.idle(btn, n > 1 ? `全部送出（${n} 支）` : '全部送出', { disabled: !n });
@@ -528,8 +531,8 @@ $('sendBtn').addEventListener('click', async () => {
     sending = false;
     const waiting = forms.map((f) => f.v).filter((v) => v.sent && isUploading(v));
     if (waiting.length) waitSet = new Set([...(waitSet || []), ...waiting]);
-    else if (fails.length) { fx.fail(btn, '全部送出'); holdFoot(); }
-    else if (okN) { fx.ok(btn, `已送出 ${okN} 支`, '全部送出'); holdFoot(); }
+    else if (fails.length) { fx.fail(btn, '全部送出', { disabled: noReady() }); holdFoot(); }
+    else if (okN) { fx.ok(btn, `已送出 ${okN} 支`, '全部送出', null, { disabled: noReady() }); holdFoot(); }
     updateFoot();
   }
   renderQueue();

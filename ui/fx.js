@@ -43,15 +43,16 @@ export function idle(btn, text, { disabled = false } = {}) {
   setLabel(btn, text);
 }
 // 成功：綠色打勾 1.5 秒後回到 back（after 在恢復後呼叫）
-export function ok(btn, text, back, after) {
-  idle(btn, null);
+//   opts.disabled：打勾期間與恢復後按鈕是否停用（例如已經沒有東西可以送）
+export function ok(btn, text, back, after, opts = {}) {
+  idle(btn, null, opts);
   btn.classList.add('fx-ok');
   setLabel(btn, text, { lead: CHECK() });
-  timers.set(btn, setTimeout(() => { idle(btn, back); if (after) after(); }, OK_MS));
+  timers.set(btn, setTimeout(() => { idle(btn, back, opts); if (after) after(); }, OK_MS));
 }
 // 失敗：紅色＋抖一下，1.5 秒後恢復顏色（文字直接回到 back，原因由呼叫端寫在旁邊或提示）
-export function fail(btn, back) {
-  idle(btn, back);
+export function fail(btn, back, opts = {}) {
+  idle(btn, back, opts);
   btn.classList.add('fx-bad');
   shake(btn);
   timers.set(btn, setTimeout(() => btn.classList.remove('fx-bad'), OK_MS));
