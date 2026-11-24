@@ -33,7 +33,7 @@ export async function postComment(env, token, postId, message) {
 // 管理頁「進階設定 → 實驗功能」（敏感卡片 labs）；快取 60 秒（同執行個體存檔立即清）
 const OPTS_KEY = 'comment_opts';
 export const MAX_LAB_STAFF = 500;
-const STAFF_RE = /^[A-Za-z0-9_-]{1,20}$/;
+export const STAFF_RE = /^[A-Za-z0-9_-]{1,20}$/;
 export function normOpts(v) {
   const edit = !!(v && v.edit === true);
   const who = v && v.who === 'some' ? 'some' : 'all';

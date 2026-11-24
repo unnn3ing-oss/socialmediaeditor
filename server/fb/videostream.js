@@ -6,7 +6,7 @@
 //   串流沒辦法在後端重送同一段：結果不明／5xx／錯誤碼 1、2 時粉專維持上傳中、不前進，回 fb_retry 讓前端重送這段（前端最多重試 2 次）
 import { GRAPH_VIDEO, GraphError, graphFetch } from './graph.js';
 import { pageTokens } from './pages.js';
-import { normOpts } from './comment.js';
+import { normOpts, STAFF_RE, MAX_LAB_STAFF } from './comment.js';
 import { rows, update, updateIf, finishReady, result, errText, ruploadPart } from './video.js';
 import { ensureSettings, cached, forget } from '../core/once.js';
 
@@ -21,7 +21,7 @@ export function validVideoOpts(b) {
   if (!b || typeof b.stream !== 'boolean') return null;
   const who = b.who === undefined ? 'all' : b.who;
   if (!['all', 'some'].includes(who)) return null;
-  if (who === 'some' && (!Array.isArray(b.staff) || b.staff.length > 500 || !b.staff.every((x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,20}$/.test(x.trim())))) return null;
+  if (who === 'some' && (!Array.isArray(b.staff) || b.staff.length > MAX_LAB_STAFF || !b.staff.every((x) => typeof x === 'string' && STAFF_RE.test(x.trim())))) return null;
   return normVideoOpts({ ...b, who });
 }
 async function readOpts(env) {
@@ -137,7 +137,7 @@ export async function receiveChunkStream(env, request, uploadId, start, len) {
         else await updateIf(env, r, { next_start: end, next_end: end }, 'uploading');
       }
     } catch (e) {
-      branch.cancel().catch(() => {});
+      // 分支已交給 fetch：失敗時 runtime 會取消本文，連帶取消這個分支
       if (!(e instanceof GraphError)) throw e;
       if (retryable(e)) { retryMsg = retryMsg || errText(e); return; }   // 維持上傳中、位置不動，等前端重送
       await updateIf(env, r, { state: 'failed', error: `${Math.floor(start / 1048576)}MB 處上傳失敗：${errText(e)}` }, 'uploading');

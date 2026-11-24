@@ -1568,7 +1568,8 @@ if (window.top !== window.self) {
     return load;
   }
   var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream')];
-  function labLoad() { labLoaded = true; return Promise.all(labLoads.map(function (f) { return f(); })); }
+  // 依序讀：權杖過期時只彈一次（第一個讀到 unauthorized 就停）
+  function labLoad() { labLoaded = true; return labLoads.reduce(function (p, f) { return p.then(function () { if (labLoaded) return f(); }); }, Promise.resolve()); }
   // ---- 進階設定「儀表板顯示項目」（GET／POST /admin/dash/config，只有已解鎖系統管理者）----
   var dcLoaded = false;
   function dcLoad() {
