@@ -359,3 +359,30 @@ test('多文來源 finish 失敗 → 多文顯示失敗（前端不會一直等�
   assert.deepEqual(r.body.data.jobs[0].cross, [{ page: '222', status: 'failed', error: '原影片沒有發布' }]);
   assert.equal(RecTimer.log.length, 0);
 });
+
+test('分段轉送：臉書 5xx 同一段再試一次就成功；兩次都 5xx 標失敗並寫出位置', async (t) => {
+  let n111 = 0, n222 = 0;
+  const { env, headers } = await setup(t, {
+    'POST /111/video_reels': (c) => c.body.upload_phase === 'start' ? { video_id: 'R1', upload_url: 'https://rupload.facebook.com/video-upload/v27.0/R1' } : { success: true },
+    'POST /222/video_reels': (c) => c.body.upload_phase === 'start' ? { video_id: 'R2', upload_url: 'https://rupload.facebook.com/video-upload/v27.0/R2' } : { success: true },
+    'POST https://rupload.facebook.com/video-upload/v27.0/R1': () => (++n111 === 1 ? gErr(2, 503) : { success: true }),
+    'POST https://rupload.facebook.com/video-upload/v27.0/R2': () => { n222++; return gErr(2, 503); }
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'Reels_x.mp4', size: 5, kind: 'reel', pages: ['111', '222'] });
+  const r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(5));
+  assert.deepEqual(states(r), [['111', 'uploaded'], ['222', 'failed']]);
+  assert.equal(n111, 2); assert.equal(n222, 2, '只多試一次');
+  assert.match(r.body.data.jobs.find((j) => j.page === '222').error, /^0MB 處上傳失敗/);
+});
+
+test('分段轉送：明確錯誤（400）不重試', async (t) => {
+  let n = 0;
+  const { env, headers } = await setup(t, {
+    'POST /111/video_reels': (c) => c.body.upload_phase === 'start' ? { video_id: 'R1', upload_url: 'https://rupload.facebook.com/video-upload/v27.0/R1' } : { success: true },
+    'POST https://rupload.facebook.com/video-upload/v27.0/R1': () => { n++; return gErr(100, 400); }
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'Reels_x.mp4', size: 5, kind: 'reel', pages: ['111'] });
+  const r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(5));
+  assert.deepEqual(states(r), [['111', 'failed']]);
+  assert.equal(n, 1);
+});

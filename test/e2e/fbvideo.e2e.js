@@ -24,7 +24,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
   const errors = [], api = { start: [], chunk: [], publish: [], stop: [], drop: [], rundown: [], cover: [] };
   const ups = new Map();
   let hold = null;   // 設成 Promise 時，分段請求等它（測試上傳中）
-  let failNext = false;   // true：下一個分段回 500（測試送出後上傳失敗）
+  let failN = 0;   // 接下來 N 個分段回 502（前端每段會自動重試 2 次，所以 3＝這段真的失敗）
   page.on('pageerror', (e) => errors.push(String(e)));
   const view = (id) => {
     const u = ups.get(id);
@@ -57,7 +57,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
       const len = req.postDataBuffer().length;
       api.chunk.push([id, s, len]);
       if (hold) await hold;
-      if (failNext) { failNext = false; return json({ ok: false, code: 'fb_error', error: '連線中斷' }, 502); }
+      if (failN > 0) { failN--; return json({ ok: false, code: 'fb_error', error: '連線中斷' }, 502); }
       const u = ups.get(id);
       for (const j of Object.values(u.pages)) if (j.state === 'uploading' && j.next === s) { j.next = s + len; if (j.next >= u.size) j.state = 'uploaded'; }
       finish(u);
@@ -84,7 +84,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
   });
   if (!opts.noToken) await page.addInitScript(() => { try { localStorage.setItem('tbx.company', JSON.stringify({ token: 't', exp: Math.floor(Date.now() / 1000) + 3600 })); } catch {} });
   await page.goto(srv.url + 'tools/fbvideo/index.html');
-  return { page, errors, api, ups, setHold: (pr) => { hold = pr; }, failChunk: () => { failNext = true; } };
+  return { page, errors, api, ups, setHold: (pr) => { hold = pr; }, failChunk: (n = 3) => { failN = n; } };
 }
 const msg = (page) => page.locator('.ed:not([hidden]) .msg').inputValue();
 const until = async (fn, ms = 5000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 50)); } return false; };
@@ -223,11 +223,11 @@ test('上傳中：擋取消粉專、移除影片、切類型；關分頁要確�
   await page.click('#stopBtn');
   await page.click('#cfYes');
   release();
-  await page.waitForSelector('#stText:has-text("已停止上傳")');
+  await page.waitForSelector(ED + ' .up-msg:has-text("已停止上傳")');
   assert.equal(api.stop.length, 1);
   assert.equal(await page.isVisible('#stopBtn'), false);
   assert.equal(await unloadBlocked(), false, '停止後不再攔');
-  await page.click('#restartBtn');
+  await page.click(ED + ' .up-restart');
   await page.waitForSelector('#stText:has-text("上傳完成")');
   assert.notEqual(api.start[0].uploadId, api.start[api.start.length - 1].uploadId);
   await page.click(`${ED} .pg input[data-page="111"]`);
@@ -246,9 +246,11 @@ test('送出後上傳失敗：重新上傳後自動用已送出的內容發布',
   await page.click('#sendBtn');
   await until(() => api.publish.length === 1);
   failChunk(); setHold(null); release();
-  await page.waitForSelector('#restartBtn:not([hidden])');
-  assert.match(await page.textContent('#stText'), /上傳失敗/);
-  await page.click('#restartBtn');
+  await page.waitForSelector(ED + ' .up-restart:not([hidden])', { timeout: 20000 });
+  assert.match(await page.textContent(ED + ' .up-msg'), /上傳失敗/);
+  assert.match(await page.textContent('#stText'), /1 支失敗或停止/);
+  assert.match(await page.textContent('.vq-err'), /上傳失敗/);
+  await page.click(ED + ' .up-restart');
   await until(() => api.publish.length === 2);
   assert.notEqual(api.publish[1].uploadId, api.publish[0].uploadId);
   assert.deepEqual({ ...api.publish[1], uploadId: '' }, { ...api.publish[0], uploadId: '' });
@@ -446,6 +448,43 @@ test('放待排 2359：只有直式能選；排到今天 23:59；RD 用送出當
   await page.check(ED + ' .pg-list input[data-page="111"]');
   await page.focus(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode');
   assert.deepEqual(await page.$eval(opt, (o) => [o.disabled, o.textContent]), [true, '放待排 2359（已過 23:49）']);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('上傳：單段失敗一次自動重試成功；按送出有「送出中」與結果提示；底部只有一行總進度', async () => {
+  const { page, errors, api, failChunk } = await newPage();
+  await page.waitForSelector('#app:not([hidden])');
+  failChunk(1);
+  await page.setInputFiles('#fileIn', file('橫式.mp4'));
+  await pickPage(page, '111');
+  await page.waitForSelector('#stText:has-text("上傳完成 1／1 支")', { timeout: 20000 });
+  assert.equal(await page.isVisible(ED + ' .up-restart'), false, '重試成功，沒有失敗');
+  assert.match(await page.textContent(ED + ' .up-list'), /新聞：/);
+  await page.click('#sendBtn');
+  await page.waitForSelector('#toast:has-text("已送出 1 支")');
+  assert.equal(api.publish.length, 1);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('超過 90 秒的直式影片：不擋送出，自動改走一般影片上傳；90 秒內直式走 Reels', async () => {
+  const { page, errors, api } = await newPage();
+  await page.waitForSelector('#app:not([hidden])');
+  await page.setInputFiles('#fileIn', file('Reels_長.mp4', 'tall-long'));
+  await pickPage(page, '111');
+  await until(() => api.start.length >= 1, 10000);
+  assert.equal(api.start[0].kind, 'video', '95 秒走一般影片');
+  assert.match(await page.textContent(ED + ' .kind-warn'), /上傳方式：一般影片（超過 90 秒/);
+  await page.waitForSelector('#stText:has-text("上傳完成")', { timeout: 20000 });
+  await page.click('#sendBtn');
+  await until(() => api.publish.length === 1);
+  await page.setInputFiles('#fileIn', file('Reels_短.mp4', 'tall'));
+  await pickPage(page, '111');
+  await until(() => api.start.length >= 2, 10000);
+  assert.equal(api.start.at(-1).kind, 'reel');
+  assert.match(await page.textContent(ED + ' .kind-warn'), /上傳方式：Reels$/);
+  if (SHOT) { await page.waitForSelector('#stText:has-text("已上傳"), #stText:has-text("上傳完成")'); await page.waitForTimeout(300); await page.screenshot({ path: path.join(SHOT, 'fbvideo-upload-a.png') }); }
   assert.deepEqual(errors, []);
   await page.close();
 });

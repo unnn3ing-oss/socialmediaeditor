@@ -1,6 +1,17 @@
 // 影片發布的純規則（沒有 DOM，單元測試用）：檔名 → 標題、Reels 判斷、貼文大框的行位、RD 文字
 export const BUILTIN_PREFIXES = ['Reels_', 'Shorts_'];
 export const REEL_MAX_SEC = 90;
+export const REEL_MIN_SEC = 3;
+// 上傳方式（臉書 API）：Reels 專用（/video_reels）只收 3～90 秒；其他一律走一般影片（/videos），臉書後台一樣顯示成 Reels
+//   kind＝使用者看到的類型（橫式／Reels，影響 RD、hashtag、放待排 2359）；route＝實際用哪個 API 上傳
+export const routeOf = (kind, duration) => (kind === 'reel' && Number.isFinite(duration) && duration >= REEL_MIN_SEC && duration <= REEL_MAX_SEC ? 'reel' : 'video');
+export function routeText(kind, duration) {
+  if (kind !== 'reel') return '上傳方式：一般影片';
+  if (!Number.isFinite(duration)) return '上傳方式：一般影片（讀不到影片長度）';
+  if (duration > REEL_MAX_SEC) return '上傳方式：一般影片（超過 90 秒，臉書後台一樣顯示為 Reels）';
+  if (duration < REEL_MIN_SEC) return '上傳方式：一般影片（不到 3 秒）';
+  return '上傳方式：Reels';
+}
 
 const lower = (s) => s.toLocaleLowerCase();
 const startsI = (s, p) => lower(s).startsWith(lower(p));

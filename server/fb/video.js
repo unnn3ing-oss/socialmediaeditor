@@ -15,7 +15,7 @@ import { audit } from '../core/staff.js';
 class StartError extends Error {}
 
 export const MAX_CHUNK = 32 * 1024 * 1024;       // 一次轉送最多 32MB（Worker 請求上限 100MB、記憶體 128MB）
-export const REEL_CHUNK = 16 * 1024 * 1024;      // Reels 自己決定分段大小
+export const REEL_CHUNK = 8 * 1024 * 1024;       // Reels 自己決定分段大小（8MB：Worker 記憶體與執行時間較穩）
 export const MAX_SIZE = 10 * 1024 * 1024 * 1024; // 10GB（臉書粉專影片上限）
 export const MIN_LEAD = 600;                      // 排程至少 10 分鐘後
 export const MAX_LEAD = { video: 180 * 86400, reel: 29 * 86400 };   // 橫式 6 個月內（保守取 180 天）、Reels 29 天內
@@ -164,40 +164,52 @@ async function ruploadPart(r, token, start, bytes) {
   }
 }
 
-// 收到一段 [start, start+bytes.length)：轉給下一段剛好從 start 開始的粉專
+// 結果不明（連不上、5xx、錯誤碼 1／2）時同一段再試一次；分段上傳靠 offset，重送同一段不會變成兩份
+//   限制：橫式 transfer 若第一次其實已被臉書收下、只是回應斷了，重送可能回 offset 不符而標失敗（和不重試結果相同）
+const retryable = (e) => e instanceof GraphError && (e.uncertain || e.status >= 500 || e.code === 1 || e.code === 2);
+async function withRetry(fn) {
+  try { return await fn(); } catch (e) { if (!retryable(e)) throw e; return fn(); }
+}
+
+// 收到一段 [start, start+bytes.length)：轉給下一段剛好從 start 開始的粉專（多個粉專同時轉送）
+//   同樣長度的分段共用一個 Blob，記憶體不會隨粉專數倍增
 export async function receiveChunk(env, uploadId, start, bytes) {
   const list = await rows(env, uploadId);
   if (!list.length) return { error: 'not_found' };
   const end = start + bytes.length;
   const tokens = await pageTokens(env);
-  for (const r of list) {
-    if (r.state !== 'uploading' || r.next_start !== start) continue;
+  const blobs = new Map();
+  const blobOf = (want) => { if (!blobs.has(want)) blobs.set(want, new Blob([bytes.subarray(0, want - start)])); return blobs.get(want); };
+  const one = async (r) => {
     const t = tokens.get(r.page);
-    if (!t) { await update(env, r, { state: 'failed', error: '找不到這個粉專（token 沒有管理權限）' }); continue; }
+    if (!t) { await update(env, r, { state: 'failed', error: '找不到這個粉專（token 沒有管理權限）' }); return; }
     try {
       if (r.kind === 'video') {
         const want = r.next_end > start ? r.next_end : end;
-        if (want > end) { await updateIf(env, r, { state: 'failed', error: '臉書要求的分段太大（超過 32MB），無法轉送' }, 'uploading'); continue; }   // 不失敗的話前端會一直收到同一段而無限重傳
-        const fd = new FormData();
-        fd.set('upload_phase', 'transfer');
-        fd.set('upload_session_id', r.session_id);
-        fd.set('start_offset', String(start));
-        fd.set('video_file_chunk', new Blob([bytes.subarray(0, want - start)]), 'chunk');
-        const d = await graphVideo(env, 'POST', '/' + r.page + '/videos', fd, t.token);
+        if (want > end) { await updateIf(env, r, { state: 'failed', error: '臉書要求的分段太大（超過 32MB），無法轉送' }, 'uploading'); return; }   // 不失敗的話前端會一直收到同一段而無限重傳
+        const d = await withRetry(() => {
+          const fd = new FormData();
+          fd.set('upload_phase', 'transfer');
+          fd.set('upload_session_id', r.session_id);
+          fd.set('start_offset', String(start));
+          fd.set('video_file_chunk', blobOf(want), 'chunk');
+          return graphVideo(env, 'POST', '/' + r.page + '/videos', fd, t.token);
+        });
         const ns = Number(d.start_offset), ne = Number(d.end_offset);
         if (!Number.isFinite(ns) || !Number.isFinite(ne)) throw new GraphError(-1, '臉書沒有回傳下一段位置', 200);
         if (ns >= r.size || ns === ne) await updateIf(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size }, 'uploading');
         else await updateIf(env, r, { next_start: ns, next_end: ne }, 'uploading');
       } else {
-        await ruploadPart(r, t.token, start, bytes);
+        await withRetry(() => ruploadPart(r, t.token, start, bytes));
         if (end >= r.size) await updateIf(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size }, 'uploading');
         else await updateIf(env, r, { next_start: end, next_end: end }, 'uploading');
       }
     } catch (e) {
       if (!(e instanceof GraphError)) throw e;
-      await updateIf(env, r, { state: 'failed', error: errText(e) }, 'uploading');
+      await updateIf(env, r, { state: 'failed', error: `${Math.floor(start / 1048576)}MB 處上傳失敗：${errText(e)}` }, 'uploading');
     }
-  }
+  };
+  await Promise.all(list.filter((r) => r.state === 'uploading' && r.next_start === start).map(one));
   await finishReady(env, uploadId);
   return result(env, uploadId);
 }

@@ -19,8 +19,21 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/video.js` | REEL_CHUNK 8MB；receiveChunk 多粉專 Promise.all＋共用 Blob＋重試 | ⬜ |
-| `tools/fbvideo/rules.js` | `routeOf(kind, duration)` | ⬜ |
-| `tools/fbvideo/app.js` | pump 並行 2 支、每段重試、start/restart 送 route、送出按鈕回饋、底部精簡 | ⬜ |
-| `tools/fbvideo/editor.js`、`index.html`、`fbvideo.css` | kindInfo 改顯示上傳方式、拿掉 90 秒擋；上傳狀態清單；排程上限用 route | ⬜ |
-| 測試 | video 單元、rules 單元、fbvideo e2e | ⬜ |
+| `server/fb/video.js` | REEL_CHUNK 8MB；receiveChunk 多粉專 Promise.all＋共用 Blob＋重試 | ✅ |
+| `tools/fbvideo/rules.js` | `routeOf(kind, duration)` | ✅ |
+| `tools/fbvideo/app.js` | pump 並行 2 支、每段重試、start/restart 送 route、送出按鈕回饋、底部精簡 | ✅ |
+| `tools/fbvideo/editor.js`、`index.html`、`fbvideo.css` | kindInfo 改顯示上傳方式、拿掉 90 秒擋；上傳狀態清單；排程上限用 route | ✅ |
+| 測試 | video 單元、rules 單元、fbvideo e2e | ✅ |
+
+## 結果
+npm test 815、fbvideo e2e 13（新增：單段失敗自動重試、95 秒直式走一般影片／4 秒走 Reels）、sidepanel e2e、build --check 通過；獨立審查無 Critical／Important，已修 Minor：底部總進度不把失敗算成完成、too_large／unsupported 不重試、transfer 重試限制註解。
+測試影片 `test/fixtures/fbvideo/tall-long.mp4`（95 秒、90×160、4KB）。
+
+## 未處理 Minor
+- 長直式（走一般影片上傳）通知卡片類型顯示「影片」不是「Reels」（後端只知道 route）。
+- e2e 沒有「兩支同時上傳＋其中一支停止」的情境（替身後端）。
+- **跑到一半失敗的真正原因仍未確認**（使用者還沒給錯誤訊息）；這次改動讓失敗會顯示粉專＋位置＋原因。
+
+## 下一步
+- [ ] 使用者確認後說「推」併入 main（同 commit 更新 CLAUDE.md）
+- [ ] 使用者部署後端（正式＋測試）→ 多支影片實測上傳，若仍失敗把左側列表紅字／編輯區上傳狀態的訊息貼回

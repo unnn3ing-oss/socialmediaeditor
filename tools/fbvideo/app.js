@@ -5,7 +5,7 @@
 //   上傳中：取消勾粉專、移除／取消勾影片、切換類型都擋下；關分頁先確認（tb.busy）；可手動「停止上傳」。
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
-import { autoKind, rdText, rdTextQ } from './rules.js';
+import { autoKind, rdText, rdTextQ, routeOf } from './rules.js';
 import { createEditor, STATE_TEXT, CROSS_TEXT } from './editor.js';
 import { pickCover } from './cover.js';
 import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
@@ -207,7 +207,8 @@ const edCtx = {
     toast(skipped.length ? `已套用；上傳中沒套用：${skipped.join('、')}` : '已套用發布方式到全部影片');
     sync();
   },
-  restart: (v) => restartUpload(v, false)
+  restart: (v) => restartUpload(v, false),
+  footChanged: () => renderFoot()
 };
 // 已上傳但還沒送出的粉專：取消它的工作階段
 async function dropPage(v, page) {
@@ -223,7 +224,7 @@ async function restartUpload(v, quiet) {
   if (!v.sent) { sync(); return; }
   try {
     const body = { ...v.sentBody, uploadId: v.uploadId };
-    const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: v.kind, pages: body.pages.map((x) => x.page) } });
+    const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: routeOf(v.kind, v.duration), pages: body.pages.map((x) => x.page) } });
     v.next = r.next;
     apply(v, r);
     await sendCover(v);
@@ -238,10 +239,32 @@ function select(v) {
   S.cur = v;
   for (const x of S.videos) x.ed.el.hidden = x !== v;
   renderQueue();
-  if (v) v.ed.renderUpload(); else clearStatus();
+  if (v) v.ed.renderUpload();
+  renderFoot();
 }
-function clearStatus() { $('stFill').style.width = '0'; $('stText').textContent = ''; $('stText').title = ''; $('restartBtn').hidden = true; }
-$('restartBtn').addEventListener('click', () => { if (S.cur) restartUpload(S.cur, false); });
+// 底部只放總進度一行：「上傳中 42%・已上傳 1／3 支」；各粉專細節在每支影片自己的編輯區
+function renderFoot() {
+  const list = S.videos.filter((v) => (v.checked || v.sent) && v.jobs.some((j) => j.state !== 'canceled'));
+  const fill = $('stFill'), text = $('stText');
+  let total = 0, done = 0, ok = 0, bad = 0;
+  for (const v of list) {
+    const jobs = v.jobs.filter((j) => j.state !== 'canceled');
+    const live = jobs.filter((j) => !['failed', 'unknown', 'stopped'].includes(j.state));
+    total += v.size;
+    done += live.length ? Math.min(...live.map((j) => (j.state === 'uploading' ? j.uploaded : j.size))) : 0;
+    if (v.upload === 'error' || v.upload === 'stopped' || live.length < jobs.length) bad++;
+    else if (!jobs.some((j) => j.state === 'uploading')) ok++;
+  }
+  const pct = total ? Math.floor((done / total) * 100) : 0;
+  const up = S.videos.filter(isUploading).length;
+  let msg = '';
+  if (up) msg = `上傳中 ${pct}%・已上傳 ${ok}／${list.length} 支`;
+  else if (list.length) msg = ok === list.length ? `上傳完成 ${ok}／${list.length} 支` : `已上傳 ${ok}／${list.length} 支`;
+  if (bad) msg += `・${bad} 支失敗或停止（看左側列表）`;
+  fill.style.width = (list.length ? pct : 0) + '%';
+  text.textContent = msg; text.title = msg;
+  text.classList.toggle('bad', !!bad);
+}
 // 封面：先傳到後端暫存（發布成功後由後端換到各粉專的影片）；失敗不擋送出
 async function sendCover(v) {
   if (!v.cover) return;
@@ -267,6 +290,9 @@ function renderQueue() {
     const file = document.createElement('span'); file.className = 'vq-file';
     file.textContent = [v.name, sizeText(v.size), v.width ? `${v.width}×${v.height}` : ''].filter(Boolean).join('．');
     tx.append(nm, file, meta);
+    const errs = v.jobs.filter((j) => ['failed', 'unknown'].includes(j.state)).map((j) => `${pageName(j.page)}：${j.error || STATE_TEXT[j.state]}`);
+    if (v.upload === 'error' && v.err) errs.unshift(v.err);
+    if (errs.length) { const er = document.createElement('span'); er.className = 'vq-err'; er.textContent = errs[0] + (errs.length > 1 ? `（另 ${errs.length - 1} 項）` : ''); er.title = errs.join('\n'); tx.append(er); }
     const pct = uploadPct(v);
     if (pct !== null) { const bar = document.createElement('span'); bar.className = 'vq-bar'; const f = document.createElement('i'); f.style.width = pct + '%'; bar.append(f); tx.append(bar); }
     pick.append(th, tx);
@@ -310,7 +336,7 @@ async function removeVideo(v) {
   if (v.cover) URL.revokeObjectURL(v.cover.url);
   if (S.cur === v) S.cur = null;
   if (!S.cur && S.videos.length) select(S.videos[Math.min(i, S.videos.length - 1)]);
-  if (!S.videos.length) clearStatus();
+  if (!S.videos.length) renderFoot();
   renderQueue();
   updateBusy();
 }
@@ -332,38 +358,58 @@ async function ensureStarted(v) {
   v.starting = true;
   try {
     if (v.metaP) { await v.metaP; v.metaP = null; }
-    const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: v.kind, pages } });
+    const r = await tb.api.call('/fb/video/start', { method: 'POST', body: { uploadId: v.uploadId, name: v.name, size: v.size, kind: routeOf(v.kind, v.duration), pages } });
     apply(v, r);
     v.next = r.next;
   } catch (e) {
     v.upload = 'error'; v.err = errText(e); v.ed.renderUpload(); renderQueue();
   } finally { v.starting = false; }
 }
-let pumping = false;
-async function pump() {
-  if (pumping) return;
-  pumping = true;
-  try {
-    for (;;) {
-      const v = S.videos.find((x) => x.next && x.upload !== 'stopped' && x.upload !== 'error' && isUploading(x));
-      if (!v) break;
-      v.upload = 'uploading';
-      while (v.next && !v.stopReq) {
-        const { start, end } = v.next;
-        const id = v.uploadId;
-        try {
-          const r = await tb.api.call(`/fb/video/chunk?u=${id}&start=${start}`, { method: 'POST', body: v.file.slice(start, end), binary: true });
-          if (id !== v.uploadId) break;   // 途中重新上傳了
-          v.next = r.next;
-          apply(v, r);
-        } catch (e) {
-          if (id !== v.uploadId) break;   // 舊上傳的錯誤（已重新上傳），不要蓋掉新的狀態
-          v.upload = 'error'; v.err = errText(e); v.next = null; v.ed.renderUpload(); renderQueue();
-        }
-      }
-      if (v.upload === 'uploading') v.upload = 'idle';
+// 同時上傳 PARALLEL 支影片；每支一段一段傳（臉書要依 offset 順序）
+// 單段遇到連線／HTTP 錯誤自動重試 CHUNK_RETRY 次（間隔 2、4 秒）；後端回的粉專失敗不在這裡重試（後端已試過）
+const PARALLEL = 2, CHUNK_RETRY = 2;
+let pumpers = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pumpable = (x) => x.next && !x.pumping && x.upload !== 'stopped' && x.upload !== 'error' && isUploading(x);
+async function sendChunk(v, id, start, end) {
+  for (let i = 0; ; i++) {
+    try { return await tb.api.call(`/fb/video/chunk?u=${id}&start=${start}`, { method: 'POST', body: v.file.slice(start, end), binary: true }); }
+    catch (e) {
+      // 權限／驗證類錯誤重試也沒用
+      if (i >= CHUNK_RETRY || id !== v.uploadId || v.stopReq || (e && ['unauthorized', 'forbidden', 'bad_request', 'not_found', 'too_large', 'unsupported'].includes(e.code))) throw e;
+      await sleep(2000 * (i + 1));
     }
-  } finally { pumping = false; updateBusy(); }
+  }
+}
+async function pumpOne(v) {
+  v.pumping = true; v.upload = 'uploading';
+  try {
+    while (v.next && !v.stopReq) {
+      const { start, end } = v.next;
+      const id = v.uploadId;
+      try {
+        const r = await sendChunk(v, id, start, end);
+        if (id !== v.uploadId) break;   // 途中重新上傳了
+        v.next = r.next;
+        apply(v, r);
+      } catch (e) {
+        if (id !== v.uploadId) break;   // 舊上傳的錯誤（已重新上傳），不要蓋掉新的狀態
+        v.upload = 'error'; v.err = `${Math.floor(start / 1048576)}MB 處上傳失敗：${errText(e)}`; v.next = null; v.ed.renderUpload(); renderQueue();
+      }
+    }
+  } finally {
+    v.pumping = false;
+    if (v.upload === 'uploading') v.upload = 'idle';
+  }
+}
+function pump() {
+  while (pumpers < PARALLEL) {
+    const v = S.videos.find(pumpable);
+    if (!v) break;
+    pumpers++;
+    pumpOne(v).finally(() => { pumpers--; updateBusy(); renderQueue(); pump(); });
+  }
+  updateBusy();
 }
 async function sync() {
   await Promise.all(S.videos.filter((v) => v.checked).map(ensureStarted));
@@ -393,16 +439,17 @@ function updateBusy() {
 }
 
 // ===== 送出 =====
+let sending = false;
 function updateFoot() {
+  if (sending) return;   // 送出中由送出流程自己更新按鈕
   const ready = S.videos.filter((v) => v.checked && !v.sent);
   const n = ready.length;
   $('sendBtn').disabled = !n;
   $('sendBtn').textContent = n > 1 ? `全部送出（${n} 支）` : '全部送出';
-  const up = S.videos.filter(isUploading);
   const parts = [];
-  if (n) parts.push(`${n} 支影片待送出`);
-  if (up.length) parts.push(`上傳中 ${up.length} 支`);
+  if (n) parts.push(`${n} 支待送出`);
   $('footMsg').textContent = parts.join('・');
+  renderFoot();
 }
 $('sendBtn').addEventListener('click', async () => {
   const list = S.videos.filter((v) => v.checked && !v.sent);
@@ -417,21 +464,39 @@ $('sendBtn').addEventListener('click', async () => {
     if (v.upload === 'stopped' || v.upload === 'error') { select(v); toast(label + '：上傳已停止或失敗，請按「重新上傳」'); return; }
     forms.push({ v, body: { uploadId: v.uploadId, title: c.title, description: c.description, comments: c.comments, pages: p.pages } });
   }
-  $('sendBtn').disabled = true;
-  await sync();   // 確保每支都開好工作階段
-  for (const { v, body } of forms) {
-    if (!v.jobs.length) { toast(`「${v.name}」還沒開始上傳，沒有送出`); continue; }
-    body.uploadId = v.uploadId;
-    await sendCover(v);
-    try {
-      const r = await tb.api.call('/fb/video/publish', { method: 'POST', body });
-      v.sent = true; v.sentAt = Date.now(); v.sentBody = body;
-      v.ed.lock();
-      apply(v, r);
-    } catch (e) { select(v); toast(`「${v.ed.titleText()}」送出失敗：${errText(e)}`); }
+  sending = true;
+  const btn = $('sendBtn');
+  btn.disabled = true; btn.classList.add('is-busy'); btn.textContent = '送出中…';
+  const fails = [];
+  let okN = 0, waitN = 0;
+  try {
+    await sync();   // 確保每支都開好工作階段
+    for (const [i, { v, body }] of forms.entries()) {
+      btn.textContent = forms.length > 1 ? `送出中…（第 ${i + 1}／${forms.length} 支）` : '送出中…';
+      const name = v.ed.titleText() || v.name;
+      if (!v.jobs.length) { fails.push(`「${name}」還沒開始上傳`); continue; }
+      body.uploadId = v.uploadId;
+      await sendCover(v);
+      try {
+        const r = await tb.api.call('/fb/video/publish', { method: 'POST', body });
+        v.sent = true; v.sentAt = Date.now(); v.sentBody = body;
+        v.ed.lock();
+        apply(v, r);
+        okN++;
+        if (isUploading(v)) waitN++;
+      } catch (e) { fails.push(`「${name}」${errText(e)}`); }
+    }
+  } finally {
+    sending = false; btn.classList.remove('is-busy');
+    updateFoot();
   }
   renderQueue();
   poll();
+  // 結果一次說清楚：幾支送出、幾支傳完後自動發布、哪幾支失敗
+  const parts = [];
+  if (okN) parts.push(`已送出 ${okN} 支` + (waitN ? `（其中 ${waitN} 支還在上傳，傳完會自動發布）` : ''));
+  if (fails.length) parts.push(`${fails.length} 支沒送出：${fails.join('；')}`);
+  toast(parts.join('。') || '沒有送出任何影片', null, fails.length ? 12000 : 6000);
 });
 
 const crossOpen = (j) => (j.cross || []).some((c) => c.status === 'pending' || c.status === 'posting');

@@ -1,7 +1,7 @@
 // 每支影片一個內容區（從 <template> 複製；切換影片只隱藏，內容保留）
 // 由上而下：上傳狀態、類型、影片標題、影片內文、標籤（按鈕＋自訂）、授權、發布粉專（各自立即／排程）、留言、RD SLUG
-import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, REEL_MAX_SEC, q2359At } from './rules.js';
-import { segmented, sizeText, durText, fmt, toLocalInput, MIN_S, MAX_S, rangeText } from './util.js';
+import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, q2359At, routeOf, routeText } from './rules.js';
+import { segmented, sizeText, fmt, toLocalInput, MIN_S, MAX_S, rangeText } from './util.js';
 
 const MAX_COMMENTS = 3;
 const FIRST_DELAYS = [0, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 360, 720, 1440];
@@ -92,10 +92,10 @@ export function createEditor(v, ctx) {
   function kindInfo() {
     setKindBtn(v.kind);
     why.textContent = v.kindManual ? '手動選擇' : /^(reels|shorts)_/i.test(v.name) ? '自動判斷：檔名' : v.width ? `自動判斷：${v.height > v.width ? '直式' : '橫式'}畫面` : '';
-    const d = v.duration;
-    const bad = v.kind === 'reel' && Number.isFinite(d) && (d > REEL_MAX_SEC || d < 3);
-    kwarn.hidden = !bad;
-    kwarn.textContent = bad ? `Reels 只能 3～90 秒（這支 ${durText(d)}），請改成橫式影片` : '';
+    // 不再擋 90 秒：超過就自動改走一般影片上傳（臉書後台不分直橫），這裡只說明用哪種上傳方式
+    kwarn.hidden = false;
+    kwarn.className = 'kind-warn hint';
+    kwarn.textContent = routeText(v.kind, v.duration);
   }
 
   // ===== 發布粉專：條列、勾選＋立即／排程（排程才出時間） =====
@@ -258,28 +258,34 @@ export function createEditor(v, ctx) {
   renumber();
 
   // ===== 上傳進度與各粉專狀態：畫在底部工具列（只畫目前選中的影片） =====
+  // 這支影片的上傳狀態（編輯區「發布粉專」下方）：一行總結＋每個粉專一行
+  const upBox = q('.up-box'), upMsg = q('.up-msg'), upList = q('.up-list'), upRestart = q('.up-restart');
+  upRestart.addEventListener('click', () => ctx.restart(v));
   function renderUpload() {
-    if (!ctx.isCurrent(v)) return;
-    const fill = document.getElementById('stFill'), upText = document.getElementById('stText'), restart = document.getElementById('restartBtn');
     const jobs = v.jobs.filter((j) => j.state !== 'canceled');
     const up = jobs.filter((j) => j.state === 'uploading');
     const done = jobs.length ? Math.min(...jobs.map((j) => (j.state === 'uploading' ? j.uploaded : j.size))) : 0;
     const pct = jobs.length ? Math.floor((done / Math.max(1, v.size)) * 100) : 0;
-    fill.style.width = pct + '%';
     let text;
     if (v.upload === 'stopped') text = '已停止上傳' + (v.sent ? '（已送出的不會發布，可按「重新上傳」）' : '');
     else if (v.upload === 'error') text = '上傳失敗：' + (v.err || '') + (v.sent ? '（按「重新上傳」，傳完會用已送出的內容自動發布）' : '');
-    else if (!jobs.length) text = v.checked ? '勾選發布粉專後開始上傳' : '沒有勾選，不會上傳';
+    else if (!jobs.length) text = '';
     else if (up.length) text = `上傳中 ${pct}%（${sizeText(done)}／${sizeText(v.size)}）`;
     else text = '上傳完成';
-    const name = v.ed ? (title.value.trim() || v.name) : v.name;
-    const pages = v.jobs.filter((j) => j.state !== 'canceled').map((j) => ctx.pageName(j.page) + ' ' + jobText(j) + (j.cover === 'failed' ? '（封面未套用' + (j.coverError ? '：' + j.coverError : '') + '）' : '')
-      + (j.cross || []).map((c) => `．${ctx.pageName(c.page)} ${CROSS_TEXT[c.status] || c.status}${c.error ? '：' + c.error : ''}`).join(''));
-    const full = `第 ${ctx.indexOf(v) + 1} 支「${name}」${text}` + (pages.length ? '．' + pages.join('．') : '');
-    upText.textContent = full;
-    upText.title = full;
-    upText.classList.toggle('bad', v.upload === 'error' || v.jobs.some((j) => ['failed', 'unknown'].includes(j.state) || (j.cross || []).some((c) => ['failed', 'unknown'].includes(c.status))));
-    restart.hidden = !(v.upload === 'stopped' || v.upload === 'error');
+    upMsg.textContent = text;
+    const bad = v.upload === 'error' || jobs.some((j) => ['failed', 'unknown'].includes(j.state) || (j.cross || []).some((c) => ['failed', 'unknown'].includes(c.status)));
+    upMsg.classList.toggle('bad', bad);
+    upList.textContent = '';
+    for (const j of jobs) {
+      const li = document.createElement('li');
+      li.className = ['failed', 'unknown'].includes(j.state) ? 'bad' : '';
+      li.textContent = ctx.pageName(j.page) + '：' + jobText(j) + (j.cover === 'failed' ? '（封面未套用' + (j.coverError ? '：' + j.coverError : '') + '）' : '')
+        + (j.cross || []).map((c) => `．${ctx.pageName(c.page)} ${CROSS_TEXT[c.status] || c.status}${c.error ? '：' + c.error : ''}`).join('');
+      upList.append(li);
+    }
+    upBox.hidden = !text && !jobs.length;
+    upRestart.hidden = !(v.upload === 'stopped' || v.upload === 'error');
+    ctx.footChanged();
   }
 
   // ===== 封面：類型右側小圖＋從影片選封面 =====
@@ -343,7 +349,8 @@ export function createEditor(v, ctx) {
         const ms = Date.parse(r.dt.value);
         if (!Number.isFinite(ms)) return { error: `${ctx.pageName(page)} 請選排程時間` };
         const at = Math.floor(ms / 1000);
-        if (at < now + MIN_S || at > now + MAX_S[v.kind]) return { error: `${ctx.pageName(page)}：${rangeText(v.kind)}` };
+        const route = routeOf(v.kind, v.duration);
+        if (at < now + MIN_S || at > now + MAX_S[route]) return { error: `${ctx.pageName(page)}：${rangeText(route)}` };
         out.push({ page, at });
       }
       if (!out.length) return { error: '請勾選發布粉專' };
@@ -355,7 +362,6 @@ export function createEditor(v, ctx) {
       if (!t) return { error: '沒有影片標題' };
       const description = stripLead(msg.value).replace(/\s+$/, '');
       if (!description) return { error: '沒有影片內文' };
-      if (!kwarn.hidden) return { error: kwarn.textContent };
       const comments = [];
       for (const [i, row] of [...cmList.children].entries()) {
         const m = row.querySelector('textarea').value.trim();

@@ -74,3 +74,16 @@ test('RD 與 SLUG、去開頭空行', async () => {
   assert.equal(slugOf('手填 SLUG!', '標'), '手填SLUG');
   assert.equal(stripLead('\n\n【標】\n#a'), '【標】\n#a');
 });
+
+test('routeOf：直式 3～90 秒走 Reels，其他（超過 90 秒、不到 3 秒、讀不到長度、橫式）走一般影片', async () => {
+  const { routeOf, routeText } = await import('../tools/fbvideo/rules.js');
+  assert.equal(routeOf('reel', 30), 'reel');
+  assert.equal(routeOf('reel', 90), 'reel');
+  assert.equal(routeOf('reel', 3), 'reel');
+  assert.equal(routeOf('reel', 90.5), 'video');
+  assert.equal(routeOf('reel', 2), 'video');
+  assert.equal(routeOf('reel', NaN), 'video');
+  assert.equal(routeOf('video', 30), 'video');
+  assert.match(routeText('reel', 120), /超過 90 秒/);
+  assert.equal(routeText('reel', 30), '上傳方式：Reels');
+});

@@ -78,7 +78,6 @@
         <div class="st-track"><div class="st-fill" id="stFill"></div></div>
         <p class="st-text" id="stText" role="status"></p>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" id="restartBtn" hidden>重新上傳</button>
       <p class="hint" id="footMsg"></p>
       <span class="grow"></span>
       <label class="rd-switch"><input type="checkbox" id="rdOn"><span class="track" aria-hidden="true"></span><span class="rd-lbl">排入 RD</span></label>
@@ -91,6 +90,10 @@
 <!-- 每支影片的內容（隱藏切換，內容保留） -->
 <template id="edTpl">
   <section class="ed card">
+    <div class="up-box" hidden>
+      <div class="up-head"><span class="up-msg" role="status"></span><button type="button" class="btn btn-secondary btn-sm up-restart" hidden>重新上傳</button></div>
+      <ul class="up-list"></ul>
+    </div>
     <fieldset class="ed-body">
       <legend class="sr">影片內容</legend>
       <div class="pg-head">
