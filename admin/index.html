@@ -94,7 +94,8 @@
 
       <section class="card" id="bgCard" data-card="bg">
         <h2>文字背景（排程發布純文字）</h2>
-        <p>在粉專「建立貼文」點 Aa 彩色方塊、顯示所有背景並捲到底，再到 DevTools Console 執行 <code>docs/fb-text-backgrounds/extract-fb-backgrounds.js</code>，把結果貼到下面。圖樣的網址幾天後會過期，貼上後請<b>當天</b>按「下載圖樣」。還沒匯入時，排程發布用內建的純色＋漸層。</p>
+        <p>在粉專「建立貼文」點 Aa 彩色方塊、顯示所有背景並捲到底，按下面「複製擷取腳本」，到 DevTools Console 貼上執行，再把結果貼到下面。圖樣的網址幾天後會過期，貼上後請<b>當天</b>按「下載圖樣」。還沒匯入時，排程發布用內建的純色＋漸層。</p>
+        <div class="row"><button id="bgScript" type="button">複製擷取腳本</button></div>
         <p class="msg" id="bgMsg" role="status"></p>
         <label for="bgPaste">擷取結果（JSON）</label>
         <textarea id="bgPaste" rows="4" spellcheck="false" placeholder='{"presets":[...]}'></textarea>
