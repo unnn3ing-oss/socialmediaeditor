@@ -1,0 +1,39 @@
+/* 全站共用：按鈕回饋與動畫（搭配 ui/fx.js）
+   適用 .btn（tokens.css）與管理頁的一般 <button>／button.primary
+   系統設定「減少動態」時全部關掉，只留文字 */
+.btn, button.primary, button.danger { transition: transform .1s ease, background-color .15s ease, color .15s ease, border-color .15s ease; }
+.btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { transform: scale(.97); }
+/* 處理中：用 disabled 擋重複按，但不要看起來像「不能按」的灰色 */
+.fx-busy[disabled], .fx-busy[disabled]:hover { cursor: progress; background: var(--surface); border-color: var(--accent); color: var(--accent); }
+.btn-primary.fx-busy[disabled], .btn-primary.fx-busy[disabled]:hover, button.primary.fx-busy[disabled], button.primary.fx-busy[disabled]:hover { background: #3b78f2; border-color: #3b78f2; color: #fff; }
+.fx-ok, .fx-ok:hover, .fx-ok[disabled] { background: var(--ok-bg, #ecfdf3) !important; border-color: var(--ok-line, #abefc6) !important; color: var(--ok-text, #067647) !important; }
+.fx-bad, .fx-bad:hover { background: var(--bad-bg, #fef3f2) !important; border-color: var(--bad-line, #fecdca) !important; color: var(--bad-text, #b42318) !important; }
+.fx-lbl { display: inline-block; animation: fx-in .15s ease; }
+@keyframes fx-in { from { opacity: 0; } }
+.fx-spin { display: inline-block; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: fx-spin .7s linear infinite; }
+@keyframes fx-spin { to { transform: rotate(360deg); } }
+.fx-chk { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.fx-chk path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: fx-draw .35s ease forwards; }
+@keyframes fx-draw { to { stroke-dashoffset: 0; } }
+.fx-shake { animation: fx-shake .4s ease; }
+@keyframes fx-shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+.fx-dots::after { content: '…'; display: inline-block; animation: fx-breathe 1.2s ease-in-out infinite; }
+@keyframes fx-breathe { 50% { opacity: .25; } }
+.fx-flash { animation: fx-flash .9s ease; }
+@keyframes fx-flash { 0%, 60% { box-shadow: 0 0 0 3px var(--ok-line, #abefc6); } }
+@keyframes fx-enter { from { opacity: 0; transform: translateY(-6px); } }
+.fx-enter { animation: fx-enter .25s ease; }
+/* 列表一列收合（collapse()） */
+.fx-gone { overflow: hidden; height: 0 !important; opacity: 0; padding-top: 0 !important; padding-bottom: 0 !important; margin-top: 0 !important; margin-bottom: 0 !important; border-width: 0 !important;
+  transition: height .25s ease, opacity .2s ease, padding .25s ease, margin .25s ease; }
+/* 骨架光帶（與 tokens.css .sk 同色） */
+@keyframes fx-shim { to { background-position: -200% 0; } }
+.fx-skrow { display: grid; gap: 6px; }
+.fx-skrow > span { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, #eef1f5 25%, #f7f9fb 50%, #eef1f5 75%); background-size: 200% 100%; animation: fx-shim 1.2s linear infinite; }
+.fx-skrow > span:first-child { width: 55%; } .fx-skrow > span:last-child { width: 35%; }
+@media (prefers-reduced-motion: reduce) {
+  .btn, button.primary, button.danger, .fx-lbl, .fx-spin, .fx-chk path, .fx-shake, .fx-dots::after, .fx-flash, .fx-enter, .fx-gone, .fx-skrow > span { animation: none !important; transition: none !important; }
+  .btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { transform: none; }
+  .fx-chk path { stroke-dashoffset: 0; }
+  .fx-spin { border-right-color: currentColor; opacity: .6; }
+}
