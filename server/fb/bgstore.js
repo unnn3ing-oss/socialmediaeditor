@@ -14,7 +14,16 @@ const IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const R2_PREFIX = 'fbbg/';
 
 const SQL = 'CREATE TABLE IF NOT EXISTS fb_backgrounds (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, bg TEXT NOT NULL, text TEXT NOT NULL, grad TEXT, dir TEXT, url TEXT, img INTEGER NOT NULL DEFAULT 0, err TEXT, tried INTEGER, show INTEGER NOT NULL DEFAULT 1, ord INTEGER NOT NULL, updated INTEGER NOT NULL)';
-const ensure = (env) => ensureOnce(env.DB, SQL);
+// 舊表沒有 rnd（列入隨機；NULL＝照種類預設：純色／漸層列入、圖樣不列入）→ 補欄位；每個執行個體只檢查一次
+const colsOk = new WeakSet();
+async function ensure(env) {
+  await ensureOnce(env.DB, SQL);
+  if (!env.DB || colsOk.has(env.DB)) return;
+  try { await env.DB.prepare('ALTER TABLE fb_backgrounds ADD COLUMN rnd INTEGER').run(); }
+  catch (e) { if (!/duplicate column/i.test(String(e && e.message))) throw e; }
+  colsOk.add(env.DB);
+}
+export const rndOf = (r) => (r.rnd == null ? r.type !== 'image' : !!r.rnd);
 const CACHE_KEY = 'fb_backgrounds';
 
 // 圖片網址：只收 https、*.fbcdn.net、沒有帳密與連接埠
@@ -76,7 +85,7 @@ export function urlExpiry(url) {
 }
 const minExp = (rows) => rows.reduce((m, r) => { const e = r.type === 'image' ? urlExpiry(r.url) : null; return e && (!m || e < m) ? e : m; }, null);
 
-const adminRow = (r) => ({ id: r.id, name: r.name, type: r.type, bg: r.bg, text: r.text, grad: r.grad, dir: r.dir, img: !!r.img, hasUrl: !!r.url, exp: r.type === 'image' ? urlExpiry(r.url) : null, err: r.err || '', show: !!r.show });
+const adminRow = (r) => ({ id: r.id, name: r.name, type: r.type, bg: r.bg, text: r.text, grad: r.grad, dir: r.dir, img: !!r.img, hasUrl: !!r.url, exp: r.type === 'image' ? urlExpiry(r.url) : null, err: r.err || '', show: !!r.show, rnd: rndOf(r) });
 
 export async function adminState(env) {
   const rows = await readAll(env);
@@ -127,15 +136,25 @@ export async function importApply(env, rows, remove = []) {
   changed(env);
 }
 
-// 改名稱／顯示；找不到回 false
-export async function updateOne(env, id, { name, show }) {
+// 改名稱／顯示／列入隨機；找不到回 false
+export async function updateOne(env, id, { name, show, rnd }) {
   await ensure(env);
   const r = await env.DB.prepare('SELECT id FROM fb_backgrounds WHERE id = ?').bind(id).first();
   if (!r) return false;
   if (name !== undefined) await env.DB.prepare('UPDATE fb_backgrounds SET name = ?, updated = ? WHERE id = ?').bind(name, Date.now(), id).run();
   if (show !== undefined) await env.DB.prepare('UPDATE fb_backgrounds SET show = ?, updated = ? WHERE id = ?').bind(show ? 1 : 0, Date.now(), id).run();
+  if (rnd !== undefined) await env.DB.prepare('UPDATE fb_backgrounds SET rnd = ?, updated = ? WHERE id = ?').bind(rnd ? 1 : 0, Date.now(), id).run();
   changed(env);
   return true;
+}
+
+// 一次設定多個的列入隨機（快捷鈕：全選純色／全選漸層／全部取消…）；ids 不在表裡的略過
+export async function setRandom(env, ids, rnd) {
+  await ensure(env);
+  const now = Date.now();
+  const stmts = ids.map((id) => env.DB.prepare('UPDATE fb_backgrounds SET rnd = ?, updated = ? WHERE id = ?').bind(rnd ? 1 : 0, now, id));
+  if (stmts.length) await env.DB.batch(stmts);
+  changed(env);
 }
 
 export async function deleteOne(env, id) {

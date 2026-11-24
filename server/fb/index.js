@@ -8,8 +8,9 @@ import { GraphError, checkAppCred, graph } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
+import { commentOpts, saveCommentOpts } from './comment.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
-import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
+import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, setRandom as bgSetRandom, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 import { retryTimer, timerStatus } from './timer.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
@@ -50,7 +51,7 @@ route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: 
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
-route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, type, css, text, img }) => (img ? { id, name, type, css, text, img } : { id, name, type, css, text }))));
+route('GET', /^\/fb\/backgrounds$/, async (request, env) => ok(request, env, (await listBackgrounds(env)).map(({ id, name, type, css, text, img, rnd }) => (img ? { id, name, type, css, text, img, rnd: !!rnd } : { id, name, type, css, text, rnd: !!rnd }))));
 // 圖樣背景的圖片（R2 fbbg/<代號>）：要登入；回應依憑證而異，不讓共用快取混用
 function bgImageResponse(request, env, obj) {
   if (!obj) return fail(request, env, 'not_found');
@@ -200,6 +201,13 @@ adminRoute('POST', /^\/admin\/fb\/pages$/, async (request, env) => {
   await savePages(env, pages);
   return ok(request, env, await listPages(env, { all: true }));
 });
+// 第一則留言選項（目前只有：發出後再編輯一次）
+adminRoute('GET', /^\/admin\/fb\/comment-opts$/, async (request, env) => ok(request, env, await commentOpts(env)));
+adminRoute('POST', /^\/admin\/fb\/comment-opts$/, async (request, env) => {
+  const body = (await readJsonBody(request)) || {};
+  if (typeof body.edit !== 'boolean') return fail(request, env, 'bad_request');
+  return ok(request, env, await saveCommentOpts(env, { edit: body.edit }));
+});
 adminRoute('GET', /^\/admin\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
   const list = validPresets(await readJsonBody(request, 400000));
@@ -218,6 +226,14 @@ adminRoute('POST', /^\/admin\/fb\/backgrounds$/, async (request, env) => {
   await bgImportApply(env, parsed.rows, remove);
   return ok(request, env, await bgAdminState(env));
 });
+// 列入隨機：一次設定多個（快捷鈕）
+adminRoute('POST', /^\/admin\/fb\/backgrounds\/random$/, async (request, env) => {
+  const body = (await readJsonBody(request)) || {};
+  if (!Array.isArray(body.ids) || typeof body.rnd !== 'boolean') return fail(request, env, 'bad_request');
+  const ids = [...new Set(body.ids.filter((x) => typeof x === 'string' && BG_ID_RE.test(x)))].slice(0, 200);
+  await bgSetRandom(env, ids, body.rnd);
+  return ok(request, env, await bgAdminState(env));
+});
 adminRoute('POST', /^\/admin\/fb\/backgrounds\/fetch$/, async (request, env) => {
   const body = (await readJsonBody(request)) || {};
   const since = Math.min(Date.now(), Math.max(0, Number(body.since) || 0));
@@ -234,6 +250,7 @@ adminRoute('POST', /^\/admin\/fb\/backgrounds\/(\d{6,20})$/, async (request, env
     patch.name = name;
   }
   if (body.show !== undefined) patch.show = !!body.show;
+  if (body.rnd !== undefined) patch.rnd = !!body.rnd;
   if (!(await bgUpdate(env, m[1], patch))) return fail(request, env, 'not_found');
   return ok(request, env, await bgAdminState(env));
 });

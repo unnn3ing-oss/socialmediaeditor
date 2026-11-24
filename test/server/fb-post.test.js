@@ -139,7 +139,7 @@ test('GET /fb/backgrounds：回清單（id、name、css）', async (t) => {
   assert.ok(list.every((b) => /^\d+$/.test(b.id) && b.name && b.css && /^#[0-9A-F]{6}$/i.test(b.text) && ['solid', 'gradient'].includes(b.type)));
   assert.deepEqual([...new Set(list.map((b) => b.type))], ['solid', 'gradient'], '純色在前、漸層在後');
   const purple = list.find((b) => b.id === '106018623298955');
-  assert.deepEqual(purple, { id: '106018623298955', name: '純紫', type: 'solid', css: '#C600FF', text: '#FFFFFF' });
+  assert.deepEqual(purple, { id: '106018623298955', name: '純紫', type: 'solid', css: '#C600FF', text: '#FFFFFF', rnd: true });
   assert.equal(list.find((b) => b.id === '249307305544279').css, 'linear-gradient(to top right,#FF0047,#2C34C7)');
   assert.ok(!list.some((b) => b.id === '204187940028597'), '臉書選單已沒有的舊代號不再列出');
 });
@@ -422,4 +422,27 @@ test('summaryOf：整行【標題】優先、否則第一行有字的、超過 4
   assert.equal(summaryOf('\n\n小編文\n內文'), '小編文');
   assert.equal(summaryOf(''), '');
   assert.equal(summaryOf('字'.repeat(45)), '字'.repeat(40) + '…');
+});
+
+test('立即發布第 1 則留言：開關打開時留完再編輯一次；沒有網址的不編輯；管理頁 comment-opts 讀寫', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => ({ id: 'C1' }),
+    'POST /C1': () => ({ success: true })
+  });
+  const w = await load();
+  const admin = async (body) => {
+    const r = await w.fetch(new Request('https://api.test/admin/fb/comment-opts', { method: body ? 'POST' : 'GET', headers: { origin: ORIGIN, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined }), env, { waitUntil() {} });
+    return { status: r.status, body: await r.json() };
+  };
+  assert.deepEqual((await admin()).body.data, { edit: false });
+  assert.equal((await admin({ edit: 'yes' })).status, 400);
+  assert.deepEqual((await admin({ edit: true })).body.data, { edit: true });
+  const r = await send(env, headers, { message: '【標題】', link: LINK, image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
+  assert.equal(r.body.data.results[0].comment, 'done');
+  const e = f.calls.filter((c) => c.method === 'POST' && c.path === '/C1');
+  assert.equal(e.length, 1);
+  assert.equal(e[0].body.message, f.calls.find((c) => c.path === '/111_9/comments').body.message);
+  const { editAfterPost } = await import('../../server/fb/comment.js');
+  assert.equal(await editAfterPost(env, 'T', 'C2', '只有文字'), 'skip');
 });

@@ -434,7 +434,7 @@ if (window.top !== window.self) {
     if (can('profiles')) jobs.push(tpLoad().then(function () { if (can('fbconn')) return fbReload(); }));
     else if (can('fbconn')) jobs.push(fbReload());
     if (can('pages')) jobs.push(pgLoad());
-    if (can('presets')) jobs.push(psLoad());
+    if (can('presets')) { jobs.push(psLoad()); jobs.push(coLoad()); }
     if (can('video')) jobs.push(vsLoad());
     if (can('bg')) jobs.push(bgLoad());
     if (can('webhook')) jobs.push(whLoad());
@@ -882,6 +882,20 @@ if (window.top !== window.self) {
       say($('psMsg'), psItems.length ? '' : '還沒有活動留言，按「＋ 新增一則」。');
     }).catch(function (e) { say($('psMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
   }
+  // 第一則留言選項（/admin/fb/comment-opts）：發出後再編輯一次
+  function coLoad() {
+    return api('/admin/fb/comment-opts').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      $('coEdit').checked = !!res.data.edit; say($('coMsg'), '');
+    }).catch(function (e) { say($('coMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
+  }
+  $('coEdit').onchange = function () {
+    var cb = $('coEdit'), v = cb.checked; cb.disabled = true;
+    api('/admin/fb/comment-opts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit: v }) }).then(function (res) {
+      if (res.ok) { cb.checked = !!res.data.edit; say($('coMsg'), res.data.edit ? '已開啟（約 1 分鐘內生效）' : '已關閉', 'good'); }
+      else { cb.checked = !v; if (res.code === 'unauthorized') expired(); else say($('coMsg'), res.error || '儲存失敗。', 'err'); }
+    }).catch(function () { cb.checked = !v; say($('coMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { cb.disabled = false; });
+  };
   $('psAdd').onclick = function () {
     psSync(); if (psItems.length >= PS_MAX) return;
     psItems.push({ name: '', body: '' }); psRender(); say($('psMsg'), '');
@@ -959,16 +973,22 @@ if (window.top !== window.self) {
       var td4 = document.createElement('td'), cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = x.show; cb.setAttribute('aria-label', '顯示 ' + x.name);
       cb.onchange = function () { bgPost('/admin/fb/backgrounds/' + x.id, { show: cb.checked }).then(function (res) { if (res.ok) bgSet(res.data); else { cb.checked = !cb.checked; if (res.code === 'unauthorized') expired(); else say($('bgMsg'), res.error || '儲存失敗。', 'err'); } }); };
       td4.appendChild(cb);
+      var td4b = document.createElement('td'), rb = document.createElement('input'); rb.type = 'checkbox'; rb.checked = !!x.rnd; rb.setAttribute('aria-label', '列入隨機 ' + x.name);
+      rb.onchange = function () { bgPost('/admin/fb/backgrounds/' + x.id, { rnd: rb.checked }).then(function (res) { if (res.ok) bgSet(res.data); else { rb.checked = !rb.checked; if (res.code === 'unauthorized') expired(); else say($('bgMsg'), res.error || '儲存失敗。', 'err'); } }); };
+      td4b.appendChild(rb);
       var td5 = document.createElement('td'), del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = '刪除'; del.setAttribute('aria-label', '刪除 ' + x.name);
       del.onclick = function () {
         if (!window.confirm('刪除「' + x.name + '」？排程發布就不能再選這個背景' + (x.img ? '，下載的圖片也會刪除' : '') + '。')) return;
         bgPost('/admin/fb/backgrounds/' + x.id, undefined, 'DELETE').then(function (res) { if (res.ok) { bgSet(res.data); say($('bgMsg'), '已刪除', 'good'); } else if (res.code === 'unauthorized') expired(); else say($('bgMsg'), res.error || '刪除失敗。', 'err'); });
       };
       td5.appendChild(del);
-      [td0, td1, td2, td3, td4, td5].forEach(function (td) { tr.appendChild(td); });
+      [td0, td1, td2, td3, td4, td4b, td5].forEach(function (td) { tr.appendChild(td); });
       box.appendChild(tr);
     });
     $('bgWrap').hidden = !bgList.length;
+    // 實際會被隨機挑到的：列入隨機＋顯示中（圖樣還要已下載）
+    var live = bgList.filter(function (x) { return x.rnd && x.show && (x.type !== 'image' || x.img); }).length;
+    $('bgRndSum').textContent = '排程發布純文字預設從 ' + live + ' 個背景隨機挑一個' + (live ? '' : '（都沒有＝預設「無」）') + '。隱藏的、圖樣還沒下載的不算。';
     $('bgSum').textContent = bgList.length
       ? '已存 ' + bgList.length + ' 個：純色 ' + n.solid + '．漸層 ' + n.gradient + '．圖樣 ' + n.image + (n.image ? '（圖已下載 ' + got + '／' + n.image + '）' : '')
       : '還沒匯入，排程發布目前用內建的純色＋漸層。';
@@ -984,6 +1004,19 @@ if (window.top !== window.self) {
       fe.textContent = todo + ' 張未下載，最早 ' + bgExpText(first) + (gone ? ' 已過期（請重新擷取匯入）' : ' 到期（' + bgExpLeft(first) + '）');
     }
   }
+  // 列入隨機快捷鈕：data-rnd＝solid／gradient／image（全選該種類）或 none（全部取消）
+  Array.prototype.forEach.call(document.querySelectorAll('#bgRnd [data-rnd]'), function (b) {
+    b.onclick = function () {
+      var k = b.getAttribute('data-rnd'), on = k !== 'none';
+      var ids = bgList.filter(function (x) { return (on ? x.type === k : true) && !!x.rnd !== on; }).map(function (x) { return x.id; });
+      if (!ids.length) return say($('bgMsg'), '沒有要改的。', 'good');
+      b.disabled = true;
+      bgPost('/admin/fb/backgrounds/random', { ids: ids, rnd: on }).then(function (res) {
+        if (res.ok) { bgSet(res.data); say($('bgMsg'), (on ? '已列入隨機 ' : '已取消隨機 ') + ids.length + ' 個', 'good'); }
+        else if (res.code === 'unauthorized') expired(); else say($('bgMsg'), res.error || '儲存失敗。', 'err');
+      }).catch(function () { say($('bgMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { b.disabled = false; });
+    };
+  });
   function bgSet(d) { bgList = (d && d.list) || []; bgRender(); }
   function bgLoad() {
     say($('bgMsg'), '讀取中');

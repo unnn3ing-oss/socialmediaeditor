@@ -83,29 +83,9 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   const bgImgUrl = {};   // 圖樣代號 → 已載入的圖片網址（ObjectURL）
   st.bg = '';
   const bgOn = () => (st.mode === 'text' && bgs.some((b) => b.id === st.bg) ? st.bg : '');
-  // 預設背景：純色或漸層隨機一個；圖樣讀到之後，整張近乎單色的圖樣也加進來（其他圖樣不選）；「無」仍可手動選
-  const bgSolidImg = new Set();
-  const randomBg = () => { const l = bgs.filter((b) => b.type !== 'image' || bgSolidImg.has(b.id)); return l.length ? l[Math.floor(Math.random() * l.length)].id : ''; };
-  // 圖樣是不是純色：縮成 16×16 取樣，R／G／B 各自最大減最小都 ≤ SOLID_TOL 且全不透明就算（透明圖樣不算）
-  const SOLID_TOL = 12;
-  function isSolidImage(url) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const c = document.createElement('canvas'); c.width = c.height = 16;
-          const g = c.getContext('2d', { willReadFrequently: true });
-          g.drawImage(img, 0, 0, 16, 16);
-          const d = g.getImageData(0, 0, 16, 16).data;
-          const lo = [255, 255, 255], hi = [0, 0, 0];
-          for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 255) { resolve(false); return; } for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], d[i + k]); hi[k] = Math.max(hi[k], d[i + k]); } }
-          resolve(hi.every((h, k) => h - lo[k] <= SOLID_TOL));
-        } catch { resolve(false); }
-      };
-      img.onerror = () => resolve(false);
-      img.src = url;
-    });
-  }
+  // 預設背景：從管理頁「列入隨機」的背景裡隨機一個（舊後端沒回 rnd：純色／漸層列入、圖樣不列入）；都沒勾＝「無」；「無」仍可手動選
+  const inRandom = (b) => (typeof b.rnd === 'boolean' ? b.rnd : b.type !== 'image');
+  const randomBg = () => { const l = bgs.filter(inRandom); return l.length ? l[Math.floor(Math.random() * l.length)].id : ''; };
   // 字級自適應：不自動換行，最長那行與總行數都塞得進預覽框的最大字級
   function fitBg() {
     const box = $('bgPrev'), p = $('bgText');
@@ -163,7 +143,6 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
         bgImgUrl[b.id] = URL.createObjectURL(blob);
         el.style.background = `${b.css} url("${bgImgUrl[b.id]}") center / cover no-repeat`;
         if (st.bg === b.id) bgShow();
-        return isSolidImage(bgImgUrl[b.id]).then((solid) => { if (solid) bgSolidImg.add(b.id); });
       }).catch(() => { el.style.background = b.css; }).then(() => { el.classList.remove('sk'); return next(); });
     };
     for (let n = 0; n < 6; n++) next();

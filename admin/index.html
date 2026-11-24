@@ -90,6 +90,12 @@
       <p class="msg" id="psMsg" role="status"></p>
       <div id="psRows"></div>
       <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
+      <div class="ps-first">
+        <h3>第一則留言（看更多新聞內容＋連結）</h3>
+        <label class="check"><input type="checkbox" id="coEdit"> 留言成功後再用相同內容編輯一次（測試：試著拿掉連結預覽）</label>
+        <p class="hint">臉書 API 沒有「關閉連結預覽」的參數，這是替代做法，<b>不一定有效</b>，請先在測試後端實測。編輯失敗不影響留言。</p>
+        <p class="msg" id="coMsg" role="status"></p>
+      </div>
       </section>
 
       <section class="card" id="bgCard" data-card="bg">
@@ -107,7 +113,9 @@
         <p id="bgSum" class="bg-sum"></p>
         <div class="row"><button id="bgFetch" class="primary" type="button" hidden>下載圖樣</button><span id="bgExp" class="bg-exp" hidden></span></div>
         <div id="bgWrap" class="bg-wrap" hidden>
-          <table class="bg-table"><thead><tr><th>預覽</th><th>名稱</th><th>種類</th><th>圖片</th><th>顯示</th><th></th></tr></thead><tbody id="bgRows"></tbody></table>
+          <div id="bgRnd" class="row bg-rnd"><span>列入隨機：</span><button type="button" data-rnd="solid">全選純色</button><button type="button" data-rnd="gradient">全選漸層</button><button type="button" data-rnd="image">全選圖樣</button><button type="button" data-rnd="none">全部取消</button></div>
+          <p id="bgRndSum" class="bg-sum"></p>
+          <table class="bg-table"><thead><tr><th>預覽</th><th>名稱</th><th>種類</th><th>圖片</th><th>顯示</th><th>隨機</th><th></th></tr></thead><tbody id="bgRows"></tbody></table>
         </div>
       </section>
 

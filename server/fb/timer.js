@@ -1,7 +1,7 @@
 // 排程貼文發布後補第一則留言的計時器（Durable Object，每則貼文一個實例，以貼文 ID 命名）
 import { graph, isRateLimit, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
-import { postComment } from './comment.js';
+import { postComment, editAfterPost } from './comment.js';
 import { setNotice, logCommentFail } from './notices.js';
 import { PTYPES } from '../core/logs.js';
 async function callTimer(env, postId, action, body) {
@@ -275,6 +275,7 @@ export class FbCommentTimer {
         Object.assign(it, { status: 'done', commentId: id });
         delete it.unsure;
         await s.put('rec', rec);
+        if (seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
       } catch (e) {
         // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
         if (step === STEP.comment) {

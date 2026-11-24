@@ -22,10 +22,10 @@ const BG = { list: [], posts: [], fetches: [] };
 function bgReset() {
   BG.posts = []; BG.fetches = [];
   BG.list = [
-    { id: '106018623298955', name: '純紫', type: 'solid', bg: '#C600FF', text: '#FFFFFF', grad: null, dir: null, img: false, hasUrl: false, err: '', show: true },
-    { id: '249307305544279', name: '紅→藍漸層', type: 'gradient', bg: '#FF0047', text: '#FFFFFF', grad: '#2C34C7', dir: 'BL_TR', img: false, hasUrl: false, err: '', show: true },
-    { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', bg: '#DC7A5A', text: '#FFFFFF', grad: null, dir: null, img: true, hasUrl: true, err: '', show: true },
-    { id: '303063890126416', name: '過期圖樣', type: 'image', bg: '#33234B', text: '#FFFFFF', grad: null, dir: null, img: false, hasUrl: true, err: '', show: true }];
+    { id: '106018623298955', name: '純紫', type: 'solid', bg: '#C600FF', text: '#FFFFFF', grad: null, dir: null, img: false, hasUrl: false, err: '', show: true, rnd: true },
+    { id: '249307305544279', name: '紅→藍漸層', type: 'gradient', bg: '#FF0047', text: '#FFFFFF', grad: '#2C34C7', dir: 'BL_TR', img: false, hasUrl: false, err: '', show: true, rnd: true },
+    { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', bg: '#DC7A5A', text: '#FFFFFF', grad: null, dir: null, img: true, hasUrl: true, err: '', show: true, rnd: false },
+    { id: '303063890126416', name: '過期圖樣', type: 'image', bg: '#33234B', text: '#FFFFFF', grad: null, dir: null, img: false, hasUrl: true, err: '', show: true, rnd: false }];
 }
 bgReset();
 let VS_SAVED = null;
@@ -58,6 +58,7 @@ const DASH_ITEMS = [
   { key: 'logs', name: '未處理錯誤', level: 'bad', text: '2 則未處理', tab: 'rec' },
   { key: 'rundown', name: 'Rundown 連線', level: 'ok', text: '已設定', tab: 'conn' },
   { key: 'online', name: '目前在線', level: 'info', text: '3 人', tab: 'people' }];
+const CO = { edit: false, posts: [] };
 const DATA = {
   'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
   'GET /admin/dash/config': () => ({ items: ['access', 'fbtoken', 'logs'], all: [{ key: 'access', name: '排程發布' }, { key: 'fbtoken', name: '臉書權杖' }, { key: 'logs', name: '未處理錯誤' }, { key: 'online', name: '目前在線' }] }),
@@ -76,8 +77,11 @@ const DATA = {
   'GET /admin/fb/pages': PAGES,
   'GET /admin/fb/backgrounds': () => ({ list: BG.list, batch: 10 }),
   'POST /admin/fb/backgrounds': (b) => { BG.posts.push(b); if (b.dry) return { add: 1, update: 3, gone: [{ id: '303063890126416', name: '過期圖樣', type: 'image' }], bad: 0, exp: Math.floor(Date.now() / 1000) + 2 * 86400 + 600 }; BG.list = BG.list.filter((x) => !b.remove.includes(x.id)); return { list: BG.list, batch: 10 }; },
+  'POST /admin/fb/backgrounds/random': (b) => { BG.posts.push(b); BG.list.forEach((x) => { if (b.ids.includes(x.id)) x.rnd = b.rnd; }); return { list: BG.list, batch: 10 }; },
+  'GET /admin/fb/comment-opts': () => ({ edit: CO.edit }),
+  'POST /admin/fb/comment-opts': (b) => { CO.edit = b.edit; CO.posts.push(b); return { edit: CO.edit }; },
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
-  'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; return { list: BG.list, batch: 10 }; },
+  'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; if (b.rnd !== undefined) BG.list[0].rnd = b.rnd; return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
@@ -1264,4 +1268,32 @@ test('左側分類手風琴：目前分類展開、游標移上展開並往下�
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-subnav-phone.png') });
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(over <= 0, '橫向捲動 ' + over);
+});
+
+test('文字背景「列入隨機」：勾選欄與快捷鈕、摘要只算顯示中且已下載；第一則留言再編輯開關', async () => {
+  bgReset(); CO.edit = false; CO.posts = [];
+  const { page } = await open({ width: 1280, height: 900 }, '#post');
+  await login(page);
+  await show(page, 'bgCard');
+  await page.waitForSelector('#bgRows tr');
+  assert.deepEqual(await page.$$eval('#bgRows tr td:nth-child(6) input', (l) => l.map((c) => c.checked)), [true, true, false, false]);
+  assert.match(await page.textContent('#bgRndSum'), /從 2 個背景隨機/);
+  await page.click('#bgRnd [data-rnd=image]');
+  await page.waitForFunction(() => /已列入隨機 2 個/.test(document.getElementById('bgMsg').textContent));
+  assert.deepEqual(BG.posts.at(-1), { ids: ['303063890126415', '303063890126416'], rnd: true });
+  assert.match(await page.textContent('#bgRndSum'), /從 3 個背景隨機/, '過期圖樣還沒下載不算');
+  await page.uncheck('#bgRows tr:nth-child(1) td:nth-child(6) input');
+  await page.waitForFunction(() => /從 2 個/.test(document.getElementById('bgRndSum').textContent));
+  assert.deepEqual(BG.posts.at(-1), { rnd: false });
+  if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg-random.png') });
+  await page.click('#bgRnd [data-rnd=none]');
+  await page.waitForFunction(() => /都沒有＝預設「無」/.test(document.getElementById('bgRndSum').textContent));
+  // 第一則留言：預設關，打開存檔
+  await show(page, 'psCard');
+  await page.waitForFunction(() => document.getElementById('coEdit') && !document.getElementById('coEdit').disabled);
+  assert.equal(await page.isChecked('#coEdit'), false);
+  await page.check('#coEdit');
+  await page.waitForFunction(() => /已開啟/.test(document.getElementById('coMsg').textContent));
+  assert.deepEqual(CO.posts, [{ edit: true }]);
+  if (SHOT) await page.locator('#psCard').screenshot({ path: path.join(SHOT, 'admin-comment-edit.png') });
 });

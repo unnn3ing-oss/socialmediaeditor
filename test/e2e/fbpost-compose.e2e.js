@@ -24,15 +24,6 @@ const BGS = [{ id: '106018623298955', name: '純紫', type: 'solid', css: '#C600
   { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', css: '#DC7A5A', text: '#FFFFFF', img: '/fb/bg/303063890126415' },
   { id: '303063890126499', name: '壞圖樣', type: 'image', css: '#33234B', text: '#FFFFFF', img: 'https://evil.example/x.jpg' }];
 const BG_IMG_HITS = [];
-// 非純色圖樣：2×1 左黑右白
-const STRIPES = (() => {
-  const zlib = require('node:zlib');
-  const t = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = t[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
-  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
-  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(2, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 6;
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(Buffer.from([0, 0, 0, 0, 255, 255, 255, 255, 255]))), chunk('IEND', Buffer.alloc(0))]);
-})();
 
 // 公司模式（假外殼＋假憑證）開排程發布
 async function openFb() {
@@ -49,7 +40,7 @@ async function openFb() {
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
     if (p === '/fb/backgrounds') return json(BGS);
-    if (p.startsWith('/fb/bg/')) { BG_IMG_HITS.push({ p, auth: req.headers().authorization || '' }); return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: p === '/fb/bg/303063890126477' ? STRIPES : fakeAsset([10, 200, 30]) }); }
+    if (p.startsWith('/fb/bg/')) { BG_IMG_HITS.push({ p, auth: req.headers().authorization || '' }); return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([10, 200, 30]) }); }
     if (p === '/fetch/article') {
       const url = u.searchParams.get('url'); articles.push(url);
       if (/slow/.test(url)) await new Promise((res) => setTimeout(res, 1500));
@@ -248,7 +239,7 @@ test('純文字文字背景：預設隨機純色／漸層、選「無」不顯�
   assert.match(body, /name="bg"\r\n\r\n106018623298955/);
   assert.doesNotMatch(body, /name="image"/);
   await frame.click('#doneAgain');
-  assert.ok(['純紫', '紅→藍漸層', '黃橘粉圖樣'].includes(await frame.textContent('#bgName')), '送出完成清空後重新隨機（測試的圖樣替身是單色，讀到後也可能選到）');
+  assert.ok(['純紫', '紅→藍漸層'].includes(await frame.textContent('#bgName')), '送出完成清空後重新隨機（沒回 rnd＝只挑純色／漸層）');
   // 切到選套版：不帶 bg、字數不顯示 130
   await frame.click('#bgSws .sw[data-bg="249307305544279"]');
   await frame.click('#modeSeg [data-mode=image]');
@@ -712,21 +703,27 @@ test('沒照片時展開「T寶／馬賽克」：貼圖列不被停用頁的 .of
   }
 });
 
-test('隨機背景：圖樣讀到後，近乎單色的圖樣也納入隨機；有花紋的圖樣不選', async () => {
-  BGS.push({ id: '303063890126477', name: '條紋圖樣', type: 'image', css: '#000000', text: '#FFFFFF', img: '/fb/bg/303063890126477' });
+test('隨機背景：照管理頁「列入隨機」（rnd）挑；舊後端沒回 rnd＝純色／漸層列入、圖樣不列入', async () => {
+  const keep = BGS.map((b) => ({ ...b }));
+  // 後台設定：純紫不列入、漸層與黃橘粉圖樣列入
+  BGS[0].rnd = false; BGS[1].rnd = true; BGS[2].rnd = true; BGS[3].rnd = false;
   try {
     const { page, frame } = await openFb();
     await frame.click('#modeSeg [data-mode=text]');
-    await frame.waitForFunction(() => ['303063890126415', '303063890126477'].every((id) => /blob:/.test(document.querySelector('#bgSws .sw[data-bg="' + id + '"]').style.backgroundImage)));
-    await page.waitForTimeout(200);   // 等純色判斷（載入圖片後才取樣）
-    // 隨機池順序＝清單順序：純紫、漸層、黃橘粉（單色圖樣）；條紋不在池中 → 取最後一個＝黃橘粉
     const pick = async (r) => {
       await frame.evaluate((v) => { Math.random = () => v; }, r);
       await frame.click('#clearBtn'); await frame.waitForSelector('#cfDlg[open]'); await frame.click('#cfYes');
       return frame.textContent('#bgName');
     };
+    assert.equal(await pick(0), '紅→藍漸層');
     assert.equal(await pick(0.999), '黃橘粉圖樣');
-    assert.equal(await pick(0), '純紫');
     await page.close();
-  } finally { BGS.pop(); }
+  } finally { BGS.splice(0, BGS.length, ...keep); }
+  // 舊後端（沒有 rnd）：只挑純色／漸層
+  const { page, frame } = await openFb();
+  await frame.click('#modeSeg [data-mode=text]');
+  await frame.evaluate(() => { Math.random = () => 0.999; });
+  await frame.click('#clearBtn'); await frame.waitForSelector('#cfDlg[open]'); await frame.click('#cfYes');
+  assert.equal(await frame.textContent('#bgName'), '紅→藍漸層');
+  await page.close();
 });

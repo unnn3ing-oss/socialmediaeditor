@@ -15,7 +15,7 @@ async function mk(t, handlers) {
   const env = mkEnv({ FB_USER_TOKEN: 'U' });
   const obj = new FbCommentTimer(state, env);
   const post = async (action, body) => (await obj.fetch(new Request('https://timer/' + action, { method: 'POST', body: JSON.stringify(body || {}) }))).json();
-  return { f, state, obj, post };
+  return { f, state, obj, post, env };
 }
 const REC = (at) => ({ pageId: '111', postId: '111_5', message: '看更多新聞內容\nhttps://x', at });
 const comments = (f) => f.calls.filter((c) => c.method === 'POST' && /\/comments$/.test(c.path));
@@ -655,4 +655,26 @@ test('通知帶貼文摘要：arm 帶 title 寫進 fb_notices', async (t) => {
   await post('arm', { ...REC(nowSec() - 60), by: 'P1', title: '颱風最新' });
   await obj.alarm();
   assert.equal(notices(env)[0].title, '颱風最新');
+});
+
+test('第 1 則留言再編輯一次：開關打開才編輯（相同內容）；關閉不編輯；編輯失敗仍算留言成功', async (t) => {
+  const { saveCommentOpts } = await import('../../server/fb/comment.js');
+  const edits = (f) => f.calls.filter((c) => c.method === 'POST' && c.path === '/C9');
+  // 關閉（預設）
+  let m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }) });
+  await m.post('arm', REC(nowSec() - 60)); await m.obj.alarm();
+  assert.equal(edits(m.f).length, 0);
+  // 打開
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
+  await saveCommentOpts(m.env, { edit: true });
+  await m.post('arm', REC(nowSec() - 60)); await m.obj.alarm();
+  assert.equal(edits(m.f).length, 1);
+  assert.equal(edits(m.f)[0].body.message, '看更多新聞內容\nhttps://x');
+  assert.equal(edits(m.f)[0].body.access_token, 'PT111');
+  // 打開但編輯失敗：留言照樣 done
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => gErr(100, 'nope') });
+  await saveCommentOpts(m.env, { edit: true });
+  await m.post('arm', REC(nowSec() - 60)); await m.obj.alarm();
+  assert.equal((await m.post('status')).status, 'done');
+  assert.equal(comments(m.f).length, 1);
 });

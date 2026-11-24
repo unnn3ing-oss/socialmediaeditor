@@ -80,7 +80,7 @@ test('文字背景：沒匯入用內建清單；匯入預覽／套用；圖樣�
 
   list = (await call(env, '/fb/backgrounds', staff)).body.data;
   const imgBg = list.find((b) => b.id === '303063890126415');
-  assert.deepEqual(imgBg, { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', css: '#DC7A5A', text: '#FFFFFF', img: '/fb/bg/303063890126415' });
+  assert.deepEqual(imgBg, { id: '303063890126415', name: '黃橘粉圖樣', type: 'image', css: '#DC7A5A', text: '#FFFFFF', img: '/fb/bg/303063890126415', rnd: false });
   assert.deepEqual(list.map((b) => b.type), ['solid', 'gradient', 'image']);
 
   // 讀圖：要登入
@@ -183,4 +183,31 @@ test('圖樣網址到期：從 oe=（16 進位秒）解析；沒有或格式不�
   const list = (await call(env, '/admin/fb/backgrounds', adm, { presets })).body.data.list;
   assert.deepEqual(list.map((x) => x.exp), [0x6745A1B0, 0x6745A000, null]);
   assert.ok(list.every((x) => !('url' in x)), '不回傳網址');
+});
+
+test('列入隨機：預設純色／漸層列入、圖樣不列入；單筆與批次可改，排程發布清單跟著回 rnd', async (t) => {
+  const f = installFetch({ [CDN(1).split('?')[0]]: () => new Response(JPG, { headers: { 'content-type': 'image/jpeg' } }) });
+  t.after(f.restore);
+  const env = mkEnv();
+  const adm = await auth(env, 'admin');
+  const staff = await auth(env, 'company', true);
+  assert.ok((await call(env, '/fb/backgrounds', staff)).body.data.every((b) => b.rnd === true), '內建清單全部列入');
+  await call(env, '/admin/fb/backgrounds', adm, { presets: DATA.presets.slice(0, 3) });
+  const st = (await call(env, '/admin/fb/backgrounds', adm)).body.data.list;
+  assert.deepEqual(st.map((x) => x.rnd), [true, true, false]);
+  // 單筆：純色取消、圖樣列入
+  await call(env, '/admin/fb/backgrounds/106018623298955', adm, { rnd: false });
+  const l2 = (await call(env, '/admin/fb/backgrounds/303063890126415', adm, { rnd: true })).body.data.list;
+  assert.deepEqual(l2.map((x) => x.rnd), [false, true, true]);
+  await call(env, '/admin/fb/backgrounds/fetch', adm, { since: 0 });
+  const pub = (await call(env, '/fb/backgrounds', staff)).body.data;
+  assert.deepEqual(pub.map((b) => [b.id, b.rnd]), [['106018623298955', false], ['249307305544279', true], ['303063890126415', true]]);
+  // 批次：全部取消；格式不對 400
+  const l3 = (await call(env, '/admin/fb/backgrounds/random', adm, { ids: ['249307305544279', '303063890126415', 'bad'], rnd: false })).body.data.list;
+  assert.ok(l3.every((x) => x.rnd === false));
+  assert.equal((await call(env, '/admin/fb/backgrounds/random', adm, { ids: [], rnd: 'x' })).status, 400);
+  assert.equal((await call(env, '/admin/fb/backgrounds/random', {}, { ids: [], rnd: true })).status, 401);
+  // 匯入更新不會蓋掉隨機設定
+  await call(env, '/admin/fb/backgrounds', adm, { presets: DATA.presets.slice(0, 3) });
+  assert.ok((await call(env, '/admin/fb/backgrounds', adm)).body.data.list.every((x) => x.rnd === false));
 });
