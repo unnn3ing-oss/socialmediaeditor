@@ -9,6 +9,7 @@ import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
 import { commentOpts, saveCommentOpts, validOpts } from './comment.js';
+import { videoOpts, saveVideoOpts, validVideoOpts, streamApplies, receiveChunkStream } from './videostream.js';
 import { ensureStaff } from '../core/staff.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
 import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, setRandom as bgSetRandom, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
@@ -137,10 +138,16 @@ route('POST', /^\/fb\/video\/start$/, async (request, env, ctx, m, me) => {
   if (!form) return fail(request, env, 'bad_request');
   return vout(request, env, await startUpload(env, form, me.who));
 }, 'vpost');
-route('POST', /^\/fb\/video\/chunk$/, async (request, env) => {
+route('POST', /^\/fb\/video\/chunk$/, async (request, env, ctx, m, me) => {
   const q = new URL(request.url).searchParams;
   const u = q.get('u') || '', start = Number(q.get('start'));
   if (!validUploadId(u) || !Number.isInteger(start) || start < 0) return fail(request, env, 'bad_request');
+  // 實驗功能「影片串流上傳」：有開、上傳的人適用、Content-Length 合理才串流；不能串流（回 null）照現行做法
+  const len = Number(request.headers.get('content-length'));
+  if (request.body && Number.isInteger(len) && len > 0 && len <= MAX_CHUNK && streamApplies(await videoOpts(env), me.who && me.who.uid)) {
+    const r = await receiveChunkStream(env, request, u, start, len);
+    if (r) return vout(request, env, r);
+  }
   const buf = await readBody(request, MAX_CHUNK);
   if (!buf) return fail(request, env, 'too_large');
   if (!buf.length) return fail(request, env, 'bad_request');
@@ -214,6 +221,18 @@ adminRoute('POST', /^\/admin\/fb\/comment-opts$/, async (request, env) => {
   if (!opts) return fail(request, env, 'bad_request');
   await saveCommentOpts(env, opts);
   return ok(request, env, await labState(env));
+});
+// 實驗功能：影片串流上傳（看上傳的人）；回傳附同一份員工名單
+async function labPeople(env) {
+  await ensureStaff(env);
+  const { results } = await env.DB.prepare('SELECT id, name, enabled FROM staff ORDER BY id').all();
+  return (results || []).map((r) => ({ id: r.id, name: r.name, enabled: !!r.enabled }));
+}
+adminRoute('GET', /^\/admin\/fb\/video-opts$/, async (request, env) => ok(request, env, { ...(await videoOpts(env)), people: await labPeople(env) }));
+adminRoute('POST', /^\/admin\/fb\/video-opts$/, async (request, env) => {
+  const opts = validVideoOpts(await readJsonBody(request, 40000));
+  if (!opts) return fail(request, env, 'bad_request');
+  return ok(request, env, { ...(await saveVideoOpts(env, opts)), people: await labPeople(env) });
 });
 adminRoute('GET', /^\/admin\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {

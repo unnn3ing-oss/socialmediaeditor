@@ -35,9 +35,15 @@ export async function graph(env, method, path, params, token, base = GRAPH, { fo
     if (token) body.set('access_token', token);
     init.body = body;
   }
+  return graphFetch(env, url.toString(), init, token, { forceUsage });
+}
+
+// 送出已組好的請求（url＋init）並用同一套規則處理回應；串流上傳（videostream.js）也走這裡
+//   token 只用來判斷「粉專權杖失效」提醒，不會加進請求
+export async function graphFetch(env, url, init, token, { forceUsage = false } = {}) {
   let res, data;
   try {
-    res = await fetch(url.toString(), init);
+    res = await fetch(url, init);
     data = await res.json().catch(() => null);
   } catch (e) {
     throw new GraphError(-1, '連不上臉書', 0, undefined, true);

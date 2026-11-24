@@ -44,24 +44,24 @@ async function ensure(env) {
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
-const errText = (e) => String((e && e.message) || e || '失敗').slice(0, 200);
+export const errText = (e) => String((e && e.message) || e || '失敗').slice(0, 200);
 export const validUploadId = (u) => typeof u === 'string' && /^[0-9a-f]{32}$/.test(u);
 const validPage = (p) => typeof p === 'string' && /^\d{1,30}$/.test(p);
 const xpostOf = (r) => { try { const l = JSON.parse(r.xpost || '[]'); return Array.isArray(l) ? l : []; } catch { return []; } };
 
-async function rows(env, uploadId) {
+export async function rows(env, uploadId) {
   await ensure(env);
   const { results } = await env.DB.prepare('SELECT * FROM fb_video_jobs WHERE upload_id = ? ORDER BY created, page').bind(uploadId).all();
   return results || [];
 }
 // 只有工作還在 from 狀態才寫入（避免慢回來的請求蓋掉剛按的「停止」等狀態）
-async function updateIf(env, r, fields, from) {
+export async function updateIf(env, r, fields, from) {
   const keys = Object.keys(fields);
   const c = await env.DB.prepare(`UPDATE fb_video_jobs SET ${keys.map((k) => k + ' = ?').join(', ')}, updated = ? WHERE upload_id = ? AND page = ? AND state = ?`)
     .bind(...keys.map((k) => fields[k]), Date.now(), r.upload_id, r.page, from).run();
   if (c && c.meta && c.meta.changes) Object.assign(r, fields);
 }
-async function update(env, r, fields) {
+export async function update(env, r, fields) {
   const keys = Object.keys(fields);
   Object.assign(r, fields, { updated: Date.now() });
   await env.DB.prepare(`UPDATE fb_video_jobs SET ${keys.map((k) => k + ' = ?').join(', ')}, updated = ? WHERE upload_id = ? AND page = ?`)
@@ -143,17 +143,17 @@ export async function startUpload(env, form, who) {
   return result(env, form.uploadId);
 }
 
-async function result(env, uploadId) {
+export async function result(env, uploadId) {
   const list = await rows(env, uploadId);
   const size = list.length ? list[0].size : 0;
   return { next: nextRange(list, size), jobs: list.map(view) };
 }
 
-// 傳到 rupload（Reels）：header 帶 offset、file_size
-async function ruploadPart(r, token, start, bytes) {
+// 傳到 rupload（Reels）：header 帶 offset、file_size；body 可以是位元組或串流（串流時 init 帶 duplex 等額外設定）
+export async function ruploadPart(r, token, start, body, init = {}) {
   let res, data;
   try {
-    res = await fetch(r.upload_url, { method: 'POST', headers: { Authorization: 'OAuth ' + token, offset: String(start), file_size: String(r.size), 'Content-Type': 'application/octet-stream' }, body: bytes });
+    res = await fetch(r.upload_url, { method: 'POST', headers: { Authorization: 'OAuth ' + token, offset: String(start), file_size: String(r.size), 'Content-Type': 'application/octet-stream' }, body, ...init });
     data = await res.json().catch(() => null);
   } catch { throw new GraphError(-1, '連不上臉書', 0, undefined, true); }
   if (!res.ok || !data || data.error || data.success === false) {
@@ -275,7 +275,7 @@ export async function publish(env, form, who) {
 }
 
 // 已傳完且已送出的粉專：搶 finishing 後 finish（同時到達的請求只有一個搶得到）
-async function finishReady(env, uploadId, who) {
+export async function finishReady(env, uploadId, who) {
   const list = await rows(env, uploadId);
   const todo = list.filter((r) => r.state === 'uploaded' && r.sent);
   if (!todo.length) return;

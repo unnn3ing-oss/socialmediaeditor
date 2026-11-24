@@ -1514,55 +1514,61 @@ if (window.top !== window.self) {
   }
   $('dashRefresh').onclick = function () { dashLoad(true); };
 
-  // ---- 實驗功能（/admin/fb/comment-opts，敏感卡片 labs）：第一則留言發出後再編輯一次；對象＝全部人／指定員工（看發文者）----
-  var labLoaded = false, labPeople = [];
-  function labWho() { var r = document.querySelector('input[name=labWho]:checked'); return r ? r.value : 'all'; }
-  function labSync() {
-    var on = $('labEdit').checked;
-    $('labWhoBox').disabled = !on;
-    $('labPeople').hidden = !(on && labWho() === 'some');
+  // ---- 實驗功能（敏感卡片 labs）：每一項＝開關＋對象（全部人／指定員工）----
+  //   lab：/admin/fb/comment-opts（第一則留言發出後再編輯一次，看發文者）；labV：/admin/fb/video-opts（影片串流上傳，看上傳的人）
+  var labLoaded = false;
+  function makeLab(p, path, field) {
+    function who() { var r = document.querySelector('input[name=' + p + 'Who]:checked'); return r ? r.value : 'all'; }
+    function sync() {
+      var on = $(p + 'On').checked;
+      $(p + 'WhoBox').disabled = !on;
+      $(p + 'People').hidden = !(on && who() === 'some');
+    }
+    function render(d) {
+      $(p + 'On').checked = !!d[field];
+      Array.prototype.forEach.call(document.querySelectorAll('input[name=' + p + 'Who]'), function (r) { r.checked = r.value === (d.who || 'all'); });
+      var people = d.people || [], box = $(p + 'People'), picked = d.staff || [];
+      box.textContent = '';
+      if (!people.length) { var em = document.createElement('p'); em.className = 'hint'; em.textContent = '授權名單還沒有員工。'; box.appendChild(em); }
+      people.forEach(function (x) {
+        var l = document.createElement('label'); l.className = 'check';
+        var c = document.createElement('input'); c.type = 'checkbox'; c.value = x.id; c.checked = picked.indexOf(x.id) >= 0;
+        l.appendChild(c); l.appendChild(document.createTextNode(' ' + x.name + '（' + x.id + '）' + (x.enabled ? '' : '・已停用')));
+        box.appendChild(l);
+      });
+      // 名單裡已經沒有的編號也保留顯示（勾著），儲存時一併送出
+      picked.filter(function (id) { return !people.some(function (x) { return x.id === id; }); }).forEach(function (id) {
+        var l = document.createElement('label'); l.className = 'check';
+        var c = document.createElement('input'); c.type = 'checkbox'; c.value = id; c.checked = true;
+        l.appendChild(c); l.appendChild(document.createTextNode(' ' + id + '・不在名單'));
+        box.appendChild(l);
+      });
+      sync();
+    }
+    function load() {
+      $(p + 'Save').disabled = true; say($(p + 'Msg'), '讀取中…');
+      return api(path).then(function (res) {
+        if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+        render(res.data); $(p + 'Save').disabled = false; say($(p + 'Msg'), '');
+      }).catch(function (e) { labLoaded = false; say($(p + 'Msg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請切換分類再回來。', 'err'); });
+    }
+    $(p + 'On').onchange = sync;
+    Array.prototype.forEach.call(document.querySelectorAll('input[name=' + p + 'Who]'), function (r) { r.onchange = sync; });
+    $(p + 'Save').onclick = function () {
+      var w = who();
+      var staff = w === 'some' ? Array.prototype.map.call($(p + 'People').querySelectorAll('input:checked'), function (c) { return c.value; }) : [];
+      if ($(p + 'On').checked && w === 'some' && !staff.length) return say($(p + 'Msg'), '選「指定員工」要至少勾一位。', 'err');
+      $(p + 'Save').disabled = true; say($(p + 'Msg'), '儲存中…');
+      var body = { who: w, staff: staff }; body[field] = $(p + 'On').checked;
+      api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
+        if (res.ok) { render(res.data); var d = res.data; say($(p + 'Msg'), !d[field] ? '已關閉' : d.who === 'all' ? '已啟用：全部人（約 1 分鐘內生效）' : '已啟用：指定 ' + d.staff.length + ' 位員工（約 1 分鐘內生效）', 'good'); }
+        else if (res.code === 'unauthorized') expired(); else say($(p + 'Msg'), res.error || '儲存失敗。', 'err');
+      }).catch(function () { say($(p + 'Msg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { $(p + 'Save').disabled = false; });
+    };
+    return load;
   }
-  function labRender(d) {
-    $('labEdit').checked = !!d.edit;
-    Array.prototype.forEach.call(document.querySelectorAll('input[name=labWho]'), function (r) { r.checked = r.value === (d.who || 'all'); });
-    labPeople = d.people || [];
-    var box = $('labPeople'); box.textContent = '';
-    var picked = d.staff || [];
-    if (!labPeople.length) { var em = document.createElement('p'); em.className = 'hint'; em.textContent = '授權名單還沒有員工。'; box.appendChild(em); }
-    labPeople.forEach(function (p) {
-      var l = document.createElement('label'); l.className = 'check';
-      var c = document.createElement('input'); c.type = 'checkbox'; c.value = p.id; c.checked = picked.indexOf(p.id) >= 0;
-      l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.name + '（' + p.id + '）' + (p.enabled ? '' : '・已停用')));
-      box.appendChild(l);
-    });
-    // 名單裡已經沒有的編號也保留顯示（勾著），儲存時一併送出
-    picked.filter(function (id) { return !labPeople.some(function (p) { return p.id === id; }); }).forEach(function (id) {
-      var l = document.createElement('label'); l.className = 'check';
-      var c = document.createElement('input'); c.type = 'checkbox'; c.value = id; c.checked = true;
-      l.appendChild(c); l.appendChild(document.createTextNode(' ' + id + '・不在名單'));
-      box.appendChild(l);
-    });
-    labSync();
-  }
-  function labLoad() {
-    labLoaded = true; $('labSave').disabled = true; say($('labMsg'), '讀取中…');
-    return api('/admin/fb/comment-opts').then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      labRender(res.data); $('labSave').disabled = false; say($('labMsg'), '');
-    }).catch(function (e) { labLoaded = false; say($('labMsg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請切換分類再回來。', 'err'); });
-  }
-  $('labEdit').onchange = labSync;
-  Array.prototype.forEach.call(document.querySelectorAll('input[name=labWho]'), function (r) { r.onchange = labSync; });
-  $('labSave').onclick = function () {
-    var who = labWho();
-    var staff = who === 'some' ? Array.prototype.map.call($('labPeople').querySelectorAll('input:checked'), function (c) { return c.value; }) : [];
-    if ($('labEdit').checked && who === 'some' && !staff.length) return say($('labMsg'), '選「指定員工」要至少勾一位。', 'err');
-    $('labSave').disabled = true; say($('labMsg'), '儲存中…');
-    api('/admin/fb/comment-opts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit: $('labEdit').checked, who: who, staff: staff }) }).then(function (res) {
-      if (res.ok) { labRender(res.data); var d = res.data; say($('labMsg'), !d.edit ? '已關閉' : d.who === 'all' ? '已啟用：全部人（約 1 分鐘內生效）' : '已啟用：指定 ' + d.staff.length + ' 位員工（約 1 分鐘內生效）', 'good'); }
-      else if (res.code === 'unauthorized') expired(); else say($('labMsg'), res.error || '儲存失敗。', 'err');
-    }).catch(function () { say($('labMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { $('labSave').disabled = false; });
-  };
+  var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream')];
+  function labLoad() { labLoaded = true; return Promise.all(labLoads.map(function (f) { return f(); })); }
   // ---- 進階設定「儀表板顯示項目」（GET／POST /admin/dash/config，只有已解鎖系統管理者）----
   var dcLoaded = false;
   function dcLoad() {

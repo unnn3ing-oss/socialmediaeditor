@@ -59,6 +59,7 @@ const DASH_ITEMS = [
   { key: 'rundown', name: 'Rundown 連線', level: 'ok', text: '已設定', tab: 'conn' },
   { key: 'online', name: '目前在線', level: 'info', text: '3 人', tab: 'people' }];
 const CO = { edit: false, who: 'all', staff: [], people: [{ id: 'A001', name: '王小明', enabled: true }, { id: 'A002', name: '李小華', enabled: false }], posts: [] };
+const VO = { stream: false, who: 'all', staff: [], posts: [] };
 const DATA = {
   'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
   'GET /admin/dash/config': () => ({ items: ['access', 'fbtoken', 'logs'], all: [{ key: 'access', name: '排程發布' }, { key: 'fbtoken', name: '臉書權杖' }, { key: 'logs', name: '未處理錯誤' }, { key: 'online', name: '目前在線' }] }),
@@ -80,6 +81,8 @@ const DATA = {
   'POST /admin/fb/backgrounds/random': (b) => { BG.posts.push(b); BG.list.forEach((x) => { if (b.ids.includes(x.id)) x.rnd = b.rnd; }); return { list: BG.list, batch: 10 }; },
   'GET /admin/fb/comment-opts': () => ({ edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }),
   'POST /admin/fb/comment-opts': (b) => { CO.edit = b.edit; CO.who = b.who; CO.staff = b.staff; CO.posts.push(b); return { edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }; },
+  'GET /admin/fb/video-opts': () => ({ stream: VO.stream, who: VO.who, staff: VO.staff, people: CO.people }),
+  'POST /admin/fb/video-opts': (b) => { VO.stream = b.stream; VO.who = b.who; VO.staff = b.staff; VO.posts.push(b); return { stream: VO.stream, who: VO.who, staff: VO.staff, people: CO.people }; },
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
   'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; if (b.rnd !== undefined) BG.list[0].rnd = b.rnd; return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
@@ -1307,12 +1310,12 @@ test('進階設定「實驗功能」：第一則留言再編輯，對象全部�
   CO.edit = false; CO.who = 'all'; CO.staff = []; CO.posts = [];
   const { page } = await open({ width: 1280, height: 900 }, '#post');
   await login(page);
-  assert.equal(await page.$('#psCard #labEdit'), null);
+  assert.equal(await page.$('#psCard #labOn'), null);
   await page.click('#tab-adv'); await show(page, 'labCard');
   await page.waitForFunction(() => !document.getElementById('labSave').disabled);
-  assert.equal(await page.isChecked('#labEdit'), false);
+  assert.equal(await page.isChecked('#labOn'), false);
   assert.equal(await page.isDisabled('input[name=labWho][value=some]'), true, '沒啟用時對象灰掉');
-  await page.check('#labEdit');
+  await page.check('#labOn');
   await page.check('input[name=labWho][value=some]');
   assert.equal(await page.isVisible('#labPeople'), true);
   assert.match(await page.textContent('#labPeople'), /王小明（A001）/);
@@ -1329,4 +1332,25 @@ test('進階設定「實驗功能」：第一則留言再編輯，對象全部�
   await page.click('#labSave');
   await page.waitForFunction(() => /已啟用：全部人/.test(document.getElementById('labMsg').textContent));
   assert.deepEqual(CO.posts.at(-1), { edit: true, who: 'all', staff: [] });
+});
+
+test('進階設定「實驗功能」：影片串流上傳（獨立開關、指定員工），不影響留言那一項', async () => {
+  CO.edit = false; CO.who = 'all'; CO.staff = []; CO.posts = [];
+  VO.stream = false; VO.who = 'all'; VO.staff = []; VO.posts = [];
+  const { page } = await open({ width: 1280, height: 900 }, '#post');
+  await login(page);
+  await page.click('#tab-adv'); await show(page, 'labCard');
+  await page.waitForFunction(() => !document.getElementById('labVSave').disabled && !document.getElementById('labSave').disabled);
+  assert.equal(await page.isChecked('#labVOn'), false);
+  assert.equal(await page.isDisabled('input[name=labVWho][value=some]'), true);
+  await page.check('#labVOn');
+  await page.check('input[name=labVWho][value=some]');
+  assert.equal(await page.isVisible('#labVPeople'), true);
+  assert.equal(await page.isVisible('#labPeople'), false, '另一項不受影響');
+  await page.check('#labVPeople input[value=A001]');
+  await page.click('#labVSave');
+  await page.waitForFunction(() => /已啟用：指定 1 位員工/.test(document.getElementById('labVMsg').textContent));
+  assert.deepEqual(VO.posts.at(-1), { who: 'some', staff: ['A001'], stream: true });
+  assert.equal(CO.posts.length, 0);
+  if (SHOT) await page.locator('#labCard').screenshot({ path: path.join(SHOT, 'admin-labs-video.png') });
 });

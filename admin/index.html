@@ -417,7 +417,7 @@
         <div class="lab-item">
           <h3>第一則留言發出後再編輯一次（試著拿掉連結預覽）</h3>
           <p class="hint">臉書 API 沒有「關閉連結預覽」的參數，這是替代做法，<b>不一定有效</b>。只對「看更多新聞內容＋連結」那則有效；編輯失敗不影響留言。對象看的是<b>發文的人</b>。</p>
-          <label class="check"><input type="checkbox" id="labEdit"> 啟用</label>
+          <label class="check"><input type="checkbox" id="labOn"> 啟用</label>
           <fieldset class="lab-who" id="labWhoBox">
             <legend>對象</legend>
             <label class="check"><input type="radio" name="labWho" value="all" checked> 全部人</label>
@@ -426,6 +426,19 @@
           <div id="labPeople" class="lab-people" hidden></div>
           <div class="row"><button class="primary" id="labSave" type="button" disabled>儲存</button></div>
           <p class="msg" id="labMsg" role="status"></p>
+        </div>
+        <div class="lab-item">
+          <h3>影片串流上傳（影片分段邊收邊轉給臉書）</h3>
+          <p class="hint">現行做法是後端先收完整段（最多 32MB）再轉給臉書；這個做法收到多少就轉多少，<b>不一定比較快或比較穩</b>。多個粉專要的分段長度不同時，自動改回現行做法。串流不能在後端重送，失敗時由影片發布工具每段自動重送 2 次。對象看的是<b>上傳影片的人</b>，約 1 分鐘內生效。</p>
+          <label class="check"><input type="checkbox" id="labVOn"> 啟用</label>
+          <fieldset class="lab-who" id="labVWhoBox">
+            <legend>對象</legend>
+            <label class="check"><input type="radio" name="labVWho" value="all" checked> 全部人</label>
+            <label class="check"><input type="radio" name="labVWho" value="some"> 指定員工</label>
+          </fieldset>
+          <div id="labVPeople" class="lab-people" hidden></div>
+          <div class="row"><button class="primary" id="labVSave" type="button" disabled>儲存</button></div>
+          <p class="msg" id="labVMsg" role="status"></p>
         </div>
       </section>
 
