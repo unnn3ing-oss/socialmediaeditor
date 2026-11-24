@@ -275,7 +275,7 @@ export class FbCommentTimer {
         Object.assign(it, { status: 'done', commentId: id });
         delete it.unsure;
         await s.put('rec', rec);
-        if (seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
+        if (seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
       } catch (e) {
         // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
         if (step === STEP.comment) {

@@ -424,25 +424,44 @@ test('summaryOf：整行【標題】優先、否則第一行有字的、超過 4
   assert.equal(summaryOf('字'.repeat(45)), '字'.repeat(40) + '…');
 });
 
-test('立即發布第 1 則留言：開關打開時留完再編輯一次；沒有網址的不編輯；管理頁 comment-opts 讀寫', async (t) => {
+test('實驗功能（第 1 則留言再編輯）：全部人／指定員工（看發文者）；管理頁 comment-opts 敏感卡片', async (t) => {
   const { f, env, headers } = await setup(t, {
     'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
     'POST /111_9/comments': () => ({ id: 'C1' }),
     'POST /C1': () => ({ success: true })
   });
   const w = await load();
-  const admin = async (body) => {
-    const r = await w.fetch(new Request('https://api.test/admin/fb/comment-opts', { method: body ? 'POST' : 'GET', headers: { origin: ORIGIN, 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined }), env, { waitUntil() {} });
+  const { signToken } = await tok();
+  const adm = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'admin', nowSec() + 600)) };
+  const admin = async (h, body) => {
+    const r = await w.fetch(new Request('https://api.test/admin/fb/comment-opts', { method: body ? 'POST' : 'GET', headers: { origin: ORIGIN, 'content-type': 'application/json', ...h }, body: body ? JSON.stringify(body) : undefined }), env, { waitUntil() {} });
     return { status: r.status, body: await r.json() };
   };
-  assert.deepEqual((await admin()).body.data, { edit: false });
-  assert.equal((await admin({ edit: 'yes' })).status, 400);
-  assert.deepEqual((await admin({ edit: true })).body.data, { edit: true });
-  const r = await send(env, headers, { message: '【標題】', link: LINK, image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
-  assert.equal(r.body.data.results[0].comment, 'done');
-  const e = f.calls.filter((c) => c.method === 'POST' && c.path === '/C1');
-  assert.equal(e.length, 1);
-  assert.equal(e[0].body.message, f.calls.find((c) => c.path === '/111_9/comments').body.message);
-  const { editAfterPost } = await import('../../server/fb/comment.js');
-  assert.equal(await editAfterPost(env, 'T', 'C2', '只有文字'), 'skip');
+  assert.equal((await admin(headers)).status, 403, '系統管理者未解鎖不能進實驗功能');
+  const g = (await admin(adm)).body.data;
+  assert.deepEqual([g.edit, g.who, g.staff], [false, 'all', []]);
+  assert.ok(Array.isArray(g.people));
+  assert.equal((await admin(adm, { edit: 'yes' })).status, 400);
+  assert.equal((await admin(adm, { edit: true, who: 'some', staff: ['bad id!'] })).status, 400);
+  const edits = () => f.calls.filter((c) => c.method === 'POST' && c.path === '/C1').length;
+  const go = () => send(env, headers, { message: '【標題】', link: LINK, image: img(), targets: JSON.stringify([{ page: '111', at: null }]) });
+  // 指定別人：發文者 SYS1 不在名單 → 不編輯
+  const s1 = (await admin(adm, { edit: true, who: 'some', staff: ['a123'] })).body.data;
+  assert.deepEqual(s1.staff, ['A123'], '編號轉大寫');
+  assert.equal((await go()).body.data.results[0].comment, 'done');
+  assert.equal(edits(), 0);
+  // 名單有發文者 → 編輯（相同內容）
+  await admin(adm, { edit: true, who: 'some', staff: ['A123', 'sys1'] });
+  await go();
+  assert.equal(edits(), 1);
+  const e = f.calls.filter((c) => c.method === 'POST' && c.path === '/C1')[0];
+  assert.equal(e.body.message, f.calls.find((c) => c.path === '/111_9/comments').body.message);
+  // 全部人
+  await admin(adm, { edit: true, who: 'all' });
+  await go();
+  assert.equal(edits(), 2);
+  const { editAfterPost, editApplies, normOpts } = await import('../../server/fb/comment.js');
+  assert.equal(await editAfterPost(env, 'T', 'C2', '只有文字', 'SYS1'), 'skip');
+  assert.deepEqual(normOpts({ edit: true }), { edit: true, who: 'all', staff: [] }, '舊設定＝全部人');
+  assert.equal(editApplies(normOpts({ edit: true, who: 'some', staff: ['A1'] }), ''), false, '沒有發文者＝指定員工時不適用');
 });

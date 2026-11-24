@@ -8,7 +8,8 @@ import { GraphError, checkAppCred, graph } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
-import { commentOpts, saveCommentOpts } from './comment.js';
+import { commentOpts, saveCommentOpts, validOpts } from './comment.js';
+import { ensureStaff } from '../core/staff.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
 import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, setRandom as bgSetRandom, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
@@ -201,12 +202,18 @@ adminRoute('POST', /^\/admin\/fb\/pages$/, async (request, env) => {
   await savePages(env, pages);
   return ok(request, env, await listPages(env, { all: true }));
 });
-// 第一則留言選項（目前只有：發出後再編輯一次）
-adminRoute('GET', /^\/admin\/fb\/comment-opts$/, async (request, env) => ok(request, env, await commentOpts(env)));
+// 實驗功能（進階設定，敏感卡片 labs）：第一則留言發出後再編輯一次；回傳附員工名單（id、名稱、停用）給管理頁勾選
+async function labState(env) {
+  await ensureStaff(env);
+  const { results } = await env.DB.prepare('SELECT id, name, enabled FROM staff ORDER BY id').all();
+  return { ...(await commentOpts(env)), people: (results || []).map((r) => ({ id: r.id, name: r.name, enabled: !!r.enabled })) };
+}
+adminRoute('GET', /^\/admin\/fb\/comment-opts$/, async (request, env) => ok(request, env, await labState(env)));
 adminRoute('POST', /^\/admin\/fb\/comment-opts$/, async (request, env) => {
-  const body = (await readJsonBody(request)) || {};
-  if (typeof body.edit !== 'boolean') return fail(request, env, 'bad_request');
-  return ok(request, env, await saveCommentOpts(env, { edit: body.edit }));
+  const opts = validOpts(await readJsonBody(request, 40000));
+  if (!opts) return fail(request, env, 'bad_request');
+  await saveCommentOpts(env, opts);
+  return ok(request, env, await labState(env));
 });
 adminRoute('GET', /^\/admin\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {

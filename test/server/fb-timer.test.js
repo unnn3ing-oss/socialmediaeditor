@@ -677,4 +677,13 @@ test('第 1 則留言再編輯一次：開關打開才編輯（相同內容）�
   await m.post('arm', REC(nowSec() - 60)); await m.obj.alarm();
   assert.equal((await m.post('status')).status, 'done');
   assert.equal(comments(m.f).length, 1);
+  // 指定員工：看計時器記的發文者（by）
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
+  await saveCommentOpts(m.env, { edit: true, who: 'some', staff: ['A1'] });
+  await m.post('arm', { ...REC(nowSec() - 60), by: 'B2' }); await m.obj.alarm();
+  assert.equal(edits(m.f).length, 0, '發文者不在名單');
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
+  await saveCommentOpts(m.env, { edit: true, who: 'some', staff: ['A1'] });
+  await m.post('arm', { ...REC(nowSec() - 60), by: 'A1' }); await m.obj.alarm();
+  assert.equal(edits(m.f).length, 1, '發文者在名單');
 });

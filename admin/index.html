@@ -90,12 +90,6 @@
       <p class="msg" id="psMsg" role="status"></p>
       <div id="psRows"></div>
       <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
-      <div class="ps-first">
-        <h3>第一則留言（看更多新聞內容＋連結）</h3>
-        <label class="check"><input type="checkbox" id="coEdit"> 留言成功後再用相同內容編輯一次（測試：試著拿掉連結預覽）</label>
-        <p class="hint">臉書 API 沒有「關閉連結預覽」的參數，這是替代做法，<b>不一定有效</b>，請先在測試後端實測。編輯失敗不影響留言。</p>
-        <p class="msg" id="coMsg" role="status"></p>
-      </div>
       </section>
 
       <section class="card" id="bgCard" data-card="bg">
@@ -390,7 +384,7 @@
       <p>只有系統管理者能用，要先輸入管理員密碼解鎖。</p>
       <section class="card unlock" id="unlockBar" hidden>
         <h2>進階設定已鎖住</h2>
-        <p>排程發布開關、儀表板顯示項目、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
+        <p>排程發布開關、儀表板顯示項目、實驗功能、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
         <form id="unlockForm" class="sf-add">
           <label class="sf-f">管理員密碼<input id="unlockPw" type="password" autocomplete="current-password" required></label>
           <button class="primary" type="submit" id="unlockBtn">解鎖</button>
@@ -414,6 +408,24 @@
         <div class="dc-list" id="dcList"></div>
         <div class="row"><button class="primary" id="dcSave" type="button" disabled>儲存</button></div>
         <p class="msg" id="dcMsg" role="status"></p>
+      </section>
+
+      <section class="card" id="labCard" data-card="labs">
+        <h2>實驗功能</h2>
+        <p>還沒確認有效的功能，可以只開給指定的員工試用。</p>
+        <div class="lab-item">
+          <h3>第一則留言發出後再編輯一次（試著拿掉連結預覽）</h3>
+          <p class="hint">臉書 API 沒有「關閉連結預覽」的參數，這是替代做法，<b>不一定有效</b>。只對「看更多新聞內容＋連結」那則有效；編輯失敗不影響留言。對象看的是<b>發文的人</b>。</p>
+          <label class="check"><input type="checkbox" id="labEdit"> 啟用</label>
+          <fieldset class="lab-who" id="labWhoBox">
+            <legend>對象</legend>
+            <label class="check"><input type="radio" name="labWho" value="all" checked> 全部人</label>
+            <label class="check"><input type="radio" name="labWho" value="some"> 指定員工</label>
+          </fieldset>
+          <div id="labPeople" class="lab-people" hidden></div>
+          <div class="row"><button class="primary" id="labSave" type="button" disabled>儲存</button></div>
+          <p class="msg" id="labMsg" role="status"></p>
+        </div>
       </section>
 
       <section class="card" id="tpCard" data-card="profiles">

@@ -58,7 +58,7 @@ const DASH_ITEMS = [
   { key: 'logs', name: '未處理錯誤', level: 'bad', text: '2 則未處理', tab: 'rec' },
   { key: 'rundown', name: 'Rundown 連線', level: 'ok', text: '已設定', tab: 'conn' },
   { key: 'online', name: '目前在線', level: 'info', text: '3 人', tab: 'people' }];
-const CO = { edit: false, posts: [] };
+const CO = { edit: false, who: 'all', staff: [], people: [{ id: 'A001', name: '王小明', enabled: true }, { id: 'A002', name: '李小華', enabled: false }], posts: [] };
 const DATA = {
   'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
   'GET /admin/dash/config': () => ({ items: ['access', 'fbtoken', 'logs'], all: [{ key: 'access', name: '排程發布' }, { key: 'fbtoken', name: '臉書權杖' }, { key: 'logs', name: '未處理錯誤' }, { key: 'online', name: '目前在線' }] }),
@@ -78,8 +78,8 @@ const DATA = {
   'GET /admin/fb/backgrounds': () => ({ list: BG.list, batch: 10 }),
   'POST /admin/fb/backgrounds': (b) => { BG.posts.push(b); if (b.dry) return { add: 1, update: 3, gone: [{ id: '303063890126416', name: '過期圖樣', type: 'image' }], bad: 0, exp: Math.floor(Date.now() / 1000) + 2 * 86400 + 600 }; BG.list = BG.list.filter((x) => !b.remove.includes(x.id)); return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/backgrounds/random': (b) => { BG.posts.push(b); BG.list.forEach((x) => { if (b.ids.includes(x.id)) x.rnd = b.rnd; }); return { list: BG.list, batch: 10 }; },
-  'GET /admin/fb/comment-opts': () => ({ edit: CO.edit }),
-  'POST /admin/fb/comment-opts': (b) => { CO.edit = b.edit; CO.posts.push(b); return { edit: CO.edit }; },
+  'GET /admin/fb/comment-opts': () => ({ edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }),
+  'POST /admin/fb/comment-opts': (b) => { CO.edit = b.edit; CO.who = b.who; CO.staff = b.staff; CO.posts.push(b); return { edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }; },
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
   'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; if (b.rnd !== undefined) BG.list[0].rnd = b.rnd; return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
@@ -163,7 +163,7 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'labs', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 // front：首頁登入存在 localStorage 的憑證（{ token, me }），/admin/me 依 Authorization 回身分；'T'＝管理頁密碼登入（系統管理者已解鎖）
 async function open(viewport, hash = '', front = null) {
@@ -820,7 +820,7 @@ test('首頁員工沒有任何卡片：顯示密碼登入與原因', async () =>
 });
 
 test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖區；輸入密碼解鎖後出現，按「鎖定」回到未解鎖', async () => {
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs'].includes(k)) };
   const { page } = await open({ width: 1280, height: 860 }, '', { token: 'F3', me: locked });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#unlockBar'), false, '其他分類不顯示解鎖區');
@@ -906,7 +906,7 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   const { page: p2 } = await open({ width: 1280, height: 860 }, '#fb', { token: 'F9', me });
   await p2.waitForSelector('#app:not([hidden])'); await p2.waitForTimeout(500);
   await p2.screenshot({ path: path.join(SHOT, 'admin-mgr-fb.png') });
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs'].includes(k)) };
   const { page: p3 } = await open({ width: 390, height: 844 }, '#adv', { token: 'F8', me: locked });
   await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
@@ -1270,8 +1270,8 @@ test('左側分類手風琴：目前分類展開、游標移上展開並往下�
   assert.ok(over <= 0, '橫向捲動 ' + over);
 });
 
-test('文字背景「列入隨機」：勾選欄與快捷鈕、摘要只算顯示中且已下載；第一則留言再編輯開關', async () => {
-  bgReset(); CO.edit = false; CO.posts = [];
+test('文字背景「列入隨機」：勾選欄與快捷鈕、摘要只算顯示中且已下載', async () => {
+  bgReset();
   const { page } = await open({ width: 1280, height: 900 }, '#post');
   await login(page);
   await show(page, 'bgCard');
@@ -1288,12 +1288,32 @@ test('文字背景「列入隨機」：勾選欄與快捷鈕、摘要只算顯�
   if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg-random.png') });
   await page.click('#bgRnd [data-rnd=none]');
   await page.waitForFunction(() => /都沒有＝預設「無」/.test(document.getElementById('bgRndSum').textContent));
-  // 第一則留言：預設關，打開存檔
-  await show(page, 'psCard');
-  await page.waitForFunction(() => document.getElementById('coEdit') && !document.getElementById('coEdit').disabled);
-  assert.equal(await page.isChecked('#coEdit'), false);
-  await page.check('#coEdit');
-  await page.waitForFunction(() => /已開啟/.test(document.getElementById('coMsg').textContent));
-  assert.deepEqual(CO.posts, [{ edit: true }]);
-  if (SHOT) await page.locator('#psCard').screenshot({ path: path.join(SHOT, 'admin-comment-edit.png') });
+});
+
+test('進階設定「實驗功能」：第一則留言再編輯，對象全部人／指定員工；活動留言卡片沒有這個開關', async () => {
+  CO.edit = false; CO.who = 'all'; CO.staff = []; CO.posts = [];
+  const { page } = await open({ width: 1280, height: 900 }, '#post');
+  await login(page);
+  assert.equal(await page.$('#psCard #labEdit'), null);
+  await page.click('#tab-adv'); await show(page, 'labCard');
+  await page.waitForFunction(() => !document.getElementById('labSave').disabled);
+  assert.equal(await page.isChecked('#labEdit'), false);
+  assert.equal(await page.isDisabled('input[name=labWho][value=some]'), true, '沒啟用時對象灰掉');
+  await page.check('#labEdit');
+  await page.check('input[name=labWho][value=some]');
+  assert.equal(await page.isVisible('#labPeople'), true);
+  assert.match(await page.textContent('#labPeople'), /王小明（A001）/);
+  assert.match(await page.textContent('#labPeople'), /李小華（A002）・已停用/);
+  await page.click('#labSave');
+  await page.waitForFunction(() => /至少勾一位/.test(document.getElementById('labMsg').textContent));
+  await page.check('#labPeople input[value=A001]');
+  if (SHOT) await page.locator('#labCard').screenshot({ path: path.join(SHOT, 'admin-labs.png') });
+  await page.click('#labSave');
+  await page.waitForFunction(() => /已啟用：指定 1 位員工/.test(document.getElementById('labMsg').textContent));
+  assert.deepEqual(CO.posts.at(-1), { edit: true, who: 'some', staff: ['A001'] });
+  await page.check('input[name=labWho][value=all]');
+  assert.equal(await page.isVisible('#labPeople'), false);
+  await page.click('#labSave');
+  await page.waitForFunction(() => /已啟用：全部人/.test(document.getElementById('labMsg').textContent));
+  assert.deepEqual(CO.posts.at(-1), { edit: true, who: 'all', staff: [] });
 });

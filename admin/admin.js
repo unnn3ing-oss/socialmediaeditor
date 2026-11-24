@@ -84,7 +84,7 @@ if (window.top !== window.self) {
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
-  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; }
+  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; labLoaded = false; }
   // 用目前的 token 讀身分；成功就進入管理頁
   function enter(msgEl) {
     return api('/admin/me').then(function (res) {
@@ -434,7 +434,7 @@ if (window.top !== window.self) {
     if (can('profiles')) jobs.push(tpLoad().then(function () { if (can('fbconn')) return fbReload(); }));
     else if (can('fbconn')) jobs.push(fbReload());
     if (can('pages')) jobs.push(pgLoad());
-    if (can('presets')) { jobs.push(psLoad()); jobs.push(coLoad()); }
+    if (can('presets')) jobs.push(psLoad());
     if (can('video')) jobs.push(vsLoad());
     if (can('bg')) jobs.push(bgLoad());
     if (can('webhook')) jobs.push(whLoad());
@@ -882,20 +882,6 @@ if (window.top !== window.self) {
       say($('psMsg'), psItems.length ? '' : '還沒有活動留言，按「＋ 新增一則」。');
     }).catch(function (e) { say($('psMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
   }
-  // 第一則留言選項（/admin/fb/comment-opts）：發出後再編輯一次
-  function coLoad() {
-    return api('/admin/fb/comment-opts').then(function (res) {
-      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
-      $('coEdit').checked = !!res.data.edit; say($('coMsg'), '');
-    }).catch(function (e) { say($('coMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
-  }
-  $('coEdit').onchange = function () {
-    var cb = $('coEdit'), v = cb.checked; cb.disabled = true;
-    api('/admin/fb/comment-opts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit: v }) }).then(function (res) {
-      if (res.ok) { cb.checked = !!res.data.edit; say($('coMsg'), res.data.edit ? '已開啟（約 1 分鐘內生效）' : '已關閉', 'good'); }
-      else { cb.checked = !v; if (res.code === 'unauthorized') expired(); else say($('coMsg'), res.error || '儲存失敗。', 'err'); }
-    }).catch(function () { cb.checked = !v; say($('coMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { cb.disabled = false; });
-  };
   $('psAdd').onclick = function () {
     psSync(); if (psItems.length >= PS_MAX) return;
     psItems.push({ name: '', body: '' }); psRender(); say($('psMsg'), '');
@@ -1515,6 +1501,55 @@ if (window.top !== window.self) {
   }
   $('dashRefresh').onclick = function () { dashLoad(true); };
 
+  // ---- 實驗功能（/admin/fb/comment-opts，敏感卡片 labs）：第一則留言發出後再編輯一次；對象＝全部人／指定員工（看發文者）----
+  var labLoaded = false, labPeople = [];
+  function labWho() { var r = document.querySelector('input[name=labWho]:checked'); return r ? r.value : 'all'; }
+  function labSync() {
+    var on = $('labEdit').checked;
+    $('labWhoBox').disabled = !on;
+    $('labPeople').hidden = !(on && labWho() === 'some');
+  }
+  function labRender(d) {
+    $('labEdit').checked = !!d.edit;
+    Array.prototype.forEach.call(document.querySelectorAll('input[name=labWho]'), function (r) { r.checked = r.value === (d.who || 'all'); });
+    labPeople = d.people || [];
+    var box = $('labPeople'); box.textContent = '';
+    var picked = d.staff || [];
+    if (!labPeople.length) { var em = document.createElement('p'); em.className = 'hint'; em.textContent = '授權名單還沒有員工。'; box.appendChild(em); }
+    labPeople.forEach(function (p) {
+      var l = document.createElement('label'); l.className = 'check';
+      var c = document.createElement('input'); c.type = 'checkbox'; c.value = p.id; c.checked = picked.indexOf(p.id) >= 0;
+      l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.name + '（' + p.id + '）' + (p.enabled ? '' : '・已停用')));
+      box.appendChild(l);
+    });
+    // 名單裡已經沒有的編號也保留顯示（勾著），儲存時一併送出
+    picked.filter(function (id) { return !labPeople.some(function (p) { return p.id === id; }); }).forEach(function (id) {
+      var l = document.createElement('label'); l.className = 'check';
+      var c = document.createElement('input'); c.type = 'checkbox'; c.value = id; c.checked = true;
+      l.appendChild(c); l.appendChild(document.createTextNode(' ' + id + '・不在名單'));
+      box.appendChild(l);
+    });
+    labSync();
+  }
+  function labLoad() {
+    labLoaded = true; $('labSave').disabled = true; say($('labMsg'), '讀取中…');
+    return api('/admin/fb/comment-opts').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
+      labRender(res.data); $('labSave').disabled = false; say($('labMsg'), '');
+    }).catch(function (e) { labLoaded = false; say($('labMsg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請切換分類再回來。', 'err'); });
+  }
+  $('labEdit').onchange = labSync;
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=labWho]'), function (r) { r.onchange = labSync; });
+  $('labSave').onclick = function () {
+    var who = labWho();
+    var staff = who === 'some' ? Array.prototype.map.call($('labPeople').querySelectorAll('input:checked'), function (c) { return c.value; }) : [];
+    if ($('labEdit').checked && who === 'some' && !staff.length) return say($('labMsg'), '選「指定員工」要至少勾一位。', 'err');
+    $('labSave').disabled = true; say($('labMsg'), '儲存中…');
+    api('/admin/fb/comment-opts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ edit: $('labEdit').checked, who: who, staff: staff }) }).then(function (res) {
+      if (res.ok) { labRender(res.data); var d = res.data; say($('labMsg'), !d.edit ? '已關閉' : d.who === 'all' ? '已啟用：全部人（約 1 分鐘內生效）' : '已啟用：指定 ' + d.staff.length + ' 位員工（約 1 分鐘內生效）', 'good'); }
+      else if (res.code === 'unauthorized') expired(); else say($('labMsg'), res.error || '儲存失敗。', 'err');
+    }).catch(function () { say($('labMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { $('labSave').disabled = false; });
+  };
   // ---- 進階設定「儀表板顯示項目」（GET／POST /admin/dash/config，只有已解鎖系統管理者）----
   var dcLoaded = false;
   function dcLoad() {
@@ -1549,7 +1584,7 @@ if (window.top !== window.self) {
     people: [['online', '目前在線', 'olCard'], ['msg', '發送通知', 'msCard'], ['staff', '授權名單', 'sfCard']],
     conn: [['fb', '臉書粉專連線狀態', 'fsCard'], ['rd', 'Rundown 連線', 'rdCard'], ['usage', '速率限制', 'usCard']],
     rec: [['audit', '操作紀錄', 'auCard'], ['logs', '錯誤紀錄', 'lgCard']],
-    adv: [['access', '排程發布', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
+    adv: [['access', '排程發布', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
   };
   var curSub = {};   // 每個分類目前的功能
   var assetsLoaded = false;
@@ -1626,6 +1661,7 @@ if (window.top !== window.self) {
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
     if (id === 'home' && !dashLoaded && token && me && me.dash && me.dash.length) dashLoad(false);
     if (id === 'adv' && !dcLoaded && token && can('dashcfg')) dcLoad();
+    if (id === 'adv' && !labLoaded && token && can('labs')) labLoad();
   }
   function showHash() { var h = parseHash(); showTab(h.tab, false, h.sub); }
 

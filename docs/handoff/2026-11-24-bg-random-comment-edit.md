@@ -41,12 +41,15 @@
 
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/core/levels.js` | 新卡片 `labs`（實驗功能，sensitive） | ⬜ |
-| `server/core/adminperm.js` | `/admin/fb/comment-opts` 改掛 `labs` | ⬜ |
-| `server/fb/comment.js` | 設定 `{edit, who:'all'|'some', staff:[]}`（舊 `{edit:true}`＝all）；`editAfterPost(env, token, id, msg, by)` 判斷發文者 | ⬜ |
-| `server/fb/post.js`、`timer.js` | 傳 `by`（timer 用 `rec.by`） | ⬜ |
-| `admin/index.html`、`admin.js` | 活動留言卡片拿掉開關；進階設定新分頁「實驗功能」`labCard`（開關＋全部人／指定員工勾選名單） | ⬜ |
-| 測試 | comment／timer／post 單元、admin e2e | ⬜ |
+| `server/core/levels.js` | 新卡片 `labs`（實驗功能，sensitive） | ✅ |
+| `server/core/adminperm.js` | `/admin/fb/comment-opts` 改掛 `labs` | ✅ |
+| `server/fb/comment.js` | 設定 `{edit, who:'all'|'some', staff:[]}`（舊 `{edit:true}`＝all）；`editAfterPost(env, token, id, msg, by)` 判斷發文者 | ✅ |
+| `server/fb/post.js`、`timer.js` | 傳 `by`（timer 用 `rec.by`） | ✅ |
+| `admin/index.html`、`admin.js` | 活動留言卡片拿掉開關；進階設定新分頁「實驗功能」`labCard`（開關＋全部人／指定員工勾選名單） | ✅ |
+| 測試 | comment／timer／post 單元、admin e2e | ✅ |
+
+### 第二段結果
+npm test 809、admin＋company e2e 通過（「截圖：電腦版…」在 SHOT_DIR 模式逾時，改動前就會，與本次無關）；獨立審查無 Critical／Important。
 
 ## 待確認（下一段）：影片發布「放待排 2359」
 使用者答：臉書排程到當天 23:59（C）；RD 找按送出當下最接近的時段（±1～2 小時）；日期欄右邊第 3～10 欄、#3c78d8 粗體「2359」或「排2359」標記下的 `reels/` 預留格；與原 Reels 草稿規則並存。最終做法待列給使用者確認。

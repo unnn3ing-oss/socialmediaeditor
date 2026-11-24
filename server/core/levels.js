@@ -17,6 +17,7 @@ export const CARDS = [
   { key: 'staff', name: '授權名單' },
   { key: 'groups', name: '權限組', sensitive: true },
   { key: 'dashcfg', name: '儀表板顯示項目', sensitive: true },
+  { key: 'labs', name: '實驗功能', sensitive: true },
   { key: 'audit', name: '操作紀錄' },
   { key: 'rundown', name: 'Rundown 連線' },
   { key: 'assets', name: '素材設定' },

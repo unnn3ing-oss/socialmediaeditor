@@ -180,7 +180,7 @@ export async function createPosts(env, form, who = null) {
     // 立即：第 1 則最重要，先馬上留；失敗就連同第 2、3 則交給計時器，由計時器先重試第 1 則，成功後才留後面的
     let firstOk = false, firstUnsure = false;
     if (first) {
-      try { const cid = await postComment(env, p.token, r.postId, first); r.comment = 'done'; firstOk = true; await editAfterPost(env, p.token, cid, first); }
+      try { const cid = await postComment(env, p.token, r.postId, first); r.comment = 'done'; firstOk = true; await editAfterPost(env, p.token, cid, first, by); }
       catch (e) { r.comment = 'failed'; r.commentError = errText(e); firstUnsure = !(e instanceof GraphError) || !!e.uncertain; }
     }
     // 第 1 則：臉書明確回錯誤＝確定沒留，計時器直接重留；沒收到回應＝可能已留，計時器先查再留（recheck）
