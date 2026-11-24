@@ -921,6 +921,19 @@ if (window.top !== window.self) {
       .then(function (b) { if (!b) return; bgUrls[x.id] = URL.createObjectURL(b); sw.style.backgroundImage = 'url("' + bgUrls[x.id] + '")'; })
       .catch(function () {});
   }
+  // 擷取腳本：按下時讀網站上的檔案再複製（腳本只有一份，改了自動跟著）
+  $('bgScript').onclick = function () {
+    var b = $('bgScript'); b.disabled = true;
+    fetch('../docs/fb-text-backgrounds/extract-fb-backgrounds.js', { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw new Error('讀不到腳本（HTTP ' + r.status + '）'); return r.text(); })
+      .then(function (t) {
+        if (!navigator.clipboard) throw new Error('這個瀏覽器不能自動複製');
+        return navigator.clipboard.writeText(t).then(null, function () { throw new Error('複製失敗'); });
+      })
+      .then(function () { say($('bgMsg'), '已複製擷取腳本，到臉書的 DevTools Console 貼上執行。', 'good'); },
+        function (e) { say($('bgMsg'), (e && e.message || '複製失敗') + '，請稍後再試。', 'err'); })
+      .then(function () { b.disabled = false; });
+  };
   function bgRender() {
     var box = $('bgRows'); box.textContent = '';
     var n = { solid: 0, gradient: 0, image: 0 }, got = 0;

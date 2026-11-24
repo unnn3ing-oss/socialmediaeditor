@@ -956,6 +956,19 @@ test('留言守門卡片：打開不查權限、按了才查、儲存規則、�
   assert.ok(!calls.some((c) => typeof c === 'string'), '沒有頁面錯誤');
 });
 
+test('文字背景：複製擷取腳本＝repo 裡的腳本檔', async () => {
+  bgReset();
+  const { page } = await open({ width: 1280, height: 900 }, '#post');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await login(page);
+  await show(page, 'bgCard');
+  await page.click('#bgScript');
+  await page.waitForFunction(() => /已複製擷取腳本/.test(document.getElementById('bgMsg').textContent));
+  const want = require('node:fs').readFileSync(path.join(__dirname, '../../docs/fb-text-backgrounds/extract-fb-backgrounds.js'), 'utf8');
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), want);
+  if (SHOT) await page.locator('#bgCard').screenshot({ path: path.join(SHOT, 'admin-bg-script.png') });
+});
+
 test('文字背景：列表與預覽圖；預覽匯入勾選刪除後套用；下載圖樣；改名', async () => {
   bgReset();
   const { page, calls } = await open({ width: 1280, height: 900 }, '#post');
