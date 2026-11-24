@@ -46,24 +46,20 @@ export async function saveVideoOpts(env, opts) {
 export const streamApplies = (opts, uid) => !!opts.stream && (opts.who === 'all' || (!!uid && opts.staff.includes(String(uid).toUpperCase())));
 
 // ---- 串流工具 ----
-// 檢查位元組數剛好 len（多或少都讓串流出錯 → 送臉書的請求失敗，不會送出長度不對的內容）
-function exact(stream, len) {
+// 只用內建串流（request.body、tee、FixedLengthStream、pipeTo）轉送：資料不經過 JS 逐塊處理，不吃 Worker CPU 時間
+//   （第一版用 JS TransformStream／pull 處理每一小塊，實測 32MB 分段超過免費方案 CPU 上限）
+// 固定長度的通道：Workers 用 FixedLengthStream（送出 Content-Length，長度不符時串流出錯 → 送臉書的請求失敗）
+//   Node（單元測試）沒有 FixedLengthStream：用計數的 TransformStream 代替，行為相同
+function fixedLength(len) {
+  if (typeof globalThis.FixedLengthStream === 'function') { const f = new globalThis.FixedLengthStream(len); return { readable: f.readable, writable: f.writable, init: {} }; }
   let n = 0;
-  return stream.pipeThrough(new TransformStream({
+  const t = new TransformStream({
     transform(chunk, c) { n += chunk.byteLength; if (n > len) c.error(new Error('分段比宣告的長')); else c.enqueue(chunk); },
     flush(c) { if (n !== len) c.error(new Error('分段比宣告的短')); }
-  }));
+  });
+  return { readable: t.readable, writable: t.writable, init: { duplex: 'half' } };
 }
-// 給 fetch 用的本文：Workers 用 FixedLengthStream（送出 Content-Length，臉書不收 chunked）；Node（測試）用 duplex:'half'
-function sized(stream, len) {
-  if (typeof globalThis.FixedLengthStream === 'function') {
-    const f = new globalThis.FixedLengthStream(len);
-    stream.pipeTo(f.writable).catch(() => { /* 錯誤會從 readable 那端讓 fetch 失敗 */ });
-    return { body: f.readable, init: {} };
-  }
-  return { body: stream, init: { duplex: 'half' } };
-}
-// 一個串流分成 n 份（n＝1 直接用原本的）
+// 一個串流分成 n 份（n＝1 直接用原本的）；request.body 的 tee 是內建的
 function split(stream, n) {
   const out = [];
   let s = stream;
@@ -71,29 +67,47 @@ function split(stream, n) {
   out.push(s);
   return out;
 }
+// 原樣轉送（Reels）：body → 固定長度通道；回 { body, init, done }（done＝寫完或出錯）
+//   stop()：送臉書的請求失敗時中止寫入（pipeTo 的 signal 會 abort 通道、cancel 來源分支），不會卡在沒人讀的背壓
+function rawBody(src, len) {
+  const f = fixedLength(len);
+  const ac = new AbortController();
+  const done = src.pipeTo(f.writable, { signal: ac.signal });
+  done.catch(() => {});
+  return { body: f.readable, init: f.init, done, stop: () => ac.abort() };
+}
 const enc = new TextEncoder();
-// 橫式 transfer 的 multipart：表單欄位 → 檔案（串流）→ 結尾；長度事先算好
-export function multipart(fields, file, fileLen) {
+// 橫式 transfer 的 multipart：開頭（表單欄位＋檔案標頭）→ 影片資料（內建 pipeTo）→ 結尾；長度事先算好
+//   寫入和 fetch 同時進行（先寫完才 fetch 會被背壓卡住）
+export function multipartBody(fields, src, fileLen) {
   const boundary = '----tbx' + crypto.randomUUID().replace(/-/g, '');
   let head = '';
   for (const [k, v] of Object.entries(fields)) head += `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`;
   head += `--${boundary}\r\nContent-Disposition: form-data; name="video_file_chunk"; filename="chunk"\r\nContent-Type: application/octet-stream\r\n\r\n`;
   const h = enc.encode(head), t = enc.encode(`\r\n--${boundary}--\r\n`);
-  const reader = file.getReader();
-  let phase = 0;
-  const stream = new ReadableStream({
-    async pull(c) {
-      if (phase === 0) { phase = 1; c.enqueue(h); return; }
-      if (phase === 1) {
-        const { done, value } = await reader.read();
-        if (!done) { c.enqueue(value); return; }
-        phase = 2;
-      }
-      c.enqueue(t); c.close();
-    },
-    cancel(reason) { return reader.cancel(reason); }
-  });
-  return { stream, length: h.length + fileLen + t.length, type: 'multipart/form-data; boundary=' + boundary };
+  const f = fixedLength(h.length + fileLen + t.length);
+  const ac = new AbortController();
+  const done = (async () => {
+    let w = f.writable.getWriter();
+    try { await w.write(h); } finally { w.releaseLock(); }
+    await src.pipeTo(f.writable, { preventClose: true, signal: ac.signal });
+    w = f.writable.getWriter();
+    try { await w.write(t); await w.close(); } finally { w.releaseLock(); }
+  })();
+  done.catch(() => { f.writable.abort().catch(() => {}); src.cancel().catch(() => {}); });
+  return { body: f.readable, init: f.init, done, stop: () => ac.abort(), type: 'multipart/form-data; boundary=' + boundary };
+}
+// 以送臉書的請求為準：
+//   請求失敗（臉書回錯誤、連不上、本文中途出錯）→ 中止寫入後丟出原本的錯誤（不等寫入端，臉書提早回錯誤也不會卡住）
+//   請求成功 → 臉書已收下這段，以回應為準（寫入端的結果不再影響）
+//   寫入端出錯（瀏覽器中斷、長度不符）會讓通道出錯 → 請求本身失敗 → 走上面第一條
+async function sendWith(pipe, send) {
+  try { return await send(); }
+  catch (e) {
+    pipe.stop();
+    if (e instanceof GraphError) throw e;
+    throw new GraphError(-1, '分段沒有完整傳完（' + String((e && e.message) || e).slice(0, 80) + '）', 0, undefined, true);
+  }
 }
 
 // 結果不明（連不上、5xx、錯誤碼 1／2）：這段可能沒送到，讓前端重送
@@ -118,26 +132,27 @@ export async function receiveChunkStream(env, request, uploadId, start, len) {
   }
   if (!ready.length) { await request.body.cancel().catch(() => {}); await finishReady(env, uploadId); return result(env, uploadId); }
 
-  const branches = split(exact(request.body, len), ready.length);
+  const branches = split(request.body, ready.length);
   let retryMsg = '';
   const one = async ([r, t], branch) => {
+    const t0 = Date.now();
     try {
       if (r.kind === 'video') {
-        const mp = multipart({ access_token: t.token, upload_phase: 'transfer', upload_session_id: r.session_id, start_offset: String(start) }, branch, len);
-        const { body, init } = sized(mp.stream, mp.length);
-        const d = await graphFetch(env, GRAPH_VIDEO + '/' + r.page + '/videos', { method: 'POST', headers: { 'Content-Type': mp.type }, body, ...init }, t.token);
+        const mp = multipartBody({ access_token: t.token, upload_phase: 'transfer', upload_session_id: r.session_id, start_offset: String(start) }, branch, len);
+        const d = await sendWith(mp, () => graphFetch(env, GRAPH_VIDEO + '/' + r.page + '/videos', { method: 'POST', headers: { 'Content-Type': mp.type }, body: mp.body, ...mp.init }, t.token));
         const ns = Number(d.start_offset), ne = Number(d.end_offset);
         if (!Number.isFinite(ns) || !Number.isFinite(ne)) throw new GraphError(-1, '臉書沒有回傳下一段位置', 200);
         if (ns >= r.size || ns === ne) await updateIf(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size }, 'uploading');
         else await updateIf(env, r, { next_start: ns, next_end: ne }, 'uploading');
       } else {
-        const { body, init } = sized(branch, len);
-        await ruploadPart(r, t.token, start, body, init);
+        const p = rawBody(branch, len);
+        await sendWith(p, () => ruploadPart(r, t.token, start, p.body, p.init));
         if (end >= r.size) await updateIf(env, r, { state: 'uploaded', next_start: r.size, next_end: r.size }, 'uploading');
         else await updateIf(env, r, { next_start: end, next_end: end }, 'uploading');
       }
+      console.log('video stream ok', r.kind, r.page, start, len, Date.now() - t0 + 'ms');
     } catch (e) {
-      // 分支已交給 fetch：失敗時 runtime 會取消本文，連帶取消這個分支
+      console.warn('video stream fail', r.kind, r.page, start, len, Date.now() - t0 + 'ms', String((e && e.message) || e).slice(0, 200));
       if (!(e instanceof GraphError)) throw e;
       if (retryable(e)) { retryMsg = retryMsg || errText(e); return; }   // 維持上傳中、位置不動，等前端重送
       await updateIf(env, r, { state: 'failed', error: `${Math.floor(start / 1048576)}MB 處上傳失敗：${errText(e)}` }, 'uploading');

@@ -44,3 +44,17 @@ npm test 821（新 `test/server/fb-video-stream.test.js` 6 項）、admin e2e 44
 - rupload 對串流本文的行為。
 - 多粉專 tee 時一路較慢會緩衝，記憶體峰值可能接近現行做法。
 - 建議第一次只開給自己、單一粉專的 Reels 測。
+
+---
+## 第二段：串流版超過 CPU 上限修正（使用者 2026-11-24「開始」）
+- 實測（橫式、1 粉專、實驗功能開）：兩次 Failed to fetch；Cloudflare 紀錄 `Error: Worker exceeded CPU time limit`。關掉實驗功能同一支重傳成功。
+- 原因：`exact` TransformStream＋multipart JS `pull` 讓每一小塊都經過 JS。
+- 改法：只用內建串流轉送——Workers `FixedLengthStream`；橫式先由 writer 寫表單開頭 → `body.pipeTo(writable, {preventClose:true})` → 寫結尾關閉；Reels／多粉專 `tee` 後各自 `pipeTo`；與 fetch 同時進行（避免背壓卡住）；Node 測試沒有 `FixedLengthStream` 時用計數 TransformStream 代替。各步驟 `console.log`（不含權杖）。
+- 只改 `server/fb/videostream.js`＋測試；後端需重新部署（正式＋測試）。
+
+## 審查後修正（臉書提早回錯誤會卡住）
+- 獨立審查 Important：`sendWith` 原本同時等「送臉書的請求」與「寫入端」；臉書沒讀完本文就先回錯誤時，寫入端卡在沒人讀的背壓，Worker 不回應。
+- 修法：`rawBody`／`multipartBody` 的 `pipeTo` 帶 AbortController `signal`，回傳 `stop()`；`sendWith` 只等請求——失敗就 `stop()`（中止通道、cancel 來源分支）後丟出原錯誤（非 GraphError 包成結果不明 → fb_retry）；成功就以臉書回應為準（審查 Minor 2）。`rawBody` 的 done 補 catch（Minor 3）。
+- 新測試「臉書沒讀完本文就先回錯誤」：舊版逾時卡住、新版通過（明確錯誤標失敗、5xx 回 fb_retry）。
+- workerd 實跑（32MB）：Reels／橫式 1～3 粉專位元組 sha256 相同、有 Content-Length；提早回錯誤立即返回；行程 CPU Reels 40ms、橫式 50ms（3 粉專 200ms，3 倍資料量，屬原生 I/O）。
+- npm test 823、build --check 通過。
