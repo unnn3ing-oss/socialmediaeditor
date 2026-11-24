@@ -405,3 +405,47 @@ test('權限：vview 才能開影片發布、vpost 才有送出鈕；只有排�
   assert.equal(await post.page.isVisible('#sendBtn'), true);
   await post.page.close();
 });
+
+test('放待排 2359：只有直式能選；排到今天 23:59；RD 用送出當下時間、slot q2359、Shorts_ 寫 Shorts/；23:49 之後停用', async () => {
+  const { page, errors, api } = await newPage('admin', { width: 1280, height: 900 });
+  await page.waitForSelector('#app:not([hidden])');
+  const t0 = new Date(); t0.setHours(10, 5, 0, 0);
+  await page.clock.setFixedTime(t0);
+  await page.locator('.rd-switch .track').click();
+  // 橫式：沒有這個選項
+  await page.setInputFiles('#fileIn', [file('橫式.mp4', 'wide')]);
+  await page.click(ED + ' .pg-dd summary');
+  await page.check(ED + ' .pg-list input[data-page="111"]');
+  const opt = ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode option[value="q2359"]';
+  assert.deepEqual(await page.$eval(opt, (o) => [o.hidden, o.disabled]), [true, true]);
+  // 直式（Shorts_）
+  await page.setInputFiles('#fileIn', [file('Shorts_短.mp4', 'tall')]);
+  await page.click(ED + ' .pg-dd summary');
+  await page.check(ED + ' .pg-list input[data-page="111"]');
+  assert.deepEqual(await page.$eval(opt, (o) => [o.hidden, o.disabled, o.textContent]), [false, false, '放待排 2359']);
+  await page.selectOption(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode', 'q2359');
+  assert.match(await page.textContent(ED + ' .pg-sum'), /新聞（放待排 2359（今天 23:59））/);
+  assert.equal(await page.isVisible(ED + ' .pg-list li:has(input[data-page="111"]) .pg-dt'), false, '不用選時間');
+  if (SHOT) await page.locator(ED).screenshot({ path: path.join(SHOT, 'fbvideo-q2359.png') });
+  // 兩支一起送（橫式＝立即、直式＝放待排 2359）
+  await until(async () => page.$$eval('.vq-meta', (l) => l.length === 2 && l.every((x) => /已上傳/.test(x.textContent))), 10000);
+  const at = Math.floor(new Date(t0).setHours(23, 59, 0, 0) / 1000);
+  await page.click('#sendBtn');
+  await until(() => api.publish.length >= 2, 10000);
+  const pub = api.publish.find((b) => b.pages.some((x) => x.q2359));
+  assert.ok(pub, JSON.stringify(api.publish.map((b) => b.pages)));
+  assert.deepEqual(pub.pages, [{ page: '111', at, q2359: true }]);
+  await until(() => api.rundown.some((r) => r.entries.some((e) => e.slot === 'q2359')), 10000);
+  const e = api.rundown.flatMap((r) => r.entries).find((x) => x.slot === 'q2359');
+  assert.deepEqual([e.page, e.text, e.kind, e.time, e.style], ['news', 'Shorts/短', 'reel', '10:05', 'video']);
+  // 23:50：停用並標示
+  const t1 = new Date(t0); t1.setHours(23, 50, 0, 0);
+  await page.clock.setFixedTime(t1);
+  await page.setInputFiles('#fileIn', [file('Reels_晚.mp4', 'tall')]);
+  await page.click(ED + ' .pg-dd summary');
+  await page.check(ED + ' .pg-list input[data-page="111"]');
+  await page.focus(ED + ' .pg-list li:has(input[data-page="111"]) .pg-mode');
+  assert.deepEqual(await page.$eval(opt, (o) => [o.disabled, o.textContent]), [true, '放待排 2359（已過 23:49）']);
+  assert.deepEqual(errors, []);
+  await page.close();
+});

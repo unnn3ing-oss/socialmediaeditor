@@ -5,7 +5,7 @@
 //   上傳中：取消勾粉專、移除／取消勾影片、切換類型都擋下；關分頁先確認（tb.busy）；可手動「停止上傳」。
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
-import { autoKind, rdText } from './rules.js';
+import { autoKind, rdText, rdTextQ } from './rules.js';
 import { createEditor, STATE_TEXT, CROSS_TEXT } from './editor.js';
 import { pickCover } from './cover.js';
 import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
@@ -471,7 +471,10 @@ async function maybeRd(v) {
     if (!OK_STATES.includes(j.state) || !p || !p.rd) continue;
     const at = ((v.sentBody && v.sentBody.pages) || []).find((x) => x.page === j.page);
     const ms = at && at.at ? at.at * 1000 : v.sentAt;
-    const e = { page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(v.kind, slug), style: 'video', ...(j.state === 'draft' ? { slot: 'draft', kind: v.kind } : {}) };
+    // 放待排 2359：時間＝按送出當下（找最接近的時段），不是 23:59
+    const e = at && at.q2359
+      ? { page: p.rd, date: dateStr(v.sentAt), time: timeStr(v.sentAt), text: rdTextQ(v.name, slug), style: 'video', slot: 'q2359', kind: 'reel' }
+      : { page: p.rd, date: dateStr(ms), time: timeStr(ms), text: rdText(v.kind, slug), style: 'video', ...(j.state === 'draft' ? { slot: 'draft', kind: v.kind } : {}) };
     if (!entries.some((x) => x.page === e.page && x.time === e.time && x.date === e.date && x.slot === e.slot)) entries.push(e);
     if (j.state === 'draft') continue;
     for (const c of (at && at.cross) || []) {
@@ -481,13 +484,14 @@ async function maybeRd(v) {
     }
   }
   if (!entries.length) return;
-  const text = rdText(v.kind, slug);
+  // 失敗時複製的文字：第一個失敗粉專那筆的（放待排 2359 可能是 Shorts/）
+  const textOf = (bad) => (entries.find((e) => bad.some((x) => x.page === e.page)) || entries[0]).text;
   try {
     const d = await tb.api.call('/rundown', { method: 'POST', body: { entries } });
     const bad = (d.results || []).filter((x) => !x.ok);
-    if (bad.length) rdFail(text, bad.map((x) => (rdPageName(x.page) ? rdPageName(x.page) + '：' : '') + (x.error || '失敗')).join('；'));
-    else toast(`RD 已寫入：${text}`);
-  } catch (e) { rdFail(text, errText(e)); }
+    if (bad.length) rdFail(textOf(bad), bad.map((x) => (rdPageName(x.page) ? rdPageName(x.page) + '：' : '') + (x.error || '失敗')).join('；'));
+    else toast(`RD 已寫入：${[...new Set(entries.map((e) => e.text))].join('、')}`);
+  } catch (e) { rdFail(entries[0].text, errText(e)); }
 }
 const RD_NAMES = { news: '主粉', ent: '娛樂粉', shaokang: '少康粉', intl: '國際＋粉' };
 const rdPageName = (k) => RD_NAMES[k] || '';

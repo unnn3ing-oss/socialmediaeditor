@@ -121,3 +121,12 @@ export function slugOf(manual, title) {
 }
 // 橫式：純影/SLUG；Reels：Reels/SLUG
 export const rdText = (kind, slug) => `${kind === 'reel' ? 'Reels' : '純影'}/${slug}`;
+// 放待排 2359 的 RD 文字：檔名 Shorts_ 開頭 → Shorts/SLUG，其他直式 → Reels/SLUG
+export const isShortsName = (name) => /^shorts_/i.test(String(name || ''));
+export const rdTextQ = (name, slug) => `${isShortsName(name) ? 'Shorts' : 'Reels'}/${slug}`;
+// 放待排 2359：今天（本機時間）23:59:00 的秒數；離現在不到 minS 秒（臉書排程至少提前 10 分鐘，即 23:49 之後）回 null
+export function q2359At(nowMs, minS = 600) {
+  const d = new Date(nowMs); d.setHours(23, 59, 0, 0);
+  const at = Math.floor(d.getTime() / 1000);
+  return at - Math.floor(nowMs / 1000) >= minS ? at : null;
+}

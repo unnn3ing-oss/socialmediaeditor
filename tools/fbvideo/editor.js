@@ -1,6 +1,6 @@
 // 每支影片一個內容區（從 <template> 複製；切換影片只隱藏，內容保留）
 // 由上而下：上傳狀態、類型、影片標題、影片內文、標籤（按鈕＋自訂）、授權、發布粉專（各自立即／排程）、留言、RD SLUG
-import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, REEL_MAX_SEC } from './rules.js';
+import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, REEL_MAX_SEC, q2359At } from './rules.js';
 import { segmented, sizeText, durText, fmt, toLocalInput, MIN_S, MAX_S, rangeText } from './util.js';
 
 const MAX_COMMENTS = 3;
@@ -22,7 +22,8 @@ export const jobText = (j) => {
 };
 export const CROSS_TEXT = { pending: '等待多文', posting: '多文中', done: '已多文', failed: '多文失敗', unknown: '多文結果不明（請到臉書確認）', canceled: '多文已取消' };
 // 發布方式：立即／排程／草稿／多文發佈（只限橫式）
-export const MODES = [['now', '立即'], ['sched', '排程'], ['draft', '草稿'], ['cross', '多文發佈']];
+export const MODES = [['now', '立即'], ['sched', '排程'], ['draft', '草稿'], ['cross', '多文發佈'], ['q2359', '放待排 2359']];
+const Q_TEXT = '放待排 2359';
 // 自訂 hashtag：去空白、補 #
 export const normTag = (s) => { const t = String(s || '').replace(/\s+/g, '').replace(/^#+/, ''); return t ? '#' + t : ''; };
 
@@ -117,6 +118,9 @@ export function createEditor(v, ctx) {
         if (cb.checked) dropTarget(p.id);
         sync1(p.id); ctx.pagesChanged(v, p.id, cb.checked);
       });
+      // 放待排 2359：每次打開選單前重新判斷是不是已過 23:49
+      mode.addEventListener('focus', syncQ);
+      mode.addEventListener('pointerdown', syncQ);
       mode.addEventListener('change', async () => {
         const r = rows.get(p.id);
         if (mode.value === 'sched' && !dt.value) dt.value = toLocalInput(Math.ceil((Date.now() + 30 * 60000) / 600000) * 600000);
@@ -172,16 +176,28 @@ export function createEditor(v, ctx) {
     r.li.classList.toggle('on', r.cb.checked);
     if (!quiet) summary();
   }
-  // Reels 不能多文：選項停用，已選的改回立即
+  // Reels 不能多文：選項停用，已選的改回立即；放待排 2359 只有直式：橫式停用，已選的改回立即
   function syncKind() {
     const reel = v.kind === 'reel';
     for (const [id, r] of rows) {
       const o = r.mode.querySelector('option[value="cross"]');
       o.disabled = reel; o.hidden = reel;
       if (reel && r.mode.value === 'cross') { r.mode.value = 'now'; r.prev = 'now'; r.cross = []; sync1(id, true); }
+      if (!reel && r.mode.value === 'q2359') { r.mode.value = 'now'; r.prev = 'now'; sync1(id, true); }
+    }
+    syncQ();
+  }
+  // 放待排 2359：橫式隱藏；23:49 之後停用並標「已過 23:49」（已選的不改，送出時擋）
+  function syncQ() {
+    const reel = v.kind === 'reel', late = q2359At(Date.now(), MIN_S) === null;
+    for (const [, r] of rows) {
+      const o = r.mode.querySelector('option[value="q2359"]');
+      o.hidden = !reel; o.disabled = !reel || late;
+      o.textContent = reel && late ? Q_TEXT + '（已過 23:49）' : Q_TEXT;
     }
   }
   const modeText = (r) => r.mode.value === 'sched' && r.dt.value ? '排程 ' + fmt(Date.parse(r.dt.value))
+    : r.mode.value === 'q2359' ? '放待排 2359（今天 23:59）'
     : r.mode.value === 'draft' ? '草稿' : r.mode.value === 'cross' ? '立即＋多文到 ' + r.cross.map(name).join('、') : '立即';
   function summary() {
     const on = [...rows.entries()].filter(([, r]) => r.cb.checked);
@@ -294,7 +310,7 @@ export function createEditor(v, ctx) {
         r.cb.checked = !!x;
         if (x) {
           r.cross = x.mode === 'cross' ? x.cross.filter((c) => !own.has(c) && rows.has(c)) : [];
-          r.mode.value = x.mode === 'cross' && (!r.cross.length || v.kind === 'reel') ? 'now' : x.mode;
+          r.mode.value = (x.mode === 'cross' && (!r.cross.length || v.kind === 'reel')) || (x.mode === 'q2359' && v.kind !== 'reel') ? 'now' : x.mode;
           if (r.mode.value !== 'cross') r.cross = [];
           r.prev = r.mode.value; r.dt.value = x.dt;
         }
@@ -302,7 +318,7 @@ export function createEditor(v, ctx) {
       }
       summary();
     },
-    // 送出用：[{ page, at, draft?, cross? }] 或 { error }
+    // 送出用：[{ page, at, draft?, cross?, q2359? }] 或 { error }（q2359 後端不看，前端寫 RD 用）
     pagesForSend() {
       const out = [];
       const now = Math.floor(Date.now() / 1000);
@@ -314,6 +330,13 @@ export function createEditor(v, ctx) {
           const cross = r.cross.filter((c) => !(rows.get(c) && rows.get(c).cb.checked));
           if (!cross.length) return { error: `${ctx.pageName(page)} 請選要多文到哪些粉專` };
           out.push({ page, at: null, cross });
+          continue;
+        }
+        if (r.mode.value === 'q2359') {
+          if (v.kind !== 'reel') return { error: `${ctx.pageName(page)}：放待排 2359 只能用在直式影片` };
+          const at = q2359At(Date.now(), MIN_S);
+          if (at === null) return { error: `${ctx.pageName(page)}：已過 23:49，不能放待排 2359（臉書排程至少要提前 10 分鐘）` };
+          out.push({ page, at, q2359: true });
           continue;
         }
         if (r.mode.value !== 'sched') { out.push({ page, at: null }); continue; }

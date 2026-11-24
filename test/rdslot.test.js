@@ -83,3 +83,51 @@ test('依粉專區段：少康粉的草稿內收網新/', () => {
   assert.deepEqual({ ...plan(sheet(), 1, 'shaokang', '08:15', 'draft', 'video') }, { row: 11, col: 4 });
   assert.deepEqual({ ...plan(sheet(), 1, 'shaokang', '08:15', 'cross', 'video') }, { row: 12, col: 5 });
 });
+
+// ---- 放待排 2359（slot q2359）：今天欄右邊第 3～10 欄、藍色粗體 2359 標記下第一個 reels/、±2 小時由近到遠 ----
+const BLUE = '#3c78d8';
+function qsheet() {
+  // 欄：0＝A，1＝今天，2～11＝右邊 1～10，12＝右邊 11（超出）
+  const w = 13, mk = (a, cells = {}) => { const r = Array(w).fill(''); r[0] = a; for (const [k, v] of Object.entries(cells)) r[+k] = v; return r; };
+  const V = [
+    mk('', { 1: '1124' }),
+    mk('主粉'),
+    mk('1000', { 3: '2359', 5: '排2359', 12: '2359' }),   // 2：col 3＝右邊第 2 欄（不在範圍）、col 5＝第 4 欄
+    mk('1010', { 3: 'reels/', 5: 'reels/學生揮刀', 12: 'reels/' }),
+    mk('1020', { 5: 'reels/' }),
+    mk(''),
+    mk('1200', { 6: '2359' }),                              // 6：中午區塊
+    mk('1210', { 6: 'reels/' }),
+    mk(''),
+    mk('1500', { 6: '2359' }),                              // 9：超過 2 小時
+    mk('1510', { 6: 'reels/' })
+  ];
+  const F = V.map((r) => r.map(() => '#000000')), Wt = V.map((r) => r.map(() => 'normal'));
+  for (const [r, c] of [[2, 3], [2, 5], [2, 12], [6, 6], [9, 6]]) { F[r][c] = BLUE; Wt[r][c] = 'bold'; }
+  return { V, F, Wt };
+}
+const qplan = (s, hhmm) => ({ ...ctx.rdQ2359Plan(s.V, s.F, s.Wt, 1, 'news', hhmm) });
+
+test('放待排 2359：最接近的區塊、右邊第 3～10 欄的藍色粗體 2359 下第一個空 reels/', () => {
+  const s = qsheet();
+  assert.deepEqual(qplan(s, '10:05'), { row: 4, col: 5 }, '跳過已填的 reels/學生揮刀；右邊第 2 欄與第 11 欄不算');
+  assert.deepEqual(qplan(s, '11:50'), { row: 7, col: 6 }, '12:00 比 10:00 近');
+});
+
+test('放待排 2359：不是藍色或不是粗體的 2359 不算；最近區塊滿了找 2 小時內其他區塊', () => {
+  const s = qsheet(); s.Wt[6][6] = 'normal';
+  assert.deepEqual(qplan(s, '11:50'), { row: 4, col: 5 }, '中午的 2359 不是粗體 → 找 10:00');
+  const s2 = qsheet(); s2.F[6][6] = '#38761d';
+  assert.deepEqual(qplan(s2, '11:50'), { row: 4, col: 5 });
+  const s3 = qsheet(); s3.V[4][5] = 'Reels/x';
+  assert.deepEqual(qplan(s3, '10:05'), { row: 7, col: 6 }, '10:00 滿了 → 12:00（2 小時內）');
+  s3.V[7][6] = 'Reels/y';
+  assert.match(qplan(s3, '10:05').error, /2 小時內找不到/, '15:00 超過 2 小時不找');
+});
+
+test('放待排 2359：超過 2 小時的區塊不找', () => {
+  const s = qsheet();
+  assert.deepEqual(qplan(s, '15:30'), { row: 10, col: 6 });
+  s.V[10][6] = 'Reels/y';
+  assert.match(qplan(s, '15:30').error, /找不到/, '12:00 差 3.5 小時不找');
+});

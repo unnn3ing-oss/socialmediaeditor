@@ -28,9 +28,10 @@ export function rundownBody(body) {
     if (e.style !== undefined && e.style !== 'video') return null;
     // style 'video'：影片發布（純影／Reels）→ Apps Script 套綠色 #38761d、粗體；所有 RD 寫入都置中（見 docs/rundown-gs-video-style.md）
     // slot：影片草稿（'draft'）／被多文的粉專（'cross'）→ 不照時間插入，改填今天欄右邊的預留格（見 docs/rundown-gs-draft-slot.md）
-    //   kind：'video'＝純影、'reel'＝Reels（多文只有 video）
+    //   'q2359'＝放待排 2359（直式；今天欄右邊第 3～10 欄藍色粗體 2359 下的 reels/）
+    //   kind：'video'＝純影、'reel'＝Reels（多文只有 video、放待排 2359 只有 reel）
     if (e.slot !== undefined) {
-      if (!['draft', 'cross'].includes(e.slot) || e.style !== 'video' || !['video', 'reel'].includes(e.kind) || (e.slot === 'cross' && e.kind !== 'video')) return null;
+      if (!['draft', 'cross', 'q2359'].includes(e.slot) || e.style !== 'video' || !['video', 'reel'].includes(e.kind) || (e.slot === 'cross' && e.kind !== 'video') || (e.slot === 'q2359' && e.kind !== 'reel')) return null;
     } else if (e.kind !== undefined) return null;
     entries.push({ page: e.page, date: e.date, time: e.time, text: e.text, ...(e.style ? { style: e.style } : {}), ...(e.slot ? { slot: e.slot, kind: e.kind } : {}) });
   }

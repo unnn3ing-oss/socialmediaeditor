@@ -1,4 +1,4 @@
-// FB RUNDOWN Apps Script 補丁：影片「草稿」與「被多文的粉專」填今天欄右邊的預留格（貼法見 docs/rundown-gs-draft-slot.md）
+// FB RUNDOWN Apps Script 補丁：影片「草稿」「被多文的粉專」「放待排 2359」填今天欄右邊的預留格（貼法見 docs/rundown-gs-draft-slot.md）
 // 這段貼在 rundown.gs 最後面；用到 rundown.gs 原有的 rdStr、rdFindSection、rdBlocks、rdFindSheetName、rdFindDateCol、rdPad。
 // 不插新列；只把格子文字換成 純影/SLUG（Reels/SLUG）並置中，其他格式保留預留格原本的（本來就是綠色）。
 //
@@ -88,6 +88,35 @@ function rdSlotPlan(V, x, page, hhmm, slot, kind) {
   return { error: kind === 'reel' ? '找不到空的「reels/」' : '找不到空的「純影/」' };
 }
 
+// ---- 放待排 2359（slot 'q2359'，影片發布直式「放待排 2359」；臉書排到當天 23:59，值班再從後台重排）----
+// 今天欄右邊第 3～10 欄；按送出當下最接近的時段區塊，前後 2 小時內由近到遠（一樣近先找較晚的）；
+// 標記＝文字色 #3c78d8＋粗體＋含「2359」（不含 /）；寫到標記下第一個「reels/」空預留格（不分大小寫）
+var RDQ_FROM = 3, RDQ_TO = 10, RDQ_NEAR = 120, RDQ_COLOR = '#3c78d8';
+function rdqMarker(v, color, weight) {
+  var s = rdslNorm(v);
+  return !!s && s.indexOf('/') < 0 && s.indexOf('2359') >= 0 && String(color || '').toLowerCase() === RDQ_COLOR && String(weight || '') === 'bold';
+}
+// F：getFontColors()；W：getFontWeights()（同 V 大小）
+function rdQ2359Plan(V, F, W, x, page, hhmm) {
+  var sec = rdFindSection(V, page);
+  if (!sec) return { error: '找不到「' + (RD_SECTIONS[page] || [page])[0] + '」區段' };
+  var want = +hhmm.slice(0, 2) * 60 + +hhmm.slice(3, 5);
+  var blocks = rdBlocks(V, sec).filter(function (b) { return Math.abs(b.min - want) <= RDQ_NEAR; });
+  blocks.sort(function (a, b) { var d = Math.abs(a.min - want) - Math.abs(b.min - want); return d || b.min - a.min; });
+  var width = V[0] ? V[0].length : 0;
+  for (var i = 0; i < blocks.length; i++) {
+    var blk = blocks[i];
+    for (var c = x + RDQ_FROM; c <= x + RDQ_TO && c < width; c++) {
+      for (var r = blk.start; r < blk.end; r++) {
+        if (!rdqMarker(V[r][c], F[r] && F[r][c], W[r] && W[r][c])) continue;
+        for (var r2 = r + 1; r2 < blk.end; r2++) if (rdslIs(V[r2][c], ['reels/'])) return { row: r2, col: c };
+        break;   // 這一欄的標記下面沒空位，換下一欄
+      }
+    }
+  }
+  return { error: '前後 2 小時內找不到藍色粗體「2359」下空的「reels/」' };
+}
+
 // ---- 以下只在 Apps Script 執行（rdAddOne 開頭加：if (en.slot) return rdSlotAdd(ss, names, en);）----
 function rdSlotAdd(ss, names, en) {
   var dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rdStr(en.date)), text = rdStr(en.text);
@@ -95,13 +124,14 @@ function rdSlotAdd(ss, names, en) {
   var y = +dm[1], mo = +dm[2], d = +dm[3];
   var name = rdFindSheetName(names, y, mo);
   if (!name) return { ok: false, page: en.page, error: '找不到 ' + y + '/' + rdPad(mo) + ' 分頁' };
-  var sh = ss.getSheetByName(name), V = sh.getDataRange().getDisplayValues();
+  var sh = ss.getSheetByName(name), rg = sh.getDataRange(), V = rg.getDisplayValues();
   var x = rdFindDateCol(V, mo, d);
   if (x < 0) return { ok: false, page: en.page, error: name + ' 找不到 ' + rdPad(mo) + rdPad(d) + ' 欄' };
-  var p = rdSlotPlan(V, x, en.page, rdStr(en.time), en.slot, en.kind === 'reel' ? 'reel' : 'video');
+  var p = en.slot === 'q2359' ? rdQ2359Plan(V, rg.getFontColors(), rg.getFontWeights(), x, en.page, rdStr(en.time))
+    : rdSlotPlan(V, x, en.page, rdStr(en.time), en.slot, en.kind === 'reel' ? 'reel' : 'video');
   if (p.error) return { ok: false, page: en.page, error: p.error };
   sh.getRange(p.row + 1, p.col + 1).setValue(text).setHorizontalAlignment('center');   // 換文字並置中，其他格式保留預留格原本的
   return { ok: true, page: en.page, status: 'slot', cell: name + '!' + rdA1(p.row, p.col), time: rdStr(en.time) };
 }
 
-if (typeof module !== 'undefined') module.exports = { rdSlotPlan: rdSlotPlan, rdslMarker: rdslMarker };
+if (typeof module !== 'undefined') module.exports = { rdSlotPlan: rdSlotPlan, rdslMarker: rdslMarker, rdQ2359Plan: rdQ2359Plan };
