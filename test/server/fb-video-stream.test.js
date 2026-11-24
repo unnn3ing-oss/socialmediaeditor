@@ -178,3 +178,34 @@ test('Workers 路徑：用內建 FixedLengthStream（Reels＝分段長度、橫�
   assert.ok(made[1] > 40, '橫式：表單開頭＋40＋結尾');
   assert.deepEqual(recv, [['reel', seq(30)], ['video', seq(40, 5)]]);
 });
+
+test('臉書沒讀完本文就先回錯誤：不會卡住，明確錯誤標失敗、5xx 讓前端重送', async (t) => {
+  const { env, headers, adm } = await setup(t, {
+    'POST /111/video_reels': (c) => c.body.upload_phase === 'start' ? { video_id: 'R1', upload_url: REEL('R1') } : { success: true },
+    'POST video:/222/videos': () => ({ upload_session_id: 'S2', video_id: 'V2', start_offset: '0', end_offset: '300' })
+  });
+  const inner = globalThis.fetch;   // 替身會讀本文；這裡模擬臉書「不讀本文直接回」
+  let code = 100, status = 400;
+  globalThis.fetch = (input, init = {}) => {
+    const u = String(input && input.url ? input.url : input);
+    if (init.body instanceof ReadableStream && (u.startsWith(REEL('R1')) || u.includes('/222/videos')))
+      return Promise.resolve(Response.json({ error: { code, message: 'early' } }, { status }));
+    return inner(input, init);
+  };
+  t.after(() => { globalThis.fetch = inner; });
+  await turnOn(env, adm);
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'Reels_x.mp4', size: 300, kind: 'reel', pages: ['111'] });
+  const U2 = 'c'.repeat(32);
+  await call(env, headers, '/fb/video/start', { uploadId: U2, name: 'a.mp4', size: 300, kind: 'video', pages: ['222'] });
+  const within = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('卡住了')), 3000))]);
+  code = 2; status = 503;
+  let r = await within(chunk(env, headers, 0, seq(300)));
+  assert.equal(r.body.code, 'fb_retry');
+  r = await within(call(env, headers, `/fb/video/chunk?u=${U2}&start=0`, seq(300)));
+  assert.equal(r.body.code, 'fb_retry');
+  code = 100; status = 400;
+  r = await within(chunk(env, headers, 0, seq(300)));
+  assert.deepEqual(states(r), [['111', 'failed']]);
+  r = await within(call(env, headers, `/fb/video/chunk?u=${U2}&start=0`, seq(300)));
+  assert.deepEqual(r.body.data.jobs.map((j) => [j.page, j.state]), [['222', 'failed']]);
+});

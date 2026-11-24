@@ -68,10 +68,13 @@ function split(stream, n) {
   return out;
 }
 // 原樣轉送（Reels）：body → 固定長度通道；回 { body, init, done }（done＝寫完或出錯）
+//   stop()：送臉書的請求失敗時中止寫入（pipeTo 的 signal 會 abort 通道、cancel 來源分支），不會卡在沒人讀的背壓
 function rawBody(src, len) {
   const f = fixedLength(len);
-  const done = src.pipeTo(f.writable);
-  return { body: f.readable, init: f.init, done };
+  const ac = new AbortController();
+  const done = src.pipeTo(f.writable, { signal: ac.signal });
+  done.catch(() => {});
+  return { body: f.readable, init: f.init, done, stop: () => ac.abort() };
 }
 const enc = new TextEncoder();
 // 橫式 transfer 的 multipart：開頭（表單欄位＋檔案標頭）→ 影片資料（內建 pipeTo）→ 結尾；長度事先算好
@@ -83,24 +86,28 @@ export function multipartBody(fields, src, fileLen) {
   head += `--${boundary}\r\nContent-Disposition: form-data; name="video_file_chunk"; filename="chunk"\r\nContent-Type: application/octet-stream\r\n\r\n`;
   const h = enc.encode(head), t = enc.encode(`\r\n--${boundary}--\r\n`);
   const f = fixedLength(h.length + fileLen + t.length);
+  const ac = new AbortController();
   const done = (async () => {
     let w = f.writable.getWriter();
     try { await w.write(h); } finally { w.releaseLock(); }
-    await src.pipeTo(f.writable, { preventClose: true });
+    await src.pipeTo(f.writable, { preventClose: true, signal: ac.signal });
     w = f.writable.getWriter();
-    await w.write(t);
-    await w.close();
+    try { await w.write(t); await w.close(); } finally { w.releaseLock(); }
   })();
-  done.catch(() => { f.writable.abort().catch(() => {}); });
-  return { body: f.readable, init: f.init, done, type: 'multipart/form-data; boundary=' + boundary };
+  done.catch(() => { f.writable.abort().catch(() => {}); src.cancel().catch(() => {}); });
+  return { body: f.readable, init: f.init, done, stop: () => ac.abort(), type: 'multipart/form-data; boundary=' + boundary };
 }
-// fetch 與寫入一起等：任一邊失敗就當失敗（fetch 的錯誤優先，才能分辨臉書回的明確錯誤）
+// 以送臉書的請求為準：
+//   請求失敗（臉書回錯誤、連不上、本文中途出錯）→ 中止寫入後丟出原本的錯誤（不等寫入端，臉書提早回錯誤也不會卡住）
+//   請求成功 → 臉書已收下這段，以回應為準（寫入端的結果不再影響）
+//   寫入端出錯（瀏覽器中斷、長度不符）會讓通道出錯 → 請求本身失敗 → 走上面第一條
 async function sendWith(pipe, send) {
-  const sent = send();
-  const [r1, r2] = await Promise.allSettled([sent, pipe.done]);
-  if (r1.status === 'rejected') throw r1.reason;
-  if (r2.status === 'rejected') throw new GraphError(-1, '分段沒有完整傳完（' + String((r2.reason && r2.reason.message) || r2.reason).slice(0, 80) + '）', 0, undefined, true);
-  return r1.value;
+  try { return await send(); }
+  catch (e) {
+    pipe.stop();
+    if (e instanceof GraphError) throw e;
+    throw new GraphError(-1, '分段沒有完整傳完（' + String((e && e.message) || e).slice(0, 80) + '）', 0, undefined, true);
+  }
 }
 
 // 結果不明（連不上、5xx、錯誤碼 1／2）：這段可能沒送到，讓前端重送
