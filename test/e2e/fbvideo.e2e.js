@@ -198,6 +198,8 @@ test('類型判斷；每支各自粉專與排程；套用到全部影片；RD �
   assert.equal(await page.isChecked('#rdOn'), true);
   await page.click('#sendBtn');
   await until(() => api.publish.length === 2);
+  await page.waitForSelector('#sendBtn.fx-ok .fx-chk');   // 送出成功：按鈕綠色打勾
+  assert.match(await page.textContent('#sendBtn'), /已送出 2 支|全部上傳完成/);
   for (const b of api.publish) { assert.equal(b.pages[0].at, null); assert.ok(b.pages[1].at > Date.now() / 1000); }
   await until(() => api.rundown.length === 2);
   const ent = api.rundown[0].entries.find((e) => e.page === 'ent'), news = api.rundown[0].entries.find((e) => e.page === 'news');
@@ -227,6 +229,7 @@ test('上傳中：擋取消粉專、移除影片、切類型；關分頁要確�
   assert.equal(await unloadBlocked(), true, '上傳中關分頁要先確認');
   await page.click('#stopBtn');
   await page.click('#cfYes');
+  await page.waitForSelector('#toast:has-text("已停止")');
   release();
   await page.waitForSelector(ED + ' .up-msg:has-text("已停止上傳")');
   assert.equal(api.stop.length, 1);

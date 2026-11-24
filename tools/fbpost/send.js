@@ -2,6 +2,7 @@
 // 全部粉專成功＝清空頁面、跳「送出完成」（再發一則／返回列表）；有任一失敗＝結果留在頁面、不清空
 import { $, fmt, errText, COMMENT, confirmBox, copyText } from './util.js';
 import { BG_MAX } from './compose.js';
+import { busy, idle, fail } from '../../ui/fx.js';
 
 const newSendId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
@@ -11,8 +12,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
   const unknown = new Set();   // 上次結果不明（可能已發出）的粉專
   function updateButton() {
     const n = targets.count(), noPhoto = composer.needsPhoto();
-    $('sendBtn').textContent = `全部送出（${n} 個粉專）`;
-    $('sendBtn').disabled = n === 0 || noPhoto;
+    if ($('sendBtn').getAttribute('aria-busy') !== 'true') idle($('sendBtn'), `全部送出（${n} 個粉專）`, { disabled: n === 0 || noPhoto });
     // 自動提示（沒勾粉專、選套版沒照片）：使用者送出時的錯誤訊息不蓋掉
     const auto = !n ? '請先勾選要發的粉專' : noPhoto ? '選套版需要照片，請貼上或選一張照片，或改用純文字' : '';
     if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = auto; $('sendErr').dataset.auto = auto ? '1' : ''; }
@@ -61,13 +61,14 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
     if (!/^https?:\/\/\S+$/i.test($('link').value.trim())) { err.textContent = '請貼上文章網址（第 1 則留言和排入 RD 都要用到）。'; return; }
     if (!c.targets.length) return;
     if (composer.needsPhoto()) { err.textContent = '選套版需要照片，請貼上或選一張照片，或改用純文字'; return; }
-    const btn = $('sendBtn'); btn.disabled = true; btn.textContent = '送出中…';
+    const btn = $('sendBtn'); busy(btn, `送出中（${c.targets.length} 個粉專）`);
+    let failed = false;
     try {
       const image = await composer.image();
       const msg = composer.text();   // 純文字＝標題框；其他＝貼文內容（開頭空行已拿掉）
-      if (!msg.trim() && !image) { err.textContent = composer.mode() === 'text' ? '請輸入標題（純文字貼文只發標題框的內容）。' : '請輸入貼文內容，或貼上網址帶入照片。'; return; }
+      if (!msg.trim() && !image) { err.textContent = composer.mode() === 'text' ? '請輸入標題（純文字貼文只發標題框的內容）。' : '請輸入貼文內容，或貼上網址帶入照片。'; failed = true; return; }
       const bg = image ? '' : composer.bg();
-      if (bg && [...msg].length > BG_MAX) { err.textContent = `有文字背景的貼文最多 ${BG_MAX} 字（目前 ${[...msg].length} 字），請縮短內容或把背景改成「無」。`; return; }
+      if (bg && [...msg].length > BG_MAX) { err.textContent = `有文字背景的貼文最多 ${BG_MAX} 字（目前 ${[...msg].length} 字），請縮短內容或把背景改成「無」。`; failed = true; return; }
       // 純文字（沒附圖）用各粉專的「文字」UTM；沒設定的提醒一下（留言連結不會加 UTM）
       if (!image) {
         const miss = c.targets.map((t) => targets.page(t.page)).filter((p) => p && p.noTextUtm).map((p) => p.short);
@@ -97,15 +98,19 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
       const results = data.results || [];
       if (history) history.save(snap, results.filter((r) => r.ok && r.postId).map((r) => String(r.postId)));
       for (const r of results) { if (r.unknown) unknown.add(r.page); else unknown.delete(r.page); }
+      if ($('rdOn').checked) busy(btn, '寫入 RD');
       const rdOut = await rd.write({ results, pageOf: targets.page, link, title: $('title').value, sentAt, mode: composer.mode() });
       if (results.length && results.every((r) => r.ok)) { clearAll(); showDone(results, rdOut); return; }
+      failed = true;
       renderResults($('results'), results, rdOut.lines);
       $('results').scrollIntoView({ block: 'nearest' });
     } catch (e) {
       // 整個請求沒有回應：各粉專可能已發出，再送時後端會依 sendId 跳過已成功的、把結果不明的標成待確認
-      err.textContent = errText(e);
+      err.textContent = errText(e); failed = true;
     } finally {
+      idle(btn, null);
       updateButton();
+      if (failed) { const back = btn.textContent; fail(btn, back); updateButton(); }
     }
   });
 

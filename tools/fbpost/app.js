@@ -5,6 +5,7 @@
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
 import { $, errText, confirmBox } from './util.js';
+import { busy, ok, fail } from '../../ui/fx.js';
 import { createManage } from './manage.js';
 import { createDialog } from './dialog.js';
 import { createDuty } from './duty.js';
@@ -93,8 +94,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); duty.paint(); };
   showPages(pages);
   $('pagesRefresh').addEventListener('click', async () => {
-    const b = $('pagesRefresh'); b.disabled = true;
-    try { showPages(await tb.api.call('/fb/pages')); } catch (e) { $('pagesState').textContent = '讀取粉專失敗：' + errText(e); }
-    finally { b.disabled = false; }
+    const b = $('pagesRefresh'), back = '重新整理粉專'; busy(b, '刷新中');
+    try { showPages(await tb.api.call('/fb/pages')); ok(b, '已更新', back); } catch (e) { $('pagesState').textContent = '讀取粉專失敗：' + errText(e); fail(b, back); }
   });
 })();

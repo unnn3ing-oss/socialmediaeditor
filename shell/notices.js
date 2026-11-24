@@ -1,6 +1,7 @@
 // 留言失敗通知清單（首頁帳號彈窗 shell/company.js 與管理頁頁首 admin/header.js 共用）
 //   資料：GET /staff/me/notices（只查 D1）。狀態：open＝未處理（紅）；handled＝發文者按完成或已補留言（只有看全部的人看得到，黃）
 //   完成：POST /staff/me/notices/read。發文者＝自己處理完；系統管理者／notify＝結案（未處理的也直接結案）
+import { busy, idle, fail, collapse } from '../ui/fx.js';
 const mk = (tag, cls, text) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -63,14 +64,14 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
       const ok = mk('button', 'btn btn-secondary btn-sm acct-done', '知道了');
       ok.type = 'button';
       ok.addEventListener('click', async () => {
-        ok.disabled = true;
+        busy(ok, '處理中');
         try {
           await api.call('/staff/me/msgs/read', { method: 'POST', body: { id: m.id } });
           m.readAt = Date.now();
           render(); onChange(items, msgs);
         } catch (ex) {
           if (ex && ex.code === 'not_found') { msgs = msgs.filter((x) => x !== m); render(); onChange(items, msgs); return; }
-          ok.disabled = false; toast((ex && ex.message) || '標記已讀失敗');
+          fail(ok, '知道了'); toast((ex && ex.message) || '標記已讀失敗');
         }
       });
       acts.append(ok);
@@ -99,12 +100,12 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
         const rb = mk('button', 'btn btn-secondary btn-sm', '重留言');
         rb.type = 'button';
         rb.addEventListener('click', async () => {
-          rb.disabled = true;
+          busy(rb, '送出中');
           try {
             await api.call('/fb/comment/retry', { method: 'POST', body: { postId: n.postId, page: n.page } });
             toast('已要求重新留言，稍後會再試一次');
-            if (all) load(); else drop(n);   // 看全部的人：重讀，這則會變成「已補留言」
-          } catch (ex) { rb.disabled = false; toast((ex && ex.message) || '重新留言失敗'); }
+            if (all) load(); else { await collapse(li); drop(n); }   // 看全部的人：重讀，這則會變成「已補留言」
+          } catch (ex) { fail(rb, '重留言'); toast((ex && ex.message) || '重新留言失敗'); }
         });
         acts.append(rb);
       }
@@ -125,13 +126,13 @@ export function createNotices({ api, openTool, toast = () => {}, onChange = () =
       rd.type = 'button';
       rd.title = all ? '結案：大家的通知都收掉' : '我處理好了，收掉這則通知';
       rd.addEventListener('click', async () => {
-        rd.disabled = true;
+        busy(rd, '處理中');
         try {
           await api.call('/staff/me/notices/read', { method: 'POST', body: { postId: n.postId } });
-          drop(n);
+          await collapse(li); drop(n);
         } catch (ex) {
-          if (ex && ex.code === 'not_found') { drop(n); return; }   // 別人已經結案
-          rd.disabled = false; toast((ex && ex.message) || '標記完成失敗');
+          if (ex && ex.code === 'not_found') { await collapse(li); drop(n); return; }   // 別人已經結案
+          fail(rd, '完成'); toast((ex && ex.message) || '標記完成失敗');
         }
       });
       acts.append(rd);

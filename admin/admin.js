@@ -29,6 +29,22 @@ if (window.top !== window.self) {
   var $ = function (id) { return document.getElementById(id); };
 
   function say(el, text, kind) { el.textContent = text || ''; el.className = 'msg' + (kind ? ' ' + kind : ''); }
+  // 按鈕回饋（ui/fx.js 的 window.tbxFx，點擊當下才讀；沒載到就退回只鎖按鈕）
+  function fxStart(btn, text) {
+    if (btn._fxBack == null) btn._fxBack = btn.textContent;
+    if (window.tbxFx) window.tbxFx.busy(btn, text); else btn.disabled = true;
+  }
+  function fxDone(btn, ok, okText) {
+    var back = btn._fxBack == null ? btn.textContent : btn._fxBack; btn._fxBack = null;
+    var f = window.tbxFx;
+    if (!f) { btn.disabled = false; return; }
+    if (ok === true) f.ok(btn, okText || '完成', back); else if (ok === false) f.fail(btn, back); else f.idle(btn, back);
+  }
+  // 結果看旁邊訊息的顏色（good／err），其他（例如登入過期）只恢復按鈕
+  function fxEnd(btn, msgEl, okText) {
+    var c = msgEl && msgEl.classList;
+    fxDone(btn, c && c.contains('good') ? true : c && c.contains('err') ? false : null, okText);
+  }
   function api(path, opts) {
     opts = opts || {};
     opts.headers = Object.assign({}, opts.headers, token ? { Authorization: 'Bearer ' + token } : {});
@@ -134,12 +150,12 @@ if (window.top !== window.self) {
 
   $('loginForm').onsubmit = function (e) {
     e.preventDefault();
-    $('loginBtn').disabled = true; say($('loginMsg'), '登入中');
+    fxStart($('loginBtn'), '登入中'); say($('loginMsg'), '登入中');
     api('/admin/login', { method: 'POST', body: JSON.stringify({ password: $('pw').value }) }).then(function (res) {
       if (res.ok) { token = res.data.token; $('pw').value = ''; return enter($('loginMsg')); }
       say($('loginMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '登入失敗。'), 'err');
     }).catch(function () { say($('loginMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('loginBtn').disabled = false; });
+      .then(function () { fxEnd($('loginBtn'), $('loginMsg'), '已登入'); if ($('loginMsg').classList.contains('err') && window.tbxFx) window.tbxFx.shake($('pw')); });
   };
 
   // 選檔案自動帶素材名稱：去副檔名、小寫、不合法的字元換成 -；只在名稱空白或上次是自動帶入時才覆蓋（「替換」或手打的不動）
@@ -155,26 +171,26 @@ if (window.top !== window.self) {
     e.preventDefault();
     var f = $('file').files[0], key = $('key').value.trim();
     if (!f) return say($('upMsg'), '請先選擇檔案。', 'err');
-    $('upBtn').disabled = true; say($('upMsg'), '上傳中');
+    fxStart($('upBtn'), '上傳中'); say($('upMsg'), '上傳中');
     api('/admin/assets/' + encodeURIComponent(key), { method: 'PUT', headers: { 'X-Tier': $('tier').value }, body: f }).then(function (res) {
       if (res.ok) { say($('upMsg'), '已上傳「' + key + '」。', 'good'); $('file').value = ''; load(); }
       else if (res.code === 'unauthorized') expired();
       else say($('upMsg'), res.error || '上傳失敗。', 'err');
     }).catch(function () { say($('upMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('upBtn').disabled = false; });
+      .then(function () { fxEnd($('upBtn'), $('upMsg'), '已上傳'); });
   };
 
   $('cfNo').onclick = function () { pending = ''; $('confirm').hidden = true; };
   $('cfYes').onclick = function () {
     var key = pending; if (!key) return;
-    $('cfYes').disabled = true;
+    fxStart($('cfYes'), '刪除中');
     api('/admin/assets/' + encodeURIComponent(key), { method: 'DELETE' }).then(function (res) {
       $('confirm').hidden = true; pending = '';
       if (res.ok) { say($('listMsg'), '已刪除「' + key + '」。', 'good'); load(); }
       else if (res.code === 'unauthorized') expired();
       else say($('listMsg'), res.error || '刪除失敗。', 'err');
     }).catch(function () { say($('listMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('cfYes').disabled = false; });
+      .then(function () { fxDone($('cfYes'), $('listMsg').classList.contains('good') ? true : $('listMsg').classList.contains('err') ? false : null, '已刪除'); });
   };
 
   // ---- 分頁（操作紀錄、錯誤紀錄共用）：每頁筆數記在瀏覽器；後端多要 1 筆判斷有沒有下一頁 ----
@@ -262,11 +278,11 @@ if (window.top !== window.self) {
         var rb = sfEl('button', 'lg-read', '完成'); rb.type = 'button';
         rb.title = r.post ? '結案：首頁的留言失敗通知也一起收掉' : '標記已處理';
         rb.onclick = function () {
-          rb.disabled = true;
+          fxStart(rb, '處理中');
           api('/admin/logs/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: r.id }) }).then(function (res) {
-            if (!res.ok) { if (res.code === 'unauthorized') return expired(); rb.disabled = false; say($('logMsg'), res.error || '標記失敗。', 'err'); return; }
+            if (!res.ok) { if (res.code === 'unauthorized') return expired(); fxDone(rb, false); say($('logMsg'), res.error || '標記失敗。', 'err'); return; }
             lgPager.reload();
-          }).catch(function () { rb.disabled = false; say($('logMsg'), '連不上後端，請稍後再試。', 'err'); });
+          }).catch(function () { fxDone(rb, false); say($('logMsg'), '連不上後端，請稍後再試。', 'err'); });
         };
         ts.appendChild(rb);
       }
@@ -284,7 +300,7 @@ if (window.top !== window.self) {
       return res.data || [];
     }).catch(function () { say($('logMsg'), '讀取錯誤紀錄失敗。', 'err'); return null; });
   }, lgRender, '這段期間沒有錯誤。');
-  $('logBtn').onclick = function () { $('logBtn').disabled = true; lgPager.go(0).then(function () { $('logBtn').disabled = false; }); };
+  $('logBtn').onclick = function () { fxStart($('logBtn'), '查詢中'); lgPager.go(0).then(function () { fxEnd($('logBtn'), $('logMsg')); }); };
 
   // ---- 臉書連線（/admin/fb/status）----
   function fmtExp(sec) {
@@ -356,20 +372,20 @@ if (window.top !== window.self) {
       acShow(res.data);
     }).catch(function (e) { say($('acMsg'), '讀取失敗：' + (e && e.message || ''), 'err'); });
   }
-  function acSet(mode, done) {
+  function acSet(mode, done, btn) {
     var reason = $('acReason').value.trim();
     if (Array.from(reason).length > 100) return say($('acMsg'), '關閉原因最多 100 字。', 'err');
-    $('acOpen').disabled = $('acClose').disabled = $('acReasonSave').disabled = true; say($('acMsg'), '儲存中');
+    $('acOpen').disabled = $('acClose').disabled = $('acReasonSave').disabled = true; fxStart(btn, '儲存中'); say($('acMsg'), '儲存中');
     api('/admin/fb/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode, reason: reason }) }).then(function (res) {
       if (res.ok) { acShow(res.data); say($('acMsg'), done, 'good'); }
       else if (res.code === 'unauthorized') expired();
       else say($('acMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('acMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('acOpen').disabled = $('acClose').disabled = $('acReasonSave').disabled = false; });
+      .then(function () { $('acOpen').disabled = $('acClose').disabled = $('acReasonSave').disabled = false; fxEnd(btn, $('acMsg'), done); });
   }
-  $('acOpen').onclick = function () { acSet('company', '已開放'); };
-  $('acClose').onclick = function () { acSet('admin', '已關閉'); };
-  $('acReasonSave').onclick = function () { acSet(acMode || 'admin', '已儲存原因'); };
+  $('acOpen').onclick = function () { acSet('company', '已開放', $('acOpen')); };
+  $('acClose').onclick = function () { acSet('admin', '已關閉', $('acClose')); };
+  $('acReasonSave').onclick = function () { acSet(acMode || 'admin', '已儲存原因', $('acReasonSave')); };
 
   // ---- 粉專設定（/admin/fb/pages）----
   var pgItems = [];   // 目前表格順序；每列 { id, name, short, utm, rd, show }
@@ -541,24 +557,24 @@ if (window.top !== window.self) {
   $('appSave').onclick = function () {
     var id = $('appId').value.trim(), sec = $('appSecret').value.trim();
     if (!id || !sec) { say($('appMsg'), '請填 App ID 和 App Secret。', 'err'); return; }
-    $('appSave').disabled = true; say($('appMsg'), '向臉書驗證中');
+    fxStart($('appSave'), '向臉書驗證中'); say($('appMsg'), '向臉書驗證中');
     api('/admin/fb/app' + tpQ(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appId: id, secret: sec }) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('appSecret').value = ''; $('appId').value = '';
       say($('appMsg'), '已驗證並儲存（App ID ' + res.data.appId + '）。之後貼剛產生的權杖會自動延長。', 'good');
       return fbLoad();
     }).catch(function (e) { say($('appMsg'), '沒有存：' + (e && e.message || '失敗'), 'err'); })
-      .then(function () { $('appSave').disabled = false; });
+      .then(function () { fxEnd($('appSave'), $('appMsg'), '已驗證'); });
   };
   $('appClear').onclick = function () {
     if (!window.confirm('清除管理頁存的 App 密鑰？清除後貼權杖前要先按 Extend。')) return;
-    $('appClear').disabled = true;
+    fxStart($('appClear'), '清除中');
     api('/admin/fb/app' + tpQ(), { method: 'DELETE' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       say($('appMsg'), '已清除。', 'good');
       return fbLoad();
     }).catch(function (e) { say($('appMsg'), '失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('appClear').disabled = false; });
+      .then(function () { fxEnd($('appClear'), $('appMsg'), '已清除'); });
   };
   // ---- 速率限制（/admin/fb/usage）：只讀存好的用量；立即查詢才會呼叫臉書 ----
   function usAgo(ms) { var m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 1 ? '剛剛' : m < 60 ? m + ' 分鐘前' : m < 1440 ? Math.round(m / 60) + ' 小時前' : Math.round(m / 1440) + ' 天前'; }
@@ -600,13 +616,13 @@ if (window.top !== window.self) {
   }
   $('usReload').onclick = function () { say($('usMsg'), ''); usLoad(); };
   $('usAsk').onclick = function () {
-    $('usAsk').disabled = true; say($('usMsg'), '向臉書查詢中');
+    fxStart($('usAsk'), '向臉書查詢中'); say($('usMsg'), '向臉書查詢中');
     api('/admin/fb/usage/refresh', { method: 'POST' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       usShow(res.data);
       say($('usMsg'), '已查詢 ' + res.data.asked + ' 次' + (res.data.failed ? '，' + res.data.failed + ' 次失敗' : '') + '。', res.data.failed ? 'err' : 'good');
     }).catch(function (e) { say($('usMsg'), '查詢失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('usAsk').disabled = false; });
+      .then(function () { fxEnd($('usAsk'), $('usMsg'), '已查詢'); });
   };
   // ---- Webhook（/admin/fb/webhook）：回呼網址、驗證權杖、簽章狀態、最後收到 ----
   function whLoad() {
@@ -666,14 +682,14 @@ if (window.top !== window.self) {
   // 檢查各組別權杖有沒有 pages_manage_metadata（每組打一次 debug_token，按了才查）
   $('gdPerm').onclick = function () {
     var keep = $('gdProfile').value;
-    $('gdPerm').disabled = true; say($('gdMsg'), '向臉書查詢權限');
+    fxStart($('gdPerm'), '向臉書查詢權限'); say($('gdMsg'), '向臉書查詢權限');
     api('/admin/fb/guard?check=1').then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       gdProfiles(res.data.profiles, keep);
       var ok = res.data.profiles.filter(function (p) { return p.meta; }).map(function (p) { return p.name; });
       say($('gdMsg'), ok.length ? '有 pages_manage_metadata 的組別：' + ok.join('、') : '沒有任何組別有 pages_manage_metadata。', ok.length ? 'good' : 'err');
     }).catch(function (e) { say($('gdMsg'), '查詢失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('gdPerm').disabled = false; });
+      .then(function () { fxEnd($('gdPerm'), $('gdMsg'), '已查詢'); });
   };
   function gdLoad() {
     say($('gdMsg'), '讀取中');
@@ -724,14 +740,14 @@ if (window.top !== window.self) {
     if (saved && prof !== saved && !confirm('換守門用組別後，所有粉專開關會清空，要重新打開。確定要換嗎？')) return;
     if (mode === 'hide' && !$('gdR1').checked && !$('gdR2').checked && !confirm('兩條規則都沒勾自動隱藏，等於只觀察。仍要儲存嗎？')) return;
     var body = { mode: mode, profile: prof, rules: { names: gdLines('gdNames'), leads: gdLines('gdLeads'), allow: gdLines('gdAllow'), auto: { r1: $('gdR1').checked, r2: $('gdR2').checked } } };
-    $('gdSave').disabled = true; say($('gdMsg'), '儲存中');
+    fxStart($('gdSave'), '儲存中'); say($('gdMsg'), '儲存中');
     api('/admin/fb/guard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('gdProfile').dataset.saved = res.data.profile; gdFill(res.data.rules); gdStats(res.data.stats);
       say($('gdMsg'), '已儲存。', 'good');
       if (saved !== res.data.profile) return gdPages(false);
     }).catch(function (e) { say($('gdMsg'), '儲存失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('gdSave').disabled = false; });
+      .then(function () { fxEnd($('gdSave'), $('gdMsg'), '已儲存'); });
   };
   $('gdDefault').onclick = function () {
     if (!gdDefaults) return;
@@ -765,14 +781,14 @@ if (window.top !== window.self) {
     var b = document.createElement('button'); b.type = 'button'; b.textContent = hidden ? '取消隱藏' : '隱藏';
     b.onclick = function () {
       if (hidden && !confirm('取消隱藏後，這則留言之後再被編輯也不會自動隱藏。確定嗎？')) return;
-      b.disabled = true; say($('gdLogMsg'), hidden ? '取消隱藏中' : '隱藏中');
+      fxStart(b, hidden ? '取消隱藏中' : '隱藏中'); say($('gdLogMsg'), hidden ? '取消隱藏中' : '隱藏中');
       api('/admin/fb/guard/log/' + it.cid + '/' + (hidden ? 'unhide' : 'hide'), { method: 'POST' }).then(function (res) {
         if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
         var open = !ex.hidden, n = gdItem(res.data);
         tr.replaceWith(n[0]); ex.replaceWith(n[1]);
         if (open) n[0].querySelector('.gd-more').click();
         say($('gdLogMsg'), hidden ? '已取消隱藏。' : '已隱藏。', 'good');
-      }).catch(function (e) { b.disabled = false; say($('gdLogMsg'), '失敗：' + (e && e.message || ''), 'err'); });
+      }).catch(function (e) { fxDone(b, false); say($('gdLogMsg'), '失敗：' + (e && e.message || ''), 'err'); });
     };
     bc.appendChild(b);
     return [tr, ex];
@@ -798,7 +814,7 @@ if (window.top !== window.self) {
   $('fbTokSave').onclick = function () {
     var v = $('fbTok').value.trim();
     if (!v) { say($('fbTokMsg'), '請先貼上權杖。', 'err'); return; }
-    $('fbTokSave').disabled = true; say($('fbTokMsg'), '向臉書驗證中');
+    fxStart($('fbTokSave'), '向臉書驗證中'); say($('fbTokMsg'), '向臉書驗證中');
     api('/admin/fb/token' + tpQ(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: v }) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       $('fbTok').value = '';
@@ -806,27 +822,27 @@ if (window.top !== window.self) {
       say($('fbTokMsg'), (d.extended ? '已自動延長權杖，' : '已換成新權杖，') + '並換好 ' + (d.pages || 0) + ' 個粉專權杖（永不過期）' + (d.app ? '；App：' + d.app : '') + '。', 'good');
       return fbLoad();
     }).catch(function (e) { say($('fbTokMsg'), '沒有換：' + (e && e.message || '失敗'), 'err'); })
-      .then(function () { $('fbTokSave').disabled = false; });
+      .then(function () { fxEnd($('fbTokSave'), $('fbTokMsg'), '已驗證'); });
   };
   $('fbTokClear').onclick = function () {
     if (!window.confirm('刪除管理頁存的權杖，改回使用 Secret FB_USER_TOKEN？')) return;
-    $('fbTokClear').disabled = true;
+    fxStart($('fbTokClear'), '處理中');
     api('/admin/fb/token' + tpQ(), { method: 'DELETE' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       say($('fbTokMsg'), '已改回 Secret。', 'good');
       return fbLoad();
     }).catch(function (e) { say($('fbTokMsg'), '失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('fbTokClear').disabled = false; });
+      .then(function () { fxEnd($('fbTokClear'), $('fbTokMsg'), '已改回'); });
   };
   $('fbRefresh').onclick = function () {
-    $('fbRefresh').disabled = true; say($('fbMsg'), '重新讀取中');
+    fxStart($('fbRefresh'), '重新讀取中'); say($('fbMsg'), '重新讀取中');
     api('/admin/fb/refresh' + tpQ(), { method: 'POST' }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error); }
       var r = res.data || {};
       var m = r.renewed ? '已重新換好粉專權杖：' + r.pages + ' 個。' : r.reason === 'user_expired' ? '使用者權杖已過期，保留原本的粉專權杖（照常發文）；要加新粉專請換新權杖。' : r.reason === 'failed' ? '沒有更新：' + (r.error || '') + ' 保留原本的粉專權杖。' : '已重新讀取。';
       return fbLoad().then(function () { say($('fbMsg'), m, r.reason ? 'err' : 'good'); });
     }).catch(function (e) { say($('fbMsg'), '重新讀取失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { $('fbRefresh').disabled = false; });
+      .then(function () { fxEnd($('fbRefresh'), $('fbMsg'), '已讀取'); });
   };
   // ---- 影片設定（/admin/fb/video-settings）----
   function vsLines(id) { return $(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
@@ -841,13 +857,13 @@ if (window.top !== window.self) {
   $('vsSave').onclick = function () {
     var body = { prefixes: vsLines('vsPre'), suffixes: vsLines('vsSuf'), reelsTag: $('vsReels').value.trim(), tags: vsLines('vsTags') };
     if (body.prefixes.length > 20 || body.suffixes.length > 20 || body.tags.length > 20) return say($('vsMsg'), '前綴、後綴、hashtag 按鈕各最多 20 個。', 'err');
-    $('vsSave').disabled = true; say($('vsMsg'), '儲存中');
+    fxStart($('vsSave'), '儲存中'); say($('vsMsg'), '儲存中');
     api('/admin/fb/video-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
       if (res.ok) { vsShow(res.data); say($('vsMsg'), '已儲存', 'good'); }
       else if (res.code === 'unauthorized') expired();
       else say($('vsMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('vsMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('vsSave').disabled = false; });
+      .then(function () { fxEnd($('vsSave'), $('vsMsg'), '已儲存'); });
   };
 
   // ---- 活動留言（/admin/fb/presets）----
@@ -895,13 +911,13 @@ if (window.top !== window.self) {
       if (b < 1 || b > 8000) { row.querySelector('.ps-body').focus(); return say($('psMsg'), '第 ' + (i + 1) + ' 則的內容要 1～8000 字。', 'err'); }
     }
     var body = { presets: psItems.map(function (it) { return { name: it.name.trim(), body: it.body.trim() }; }) };
-    $('psSave').disabled = true; say($('psMsg'), '儲存中');
+    fxStart($('psSave'), '儲存中'); say($('psMsg'), '儲存中');
     api('/admin/fb/presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
       if (res.ok) { psItems = res.data.map(function (p) { return { name: p.name, body: p.body }; }); psRender(); say($('psMsg'), '已儲存', 'good'); }
       else if (res.code === 'unauthorized') expired();
       else say($('psMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('psMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('psSave').disabled = false; });
+      .then(function () { fxEnd($('psSave'), $('psMsg'), '已儲存'); });
   };
 
   // ---- 文字背景（/admin/fb/backgrounds）：匯入擷取結果、分批下載圖樣、改名／顯示／刪除 ----
@@ -923,7 +939,7 @@ if (window.top !== window.self) {
   }
   // 擷取腳本：按下時讀網站上的檔案再複製（腳本只有一份，改了自動跟著）
   $('bgScript').onclick = function () {
-    var b = $('bgScript'); b.disabled = true;
+    var b = $('bgScript'); fxStart(b, '複製中');
     fetch('../docs/fb-text-backgrounds/extract-fb-backgrounds.js', { cache: 'no-cache' })
       .then(function (r) { if (!r.ok) throw new Error('讀不到腳本（HTTP ' + r.status + '）'); return r.text(); })
       .then(function (t) {
@@ -932,7 +948,7 @@ if (window.top !== window.self) {
       })
       .then(function () { say($('bgMsg'), '已複製擷取腳本，到臉書的 DevTools Console 貼上執行。', 'good'); },
         function (e) { say($('bgMsg'), (e && e.message || '複製失敗') + '，請稍後再試。', 'err'); })
-      .then(function () { b.disabled = false; });
+      .then(function () { fxEnd(b, $('bgMsg'), '已複製'); });
   };
   function bgRender() {
     var box = $('bgRows'); box.textContent = '';
@@ -1009,11 +1025,11 @@ if (window.top !== window.self) {
       var k = b.getAttribute('data-rnd'), on = k !== 'none';
       var ids = bgList.filter(function (x) { return (on ? x.type === k : true) && !!x.rnd !== on; }).map(function (x) { return x.id; });
       if (!ids.length) return say($('bgMsg'), '沒有要改的。', 'good');
-      b.disabled = true;
+      fxStart(b, '儲存中');
       bgPost('/admin/fb/backgrounds/random', { ids: ids, rnd: on }).then(function (res) {
         if (res.ok) { bgSet(res.data); say($('bgMsg'), (on ? '已列入隨機 ' : '已取消隨機 ') + ids.length + ' 個', 'good'); }
         else if (res.code === 'unauthorized') expired(); else say($('bgMsg'), res.error || '儲存失敗。', 'err');
-      }).catch(function () { say($('bgMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { b.disabled = false; });
+      }).catch(function () { say($('bgMsg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { fxEnd(b, $('bgMsg'), '已儲存'); });
     };
   });
   function bgSet(d) { bgList = (d && d.list) || []; bgRender(); }
@@ -1031,7 +1047,7 @@ if (window.top !== window.self) {
   $('bgPreview').onclick = function () {
     var data = bgParse();
     if (!data || !Array.isArray(data.presets)) { $('bgPaste').focus(); return say($('bgMsg'), '貼上的內容不是擷取腳本的結果（JSON，要有 presets）。', 'err'); }
-    $('bgPreview').disabled = true; say($('bgMsg'), '比對中');
+    fxStart($('bgPreview'), '比對中'); say($('bgMsg'), '比對中');
     bgPost('/admin/fb/backgrounds', { presets: data.presets, dry: true }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); return say($('bgMsg'), res.error || '比對失敗。', 'err'); }
       var d = res.data; bgPend = data.presets;
@@ -1047,25 +1063,25 @@ if (window.top !== window.self) {
       }
       $('bgDiff').hidden = false; say($('bgMsg'), ''); $('bgApply').focus();
     }).catch(function () { say($('bgMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('bgPreview').disabled = false; });
+      .then(function () { fxEnd($('bgPreview'), $('bgMsg'), '已比對'); });
   };
   $('bgCancel').onclick = function () { bgPend = null; $('bgDiff').hidden = true; say($('bgMsg'), ''); };
   $('bgApply').onclick = function () {
     if (!bgPend) return;
     var remove = Array.prototype.map.call($('bgGone').querySelectorAll('input:checked'), function (c) { return c.value; });
-    $('bgApply').disabled = true; say($('bgMsg'), '儲存中');
+    fxStart($('bgApply'), '儲存中'); say($('bgMsg'), '儲存中');
     bgPost('/admin/fb/backgrounds', { presets: bgPend, remove: remove }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); return say($('bgMsg'), res.error || '儲存失敗。', 'err'); }
       bgPend = null; $('bgDiff').hidden = true; $('bgPaste').value = ''; bgSet(res.data);
       var todo = bgTodo();
       say($('bgMsg'), '已匯入' + (todo ? '，還有 ' + todo + ' 張圖樣要下載，請按「下載圖樣」。' : ''), 'good');
     }).catch(function () { say($('bgMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('bgApply').disabled = false; });
+      .then(function () { fxEnd($('bgApply'), $('bgMsg'), '已匯入'); });
   };
   // 一次 10 張，直到沒有剩下；這一輪失敗的不重試（since），下次按才重試
   $('bgFetch').onclick = function () {
     var since = Date.now(), total = bgTodo(), done = 0, failed = 0;
-    $('bgFetch').disabled = true;
+    fxStart($('bgFetch'), '下載中');
     function step() {
       say($('bgMsg'), '下載中：' + (done + failed) + '／' + total);
       return bgPost('/admin/fb/backgrounds/fetch', { since: since }).then(function (res) {
@@ -1077,7 +1093,7 @@ if (window.top !== window.self) {
     step().then(function () { return bgLoad(); }).then(function () {
       say($('bgMsg'), '下載完成：成功 ' + done + ' 張' + (failed ? '、失敗 ' + failed + ' 張（原因見表格）' : ''), failed ? 'err' : 'good');
     }).catch(function (e) { say($('bgMsg'), (e && e.message) || '連不上後端，請稍後再試。', 'err'); bgLoad(); })
-      .then(function () { $('bgFetch').disabled = false; });
+      .then(function () { fxEnd($('bgFetch'), $('bgMsg'), '下載完成'); });
   };
 
   $('pgSave').onclick = function () {
@@ -1088,13 +1104,13 @@ if (window.top !== window.self) {
       if (pgItems[i].utm.length > 200 || pgItems[i].utmText.length > 200) return say($('pgMsg'), '第 ' + (i + 1) + ' 個「' + pgItems[i].name + '」的 UTM 不能超過 200 字。', 'err');
     }
     var body = { pages: pgItems.map(function (it, k) { return { id: it.id, short: it.short.trim(), utm: it.utm.trim(), utmText: it.utmText.trim(), rd: it.rd, order: k, show: it.show ? 1 : 0 }; }) };
-    $('pgSave').disabled = true; say($('pgMsg'), '儲存中');
+    fxStart($('pgSave'), '儲存中'); say($('pgMsg'), '儲存中');
     api('/admin/fb/pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
       if (res.ok) { pgItems = pgMap(res.data); pgRender(); say($('pgMsg'), '已儲存', 'good'); }
       else if (res.code === 'unauthorized') expired();
       else say($('pgMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('pgMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('pgSave').disabled = false; });
+      .then(function () { fxEnd($('pgSave'), $('pgMsg'), '已儲存'); });
   };
 
   function signOut() {
@@ -1111,26 +1127,26 @@ if (window.top !== window.self) {
   // 解鎖進階設定：輸入管理員密碼換 admin 憑證（只放記憶體）
   $('unlockForm').onsubmit = function (e) {
     e.preventDefault();
-    $('unlockBtn').disabled = true; say($('unlockMsg'), '解鎖中');
+    fxStart($('unlockBtn'), '解鎖中'); say($('unlockMsg'), '解鎖中');
     api('/admin/login', { method: 'POST', body: JSON.stringify({ password: $('unlockPw').value }) }).then(function (res) {
       if (!res.ok) return say($('unlockMsg'), res.code === 'bad_password' ? '密碼不正確。' : (res.error || '解鎖失敗。'), 'err');
       var prev = token; token = res.data.token; $('unlockPw').value = ''; say($('unlockMsg'), '');
       return enter($('unlockMsg')).then(function (ok) { if (!ok) token = prev; });
     }).catch(function () { say($('unlockMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('unlockBtn').disabled = false; });
+      .then(function () { fxEnd($('unlockBtn'), $('unlockMsg'), '已解鎖'); });
   };
 
   // 分類分頁：用隱藏切換，已讀進來的表格與填到一半的內容不會消失；網址 #post 等記住目前分類（舊的 #fb 等會轉到新分類）
 
   // ---- Rundown 連線（後端 /admin/rundown；不顯示網址與金鑰）----
   $('rdPing').onclick = function () {
-    $('rdPing').disabled = true; say($('rdMsg'), '測試中');
+    fxStart($('rdPing'), '測試中'); say($('rdMsg'), '測試中');
     api('/admin/rundown/ping', { method: 'POST' }).then(function (res) {
       if (res.ok) say($('rdMsg'), '連線正常：' + (res.data.title || '') + (res.data.sheets && res.data.sheets.length ? '（分頁：' + res.data.sheets.join('、') + '）' : ''), 'good');
       else if (res.code === 'unauthorized') expired();
       else say($('rdMsg'), res.error || '測試失敗。', 'err');
     }).catch(function () { say($('rdMsg'), '連不上後端，請稍後再試。', 'err'); })
-      .then(function () { $('rdPing').disabled = false; });
+      .then(function () { fxEnd($('rdPing'), $('rdMsg'), '連線正常'); });
   };
 
   var rdLoaded = false;
@@ -1229,14 +1245,14 @@ if (window.top !== window.self) {
       var ls = sfEl('td', 'num', s.lastSeen ? fmtAgo(s.lastSeen) : '—'); if (s.lastSeen) ls.title = fmtTime(s.lastSeen); tr.appendChild(ls);
       var ac = sfEl('td', 'sf-ops');
       var tgl = sfEl('button', '', s.enabled ? '停用' : '啟用'); tgl.type = 'button';
-      tgl.onclick = function () { tgl.disabled = true; sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { enabled: !s.enabled }, $('sfMsg'), s.enabled ? '已停用「' + s.name + '」。' : '已啟用「' + s.name + '」。'); };
+      tgl.onclick = function () { fxStart(tgl, s.enabled ? '停用中' : '啟用中'); sfCall('/admin/staff/' + encodeURIComponent(s.id), 'POST', { enabled: !s.enabled }, $('sfMsg'), s.enabled ? '已停用「' + s.name + '」。' : '已啟用「' + s.name + '」。').then(function (ok) { fxDone(tgl, ok, s.enabled ? '已停用' : '已啟用'); }); };
       var del = sfEl('button', 'danger', '移除'); del.type = 'button';
       del.onclick = function () { sfPending = s.id; $('sfCfText').textContent = s.name + '（' + s.id + '）會從名單移除，對方下一次操作就會被擋。'; $('sfConfirm').hidden = false; $('sfCfYes').focus(); };
       var rst = sfEl('button', '', '重置密碼'); rst.type = 'button';
       rst.onclick = function () {
         if (!window.confirm('重置「' + s.name + '」的密碼？\n對方所有裝置會登出，要用新的設定碼重新設密碼。')) return;
-        rst.disabled = true;
-        sfCall('/admin/staff/' + encodeURIComponent(s.id) + '/reset', 'POST', null, $('sfMsg'), '已重置「' + s.name + '」的密碼。').then(function (ok) { if (!ok) rst.disabled = false; });
+        fxStart(rst, '重置中');
+        sfCall('/admin/staff/' + encodeURIComponent(s.id) + '/reset', 'POST', null, $('sfMsg'), '已重置「' + s.name + '」的密碼。').then(function (ok) { fxDone(rst, ok, '已重置'); });
       };
       ac.appendChild(rst); ac.appendChild(tgl); ac.appendChild(del); tr.appendChild(ac);
       // 系統管理者不能停用、移除
@@ -1272,8 +1288,8 @@ if (window.top !== window.self) {
       var nm = name.value.trim(); if (!nm) { name.focus(); return say($('sgMsg'), '請填權限組名稱。', 'err'); }
       var perms = Array.prototype.filter.call(boxes.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
       var body = { name: nm, perms: perms }; if (g.id) body.id = g.id;
-      save.disabled = true; say($('sgMsg'), '儲存中');
-      sfCall('/admin/staff-groups', 'POST', body, $('sgMsg'), '已儲存「' + nm + '」。').then(function (ok) { if (!ok) save.disabled = false; });
+      fxStart(save, '儲存中'); say($('sgMsg'), '儲存中');
+      sfCall('/admin/staff-groups', 'POST', body, $('sgMsg'), '已儲存「' + nm + '」。').then(function (ok) { fxDone(save, ok, '已儲存'); });
     };
     var del = sfEl('button', 'danger', '刪除'); del.type = 'button';
     if (!g.id) del.onclick = function () { row.remove(); };
@@ -1340,13 +1356,13 @@ if (window.top !== window.self) {
   $('msCfNo').onclick = function () { $('msConfirm').hidden = true; };
   $('msCfYes').onclick = function () {
     if (msBusy) return;
-    var p = msPayload(); msBusy = true; $('msCfYes').disabled = true;
+    var p = msPayload(); msBusy = true; fxStart($('msCfYes'), '發送中');
     api('/admin/msgs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p.body) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('msMsg'), res.error || '發送失敗。', 'err'); return; }
       $('msBody').value = ''; $('msCount').textContent = '0／200 字';
       say($('msMsg'), '已發送給 ' + res.data.count + ' 人。', 'good'); return msLoad();
     }).catch(function (e) { say($('msMsg'), '發送失敗：' + (e && e.message || ''), 'err'); })
-      .then(function () { msBusy = false; $('msCfYes').disabled = false; $('msConfirm').hidden = true; });
+      .then(function () { msBusy = false; fxDone($('msCfYes'), null); $('msConfirm').hidden = true; });
   };
   function msLoad() {
     return api('/admin/msgs').then(function (res) {
@@ -1370,11 +1386,11 @@ if (window.top !== window.self) {
       if (!m.recalled) {
         var rc = sfEl('button', 'danger', '撤回'); rc.type = 'button';
         rc.onclick = function () {
-          rc.disabled = true;
+          fxStart(rc, '撤回中');
           api('/admin/msgs/' + m.id + '/recall', { method: 'POST' }).then(function (res) {
-            if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('msMsg'), res.error || '撤回失敗。', 'err'); rc.disabled = false; return; }
+            if (!res.ok) { if (res.code === 'unauthorized') return expired(); say($('msMsg'), res.error || '撤回失敗。', 'err'); fxDone(rc, false); return; }
             say($('msMsg'), '已撤回，收件人不會再看到這則通知。', 'good'); return msLoad();
-          }).catch(function (e) { rc.disabled = false; say($('msMsg'), '撤回失敗：' + (e && e.message || ''), 'err'); });
+          }).catch(function (e) { fxDone(rc, false); say($('msMsg'), '撤回失敗：' + (e && e.message || ''), 'err'); });
         };
         ops.appendChild(rc);
       }
@@ -1397,7 +1413,7 @@ if (window.top !== window.self) {
     $('olEmpty').hidden = on.length > 0; ul.hidden = !on.length;
     $('olAt').textContent = '更新於 ' + fmtTime(now).slice(11);
   }
-  $('olRefresh').onclick = function () { $('olRefresh').disabled = true; sfLoad().then(function () { $('olRefresh').disabled = false; }); };
+  $('olRefresh').onclick = function () { fxStart($('olRefresh'), '讀取中'); sfLoad().then(function () { fxEnd($('olRefresh'), $('sfMsg')); }); };
   function sfLoad() {
     say($('sfMsg'), '讀取中');
     return api('/admin/staff').then(function (res) {
@@ -1408,18 +1424,18 @@ if (window.top !== window.self) {
   $('sfForm').onsubmit = function (e) {
     e.preventDefault();
     var body = { id: $('sfId').value.trim(), name: $('sfName').value.trim(), group: $('sfGroup').value, contact: $('sfContact').value.trim() };
-    $('sfAdd').disabled = true; say($('sfMsg'), '新增中');
+    fxStart($('sfAdd'), '新增中'); say($('sfMsg'), '新增中');
     sfCall('/admin/staff', 'POST', body, $('sfMsg'), '已新增「' + body.name + '」。').then(function (ok) {
       if (ok) { $('sfId').value = ''; $('sfName').value = ''; $('sfContact').value = ''; $('sfId').focus(); }
-      $('sfAdd').disabled = false;
+      fxDone($('sfAdd'), ok, '已新增');
     });
   };
   $('sfCfNo').onclick = function () { sfPending = null; $('sfConfirm').hidden = true; };
   $('sfCfYes').onclick = function () {
     var id = sfPending; if (!id) return;
-    $('sfCfYes').disabled = true;
+    fxStart($('sfCfYes'), '移除中');
     sfCall('/admin/staff/' + encodeURIComponent(id), 'DELETE', null, $('sfMsg'), '已移除。').then(function () {
-      $('sfConfirm').hidden = true; sfPending = null; $('sfCfYes').disabled = false;
+      $('sfConfirm').hidden = true; sfPending = null; fxDone($('sfCfYes'), null);
     });
   };
   // 操作紀錄：類別（工具／後台）依動作判斷；發文類型從 detail 的 kind= 讀（舊紀錄沒有）
@@ -1462,7 +1478,7 @@ if (window.top !== window.self) {
   }, auRender, '這段期間沒有紀錄。');
   $('auSrc').onchange = function () { if (!$('auWrap').hidden || $('auPager').hidden === false) auPager.go(0); };
   $('auUid').onkeydown = function (e) { if (e.key === 'Enter') $('auBtn').click(); };
-  $('auBtn').onclick = function () { $('auBtn').disabled = true; auPager.go(0).then(function () { $('auBtn').disabled = false; }); };
+  $('auBtn').onclick = function () { fxStart($('auBtn'), '查詢中'); auPager.go(0).then(function () { fxEnd($('auBtn'), $('auMsg')); }); };
 
   // ---- 首頁儀表板（GET /admin/dash）：進到首頁查一次；「重新整理」帶 fresh=1 ----
   var dashLoaded = false, dashSeq = 0;
@@ -1558,12 +1574,12 @@ if (window.top !== window.self) {
       var w = who();
       var staff = w === 'some' ? Array.prototype.map.call($(p + 'People').querySelectorAll('input:checked'), function (c) { return c.value; }) : [];
       if ($(p + 'On').checked && w === 'some' && !staff.length) return say($(p + 'Msg'), '選「指定員工」要至少勾一位。', 'err');
-      $(p + 'Save').disabled = true; say($(p + 'Msg'), '儲存中…');
+      fxStart($(p + 'Save'), '儲存中'); say($(p + 'Msg'), '儲存中…');
       var body = { who: w, staff: staff }; body[field] = $(p + 'On').checked;
       api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
         if (res.ok) { render(res.data); var d = res.data; say($(p + 'Msg'), !d[field] ? '已關閉' : d.who === 'all' ? '已啟用：全部人（約 1 分鐘內生效）' : '已啟用：指定 ' + d.staff.length + ' 位員工（約 1 分鐘內生效）', 'good'); }
         else if (res.code === 'unauthorized') expired(); else say($(p + 'Msg'), res.error || '儲存失敗。', 'err');
-      }).catch(function () { say($(p + 'Msg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { $(p + 'Save').disabled = false; });
+      }).catch(function () { say($(p + 'Msg'), '連不上後端，請稍後再試。', 'err'); }).then(function () { fxEnd($(p + 'Save'), $(p + 'Msg'), '已儲存'); });
     };
     return load;
   }
@@ -1587,11 +1603,11 @@ if (window.top !== window.self) {
   }
   $('dcSave').onclick = function () {
     var items = Array.prototype.filter.call($('dcList').querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
-    $('dcSave').disabled = true; say($('dcMsg'), '儲存中…');
+    fxStart($('dcSave'), '儲存中'); say($('dcMsg'), '儲存中…');
     api('/admin/dash/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (res) {
       if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
       say($('dcMsg'), '已儲存，首頁重新整理後生效。', 'good'); dashLoaded = false;
-    }).catch(function (e) { say($('dcMsg'), '儲存失敗' + (e && e.message ? '：' + e.message : ''), 'err'); }).then(function () { $('dcSave').disabled = false; });
+    }).catch(function (e) { say($('dcMsg'), '儲存失敗' + (e && e.message ? '：' + e.message : ''), 'err'); }).then(function () { fxEnd($('dcSave'), $('dcMsg'), '已儲存'); });
   };
 
   var TABS = ['home', 'post', 'guard', 'people', 'conn', 'assets', 'rec', 'adv'];

@@ -41,6 +41,7 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     if (p === '/fb/post') {
       const body = req.postData() || '';
       api.posts.push(body);
+      if (opts.postDelay) await new Promise((res) => setTimeout(res, opts.postDelay));
       const targets = JSON.parse(/name="targets"\r\n\r\n([^\r]*)\r\n/.exec(body)[1]);
       if (opts.post) return json(opts.post(targets, body));
       return json({ results: targets.map((t) => (t.page === '222'   // 替身後端：娛樂一定失敗
@@ -137,6 +138,22 @@ test('純文字貼文：勾到沒設定文字 UTM 的粉專會先提醒，返回
   await page.click('#cfYes');
   await page.waitForSelector('#doneDlg[open]');
   assert.equal(api.posts.length, 1);
+  await page.close();
+});
+
+test('送出中按鈕轉圈（aria-busy）、完成後恢復', async () => {
+  const { page } = await newPage('admin', undefined, { postDelay: 600 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('#modeSeg [data-mode=text]');
+  await page.fill('#title', '只有文字');
+  await page.evaluate(() => { document.getElementById('link').value = 'https://news.tvbs.com.tw/life/1'; });
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#sendBtn[aria-busy="true"]');
+  assert.match(await page.textContent('#sendBtn'), /送出中（1 個粉專）/);
+  await page.waitForSelector('#doneDlg[open]');
+  assert.equal(await page.getAttribute('#sendBtn', 'aria-busy'), null);
   await page.close();
 });
 
@@ -309,8 +326,9 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   assert.equal(api.cancels.length, 0);
   await page.click('#schedList li .acts >> text=刪除');
   await page.waitForSelector('#cfDlg[open]');
+  const liBefore = await page.locator('#schedList li').count();
   await page.click('#cfYes');
-  await page.waitForFunction(() => /共|沒有排程/.test(document.getElementById('schedHint').textContent));
+  await page.waitForFunction((n) => document.querySelectorAll('#schedList li').length === n, liBefore - 1);
   assert.deepEqual(api.cancels, [{ page: '111' }]);
 
   // 已發佈

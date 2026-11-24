@@ -9,6 +9,7 @@ import { autoKind, rdText, rdTextQ, routeOf } from './rules.js';
 import { createEditor, STATE_TEXT, CROSS_TEXT } from './editor.js';
 import { pickCover } from './cover.js';
 import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
+import * as fx from '../../ui/fx.js';
 
 tb.init('fbvideo');
 
@@ -99,8 +100,10 @@ function addFiles(files) {
     v.ed = createEditor(v, edCtx);
     v.ed.renderPages();
     $('editors').append(v.ed.el);
+    v.fxIn = true;   // 左側列表第一次畫出來時滑入
     S.videos.push(v);
     v.metaP = readMeta(v);
+    v.metaP.finally(() => { v.metaDone = true; renderQueue(); });   // 讀到縮圖前左側縮圖顯示骨架
     v.ed.kindInfo(); v.ed.renderUpload();
     select(v);
   }
@@ -175,6 +178,7 @@ const edCtx = {
     if (v.cover) URL.revokeObjectURL(v.cover.url);
     v.cover = r === 'auto' ? null : r;
     v.ed.renderCover(); renderQueue();
+    fx.flash(v.ed.el.querySelector('.cover-img'));
   },
   // 手動上傳的封面圖
   setCover(v, c) {
@@ -182,6 +186,7 @@ const edCtx = {
     if (v.cover) URL.revokeObjectURL(v.cover.url);
     v.cover = c;
     v.ed.renderCover(); renderQueue();
+    fx.flash(v.ed.el.querySelector('.cover-img'));
   },
   toast,
   // 切換類型：上傳中擋；已開始上傳（還沒送出）就停掉舊的、用新類型重傳
@@ -283,12 +288,14 @@ function renderQueue() {
   const list = $('vqList'); list.textContent = '';
   $('emptyHint').hidden = !!S.videos.length;
   S.videos.forEach((v, i) => {
-    const li = document.createElement('li'); li.className = 'vq-item' + (v === S.cur ? ' is-cur' : '');
+    const li = document.createElement('li'); li.className = 'vq-item' + (v === S.cur ? ' is-cur' : '') + (v.fxIn ? ' fx-enter' : '');
+    v.fxIn = false; v.li = li;
     const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'vq-pick';
     pick.setAttribute('aria-current', String(v === S.cur));
     const th = document.createElement('span'); th.className = 'vq-thumb' + (v.height > v.width ? ' tall' : '');
     const src = v.cover ? v.cover.url : v.thumb;
     if (src) { const img = document.createElement('img'); img.src = src; img.alt = ''; th.append(img); }
+    else if (!v.metaDone) th.classList.add('fx-sk');
     if (Number.isFinite(v.duration)) { const d = document.createElement('span'); d.className = 'vq-dur'; d.textContent = durText(v.duration); th.append(d); }
     const tx = document.createElement('span'); tx.className = 'vq-text';
     const nm = document.createElement('span'); nm.className = 'vq-name'; nm.textContent = v.ed.titleText() || v.name;
@@ -335,8 +342,12 @@ function queueState(v) {
   return v.ed.selected().length ? '' : '未選粉專';
 }
 async function removeVideo(v) {
-  if (isUploading(v)) { toast('影片上傳中，等上傳完成才能移除（或先按「停止上傳」）'); return; }
+  if (isUploading(v)) { if (v.li) fx.shake(v.li); toast('影片上傳中，等上傳完成才能移除（或先按「停止上傳」）'); return; }
+  if (v.removing) return;
+  v.removing = true;
+  if (v.li) { const rm = v.li.querySelector('.vq-rm'); if (rm) { rm.disabled = true; rm.textContent = '移除中'; } }
   if (v.jobs.length && !v.sent) { try { await tb.api.call('/fb/video/stop', { method: 'POST', body: { uploadId: v.uploadId } }); } catch { /* 沒送出就不會發布 */ } }
+  await fx.collapse(v.li);   // 那一列收合後才拿掉
   const i = S.videos.indexOf(v);
   S.videos.splice(i, 1);
   v.ed.el.remove();
@@ -432,12 +443,16 @@ $('stopBtn').addEventListener('click', async () => {
   const sentOnes = list.filter((v) => v.sent).length;
   const ok = await confirmBox('停止上傳？', `會停止 ${list.length} 支影片的上傳${sentOnes ? `（其中 ${sentOnes} 支已按送出，停止後不會發布）` : ''}。影片與文字會留著，可以按「重新上傳」。`, '停止上傳');
   if (!ok) return;
+  const sb = $('stopBtn');
+  fx.busy(sb, '停止中');
   for (const v of list) {
     v.stopReq = true; v.next = null;
     try { apply(v, await tb.api.call('/fb/video/stop', { method: 'POST', body: { uploadId: v.uploadId } })); } catch { /* 忽略 */ }
     v.upload = 'stopped'; v.ed.renderUpload();
   }
+  fx.idle(sb, '停止上傳');
   renderQueue(); updateBusy();
+  toast(`已停止 ${list.length} 支影片的上傳，可以按「重新上傳」`);
 });
 
 function updateBusy() {
@@ -448,12 +463,27 @@ function updateBusy() {
 
 // ===== 送出 =====
 let sending = false;
+// 送出後還在上傳的影片：按鈕顯示「已送出，等上傳完成 N 支…」，全部傳完打勾、有失敗抖一下
+let waitSet = null;
+let hold = false;   // 打勾／抖動顯示中（1.5 秒）不要被重畫蓋掉
+const failedV = (v) => v.upload === 'error' || v.jobs.some((j) => ['failed', 'unknown'].includes(j.state));
+function holdFoot() { hold = true; setTimeout(() => { hold = false; updateFoot(); }, 1500); }
 function updateFoot() {
   if (sending) return;   // 送出中由送出流程自己更新按鈕
+  const btn = $('sendBtn');
   const ready = S.videos.filter((v) => v.checked && !v.sent);
   const n = ready.length;
-  $('sendBtn').disabled = !n;
-  $('sendBtn').textContent = n > 1 ? `全部送出（${n} 支）` : '全部送出';
+  if (waitSet) {
+    const live = [...waitSet].filter((v) => S.videos.includes(v) && v.upload !== 'stopped');
+    const still = live.filter(isUploading);
+    if (!still.length) {
+      waitSet = null;
+      const bad = live.filter(failedV);
+      if (bad.length) { fx.fail(btn, '全部送出'); toast(`${bad.length} 支影片上傳失敗（看左側紅字），可以按「重新上傳」`, null, 10000); holdFoot(); }
+      else if (live.length) { fx.ok(btn, `全部上傳完成（${live.length} 支）`, '全部送出'); holdFoot(); }
+    } else if (!n && !hold) fx.busy(btn, `已送出，等上傳完成 ${still.length} 支`, { dots: true });
+  }
+  if (!hold && !(waitSet && !n)) fx.idle(btn, n > 1 ? `全部送出（${n} 支）` : '全部送出', { disabled: !n });
   const parts = [];
   if (n) parts.push(`${n} 支待送出`);
   $('footMsg').textContent = parts.join('・');
@@ -474,13 +504,13 @@ $('sendBtn').addEventListener('click', async () => {
   }
   sending = true;
   const btn = $('sendBtn');
-  btn.disabled = true; btn.classList.add('is-busy'); btn.textContent = '送出中…';
+  fx.busy(btn, forms.length > 1 ? `送出中（第 1／${forms.length} 支）` : '送出中');
   const fails = [];
   let okN = 0, waitN = 0;
   try {
     await sync();   // 確保每支都開好工作階段
     for (const [i, { v, body }] of forms.entries()) {
-      btn.textContent = forms.length > 1 ? `送出中…（第 ${i + 1}／${forms.length} 支）` : '送出中…';
+      fx.busy(btn, forms.length > 1 ? `送出中（第 ${i + 1}／${forms.length} 支）` : '送出中');
       const name = v.ed.titleText() || v.name;
       if (!v.jobs.length) { fails.push(`「${name}」還沒開始上傳`); continue; }
       body.uploadId = v.uploadId;
@@ -495,7 +525,11 @@ $('sendBtn').addEventListener('click', async () => {
       } catch (e) { fails.push(`「${name}」${errText(e)}`); }
     }
   } finally {
-    sending = false; btn.classList.remove('is-busy');
+    sending = false;
+    const waiting = forms.map((f) => f.v).filter((v) => v.sent && isUploading(v));
+    if (waiting.length) waitSet = new Set([...(waitSet || []), ...waiting]);
+    else if (fails.length) { fx.fail(btn, '全部送出'); holdFoot(); }
+    else if (okN) { fx.ok(btn, `已送出 ${okN} 支`, '全部送出'); holdFoot(); }
     updateFoot();
   }
   renderQueue();
@@ -580,8 +614,12 @@ function rdFail(text, why) {
 let logLoaded = false;
 async function loadLog() {
   logLoaded = true;
-  const b = $('logReload'); b.disabled = true;
+  const b = $('logReload'); fx.busy(b, '刷新中');
   $('logHint').textContent = '讀取中…';
+  const ulOld = $('logList'), keep = [...ulOld.childNodes];
+  ulOld.textContent = '';
+  for (let k = 0; k < 3; k++) { const li = document.createElement('li'); li.className = 'fx-skrow'; li.setAttribute('aria-hidden', 'true'); li.append(document.createElement('span'), document.createElement('span')); ulOld.append(li); }
+  let okLoad = false;
   try {
     const jobs = await tb.api.call('/fb/video/jobs');
     const groups = new Map();
@@ -608,8 +646,9 @@ async function loadLog() {
       ul.append(li);
     }
     $('logHint').textContent = groups.size ? `最近 7 天 ${groups.size} 支影片` : '最近 7 天沒有送出的影片';
-  } catch (e) { $('logHint').textContent = '讀取失敗：' + errText(e); }
-  finally { b.disabled = false; }
+    okLoad = true;
+  } catch (e) { $('logHint').textContent = '讀取失敗：' + errText(e) + (keep.length ? '（保留上次的內容）' : ''); $('logList').replaceChildren(...keep); }
+  finally { if (okLoad) fx.ok(b, '已更新', '刷新'); else fx.fail(b, '刷新'); }
 }
 $('logReload').addEventListener('click', loadLog);
 updateFoot();

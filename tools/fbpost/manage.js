@@ -1,6 +1,7 @@
 // 已排程／已發佈：選粉專＋刷新才查；編輯（尚未推出）、改時間、刪除
 import { $, errText, bounds, inRange, toLocalInput, commentState, say, confirmBox } from './util.js';
 import { postKey } from './history.js';
+import * as fx from '../../ui/fx.js';
 
 // 列表（2026-11-18 使用者定版）：縮圖｜內容（一行）＋「相片／文字．粉專．留言」｜按鈕｜時間欄
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -107,12 +108,12 @@ export function createManage({ tb, history = null, onResend = null }) {
     const c = it.comment;
     if (!c || !c.alert) return null;
     const b = btn('重新留言', 'btn-secondary act-retry', async () => {
-      b.disabled = true;
+      fx.busy(b, '重新留言中');
       try {
         await tb.api.call('/fb/comment/retry', { method: 'POST', body: { postId: it.id, page } });
         const sp = li.querySelector('.cm'); sp.textContent = '留言：重新留言中'; sp.classList.remove('cm-bad'); sp.classList.add('cm-line');
         b.remove(); say(hint, '已要求重新留言，稍後按「刷新」看結果');
-      } catch (e) { b.disabled = false; say(hint, errText(e), true); }
+      } catch (e) { fx.fail(b, '重新留言'); say(hint, errText(e), true); }
     });
     b.title = '馬上再試一次留言（已留過的不會重複）';
     return b;
@@ -146,14 +147,16 @@ export function createManage({ tb, history = null, onResend = null }) {
         const ok = btn('確認改時間', 'btn-primary', async () => {
           const at = Math.floor(new Date(dt.value).getTime() / 1000);
           if (!inRange(at)) { say('schedHint', '排程時間必須在 10 分鐘到 30 天之間。', true); return; }
+          fx.busy(ok, '改時間中');
           try {
             await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/reschedule`, { method: 'POST', body: { page, at } });
             // 成功：直接更新這一列的時間並重排，不整份重查臉書
             it.at = at; li.dataset.at = String(at); edit.hidden = true;
             li._setWhen(at * 1000);
             sortSched(); say('schedHint', `共 ${$('schedList').children.length} 則，已改時間`);
+            fx.ok(ok, '已更新', '確認改時間');
           }
-          catch (e) { say('schedHint', errText(e), true); }
+          catch (e) { fx.fail(ok, '確認改時間'); say('schedHint', errText(e), true); }
         });
         edit.append(dt, ok);
         const bEdit = btn('改時間', 'btn-secondary act-time', () => {
@@ -161,11 +164,12 @@ export function createManage({ tb, history = null, onResend = null }) {
         });
         const bCancel = btn('刪除', 'btn-secondary btn-del', async () => {
           if (!await confirmBox('刪除排程貼文', '確定要刪除這則排程貼文嗎？刪除後不會發布，無法復原。')) return;
+          fx.busy(bCancel, '刪除中');
           try {
             await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/cancel`, { method: 'POST', body: { page } });
-            li.remove(); const n = $('schedList').children.length; say('schedHint', n ? `共 ${n} 則` : '沒有排程貼文');   // 直接移除這一列，不重查
+            await fx.collapse(li); li.remove(); const n = $('schedList').children.length; say('schedHint', n ? `共 ${n} 則` : '沒有排程貼文');   // 直接移除這一列，不重查
           }
-          catch (e) { say('schedHint', errText(e), true); }
+          catch (e) { fx.fail(bCancel, '刪除'); say('schedHint', errText(e), true); }
         });
         const bRetry = retryBtn(it, li, page, 'schedHint');
         if (bRetry) acts.append(bRetry);
@@ -173,7 +177,8 @@ export function createManage({ tb, history = null, onResend = null }) {
         li.insertBefore(acts, li.querySelector('.when')); li.append(edit); ul.append(li);
       }
       say('schedHint', items.length ? `共 ${items.length} 則` : '沒有排程貼文');
-    } catch (e) { if (my === schedSeq) { skelEnd($('schedList'), true); say('schedHint', errText(e), true); } }
+      return true;
+    } catch (e) { if (my === schedSeq) { skelEnd($('schedList'), true); say('schedHint', errText(e), true); return false; } }
   }
 
   let pubNext = null;
@@ -194,16 +199,19 @@ export function createManage({ tb, history = null, onResend = null }) {
         const bRetry = retryBtn(it, li, page, 'pubHint');
         if (bRetry) acts.append(bRetry);
         acts.append(editSoon(), resendBtn(it, idx));
-        acts.append(btn('刪除', 'btn-secondary btn-del', async () => {
+        const bDel = btn('刪除', 'btn-secondary btn-del', async () => {
           if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
-          try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/delete`, { method: 'POST', body: { page } }); li.remove(); const n = ul.children.length; say('pubHint', n ? `共 ${n} 則` : '沒有已發佈貼文'); }
-          catch (e) { say('pubHint', errText(e), true); }
-        }));
+          fx.busy(bDel, '刪除中');
+          try { await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/delete`, { method: 'POST', body: { page } }); await fx.collapse(li); li.remove(); const n = ul.children.length; say('pubHint', n ? `共 ${n} 則` : '沒有已發佈貼文'); }
+          catch (e) { fx.fail(bDel, '刪除'); say('pubHint', errText(e), true); }
+        });
+        acts.append(bDel);
         li.insertBefore(acts, li.querySelector('.when')); ul.append(li);
       }
       pubNext = d.next || null; $('pubMore').hidden = !pubNext;
       say('pubHint', ul.children.length ? `共 ${ul.children.length} 則` : '沒有已發佈貼文');
-    } catch (e) { if (my === pubSeq) { skelEnd($('pubList'), true); $('pubMore').hidden = !pubNext; say('pubHint', errText(e), true); } }
+      return true;
+    } catch (e) { if (my === pubSeq) { skelEnd($('pubList'), true); $('pubMore').hidden = !pubNext; say('pubHint', errText(e), true); return false; } }
   }
 
   // 畫面開著時，時間到了的排程每分鐘拿掉（不重查臉書）
@@ -223,13 +231,18 @@ export function createManage({ tb, history = null, onResend = null }) {
   }
   setInterval(autoSched, 60 * 1000);
   document.addEventListener('visibilitychange', autoSched);
-  $('schedReload').onclick = loadSched;
+  const reloader = (id, load) => async () => {
+    const b = $(id); fx.busy(b, '刷新中');
+    const r = await load();
+    if (r === true) fx.ok(b, '已更新', '刷新'); else if (r === false) fx.fail(b, '刷新'); else fx.idle(b, '刷新');
+  };
+  $('schedReload').onclick = reloader('schedReload', loadSched);
   // 排序只重排畫面上的列，不重查臉書
   $('schedSort').onchange = sortSched;
   // 換粉專：清掉舊粉專的列表，等按「刷新」才查（不自動查詢）
   $('schedPage').onchange = () => { schedSeq++; skelDrop($('schedList')); say('schedHint', '按「刷新」讀取 Facebook 排程'); };
   $('pubPage').onchange = () => { pubSeq++; skelDrop($('pubList')); pubNext = null; $('pubMore').hidden = true; say('pubHint', '按「刷新」讀取 Facebook 已發佈貼文'); };
-  $('pubReload').onclick = () => loadPub(false);
+  $('pubReload').onclick = reloader('pubReload', () => loadPub(false));
   $('pubMore').onclick = () => loadPub(true);
 
   return {

@@ -1,5 +1,6 @@
 // 每支影片一個內容區（從 <template> 複製；切換影片只隱藏，內容保留）
 // 由上而下：上傳狀態、類型、影片標題、影片內文、標籤（按鈕＋自訂）、授權、發布粉專（各自立即／排程）、留言、RD SLUG
+import * as fx from '../../ui/fx.js';
 import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, q2359At, routeOf, routeText } from './rules.js';
 import { segmented, sizeText, fmt, toLocalInput, MIN_S, MAX_S, rangeText } from './util.js';
 
@@ -229,7 +230,7 @@ export function createEditor(v, ctx) {
     note.textContent = drafts.length ? `存草稿的粉專（${drafts.join('、')}）不會留言；被多文的粉專也不會留言。` : '';
     ctx.changed(v);
   }
-  q('.apply-all').addEventListener('click', () => ctx.applyAll(v));
+  q('.apply-all').addEventListener('click', (e) => { const b = e.currentTarget; if (ctx.applyAll(v) !== false) fx.ok(b, '已套用', '發布方式全套用'); });
 
   // ===== 留言 =====
   const cmList = q('.cm-list'), cmAdd = q('.cm-add');
@@ -279,7 +280,10 @@ export function createEditor(v, ctx) {
   // ===== 上傳進度與各粉專狀態：畫在底部工具列（只畫目前選中的影片） =====
   // 這支影片的上傳狀態（編輯區「發布粉專」下方）：一行總結＋每個粉專一行
   const upBox = q('.up-box'), upMsg = q('.up-msg'), upList = q('.up-list'), upRestart = q('.up-restart');
-  upRestart.addEventListener('click', () => ctx.restart(v));
+  upRestart.addEventListener('click', async () => {
+    fx.busy(upRestart, '重新上傳中');
+    try { await ctx.restart(v); } finally { if (v.upload === 'error') fx.fail(upRestart, '重新上傳'); else fx.idle(upRestart, '重新上傳'); }
+  });
   function renderUpload() {
     const jobs = v.jobs.filter((j) => j.state !== 'canceled');
     const up = jobs.filter((j) => j.state === 'uploading');

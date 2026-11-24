@@ -5,6 +5,7 @@ import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
 import { API_ENV } from './config.js';
 import { switchApiEnv } from './apienv.js';
 import { createNotices, paintAlert } from './notices.js';
+import { busy, idle, fail, shake } from '../ui/fx.js';
 
 const CHECK_INTERVAL = 10 * 60 * 1000;
 const ID_KEY = 'tbx.staffId';   // 記住上次登入的員工編號（這台瀏覽器）
@@ -88,12 +89,13 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     whoText.append('員工編號 ', mk('b', null, staffId));
     hiddenUser.value = staffId;
     title.textContent = n === 'setup' ? '第一次登入，請設定密碼' : expiredTitle ? '登入已過期，請重新登入' : '登入公司帳號';
-    submit.textContent = n === 'id' ? '下一步' : n === 'pw' ? '登入' : '設定並登入';
+    idle(submit, stepLabel(n));
     err.textContent = '';
     const focus = n === 'id' ? fId.input : n === 'pw' ? fPw.input : fCode.input;
     if (dlg.open) focus.focus();
   }
 
+  const stepLabel = (n) => (n === 'id' ? '下一步' : n === 'pw' ? '登入' : '設定並登入');
   function openLogin(expired = false) {
     expiredTitle = expired;
     for (const f of [fId, fPw, fCode, fNew, fNew2]) f.input.value = '';
@@ -133,7 +135,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       if ([...fNew.input.value].length < PW_MIN) { err.textContent = `新密碼至少 ${PW_MIN} 個字`; fNew.input.focus(); return; }
       if (fNew.input.value !== fNew2.input.value) { err.textContent = '兩次輸入的新密碼不一樣'; fNew2.input.focus(); return; }
     }
-    submit.disabled = true;
+    busy(submit, step === 'id' ? '確認中' : step === 'pw' ? '登入中' : '設定中');
+    let failed = false;
     try {
       if (step === 'id') {
         const r = await api.call('/auth', { method: 'POST', body: { staffId } });
@@ -147,9 +150,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       if (ex && ex.code === 'need_setup') { setStep('setup'); return; }
       if (ex && ex.code === 'bad_staff' && step !== 'id') { setStep('id'); fId.input.value = staffId; }
       showError(ex);
-      if (step === 'pw') { fPw.input.value = ''; fPw.input.focus(); }
+      failed = true;
+      if (step === 'pw') { fPw.input.value = ''; fPw.input.focus(); shake(fPw.input); }
     } finally {
-      submit.disabled = false;
+      if (failed) fail(submit, stepLabel(step)); else idle(submit, stepLabel(step));
     }
   });
 
@@ -193,7 +197,8 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     if (!cOld.input.value) { cErr.textContent = '請輸入目前密碼'; cOld.input.focus(); return; }
     if ([...cNew.input.value].length < PW_MIN) { cErr.textContent = `新密碼至少 ${PW_MIN} 個字`; cNew.input.focus(); return; }
     if (cNew.input.value !== cNew2.input.value) { cErr.textContent = '兩次輸入的新密碼不一樣'; cNew2.input.focus(); return; }
-    cOk.disabled = true;
+    busy(cOk, '儲存中');
+    let cFailed = false;
     try {
       const data = await api.call('/staff/me/password', { method: 'POST', body: { password: cOld.input.value, newPassword: cNew.input.value } });
       storage.setItem(COMPANY_KEY, JSON.stringify({ token: data.token, exp: data.exp, ...(data.staff ? { staff: data.staff } : {}) }));
@@ -203,8 +208,10 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     } catch (ex) {
       if (ex && ex.code === 'unauthorized') { cp.close(); expire(); return; }
       cErr.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試' : (ex.message || '變更失敗').replace(/。$/, '');
+      cFailed = true;
+      if (ex && (ex.code === 'bad_password' || /密碼/.test(ex.message || ''))) shake(cOld.input);
     } finally {
-      cOk.disabled = false;
+      if (cFailed) fail(cOk, '變更'); else idle(cOk, '變更');
     }
   });
 

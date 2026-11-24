@@ -37,7 +37,10 @@ export function idle(btn, text, { disabled = false } = {}) {
   btn.classList.remove('fx-busy', 'fx-ok', 'fx-bad');
   btn.removeAttribute('aria-busy');
   btn.disabled = disabled;
-  if (text != null) setLabel(btn, text);
+  if (text == null) return;
+  const cur = btn.querySelector('.fx-lbl');
+  if (cur && cur.textContent === text && btn.childNodes.length === 1 && !cur.classList.contains('fx-dots')) return;   // 文字沒變不重畫（常被重複呼叫時不閃）
+  setLabel(btn, text);
 }
 // 成功：綠色打勾 1.5 秒後回到 back（after 在恢復後呼叫）
 export function ok(btn, text, back, after) {
