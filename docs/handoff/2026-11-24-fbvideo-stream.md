@@ -15,15 +15,22 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/videostream.js`（新） | 設定讀寫（`videoOpts`／`saveVideoOpts`／`streamApplies`）＋`receiveChunkStream` | ⬜ |
-| `server/fb/video.js` | 匯出共用的 rows/update/updateIf/finishReady/result 等給串流版 | ⬜ |
-| `server/fb/index.js` | chunk 路由判斷；`GET`／`POST /admin/fb/video-opts` | ⬜ |
-| `server/core/adminperm.js` | 新路由對應 `labs` 卡片 | ⬜ |
-| `admin/index.html`、`admin.js` | 第二張實驗卡片 | ⬜ |
-| 測試 | 單元（位元組比對、fallback、設定）、admin e2e | ⬜ |
+| `server/fb/videostream.js`（新） | 設定讀寫（`videoOpts`／`saveVideoOpts`／`streamApplies`）＋`receiveChunkStream` | ✅ |
+| `server/fb/video.js` | 匯出共用的 rows/update/updateIf/finishReady/result 等給串流版 | ✅ |
+| `server/fb/index.js` | chunk 路由判斷；`GET`／`POST /admin/fb/video-opts` | ✅ |
+| `server/core/adminperm.js` | 新路由對應 `labs` 卡片 | ✅ |
+| `admin/index.html`、`admin.js` | 第二張實驗卡片 | ✅ |
+| 測試 | 單元（位元組比對、fallback、設定）、admin e2e | ✅ |
 
 ## 下一步
-- [ ] 實作後端與管理頁、測試、獨立審查、截圖給使用者
+- [x] 實作後端與管理頁、測試（commit `37eddbe`）
+- [ ] 獨立審查
+- [ ] 使用者確認後說「推」併入 main（同 commit 更新 CLAUDE.md 目前進度）
+- [ ] 使用者部署後端（正式＋測試）→ 管理頁「進階設定 → 實驗功能」只開給自己 → 上傳大檔比較速度、失敗時回報左側紅字
+
+## 結果
+npm test 821（新 `test/server/fb-video-stream.test.js` 6 項）、admin e2e 44、fbvideo e2e 15、build --check 通過（main 上 `shell/catalog.json` 本來就過期，這次一起重產）。
+備註：`fb_retry`（503）新錯誤碼；`graph.js` 抽出 `graphFetch`；`video.js` 匯出 rows／update／updateIf／finishReady／result／errText，`ruploadPart` 可收串流；管理頁 `#labEdit` 改名 `#labOn`，兩項共用 `makeLab`。
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/admin*.e2e.js test/e2e/fbvideo*.e2e.js`、`node build.js --check`
