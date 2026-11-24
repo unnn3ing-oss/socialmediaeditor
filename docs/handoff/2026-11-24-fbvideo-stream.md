@@ -44,3 +44,10 @@ npm test 821（新 `test/server/fb-video-stream.test.js` 6 項）、admin e2e 44
 - rupload 對串流本文的行為。
 - 多粉專 tee 時一路較慢會緩衝，記憶體峰值可能接近現行做法。
 - 建議第一次只開給自己、單一粉專的 Reels 測。
+
+---
+## 第二段：串流版超過 CPU 上限修正（使用者 2026-11-24「開始」）
+- 實測（橫式、1 粉專、實驗功能開）：兩次 Failed to fetch；Cloudflare 紀錄 `Error: Worker exceeded CPU time limit`。關掉實驗功能同一支重傳成功。
+- 原因：`exact` TransformStream＋multipart JS `pull` 讓每一小塊都經過 JS。
+- 改法：只用內建串流轉送——Workers `FixedLengthStream`；橫式先由 writer 寫表單開頭 → `body.pipeTo(writable, {preventClose:true})` → 寫結尾關閉；Reels／多粉專 `tee` 後各自 `pipeTo`；與 fetch 同時進行（避免背壓卡住）；Node 測試沒有 `FixedLengthStream` 時用計數 TransformStream 代替。各步驟 `console.log`（不含權杖）。
+- 只改 `server/fb/videostream.js`＋測試；後端需重新部署（正式＋測試）。
