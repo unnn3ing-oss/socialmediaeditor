@@ -44,6 +44,27 @@ test('已排程列表：欄位對應、縮圖、留言狀態', async (t) => {
   assert.equal(q.access_token, 'PT111');
 });
 
+test('已排程列表：v=2 回 {items,next}、帶 after、limit 50；舊前端不帶 v 仍回陣列', async (t) => {
+  const { f, call } = await setup(t, {
+    'GET /111/scheduled_posts': () => ({ data: [{ id: '111_1', message: 'm', scheduled_publish_time: 1900000000 }], paging: { cursors: { after: 'NXT' }, next: 'https://next' } })
+  });
+  const r = await call('/fb/scheduled?page=111&v=2&after=ABC');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.data.next, 'NXT');
+  assert.equal(r.body.data.items.length, 1);
+  const q = f.calls.find((c) => c.path === '/111/scheduled_posts').query;
+  assert.equal(q.after, 'ABC'); assert.equal(String(q.limit), '50');
+  assert.ok(Array.isArray((await call('/fb/scheduled?page=111')).body.data), '沒帶 v=2 照舊回陣列');
+  assert.equal((await call('/fb/scheduled?page=111&v=2&after=' + encodeURIComponent('a b<'))).status, 400);
+  assert.equal((await call('/fb/scheduled?page=111&v=2&after=' + 'a'.repeat(4001))).status, 400);
+});
+
+test('已發佈列表：每批 50 則', async (t) => {
+  const { f, call } = await setup(t, { 'GET /111/published_posts': () => ({ data: [] }) });
+  await call('/fb/published?page=111');
+  assert.equal(String(f.calls.find((c) => c.path === '/111/published_posts').query.limit), '50');
+});
+
 test('已發佈列表：分頁游標', async (t) => {
   const { f, call } = await setup(t, {
     'GET /111/published_posts': (c) => ({ data: [{ id: '111_3', message: 'm', created_time: '2026-11-16T01:00:00+0000', full_picture: 'p', permalink_url: 'https://fb/1' }], paging: { cursors: { after: 'CUR' }, next: 'https://next' } })

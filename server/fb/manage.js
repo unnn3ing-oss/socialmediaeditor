@@ -23,23 +23,25 @@ async function commentState(env, id) {
   } catch { return 'none'; }
 }
 
-export async function listScheduled(env, page, token) {
-  const d = await graph(env, 'GET', '/' + page + '/scheduled_posts', { fields: 'id,message,scheduled_publish_time,full_picture,created_time', limit: 50 }, token);
+const nextOf = (d) => (d.paging && d.paging.next && d.paging.cursors ? d.paging.cursors.after || null : null);
+
+// after：翻頁游標；回 { items, next }（路由依 v=2 決定要不要包起來，舊前端收陣列）
+export async function listScheduled(env, page, token, after) {
+  const d = await graph(env, 'GET', '/' + page + '/scheduled_posts', { fields: 'id,message,scheduled_publish_time,full_picture,created_time', limit: 50, after: after || undefined }, token);
   const out = [];
   for (const p of d.data || []) {
     out.push({ id: String(p.id), message: p.message || '', at: toSec(p.scheduled_publish_time), picture: p.full_picture || null, comment: await commentState(env, String(p.id)) });
   }
-  return out;
+  return { items: out, next: nextOf(d) };
 }
 
 export async function listPublished(env, page, token, after) {
-  const d = await graph(env, 'GET', '/' + page + '/published_posts', { fields: 'id,message,created_time,full_picture,permalink_url', limit: 25, after: after || undefined }, token);
+  const d = await graph(env, 'GET', '/' + page + '/published_posts', { fields: 'id,message,created_time,full_picture,permalink_url', limit: 50, after: after || undefined }, token);
   const items = [];
   for (const p of d.data || []) {
     items.push({ id: String(p.id), message: p.message || '', time: p.created_time || null, picture: p.full_picture || null, url: p.permalink_url || null, comment: await commentState(env, String(p.id)) });
   }
-  const next = d.paging && d.paging.next && d.paging.cursors ? d.paging.cursors.after || null : null;
-  return { items, next };
+  return { items, next: nextOf(d) };
 }
 
 export async function reschedule(env, id, token, at) {

@@ -9,7 +9,7 @@ export const errText = (e) => (e && e.message) || '失敗';
 export const bounds = () => { const n = Date.now(); return { min: toLocalInput(n + MIN_S * 1000), max: toLocalInput(n + MAX_S * 1000) }; };
 export const inRange = (at) => { const n = Math.floor(Date.now() / 1000); return Number.isFinite(at) && at >= n + MIN_S && at <= n + MAX_S; };
 
-export const COMMENT = { done: '已留言', armed: '排程後補留言', retry: '第 1 則稍後重試', pending: '等待補留言', posting: '等待補留言', none: '不留言', failed: '留言失敗', canceled: '已取消' };
+export const COMMENT = { done: '已留言', armed: '排程後補留言', retry: '第 1 則稍後重試', pending: '等待補留言', posting: '等待補留言', none: '不留言', failed: '留言失敗', canceled: '已取消', retrying: '重新留言中' };
 export const commentState = (c) => {
   if (!c) return '';
   if (typeof c === 'string') return '留言：' + (COMMENT[c] || c);

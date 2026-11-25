@@ -48,11 +48,14 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
         ? { page: t.page, ok: false, scheduled: false, comment: 'none', error: '臉書拒絕' }
         : { page: t.page, ok: true, postId: t.page + '_9', scheduled: t.at != null, at: t.at ?? undefined, comment: t.at != null ? 'armed' : 'done' })) });
     }
+    if (p === '/fb/scheduled') api.schedQs = [...(api.schedQs || []), u.search];
+    if (p === '/fb/scheduled' && opts.schedFn) return json(opts.schedFn(u));
     if (p === '/fb/scheduled' && opts.sched) return json(opts.sched);
     if (p === '/fb/scheduled') return json([{ id: '111_7', message: '排好的貼文'.repeat(20), at: soon, picture: 'data:image/png;base64,' + fakeAsset().toString('base64'), comment: 'pending' }]);
     if (p === '/staff/me/notices' && opts.notices) { api.noticeCalls = (api.noticeCalls || 0) + 1; return json(typeof opts.notices === 'function' ? opts.notices() : opts.notices); }
     if (p === '/fb/published') api.pubPages = [...(api.pubPages || []), u.searchParams.get('page')];
     if (p === '/fb/comment/retry') { api.retries.push(JSON.parse(req.postData() || '{}')); return opts.retryFail ? json({ ok: false, code: 'bad_request', error: '沒有失敗的留言' }, 400) : json({ ok: true }); }
+    if (p === '/fb/published' && opts.pubFn) return json(opts.pubFn(u));
     if (p === '/fb/published' && opts.pub) return json({ items: opts.pub, next: null });
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
     if (p === '/fb/presets') return json([{ name: '雙11抽獎', body: '留言＋分享抽 AirPods！\nhttps://example.com/a' }, { name: '訂閱', body: '記得訂閱 YouTube' }]);
@@ -727,20 +730,24 @@ test('U6：開視窗焦點在文章網址、背景 inert（Tab 不跑到背景�
   await page.close();
 });
 
-test('U7：換粉專清空列表且不查詢；改時間、取消成功只更新該列、不重查', async () => {
+test('U7：換粉專自動讀一次、切回不重查；改時間、取消成功只更新該列、不重查', async () => {
   const { page, errors, fbCalls, api } = await newPage('admin');
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await page.waitForSelector('#fbpostApp:not([hidden])');
-  await page.click('#schedReload');
-  await page.waitForSelector('#schedList li');
+  await page.waitForSelector('#schedList li');   // 進入自動讀第一個粉專
   const n0 = fbCalls.filter((c) => c === '/fb/scheduled').length;
+  assert.equal(n0, 1, '進入自動讀一次');
   await page.selectOption('#schedPage', '222');
-  assert.equal(await page.locator('#schedList li').count(), 0);
-  assert.match(await page.textContent('#schedHint'), /按「刷新」/);
-  await page.waitForTimeout(200);
-  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n0, '換粉專不自動查詢');
-  await page.click('#schedReload');
   await page.waitForSelector('#schedList li');
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n0 + 1, '換粉專自動讀一次');
+  await page.selectOption('#schedPage', '111');
+  await page.waitForSelector('#schedList li');
+  await page.selectOption('#schedPage', '222');
+  await page.waitForTimeout(200);
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n0 + 1, '切回讀過的粉專不重查');
+  await page.click('#schedReload');
+  await page.waitForTimeout(300);
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n0 + 2, '按刷新才重查');
   const n1 = fbCalls.filter((c) => c === '/fb/scheduled').length;
   const before = await page.getAttribute('#schedList li', 'data-at');
   await page.click('#schedList li >> text=改時間');
@@ -1309,20 +1316,21 @@ test('已排程每 30 分鐘自動刷新；不到 30 分鐘不查；分頁在背
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await page.waitForSelector('#fbpostApp:not([hidden])');
   const n = () => fbCalls.filter((p) => p === '/fb/scheduled').length;
-  assert.equal(n(), 0, '開頁不自動查');
+  await page.waitForFunction(() => /共 1 則/.test(document.getElementById('schedHint').textContent));
+  assert.equal(n(), 1, '開頁自動讀一次');
   await page.clock.fastForward('29:00');
-  assert.equal(n(), 0);
+  assert.equal(n(), 1);
   await page.clock.fastForward('02:00');
   await page.waitForFunction(() => /共 1 則/.test(document.getElementById('schedHint').textContent));
-  assert.equal(n(), 1);
+  assert.equal(n(), 2);
   await page.clock.fastForward('10:00');
-  assert.equal(n(), 1, '剛查過不再查');
+  assert.equal(n(), 2, '剛查過不再查');
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); });
   await page.clock.fastForward('40:00');
-  assert.equal(n(), 1, '背景不查');
+  assert.equal(n(), 2, '背景不查');
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await page.waitForFunction(() => document.getElementById('schedList').getAttribute('aria-busy') === 'false');
-  assert.equal(n(), 2, '切回來超過 30 分鐘補查');
+  assert.equal(n(), 3, '切回來超過 30 分鐘補查');
   await page.close();
 });
 
@@ -1373,10 +1381,10 @@ test('即時狀態（側邊欄）：留言失敗紅燈閃爍；點一下關新�
   await page.waitForSelector('#liveTip', { state: 'hidden' });
   await page.click('#liveState');
   await page.waitForSelector('#postDlg', { state: 'hidden' });
-  await page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  await page.waitForFunction(() => document.getElementById('pubPage').value === '222' && !document.getElementById('tab-pub').hidden && /共 3 則/.test(document.getElementById('pubHint').textContent));
   assert.equal(await page.isVisible('#tab-pub'), true);
   assert.equal(await page.$eval('#pubPage', (e) => e.value), '222');
-  assert.deepEqual(api.pubPages, ['222']);
+  assert.equal(api.pubPages.at(-1), '222');
   assert.equal(await page.locator('#pubList .cm-bad').count(), 2);
   assert.deepEqual(errors, []);
   await page.close();
@@ -1390,12 +1398,134 @@ test('網頁版：留言失敗時關閉新增發文回列表，直接切到已�
   await page.click('#dlgClose');
   await page.waitForTimeout(300);
   assert.equal(await page.isVisible('#tab-sched'), true, '沒有失敗留在已排程');
-  assert.equal(api.pubPages, undefined);
+  assert.deepEqual(api.pubPages, ['111'], '只有進入時自動讀第一個粉專');
   fail = true;
   await page.click('#newBtn'); await page.waitForSelector('#postDlg:not([hidden])');
   await page.click('#dlgClose');
-  await page.waitForFunction(() => /共 3 則/.test(document.getElementById('pubHint').textContent));
+  await page.waitForFunction(() => document.getElementById('pubPage').value === '222' && !document.getElementById('tab-pub').hidden && /共 3 則/.test(document.getElementById('pubHint').textContent));
   assert.equal(await page.isVisible('#tab-pub'), true);
-  assert.deepEqual(api.pubPages, ['222']);
+  assert.deepEqual(api.pubPages, ['111', '222']);
   await page.close();
+});
+
+// ===== 列表改版（2026-11-25）：自動讀、值班粉專預設、換粉專、分頁、卡片 =====
+const mkSched = (n, from, soon) => Array.from({ length: n }, (_, i) => ({ id: '111_' + (from + i), message: '排程 ' + (from + i), at: soon + (from + i) * 60, picture: null, comment: 'none' }));
+const mkPub = (n, from) => Array.from({ length: n }, (_, i) => ({ id: '111_p' + (from + i), message: '已發 ' + (from + i), time: new Date(Date.now() - (from + i) * 60000).toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/' + (from + i), comment: 'done' }));
+
+test('進入自動讀兩批（50＋50）；第 2 批背景接著讀；只有 1 頁以上才有分頁器；不再自動讀第 3 批', async () => {
+  const soon = Math.floor(Date.now() / 1000) + 7200;
+  const { page, errors, fbCalls, api } = await newPage('admin', undefined, {
+    schedFn: (u) => (u.searchParams.get('after') === 'C3' ? { items: mkSched(50, 100, soon), next: null } : u.searchParams.get('after') ? { items: mkSched(50, 50, soon), next: 'C3' } : { items: mkSched(50, 0, soon), next: 'C2' }),
+    pubFn: (u) => (u.searchParams.get('after') ? { items: mkPub(30, 50), next: null } : { items: mkPub(50, 0), next: 'P2' })
+  });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForFunction(() => /共 100 則/.test(document.getElementById('schedHint').textContent));
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, 2, '兩批');
+  assert.match(api.schedQs[0], /v=2/); assert.match(api.schedQs[1], /after=C2/);
+  assert.equal(await page.locator('#schedList li').count(), 50, '每頁 50 則');
+  assert.equal(await page.isVisible('#schedPager'), true);
+  assert.match(await page.textContent('#schedNo'), /第 1／2 頁/);
+  assert.equal(await page.isVisible('#schedMore'), false, '不在最後一頁不顯示讀取更多');
+  await page.click('#schedNext');
+  assert.match(await page.textContent('#schedNo'), /第 2／2 頁/);
+  assert.equal(await page.locator('#schedList li').count(), 50);
+  assert.equal(await page.isVisible('#schedMore'), true, '100 則後還有 next：最後一頁出現讀取更多');
+  const n = fbCalls.filter((c) => c === '/fb/scheduled').length;
+  await page.click('#schedPrev');
+  await page.waitForTimeout(150);
+  assert.equal(fbCalls.filter((c) => c === '/fb/scheduled').length, n, '換頁不重查');
+  // 已發佈：80 則，2 頁，沒有 next → 沒有讀取更多
+  await page.click('[data-tab=pub]');
+  await page.waitForFunction(() => /共 80 則/.test(document.getElementById('pubHint').textContent));
+  assert.match(await page.textContent('#pubNo'), /第 1／2 頁/);
+  await page.click('#pubNext');
+  assert.equal(await page.locator('#pubList li').count(), 30);
+  assert.equal(await page.isVisible('#pubMore'), false);
+  // 讀取更多：已排程再讀一批接在後面
+  await page.click('[data-tab=sched]');
+  await page.click('#schedNext');
+  await page.click('#schedMore');
+  await page.waitForFunction(() => /共 150 則/.test(document.getElementById('schedHint').textContent));
+  assert.match(await page.textContent('#schedNo'), /第 \d／3 頁/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('預設粉專＝值班粉專第一個；值班改了且沒手動換過就跟著切；手動換過就不動', async () => {
+  const { page, errors, fbCalls, api } = await newPage('admin', undefined, { duty: ['222', '333'] });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#schedList li');
+  assert.equal(await page.inputValue('#schedPage'), '222');
+  assert.equal(await page.inputValue('#pubPage'), '222');
+  assert.deepEqual(api.pubPages, ['222']);
+  // 改值班（沒手動換過）：兩個列表都切到新值班粉專並讀取
+  await page.click('#dutyBtn');
+  await page.click('#dutyList input[value="222"]');
+  await page.click('#dutyList input[value="333"]');
+  await page.click('#dutyList input[value="111"]');
+  await page.click('#dutyOk');
+  await page.waitForFunction(() => document.getElementById('schedPage').value === '111');
+  assert.equal(await page.inputValue('#pubPage'), '111');
+  await page.waitForFunction(() => document.getElementById('schedList').getAttribute('aria-busy') === 'false');
+  // 手動換過粉專後，改值班不再動列表
+  await page.selectOption('#schedPage', '333');
+  await page.waitForFunction(() => document.getElementById('schedList').getAttribute('aria-busy') === 'false');
+  await page.click('#dutyBtn');
+  await page.click('#dutyList input[value="111"]');
+  await page.click('#dutyList input[value="222"]');
+  await page.click('#dutyOk');
+  await page.waitForTimeout(200);
+  assert.equal(await page.inputValue('#schedPage'), '333');
+  assert.ok(fbCalls.length > 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('沒有值班粉專：預設第一個粉專；列表／卡片切換記在瀏覽器、不重建資料', async () => {
+  const { page, errors } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#schedList li');
+  assert.equal(await page.inputValue('#schedPage'), '111');
+  assert.equal(await page.$eval('#listCard', (e) => e.dataset.view), 'list');
+  const li = await page.$('#schedList li');
+  await page.click('#ctl-sched [data-view=card]');
+  assert.equal(await page.$eval('#listCard', (e) => e.dataset.view), 'card');
+  assert.equal(await page.evaluate(() => localStorage.getItem('tbx.fbpost.view')), 'card');
+  assert.equal(await li.evaluate((e) => e.isConnected), true, '切換不重建列');
+  assert.equal(await page.$eval('#schedList', (e) => getComputedStyle(e).display), 'grid');
+  await page.click('[data-tab=pub]');
+  assert.equal(await page.$eval('#ctl-pub [data-view=card]', (e) => e.getAttribute('aria-pressed')), 'true', '兩個分頁共用');
+  await page.reload();
+  await page.waitForSelector('#schedList li');
+  assert.equal(await page.$eval('#listCard', (e) => e.dataset.view), 'card', '重新整理還在');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('控制列在分頁右邊同一列；窄版與側邊欄換到下一行、不超出畫面', async () => {
+  const wide = await newPage('admin');
+  await wide.page.goto(srv.url + 'tools/fbpost/index.html');
+  await wide.page.waitForSelector('#schedList li');
+  const box = (pg, sel) => pg.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, b: r.bottom }; });
+  const t = await box(wide.page, '#tabs'), c = await box(wide.page, '#ctl-sched');
+  assert.ok(c.x > t.x + t.w - 1 && Math.abs(c.y - t.y) < 40, '電腦版同一列、在右邊');
+  if (SHOT) { await wide.page.screenshot({ path: SHOT + '/fbpost-list-desktop.png' }); await wide.page.click('#ctl-sched [data-view=card]'); await wide.page.screenshot({ path: SHOT + '/fbpost-cards-desktop.png' }); }
+  await wide.page.close();
+  const side = await newPage('admin', { width: 360, height: 760 });
+  await side.page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('is-side')));
+  await side.page.goto(srv.url + 'tools/fbpost/index.html');
+  await side.page.waitForSelector('#schedList li');
+  const t2 = await box(side.page, '#tabs'), c2 = await box(side.page, '#ctl-sched');
+  assert.ok(c2.y >= t2.b - 1, '側邊欄控制列在下一行');
+  assert.ok(await overflow(side.page) <= 0, '不超出畫面');
+  if (SHOT) { await side.page.click('#ctl-sched [data-view=card]'); await side.page.screenshot({ path: SHOT + '/fbpost-side.png' }); }
+  assert.deepEqual(side.errors, []);
+  await side.page.close();
+  const phone = await newPage('admin', { width: 390, height: 800 });
+  await phone.page.goto(srv.url + 'tools/fbpost/index.html');
+  await phone.page.waitForSelector('#schedList li');
+  assert.ok(await overflow(phone.page) <= 0);
+  const c3 = await box(phone.page, '#ctl-sched'), t3 = await box(phone.page, '#tabs');
+  assert.ok(c3.y >= t3.b - 1, '手機控制列在下一行');
+  await phone.page.close();
 });
