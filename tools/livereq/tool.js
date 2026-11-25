@@ -1,5 +1,6 @@
 // 直播需求單：畫面。規則都在 parse.js。
 import { tb } from '../../sdk/toolbox.js';
+import * as fx from '../../ui/fx.js';
 import { PAGES, parse, check, build, weatherNote, dutyExpiry, fmtTime } from './parse.js';
 
 tb.init('livereq');
@@ -216,10 +217,14 @@ function makeCard(a, idx) {
     const ok = await copyText(out.value);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
     msg.textContent = ok ? '已複製完整需求單' : '複製失敗，已選取全文，請長按或按 Ctrl+C 手動複製';
-    if (ok) afterCopy(idx); else selectManual(out);
+    // 按鈕回饋（ui/fx.js）：成功打勾「已複製」1.5 秒（照舊跳下一張）、失敗抖一下
+    const back = fx.restLabel(copyNext);
+    if (ok) { fx.ok(copyNext, '已複製', back, syncCopyBtn); afterCopy(idx); } else { fx.fail(copyNext, back); syncCopyBtn(); selectManual(out); }
   };
-  q('[data-weather]').addEventListener('click', async () => {
+  q('[data-weather]').addEventListener('click', async (e) => {
+    const wb = e.currentTarget, wback = fx.restLabel(wb);
     const ok = await copyText(w.text);
+    if (ok) fx.ok(wb, '已複製', wback); else fx.fail(wb, wback);
     msg.className = 'lr-msg ' + (ok ? 'is-ok' : 'is-bad');
     msg.textContent = ok ? (w.ok ? '已複製封面提醒' : '已複製封面提醒（主播或標題沒抓到，請檢查）') : '複製失敗，已選取封面提醒文字，請手動複製';
     if (!ok) selectManual(q('[data-wtext]'));
@@ -257,10 +262,13 @@ function renderBar() {
     else b.addEventListener('click', () => focusField(it.target()));
     return b;
   }));
-  copyNext.disabled = c.lastMissing.length > 0;
+  syncCopyBtn();
   const miss = c.lastMissing.length ? '缺：' + c.lastMissing.join('、') : '';
   copyNext.title = miss;
 }
+
+// 「複製並下一張」能不能按：目前這張缺必填就不能（打勾的 1.5 秒內也照這個）
+function syncCopyBtn() { const c = cards[cur]; copyNext.disabled = !c || c.lastMissing.length > 0; }
 
 // ---- 一次一張 ----
 function show(i) {

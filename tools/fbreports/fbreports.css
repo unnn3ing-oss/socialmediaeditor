@@ -133,3 +133,5 @@ table.tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabula
   .f-row > .grow { display: none; }
   #queryBtn { width: 100%; }
 }
+.toast:not([hidden]) { animation: fx-toast-in .22s ease; }   /* 從下方滑入（keyframes 在 ui/fx.css） */
+@media (prefers-reduced-motion: reduce) { .toast:not([hidden]) { animation: none; } }
