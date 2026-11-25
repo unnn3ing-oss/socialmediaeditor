@@ -49,7 +49,7 @@ main.off { min-height: 100vh; display: flex; align-items: center; justify-conten
 .vq-meta { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 6px; background: #e7ecf3; color: #475467; }
 .badge.reel { background: #fdf2fa; color: #c11574; }
-.vq-bar { display: block; height: 4px; background: #e7ecf3; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+.vq-bar { display: block; height: 6px; background: #e7ecf3; border-radius: 3px; overflow: hidden; margin-top: 2px; }
 .vq-bar i { display: block; height: 100%; background: var(--accent); }
 .vq-side { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .vq-side input { width: 20px; height: 20px; accent-color: var(--accent); }
@@ -150,7 +150,7 @@ main.off { min-height: 100vh; display: flex; align-items: center; justify-conten
 
 /* 底部工具列：目前選中影片的上傳狀態 */
 .st { flex: 1 1 360px; min-width: 0; max-width: 680px; }
-.st-track { height: 6px; background: #e7ecf3; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.st-track { height: 10px; background: #e7ecf3; border-radius: 5px; overflow: hidden; margin-bottom: 4px; }
 .st-fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
 .st-text { margin: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .st-text.bad { color: var(--bad-text, #b42318); }
