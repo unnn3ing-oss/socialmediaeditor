@@ -23,7 +23,8 @@
 
 ## 下一步
 - [x] 逐工具套用 → 相關 e2e（resize／watermark 10、pattern／collage 31、linepush 12、design 10、fbreports 7、ytdl 9、sidepanel 等 11）→ npm test 823、build --check
-- [ ] 獨立審查 → 截圖給使用者
+- [x] 獨立審查通過（修 ytdl 轉圈中 tab-add／save-outdir 被重畫重新啟用，`4b3a4ac`）
+- [ ] 使用者看截圖確認 → 說「推」才併入 main（同 commit 更新 CLAUDE.md 目前進度）
 
 ## 實作細節
 - `ui/fx.js` 新增 `restLabel(btn)`（打勾中再按時拿原本的字）；`busy()` 記 `data-fx-back`。`ui/fx.css` 變數加後備值、一般 `<button>` 轉圈時 inline-flex、停用不半透明。
