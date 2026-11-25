@@ -153,7 +153,12 @@
     const st = { thumb, placed: false, drag: null, timer: 0, x: 0, w: 0, suppressUntil: 0, mo: null };
     states.set(c, st);
     // 只看這個開關「按鈕」的 class 變化（不看圓塊自己，免得自己改 class 又觸發自己）
-    st.mo = new MutationObserver(() => schedule(c, true));
+    // 開關本身也看 childList：按鈕是之後才由程式加進來的（例如拼圖的「不切／2／3／4」）時，加進來的按鈕也要看
+    st.mo = new MutationObserver(records => {
+      for (const r of records) r.addedNodes.forEach(n => { if (n.tagName === 'BUTTON') st.mo.observe(n, { attributes: true, attributeFilter: ['class'] }); });
+      schedule(c, true);
+    });
+    st.mo.observe(c, { childList: true });
     segs(c).forEach(b => st.mo.observe(b, { attributes: true, attributeFilter: ['class'] }));
     bindDrag(c, st);
     bindKeys(c);
