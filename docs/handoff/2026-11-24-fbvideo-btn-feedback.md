@@ -1,5 +1,5 @@
 # 按鈕回饋與動畫（影片發布＋全站高優先）
-- 狀態：完成，待使用者說「推」　- 分支：claude/adoring-newton-hl37xe　- 最後更新：2026-11-24
+- 狀態：已併入 main　- 分支：claude/adoring-newton-hl37xe　- 最後更新：2026-11-24
 - 使用者原始需求：「把這介面的按鈕都改成要能讓使用者知道當前發生什麼，不能按下去後按鈕沒有其他反應，反而會誤會沒傳、當掉等」「有動畫效果可以適當使用」；看過示範頁（scratchpad `fbvideo-feedback-demo.html`）後說「開始」。
 
 ## 已定案的決定
@@ -24,7 +24,8 @@
 - [x] 獨立審查（無 Critical）修正後：fbvideo＋fbpost＋admin＋company e2e 128、npm test 823、build --check 通過
   - 已修：fbpost 失敗紅色被 updateButton 洗掉；fbvideo 移除收合中那列彈回；打勾／抖動期間按鈕仍可按（`ok`／`fail` 加 `opts.disabled`）；底列 holdFoot 計時器互相打架；`button.danger` 處理中改紅字
   - 未修（Minor）：fbpost 刪除收合中按刷新，數量文字可能短暫不同步；fbpost 送出沒有逐粉專「第 i／N」；管理頁列表刪除是重畫表格、沒有收合動畫
-- [ ] 使用者看截圖、說「推」→ 併 main（同 commit 更新 CLAUDE.md 目前進度）
+- [x] 進度條加粗（列表 6px、底部 10px，使用者選）
+- [x] 使用者說「推」→ 已併 main（同 commit 更新 CLAUDE.md 目前進度）
 - [ ] 之後另批：中優先（數據報表、YT 下載、圖片工具下載鈕、圖片套版快速填入）、低優先（直播需求單複製、全站按下縮放、toast 滑入）
 
 ## 測試
