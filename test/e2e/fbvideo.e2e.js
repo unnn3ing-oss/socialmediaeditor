@@ -24,6 +24,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
   const errors = [], api = { start: [], chunk: [], publish: [], stop: [], drop: [], rundown: [], cover: [] };
   const ups = new Map();
   let hold = null;   // 設成 Promise 時，分段請求等它（測試上傳中）
+  let stopHold = null;   // 設成 Promise 時，停止請求等它（測試停止途中分段剛好傳完）
   let failN = 0;   // 接下來 N 個分段回 502（前端每段會自動重試 2 次，所以 3＝這段真的失敗）
   page.on('pageerror', (e) => errors.push(String(e)));
   const view = (id) => {
@@ -72,6 +73,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
       return json(view(b.uploadId));
     }
     if (p === '/fb/video/stop' || p === '/fb/video/drop') {
+      if (p === '/fb/video/stop' && stopHold) await stopHold;
       const b = JSON.parse(req.postData()); api[p.endsWith('stop') ? 'stop' : 'drop'].push(b);
       const u = ups.get(b.uploadId);
       if (u) for (const [pg, j] of Object.entries(u.pages)) if ((!b.page || b.page === pg) && ['uploading', 'uploaded'].includes(j.state)) j.state = b.page ? 'canceled' : 'stopped';
@@ -84,7 +86,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
   });
   if (!opts.noToken) await page.addInitScript(() => { try { localStorage.setItem('tbx.company', JSON.stringify({ token: 't', exp: Math.floor(Date.now() / 1000) + 3600 })); } catch {} });
   await page.goto(srv.url + 'tools/fbvideo/index.html');
-  return { page, errors, api, ups, setHold: (pr) => { hold = pr; }, failChunk: (n = 3) => { failN = n; } };
+  return { page, errors, api, ups, setHold: (pr) => { hold = pr; }, setStopHold: (pr) => { stopHold = pr; }, failChunk: (n = 3) => { failN = n; } };
 }
 const msg = (page) => page.locator('.ed:not([hidden]) .msg').inputValue();
 const until = async (fn, ms = 5000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 50)); } return false; };
@@ -545,6 +547,32 @@ test('封面：上傳 PNG 圖片當封面（按鈕變「換一張圖片」、顯
   await page.click('#sendBtn');
   await until(() => api.cover.length === 1 && api.publish.length === 1);
   assert.ok(api.cover.length === 1, '封面送到後端');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('停止上傳：停止請求還沒回來時分段剛好傳完，網頁不會卡死、狀態變成已停止', async () => {
+  const { page, errors, api, setHold, setStopHold } = await newPage();
+  await page.waitForSelector('#app:not([hidden])');
+  let releaseChunk; setHold(new Promise((r) => { releaseChunk = r; }));
+  let releaseStop; setStopHold(new Promise((r) => { releaseStop = r; }));
+  await page.setInputFiles('#fileIn', file('橫式.mp4'));
+  await pickPage(page, '111');
+  await until(() => api.chunk.length >= 1);
+  await page.waitForSelector('#stopBtn:not([hidden])');
+  await page.click('#stopBtn');
+  await page.click('#cfYes');
+  await until(() => api.stop.length === 1);
+  setHold(null); releaseChunk();                 // 分段先回來（帶著下一段）
+  await new Promise((r) => setTimeout(r, 300));
+  // 網頁還能回應（卡死的話這個 evaluate 會逾時）
+  const alive = await Promise.race([page.evaluate(() => 1), new Promise((r) => setTimeout(() => r(0), 3000))]);
+  assert.equal(alive, 1, '網頁沒有回應');
+  const n = api.chunk.length;
+  releaseStop();
+  await page.waitForSelector(ED + ' .up-msg:has-text("已停止上傳")');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(api.chunk.length, n, '停止後不再送下一段');
   assert.deepEqual(errors, []);
   await page.close();
 });

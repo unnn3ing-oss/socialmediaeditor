@@ -399,3 +399,11 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .tool-h1 { margin: 0 0 12px; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--text); }
 /* 「下載這張」匯出中（ui/fx.css fx-busy）：停用但不要半透明 */
 .dz button.dz-export-btn.fx-busy:disabled { opacity: 1; }
+/* 電腦版上方檢視列縮小：按鈕 34px、整組 40px、「下載這張」36px（手機維持 44px，見上方 ≤820px） */
+@media (min-width: 821px) {
+  .dz-viewbar .dz-group { padding: 3px; gap: 2px; }
+  .dz-viewbar .dz-group button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+  .dz-viewbar .dz-group .dz-sq { width: 30px; padding: 4px 0; }
+  .dz-viewbar #dzZoomOut { min-width: 46px; }
+  .dz-viewbar .dz-export-btn { min-height: 40px; padding: 6px 14px !important; }
+}
