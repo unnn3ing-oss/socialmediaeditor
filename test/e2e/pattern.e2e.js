@@ -634,3 +634,23 @@ test('快速填入讀取中：預覽顯示骨架，確認視窗前收起，讀�
   assert.equal(await frame.isHidden('#qfSkel'), true);
   assert.deepEqual(errors, []);
 });
+
+test('快速填入：網址與提示跟著每一張；新增的一張空白；切回第 1 張網址還在', async () => {
+  const { page, frame } = await openTool(browser, srv.url, 'pattern');
+  const errors = watchErrors(page);
+  await fakeBackend(page, []);
+  await frame.waitForSelector('.batch-item-block');
+  const URL1 = 'https://news.tvbs.com.tw/local/123456';
+  await frame.fill('#qfUrl', URL1);
+  await frame.press('#qfUrl', 'Enter');
+  await frame.waitForFunction(() => /已帶入/.test(document.getElementById('qfHint').textContent), null, { timeout: 8000 });
+  await frame.click('#thumbAddBtn');
+  await frame.waitForFunction(() => document.querySelectorAll('.thumb-item').length === 2);
+  assert.equal(await frame.inputValue('#qfUrl'), '', '新的一張網址空白');
+  assert.doesNotMatch(await frame.textContent('#qfHint'), /已帶入/, '新的一張沒有上一張的提示');
+  assert.equal(await frame.inputValue('.batch-item-block textarea'), '', '新的一張標題空白');
+  await frame.click('.thumb-item >> nth=0');
+  await frame.waitForFunction((u) => document.getElementById('qfUrl').value === u, URL1);
+  assert.match(await frame.textContent('#qfHint'), /已帶入/);
+  assert.deepEqual(errors, []);
+});
