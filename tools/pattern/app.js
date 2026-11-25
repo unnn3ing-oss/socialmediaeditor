@@ -524,6 +524,7 @@ function expandBatchItem(item) {
     batchCtx.clearRect(0, 0, SIZE, SIZE);
   }
   syncBatchFx();
+  if (window.qfSync) window.qfSync();   // 快速填入的網址與提示換成這一張的
 }
 
 function addBatchItem() {
@@ -570,6 +571,7 @@ async function removeBatchItem(id) {
     renderBatchItemsList();
     renderBatchThumbs();
     syncBatchFx();
+    if (window.qfSync) window.qfSync();
   }
 }
 

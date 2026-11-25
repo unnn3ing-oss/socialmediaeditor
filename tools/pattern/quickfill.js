@@ -11,7 +11,24 @@
   const MAX_IMAGES = 3;
   let busy = false;
 
-  const say = (text, isError) => { hint.textContent = text; hint.classList.toggle('qf-error', !!isError); };
+  // 網址與提示跟著每一張（2026-11-25 使用者選 A）：存在 item.qfUrl／item.qfHint，切換張數時換成那一張的
+  const DEFAULT_HINT = hint.textContent;
+  const current = () => batchItems.find(it => it.id === expandedBatchItemId) || null;
+  const show = (h) => { hint.textContent = h ? h.text : DEFAULT_HINT; hint.classList.toggle('qf-error', !!(h && h.err)); };
+  let runItem = null;   // 帶入中的那一張（提示寫回它）
+  const say = (text, isError) => {
+    const it = runItem || current();
+    const h = { text, err: !!isError };
+    if (it) it.qfHint = h;
+    if (!it || it === current()) show(h);
+  };
+  // app.js 切換／新增／刪除／全部清除後呼叫：網址框與提示換成目前那一張的
+  window.qfSync = () => {
+    const it = current();
+    input.value = (it && it.qfUrl) || '';
+    show(it && it.qfHint);
+  };
+  input.addEventListener('input', () => { const it = current(); if (it) it.qfUrl = input.value; });
 
   // 後端錯誤（tb.api.call 會 reject：code 是錯誤代碼、message 是後端給的中文說明）→ 給人看的原因
   function reason(e) {
@@ -57,6 +74,8 @@
     if (busy) return;
     const url = input.value.trim();
     if (!/^https?:\/\//i.test(url)) { say('請貼文章網址（https:// 開頭）', true); return; }
+    runItem = targetItem();   // 結果寫回按下當時那一張（途中切到別張也一樣）
+    runItem.qfUrl = input.value;
     busy = true; btn.disabled = true;
     const fx = window.tbxFx, back = fx ? fx.restLabel(btn) : btn.textContent;
     let result = 'fail';   // 按鈕回饋：ok 打勾／fail 抖動／cancel 直接恢復
@@ -72,7 +91,9 @@
       } catch (e) { say('帶入失敗：' + reason(e), true); return; }  // 失敗不動已有內容
       if (!article.title && !article.images.length) { say('帶入失敗：文章裡找不到標題或圖片', true); return; }
 
-      let item = targetItem();
+      let item = runItem;
+      if (!batchItems.includes(item)) { say('那一張已經刪除，取消帶入'); result = 'cancel'; return; }
+      if (item.id !== expandedBatchItemId) expandBatchItem(item);   // 途中切到別張：切回那一張再寫
       if (item.title.trim() || hasBackground(item.bg)) {
         skel(false);
         if (fx) fx.idle(btn, back, { disabled: true });   // 等使用者回答時不轉圈
@@ -82,7 +103,8 @@
           okText: '覆蓋'
         });
         if (!ok) { say('已取消帶入'); result = 'cancel'; return; }
-        item = targetItem();
+        if (!batchItems.includes(item)) { say('那一張已經刪除，取消帶入'); result = 'cancel'; return; }
+        if (item.id !== expandedBatchItemId) expandBatchItem(item);
       }
       say('帶入中…'); skel(true);
       if (fx) fx.busy(btn, '帶入中');
@@ -117,11 +139,12 @@
       result = 'ok';
     } finally {
       skel(false);
-      busy = false; btn.disabled = false;
+      busy = false; btn.disabled = false; runItem = null;
       if (fx) { if (result === 'ok') fx.ok(btn, '已帶入', back); else if (result === 'fail') fx.fail(btn, back); else fx.idle(btn, back); }
     }
   }
 
+  window.qfSync();
   btn.addEventListener('click', run);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
   // 貼上後等值進來再自動讀取

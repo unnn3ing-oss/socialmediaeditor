@@ -35,8 +35,15 @@ button.danger.fx-busy[disabled], button.danger.fx-busy[disabled]:hover, .btn-dan
 .fx-skrow { display: grid; gap: 6px; }
 .fx-skrow > span { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, #eef1f5 25%, #f7f9fb 50%, #eef1f5 75%); background-size: 200% 100%; animation: fx-shim 1.2s linear infinite; }
 .fx-skrow > span:first-child { width: 55%; } .fx-skrow > span:last-child { width: 35%; }
+/* 全站按下縮放：各工具自帶樣式的一般按鈕也縮一下。用獨立的 scale 屬性，不會蓋掉按鈕本來的 transform（置中用的 translate 等）
+   不縮：切換鈕的每一格、分頁、色票、縮圖、設計左側工具（這些有自己的選中動畫或是拖放目標） */
+:where(button):active:not([disabled]):not([aria-disabled="true"]):not(:where(.btn, .primary, .danger, .fx-press, .bg-toggle *, .seg *, .segmented *, .func-switch *, .mode-switch *, .m-tabs *, [role="tab"], [role="menuitemradio"], .color-swatch, .thumb-item, .thumb-item *, .dz-tool, .shelf-nav)) { scale: .97; }
+/* 提示（toast）出現時從下方滑入：用獨立的 translate 屬性，不影響各頁自己置中用的 transform */
+@keyframes fx-toast-in { from { opacity: 0; translate: 0 12px; } }
 @media (prefers-reduced-motion: reduce) {
   .btn, button.primary, button.danger, .fx-lbl, .fx-spin, .fx-chk path, .fx-shake, .fx-dots::after, .fx-flash, .fx-enter, .fx-gone, .fx-skrow > span { animation: none !important; transition: none !important; }
+  :where(button):active { scale: none !important; }
+  #toast, .toast, .acct-toast { animation: none !important; }
   .btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { transform: none; }
   .fx-chk path { stroke-dashoffset: 0; }
   .fx-spin { border-right-color: currentColor; opacity: .6; }

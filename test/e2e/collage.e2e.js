@@ -69,3 +69,18 @@ test('沒密碼與有密碼：畫面都沒有 TVBS 字樣，也不會要公司�
     assert.deepEqual(requested, []);
   }
 });
+
+test('等分的「不切／2／3／4」：按下後白色選中塊移到那一格（按鈕是程式後加的也要跟著動）', async () => {
+  const { frame, errors } = await openPlain();
+  const thumbAt = (sel, n) => frame.evaluate(([sel, n]) => {
+    const c = document.querySelector(sel), th = c.querySelector('.seg-thumb'), b = c.querySelector(`button[data-n="${n}"]`);
+    const m = /translate3d\(([-\d.]+)px/.exec(th.style.transform || '');
+    return { x: m ? Number(m[1]) : null, want: b.offsetLeft, active: b.classList.contains('active') };
+  }, [sel, n]);
+  await frame.click('#cgCols button[data-n="4"]');
+  await frame.waitForFunction(() => { const th = document.querySelector('#cgCols .seg-thumb'), b = document.querySelector('#cgCols button[data-n="4"]'); return th.style.transform.includes(`${b.offsetLeft}px`); });
+  const a = await thumbAt('#cgCols', 4); assert.equal(a.active, true); assert.equal(a.x, a.want);
+  await frame.click('#cgRows button[data-n="3"]');
+  await frame.waitForFunction(() => { const th = document.querySelector('#cgRows .seg-thumb'), b = document.querySelector('#cgRows button[data-n="3"]'); return th.style.transform.includes(`${b.offsetLeft}px`); });
+  assert.deepEqual(errors, []);
+});

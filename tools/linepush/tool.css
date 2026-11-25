@@ -335,7 +335,7 @@ canvas {
     box-shadow: var(--shadow);
     opacity: 0;
     cursor: pointer;
-    transition: opacity .5s ease, transform .5s ease;
+    transition: opacity .25s ease, transform .25s ease;
   }
 .status-toast.success { background: #15803d; }
 .status-toast.error { background: #b91c1c; }

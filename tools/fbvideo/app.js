@@ -390,7 +390,8 @@ async function ensureStarted(v) {
 const PARALLEL = 2, CHUNK_RETRY = 2;
 let pumpers = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const pumpable = (x) => x.next && !x.pumping && x.upload !== 'stopped' && x.upload !== 'error' && isUploading(x);
+// 已要求停止的不再撿（停止請求還在路上時，最後一段剛好傳完會帶回 next；不擋會在 pump 裡無限撿起又立刻結束，整頁卡死）
+const pumpable = (x) => x.next && !x.pumping && !x.stopReq && x.upload !== 'stopped' && x.upload !== 'error' && isUploading(x);
 async function sendChunk(v, id, start, end) {
   for (let i = 0; ; i++) {
     try { return await tb.api.call(`/fb/video/chunk?u=${id}&start=${start}`, { method: 'POST', body: v.file.slice(start, end), binary: true }); }
@@ -410,6 +411,7 @@ async function pumpOne(v) {
       try {
         const r = await sendChunk(v, id, start, end);
         if (id !== v.uploadId) break;   // 途中重新上傳了
+        if (v.stopReq) { v.next = null; break; }   // 傳的時候按了停止：不再接下一段
         v.next = r.next;
         apply(v, r);
       } catch (e) {

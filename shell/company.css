@@ -84,3 +84,5 @@
   .acct-pop { left: 16px; right: 16px !important; width: auto; }
   .acct-act .btn { height: 44px; }
 }
+.acct-toast { animation: fx-toast-in .22s ease; }   /* 從下方滑入（keyframes 在 ui/fx.css） */
+@media (prefers-reduced-motion: reduce) { .acct-toast { animation: none; } }
