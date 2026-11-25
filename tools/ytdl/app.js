@@ -178,11 +178,11 @@ function renderQueueArea() {
   setText($("conn-note"), hostText?.text ?? "");
   $("conn-note").dataset.kind = hostText?.kind ?? "info";
   setHidden($("conn-note"), !hostText);
-  for (const id of ["add-url", "add-btn", "tab-add", "cooldown", "limit", "auto-cover"]) $(id).disabled = !detected;
+  for (const id of ["add-url", "add-btn", "tab-add", "cooldown", "limit", "auto-cover"]) $(id).disabled = !detected || $(id).classList.contains("fx-busy");   // 轉圈中維持停用（避免重複送出）
   renderHostNote($("host-note"), queue, { updateAvailable: updateOffered() });
   const folderLocked = outputDirLocked(queue); // 下載中的工作沿用開始時的資料夾，改了要等下一批
   $("outdir").disabled = !connected || folderLocked;
-  $("save-outdir").disabled = !connected || folderLocked;
+  $("save-outdir").disabled = !connected || folderLocked || $("save-outdir").classList.contains("fx-busy");
   setText($("outdir-hint"), folderLocked ? OUTPUT_DIR_LOCKED_TEXT : "");
   setHidden($("outdir-hint"), !folderLocked);
   $("doctor-check").disabled = !connected;
@@ -319,7 +319,7 @@ if (isSide) {
   setHidden($("queue-foot"), false);
 }
 $("tab-add").addEventListener("click", async () => {
-  if (!currentTab) return;
+  if (!currentTab || $("tab-add").classList.contains("fx-busy")) return;
   const button = $("tab-add"), back = fx.restLabel(button);
   fx.busy(button, "增加中");
   let err = "";
