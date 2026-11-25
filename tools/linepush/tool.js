@@ -1,6 +1,8 @@
 // LINE 推播：搬自舊「LinePushPatternTool」的做圖部分（版面、標題、照片、貼圖、輸出）。
 // 推送／排程／訊息中心／試驗功能 P1 不搬。公司素材一律用 tb.assets.get 取得，沒密碼時走通用版。
 import { tb } from '../../sdk/toolbox.js';
+import * as fx from '../../ui/fx.js';
+const fxOn = (b) => b.classList.contains('fx-busy') || b.classList.contains('fx-ok');   // 按鈕正在轉圈／打勾時不改字
 
 tb.init('linepush');
 
@@ -2273,25 +2275,45 @@ document.getElementById('downloadJpgBtn').addEventListener('click', async () => 
       if (!ok) return;
     }
   }
-  await ensureAssetsReady();
-  const off = renderPageToOffscreen(activePage(), 'final');
-  const donePage = activePageIndex;
-  const res1 = await exportCanvas(off, exportFileName(donePage));
-  reportExport([res1]);
+  // 按鈕回饋（ui/fx.js）：產生中轉圈，成功打勾 1.5 秒，失敗抖動（原因照舊在狀態提示）
+  const btn = document.getElementById('downloadJpgBtn'), back = fx.restLabel(btn);
+  fx.busy(btn, '產生中');
+  try {
+    await ensureAssetsReady();
+    const off = renderPageToOffscreen(activePage(), 'final');
+    const donePage = activePageIndex;
+    const res1 = await exportCanvas(off, exportFileName(donePage));
+    reportExport([res1]);
+    fx.ok(btn, '已下載', back);
+  } catch (err) {
+    fx.fail(btn, back);
+  }
 });
 
 async function runDownloadAll() {
-  await ensureAssetsReady();
-  const results = [];
-  for (let p = 0; p < PAGE_COUNT; p++) {
-    if (mode === 'grid4' && !pageIsEdited(pages[p])) continue;   // 四格 A：空白頁不輸出
-    const off = renderPageToOffscreen(pages[p], 'final');
-    results.push(await exportCanvas(off, exportFileName(p)));
-    // Small gap so the browser treats these as two distinct downloads
-    // rather than racing them back-to-back.
-    if (p < PAGE_COUNT - 1) await new Promise(r => setTimeout(r, 600));
+  // 按鈕回饋（ui/fx.js）：「下載第 i／N 張」轉圈，成功打勾 1.5 秒，失敗抖動（原因照舊在狀態提示）
+  const btn = document.getElementById('downloadAllBtn'), back = fx.restLabel(btn);
+  if (btn.classList.contains('fx-busy')) return;
+  fx.busy(btn, '準備中');
+  try {
+    await ensureAssetsReady();
+    const results = [];
+    const list = [];
+    for (let p = 0; p < PAGE_COUNT; p++) if (!(mode === 'grid4' && !pageIsEdited(pages[p]))) list.push(p);   // 四格 A：空白頁不輸出
+    for (let k = 0; k < list.length; k++) {
+      const p = list[k];
+      fx.busy(btn, `下載第 ${k + 1}／${list.length} 張`);
+      const off = renderPageToOffscreen(pages[p], 'final');
+      results.push(await exportCanvas(off, exportFileName(p)));
+      // Small gap so the browser treats these as two distinct downloads
+      // rather than racing them back-to-back.
+      if (p < PAGE_COUNT - 1) await new Promise(r => setTimeout(r, 600));
+    }
+    reportExport(results);
+    fx.ok(btn, '已下載', back);
+  } catch (err) {
+    fx.fail(btn, back);
   }
-  reportExport(results);
 }
 // 全部下載 first asks for a last check (typos / white edges) in a popover at the
 // button; 確認下載 goes ahead, 再修改 (or clicking elsewhere / Esc) closes it.
@@ -2474,7 +2496,7 @@ document.getElementById('quickfillBtn').addEventListener('click', () => {
   render();
   const baseMsg = `快速填入完成，共套用 ${entries.length} 格`;
   if (entries.length) statusEl.show(baseMsg, 'success');
-  else statusEl.show('沒有找到任何「★」開頭的內容可以填入', 'error');
+  else { statusEl.show('沒有找到任何「★」開頭的內容可以填入', 'error'); fx.fail(document.getElementById('quickfillBtn'), '快速填入'); }
   if (entries.length) autoFetchImages(entries, baseMsg);
   // Once something was actually filled in, tuck the panel away (it stays open
   // when nothing matched, so the pasted text can be fixed); 「快速填入」 on the
@@ -3002,9 +3024,9 @@ function syncChrome() {
   $('dock').classList.toggle('checking', checking);
   $('nextStepBtn').hidden = !editing;
   $('backStepBtn').hidden = !checking;
-  $('downloadJpgBtn').textContent = '下載這張';
+  if (!fxOn($('downloadJpgBtn'))) $('downloadJpgBtn').textContent = '下載這張';
   $('downloadAllBtn').hidden = !checking;
-  $('downloadAllBtn').textContent = '全部下載';
+  if (!fxOn($('downloadAllBtn'))) $('downloadAllBtn').textContent = '全部下載';
   syncDockContext();
   updateDownloadState();
   alignFloatStack();

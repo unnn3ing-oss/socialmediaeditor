@@ -613,10 +613,14 @@ function scheduleThumb(item) {
 
 function redrawAllThumbs() { batchItems.forEach(drawThumb); }
 
-function renderBatchThumbs() {
-  batchDownloadAllBtn.disabled = batchItems.length === 0;
+function syncDlButtons() {
+  batchDownloadAllBtn.disabled = batchItems.length === 0 || batchDownloadAllBtn.classList.contains('fx-busy');   // 下載中（轉圈）維持停用
   batchResetBtn.disabled = batchItems.length === 0;
-  dlBtn.disabled = batchItems.length === 0;
+  dlBtn.disabled = batchItems.length === 0 || dlBtn.classList.contains('fx-busy');
+}
+
+function renderBatchThumbs() {
+  syncDlButtons();
   batchThumbs.innerHTML = '';
   batchItems.forEach((item, index) => {
     const firstLine = item.title.split('\n').find(l => l.trim()) || '';
@@ -1147,10 +1151,15 @@ dlBtn.addEventListener('click', async () => {
     showToast(reason);
     return;
   }
+  // 按鈕回饋（ui/fx.js）：產生中轉圈，成功打勾 1.5 秒，失敗抖動＋提示
+  const fx = window.tbxFx, back = fx ? fx.restLabel(dlBtn) : dlBtn.textContent;
+  if (fx) fx.busy(dlBtn, '產生中');
   try {
     const { blob, name } = await renderItemBlob(item);
     PA.tb.download(blob, name);
+    if (fx) fx.ok(dlBtn, '已下載', back, syncDlButtons);
   } catch (e) {
+    if (fx) fx.fail(dlBtn, back);
     showToast('下載失敗，請再按一次「下載這張」');
   }
 });
@@ -1176,11 +1185,15 @@ batchDownloadAllBtn.addEventListener('click', async () => {
     });
     if (!ok) return;
   }
+  const fx = window.tbxFx, btn = batchDownloadAllBtn, back = fx ? fx.restLabel(btn) : btn.textContent;
+  const say = (t) => { if (fx) fx.busy(btn, t); };
   try {
     const files = [];
-    for (const item of ready) files.push(await renderItemBlob(item));
-    await PA.tb.download.batch(files.map(f => ({ blob: f.blob, name: f.name })));
+    for (let i = 0; i < ready.length; i++) { say(`產生中 ${i + 1}／${ready.length}`); files.push(await renderItemBlob(ready[i])); }
+    await PA.tb.download.batch(files.map(f => ({ blob: f.blob, name: f.name })), { onProgress: (i, total) => say(`儲存第 ${i}／${total} 張`) });
+    if (fx) fx.ok(btn, '已下載', back, syncDlButtons);
   } catch (e) {
+    if (fx) fx.fail(btn, back);
     showToast('下載失敗，請再按一次「全部下載」');
   }
 });

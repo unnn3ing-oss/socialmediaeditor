@@ -1926,6 +1926,38 @@
   // 匯出、剪貼簿、專案檔
   // =====================================================================================
   // spec = { kind:'download'|'copy', fmt, pages:[0 起算], scale, quality(0～1), dpi, name, pack:'each'|'zip' }（由匯出彈窗組出來）
+  // 「下載這張」按鈕回饋（ui/fx.css 的 fx-busy／fx-ok／fx-shake）：保留原本的圖示與字，只換狀態
+  //   busy：圖示換轉圈、字換「匯出中」；ok：打勾＋「已下載／已複製」1.5 秒；fail：抖一下
+  let expFxTimer = 0;
+  function expBtnFx(stateName, text) {
+    const btn = $('dzExportBtn'); if (!btn) return;
+    const lbl = btn.querySelector('span:not(.fx-spin)'), ico = btn.querySelector('svg:not(.fx-chk)');
+    if (!btn.dataset.fxBack) btn.dataset.fxBack = lbl ? lbl.textContent : '';
+    clearTimeout(expFxTimer);
+    btn.querySelectorAll('.fx-spin, .fx-chk').forEach(n => n.remove());
+    btn.classList.remove('fx-busy', 'fx-ok', 'fx-bad');
+    btn.removeAttribute('aria-busy');
+    if (ico) ico.style.display = '';
+    if (lbl) lbl.textContent = btn.dataset.fxBack;
+    if (stateName === 'busy' || stateName === 'ok') {
+      let lead;
+      if (stateName === 'busy') { lead = document.createElement('span'); lead.className = 'fx-spin'; btn.classList.add('fx-busy'); btn.setAttribute('aria-busy', 'true'); }
+      else {
+        const ns = 'http://www.w3.org/2000/svg';
+        lead = document.createElementNS(ns, 'svg'); lead.setAttribute('class', 'fx-chk'); lead.setAttribute('viewBox', '0 0 16 16');
+        const pth = document.createElementNS(ns, 'path'); pth.setAttribute('d', 'M3 8.5l3.2 3L13 4.5'); lead.append(pth);
+        btn.classList.add('fx-ok');
+        expFxTimer = setTimeout(() => expBtnFx('idle'), 1500);
+      }
+      lead.setAttribute('aria-hidden', 'true');
+      if (ico) { ico.style.display = 'none'; ico.before(lead); } else btn.prepend(lead);
+      if (lbl) lbl.textContent = text;
+    } else if (stateName === 'fail') {
+      btn.classList.add('fx-bad');
+      btn.classList.remove('fx-shake'); void btn.offsetWidth; btn.classList.add('fx-shake');
+      expFxTimer = setTimeout(() => btn.classList.remove('fx-bad', 'fx-shake'), 1500);
+    }
+  }
   async function runExport(spec) {
     if (exporting) return;
     endField();
@@ -1933,6 +1965,8 @@
     exporting = true;
     syncChrome();
     say('匯出中…', 'stay');
+    expBtnFx('busy', spec.kind === 'copy' ? '複製中' : '匯出中');
+    let fxResult = 'fail';
     try {
       // 匯出期間使用者仍可能在編輯；先深拷貝一份，避免 core 的 replaceInPlace 在同一物件上換掉 pages
       const d = core().deserialize(core().serialize(state.doc)), env = exportEnv();
@@ -1942,6 +1976,7 @@
       if (spec.kind === 'copy') {
         const r = await X().copyPage(d, pages[0], env, opts);
         say(r.ok ? `已複製第 ${pages[0] + 1} 頁（${px(pages[0])}），可以直接貼上` : r.reason, r.ok ? null : 'err');
+        if (r.ok) fxResult = 'copied';
       } else if (pages.length === 1) {
         const blob = await X().exportPage(d, pages[0], fmt, env, opts);
         download(blob, `${spec.name}.${fmt}`);
@@ -1950,6 +1985,7 @@
         // 一張一張下載：字型只等第一張，之後每張不再等；每張之間隔一下，瀏覽器才不會漏掉
         for (let k = 0; k < pages.length; k++) {
           say(`下載中 ${k + 1}／${pages.length}…`, 'stay');
+          expBtnFx('busy', `下載第 ${k + 1}／${pages.length} 張`);
           const blob = await X().exportPage(d, pages[k], fmt, env, Object.assign({ skipFontWait: k > 0 }, opts));
           download(blob, `${spec.name}_${String(pages[k] + 1).padStart(2, '0')}.${fmt}`);
           if (k < pages.length - 1) await new Promise(r => setTimeout(r, EACH_GAP_MS));
@@ -1960,12 +1996,14 @@
         download(blob, `${spec.name}.zip`);
         say(`已下載 ${pages.length} 頁（ZIP，每頁 ${FMT}，${spec.dpi} DPI）`);
       }
+      if (spec.kind !== 'copy') fxResult = 'ok';
     } catch (e) {
       const m = (e && e.message) || String(e);
       say('匯出失敗：' + m + (/太大/.test(m) ? '' : '（圖片可能來自不同來源，請改用上傳的圖片）'), 'err');
     } finally {
       exporting = false;
       syncChrome();
+      if (fxResult === 'fail') expBtnFx('fail'); else expBtnFx('ok', fxResult === 'copied' ? '已複製' : '已下載');
     }
   }
 

@@ -10,6 +10,7 @@
 // 搬進小編工具箱：下載、選檔／拖曳／貼上改用 SDK（tb.download、tb.files.bind），其餘照舊。
 // =====================================================================================
 import { tb } from '../../sdk/toolbox.js';
+import * as fx from '../../ui/fx.js';
 import { askConfirm, isImageFile } from './confirm.js';
 
 tb.init('resize');
@@ -341,27 +342,35 @@ tb.init('resize');
     const blob = await new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('產生圖片失敗'))), ext === 'png' ? 'image/png' : 'image/jpeg', 0.95));
     return { blob, ext, pl, filename: `${safeBase(p.name)}_${pl.tw}x${pl.th}.${ext}` };
   }
-  async function run(fn) {
+  // 下載按鈕回饋（ui/fx.js）：處理中轉圈＋進度，成功打勾 1.5 秒，失敗抖動；原因與進度照舊寫在狀態列
+  async function run(btn, fn) {
     if (busy) return;
-    busy = true; render();
-    try { await fn(); } catch (err) { statusEl.textContent = `下載失敗：${err.message || err}`; }
-    finally { busy = false; const keep = statusEl.textContent; render(); statusEl.textContent = keep; }
+    const back = fx.restLabel(btn);
+    busy = true; fx.busy(btn, '產生中'); render();
+    let okDone = false;
+    try { await fn((t) => fx.busy(btn, t)); okDone = true; } catch (err) { statusEl.textContent = `下載失敗：${err.message || err}`; }
+    finally {
+      busy = false;
+      if (okDone) fx.ok(btn, '已下載', back, render); else fx.fail(btn, back);
+      const keep = statusEl.textContent; render(); statusEl.textContent = keep;
+    }
   }
 
-  downloadBtn.addEventListener('click', () => run(async () => {
+  downloadBtn.addEventListener('click', () => run(downloadBtn, async () => {
     const { blob, filename } = await exportPhoto(photo());
     tb.download(blob, filename);
     statusEl.textContent = `已下載：${filename}`;
   }));
-  downloadAllBtn.addEventListener('click', () => run(async () => {
+  downloadAllBtn.addEventListener('click', () => run(downloadAllBtn, async (say) => {
     const list = [...st.photos];
     const now = new Date(), items = [];
     for (let i = 0; i < list.length; i++) {
       statusEl.textContent = `產生中 ${i + 1}／${list.length}：${list[i].name}`;
+      say(`產生中 ${i + 1}／${list.length}`);
       const { blob, ext } = await exportPhoto(list[i]);
       items.push({ blob, name: `${tb.stampName(now, i + 1)}.${ext}` });
     }
-    await tb.download.batch(items, { onProgress: (i, total) => { statusEl.textContent = `儲存第 ${i}／${total} 張`; } });   // 每張間隔 0.5～1 秒，瀏覽器比較不會擋掉連續下載
+    await tb.download.batch(items, { onProgress: (i, total) => { statusEl.textContent = `儲存第 ${i}／${total} 張`; say(`儲存第 ${i}／${total} 張`); } });   // 每張間隔 0.5～1 秒，瀏覽器比較不會擋掉連續下載
     statusEl.textContent = `已下載 ${list.length} 張（${items[0].name} ～ ${items[items.length - 1].name}）`;
   }));
 

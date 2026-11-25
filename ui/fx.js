@@ -23,6 +23,7 @@ export function setLabel(btn, text, { lead = null, dots = false } = {}) {
 }
 // 處理中：轉圈＋文字、不能再按（同一顆按鈕可以一直呼叫來更新文字）
 export function busy(btn, text, opts = {}) {
+  if (!btn.classList.contains('fx-busy') && !btn.classList.contains('fx-ok')) btn.dataset.fxBack = btn.textContent.trim();   // 記住原本的字（restLabel 用）
   stopTimer(btn);
   btn.classList.remove('fx-ok', 'fx-bad');
   btn.classList.add('fx-busy');
@@ -46,9 +47,16 @@ export function idle(btn, text, { disabled = false } = {}) {
 //   opts.disabled：打勾期間與恢復後按鈕是否停用（例如已經沒有東西可以送）
 export function ok(btn, text, back, after, opts = {}) {
   idle(btn, null, opts);
+  if (back != null) btn.dataset.fxBack = back;
   btn.classList.add('fx-ok');
   setLabel(btn, text, { lead: CHECK() });
   timers.set(btn, setTimeout(() => { idle(btn, back, opts); if (after) after(); }, OK_MS));
+}
+// 按鈕「平常」的字：轉圈或打勾中回傳原本的字，不然就是目前的字
+//   （打勾的 1.5 秒內又按一次時，用這個當 back，才不會把「已下載」記成原本的字）
+export function restLabel(btn) {
+  const on = btn.classList.contains('fx-busy') || btn.classList.contains('fx-ok');
+  return on && btn.dataset.fxBack != null ? btn.dataset.fxBack : btn.textContent.trim();
 }
 // 失敗：紅色＋抖一下，1.5 秒後恢復顏色（文字直接回到 back，原因由呼叫端寫在旁邊或提示）
 export function fail(btn, back, opts = {}) {
@@ -82,4 +90,4 @@ export function collapse(el) {
   });
 }
 
-if (typeof window !== 'undefined') window.tbxFx = { setLabel, busy, idle, ok, fail, shake, flash, collapse };
+if (typeof window !== 'undefined') window.tbxFx = { setLabel, restLabel, busy, idle, ok, fail, shake, flash, collapse };

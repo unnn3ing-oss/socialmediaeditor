@@ -4,9 +4,12 @@
 .btn, button.primary, button.danger { transition: transform .1s ease, background-color .15s ease, color .15s ease, border-color .15s ease; }
 .btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { transform: scale(.97); }
 /* 處理中：用 disabled 擋重複按，但不要看起來像「不能按」的灰色 */
-.fx-busy[disabled], .fx-busy[disabled]:hover { cursor: progress; background: var(--surface); border-color: var(--accent); color: var(--accent); }
+.fx-busy[disabled], .fx-busy[disabled]:hover { cursor: progress; opacity: 1; background: var(--surface, #fff); border-color: var(--accent, #155eef); color: var(--accent, #155eef); }
 .btn-primary.fx-busy[disabled], .btn-primary.fx-busy[disabled]:hover, button.primary.fx-busy[disabled], button.primary.fx-busy[disabled]:hover { background: #3b78f2; border-color: #3b78f2; color: #fff; }
-button.danger.fx-busy[disabled], button.danger.fx-busy[disabled]:hover, .btn-danger.fx-busy[disabled], .btn-danger.fx-busy[disabled]:hover { background: var(--surface); border-color: var(--bad-line); color: var(--bad-text); }
+button.danger.fx-busy[disabled], button.danger.fx-busy[disabled]:hover, .btn-danger.fx-busy[disabled], .btn-danger.fx-busy[disabled]:hover { background: var(--surface, #fff); border-color: var(--bad-line); color: var(--bad-text); }
+/* 各工具自帶 base.css 的一般 <button>（不是 .btn）：轉圈／打勾和文字排同一列；停用時不要半透明 */
+.fx-busy:not([hidden]), .fx-ok:not([hidden]) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.fx-ok[disabled] { opacity: 1; }
 .fx-ok, .fx-ok:hover, .fx-ok[disabled] { background: var(--ok-bg, #ecfdf3) !important; border-color: var(--ok-line, #abefc6) !important; color: var(--ok-text, #067647) !important; }
 .fx-bad, .fx-bad:hover { background: var(--bad-bg, #fef3f2) !important; border-color: var(--bad-line, #fecdca) !important; color: var(--bad-text, #b42318) !important; }
 .fx-lbl { display: inline-block; animation: fx-in .15s ease; }

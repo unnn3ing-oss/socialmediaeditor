@@ -1,6 +1,7 @@
 // YT 批量下載（網頁）：它是「遙控器」。清單與下載由小編工具箱外掛保管，並透過 Native Messaging 交給你電腦上的下載助手；
 // 這個頁面只顯示同一份清單，並帶使用者做第一次設定（見 tools/ytdl/PROTOCOL.md）。
 import { tb } from "../../sdk/toolbox.js";
+import * as fx from "../../ui/fx.js";
 import { createBridgeClient } from "./web/bridge-client.js";
 import {
   addPastedUrls, bindClearAll, bindNumberSetting, copyRowText, downloadRowCover, renderAbortNote, renderClearButton, renderFormatPicker,
@@ -141,15 +142,14 @@ $("start").addEventListener("click", () => {
 });
 
 async function copyText(text, button, failNoteId, failText) {
-  const label = button.textContent;
+  const label = fx.restLabel(button);
   try {
     await navigator.clipboard.writeText(text);
     setNote(failNoteId, "");
-    button.textContent = "已複製";
-    clearTimeout(button._copied);
-    button._copied = setTimeout(() => { button.textContent = label; }, 2000);
+    fx.ok(button, "已複製", label);   // 按鈕回饋（ui/fx.js）：打勾 1.5 秒
   } catch {
     setNote(failNoteId, failText, "error");
+    fx.fail(button, label);
   }
 }
 $("copy-mac-command").addEventListener("click", (event) => copyText(macInstallCommand(), event.currentTarget, "installer-status", `無法自動複製，請自己輸入：${macInstallCommand()}`));
@@ -210,9 +210,17 @@ function renderQueueArea() {
   if (cooling) $("cooldown-chip").textContent = cooling;
 
   const button = $("start-all");
+  // 按下「開始／停止」後轉圈，等下載助手回報狀態真的變了才換回（最多等 10 秒）
+  if (startPending && queue.running === startPending.wasRunning && Date.now() - startPending.at < 10000) return renderQueueTail(detected);
+  startPending = null;
+  button.removeAttribute("aria-busy");
   button.className = `btn btn-sm ${queue.running ? "btn-danger" : "btn-primary"}`;
   button.textContent = queue.running ? "停止" : info.total && info.waiting === 0 && info.done > 0 ? "全部完成" : "開始全部下載";
   button.disabled = !queue.running && (!connected || queue.hostOutdated || info.waiting === 0);
+  renderQueueTail(detected);
+}
+// renderQueueArea 的後半（開始鈕轉圈中時也要照常更新）
+function renderQueueTail(detected) {
   renderAbortNote($("abort-note"), queue);
   renderClearButton($("clear-all"), queue);
 
@@ -312,27 +320,49 @@ if (isSide) {
 }
 $("tab-add").addEventListener("click", async () => {
   if (!currentTab) return;
+  const button = $("tab-add"), back = fx.restLabel(button);
+  fx.busy(button, "增加中");
+  let err = "";
   try {
     const result = await send({ type: "queue_add", url: currentTab.url });
-    setNote("add-note", result?.ok === false ? result.error : "", "error");
-  } catch (error) { setNote("add-note", error.message, "error"); }
+    err = result?.ok === false ? result.error || "無法加入" : "";
+  } catch (error) { err = error.message || "無法加入"; }
+  setNote("add-note", err, "error");
+  if (err) fx.fail(button, back, { disabled: !client.detected() }); else fx.ok(button, "已增加", back, null, { disabled: !client.detected() });
 });
 
 // ---------- 加入與執行 ----------
 async function addFromBox() {
-  setNote("add-note", await addPastedUrls($("add-url"), send), "error");
+  const button = $("add-btn");
+  if (button.classList.contains("fx-busy")) return;
+  if (!$("add-url").value.trim()) { setNote("add-note", await addPastedUrls($("add-url"), send), "error"); return; }
+  const back = fx.restLabel(button);
+  fx.busy(button, "增加中");   // 按鈕回饋（ui/fx.js）：全部加入打勾，有加不進去的抖動（原因寫在下面）
+  const note = await addPastedUrls($("add-url"), send);
+  setNote("add-note", note, "error");
+  const opts = { disabled: !client.detected() };
+  if (note) fx.fail(button, back, opts); else fx.ok(button, "已增加", back, null, opts);
 }
 $("add-btn").addEventListener("click", addFromBox);
 $("add-url").addEventListener("keydown", (event) => { if (event.key === "Enter") addFromBox(); });
 $("add-url").addEventListener("input", () => setNote("add-note", ""));
 
+let startPending = null;   // { wasRunning, at }：開始／停止已送出、狀態還沒變
 $("start-all").addEventListener("click", async () => {
+  const button = $("start-all"), wasRunning = Boolean(queue?.running);
+  startPending = { wasRunning, at: Date.now() };
+  fx.busy(button, wasRunning ? "停止中" : "開始中");
+  setTimeout(() => { if (startPending && Date.now() - startPending.at >= 10000) renderQueueArea(); }, 10100);   // 狀態一直沒變也要換回來
+  let bad = false;
   try {
-    const result = await send({ type: queue?.running ? "queue_stop" : "queue_start" });
-    setNote("note", result?.ok === false ? result.error : "", "error");
+    const result = await send({ type: wasRunning ? "queue_stop" : "queue_start" });
+    bad = result?.ok === false;
+    setNote("note", bad ? result.error : "", "error");
   } catch (error) {
+    bad = true;
     setNote("note", error.message, "error");
   }
+  if (bad) { startPending = null; renderQueueArea(); fx.shake(button); }
 });
 
 bindClearAll($("clear-all"), { send, getState: () => queue, report: (message) => setNote("note", message, "error"), before: $("queue-list") });
@@ -347,14 +377,24 @@ $("auto-cover").addEventListener("change", () => send({ type: "settings_set", se
 const doctorUi = () => ({ check: $("doctor-check"), fix: $("doctor-fix"), list: $("doctor-list"), summary: $("doctor-summary"), fixed: $("doctor-fixed") });
 $("doctor-check").addEventListener("click", () => runDoctor(send, doctorUi(), false));
 $("doctor-fix").addEventListener("click", () => runDoctor(send, doctorUi(), true));
-$("diag-copy").addEventListener("click", () => runCopyDiagnostics(send, { button: $("diag-copy"), status: $("diag-copy-status"), fallback: $("diag-copy-text") }));
+$("diag-copy").addEventListener("click", async () => {
+  const button = $("diag-copy"), back = fx.restLabel(button);
+  fx.busy(button, "產生中");
+  try { await runCopyDiagnostics(send, { button, status: $("diag-copy-status"), fallback: $("diag-copy-text") }); } catch { /* 原因寫在狀態列 */ }
+  if ($("diag-copy-status").dataset.kind === "ok") fx.ok(button, "已複製", back); else fx.fail(button, back);
+});
 $("save-outdir").addEventListener("click", async () => {
+  const button = $("save-outdir"), back = fx.restLabel(button);
+  fx.busy(button, "儲存中");
+  let good = false;
   try {
     const result = await send({ type: "set_output_dir", path: $("outdir").value });
+    good = Boolean(result?.ok);
     setNote("settings-note", result?.ok ? `已改為：${result.outputDir}` : result?.error ?? "無法使用這個資料夾", result?.ok ? "ok" : "error");
   } catch (error) {
     setNote("settings-note", error.message, "error");
   }
+  if (good) fx.ok(button, "已儲存", back, renderQueueArea); else { fx.fail(button, back); renderQueueArea(); }
 });
 
 // ---------- 版本與更新（只管下載助手與下載引擎；外掛本身的更新由工具箱處理）----------
