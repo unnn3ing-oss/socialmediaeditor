@@ -83,10 +83,13 @@ route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
 }, 'post');
 
 route('GET', /^\/fb\/scheduled$/, async (request, env) => {
-  const page = new URL(request.url).searchParams.get('page') || '';
+  const q = new URL(request.url).searchParams;
+  const page = q.get('page') || '';
+  const after = q.get('after') || '';
   const token = await pageToken(env, page);
-  if (!token) return fail(request, env, 'bad_request');
-  return ok(request, env, await listScheduled(env, page, token));
+  if (!token || after.length > 4000 || !/^[A-Za-z0-9_\-=%]*$/.test(after)) return fail(request, env, 'bad_request');
+  const r = await listScheduled(env, page, token, after);
+  return ok(request, env, q.get('v') === '2' ? r : r.items);   // 沒帶 v=2＝舊前端，照舊回陣列
 }, 'view');
 route('GET', /^\/fb\/published$/, async (request, env) => {
   const q = new URL(request.url).searchParams;

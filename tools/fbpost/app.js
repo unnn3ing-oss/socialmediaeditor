@@ -17,7 +17,7 @@ tb.init('fbpost');
 function showTab(name) {
   for (const t of $('tabs').querySelectorAll('[data-tab]')) {
     const on = t.dataset.tab === name; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on));
-    $('tab-' + t.dataset.tab).hidden = !on;
+    $('tab-' + t.dataset.tab).hidden = !on; $('ctl-' + t.dataset.tab).hidden = !on;
   }
 }
 $('tabs').addEventListener('click', (e) => {
@@ -59,13 +59,17 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
     if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
-  }).catch(() => {}).then(() => { $('dutyBtn').hidden = !canPost; duty.check(); });
+  }).catch(() => {}).then(() => {
+    $('dutyBtn').hidden = !canPost; duty.check();
+    // 有檢視權限才自動讀列表；還得先選值班粉專（值班視窗開著）就等選完再讀
+    manage.allowView(!$('fbpostApp').classList.contains('no-view'), $('dutyDlg').open);
+  });
   booted(true);
   $('fbpostApp').hidden = false;
   // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
   let currentPages = pages, targets = null, loading = null, composer = null, sender = null;
   const history = createHistory();
-  const duty = createDuty({ pages: () => currentPages, canAsk: () => canPost, onChange: () => { if (targets) targets.applyDefaults(); } });
+  const duty = createDuty({ pages: () => currentPages, canAsk: () => canPost, onChange: () => { if (targets) targets.applyDefaults(); manage.dutyChanged(); } });
   const ensureCompose = () => loading || (loading = (async () => {
     const [{ loadComposeAssets }, { createComposer }, { createTargets }, { createSender }, { createTimePop }, { createRd }, { createComments }] =
       await Promise.all([import('../../ui/compose/assets.js'), import('./compose.js'), import('./targets.js'), import('./send.js'),
@@ -90,7 +94,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     await composer.restore(rec);
     dialog.open();
   }
-  const manage = createManage({ tb, history, onResend: resend });
+  const manage = createManage({ tb, history, onResend: resend, getDuty: () => duty.ids() });
   const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); duty.paint(); };
   showPages(pages);
   $('pagesRefresh').addEventListener('click', async () => {

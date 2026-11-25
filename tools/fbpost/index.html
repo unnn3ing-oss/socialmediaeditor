@@ -68,26 +68,31 @@
         <button type="button" role="tab" class="is-on" aria-selected="true" data-tab="sched">已排程</button>
         <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
       </div>
-    </div>
-
-    <div id="tab-sched">
-      <div class="bar">
+      <div class="bar ctl" id="ctl-sched">
         <label class="inline">粉專 <select id="schedPage"></select></label>
         <label class="inline">排序 <select id="schedSort"><option value="near">時間最近</option><option value="far">時間最遠</option></select></label>
         <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
-        <p class="hint" id="schedHint" role="status">按「刷新」讀取 Facebook 排程</p>
+        <div class="seg view-seg" role="group" aria-label="顯示方式"><button type="button" data-view="list" class="is-on" aria-pressed="true">列表</button><button type="button" data-view="card" aria-pressed="false">卡片</button></div>
       </div>
+      <div class="bar ctl" id="ctl-pub" hidden>
+        <label class="inline">粉專 <select id="pubPage"></select></label>
+        <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
+        <div class="seg view-seg" role="group" aria-label="顯示方式"><button type="button" data-view="list" class="is-on" aria-pressed="true">列表</button><button type="button" data-view="card" aria-pressed="false">卡片</button></div>
+      </div>
+    </div>
+
+    <div id="tab-sched">
+      <p class="hint" id="schedHint" role="status"></p>
       <ul class="list" id="schedList"></ul>
+      <nav class="pager" id="schedPager" aria-label="已排程分頁" hidden><button type="button" class="btn btn-secondary btn-sm" id="schedPrev">‹ 上一頁</button><span id="schedNo" aria-live="polite"></span><button type="button" class="btn btn-secondary btn-sm" id="schedNext">下一頁 ›</button></nav>
+      <button type="button" class="btn btn-secondary btn-sm more-btn" id="schedMore" hidden>讀取更多</button>
     </div>
 
     <div id="tab-pub" hidden>
-      <div class="bar">
-        <label class="inline">粉專 <select id="pubPage"></select></label>
-        <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
-        <p class="hint" id="pubHint" role="status">按「刷新」讀取 Facebook 已發佈貼文</p>
-      </div>
+      <p class="hint" id="pubHint" role="status"></p>
       <ul class="list" id="pubList"></ul>
-      <button type="button" class="btn btn-secondary btn-sm" id="pubMore" hidden>載入更多</button>
+      <nav class="pager" id="pubPager" aria-label="已發佈分頁" hidden><button type="button" class="btn btn-secondary btn-sm" id="pubPrev">‹ 上一頁</button><span id="pubNo" aria-live="polite"></span><button type="button" class="btn btn-secondary btn-sm" id="pubNext">下一頁 ›</button></nav>
+      <button type="button" class="btn btn-secondary btn-sm more-btn" id="pubMore" hidden>讀取更多</button>
     </div>
   </section>
 </main>
