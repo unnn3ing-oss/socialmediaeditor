@@ -14,15 +14,20 @@
 ## 做法（改哪裡）
 | 項目 | 檔案 | 狀態 |
 |---|---|---|
-| 拼圖等分白塊不動（segmented.js 載入時按鈕還沒建立，沒監看到） | `tools/{collage,resize,watermark}/segmented.js` | ⬜ |
-| 設計工具列高度 | `tools/design/design.css` | ⬜ |
-| 影片停止無限迴圈（停止請求中分段傳完重設 v.next → pump 微任務無限撿起） | `tools/fbvideo/app.js` `pumpable`／`pumpOne` | ⬜ |
-| 排程發布列表 | `server/fb/manage.js`（scheduled after 游標、published 50）、`tools/fbpost/manage.js`、`index.html`、`fbpost.css` | ⬜ |
-| 圖片套版網址每張獨立 | `tools/pattern/quickfill.js`、`app.js` | ⬜ |
-| 低優先：直播需求單複製打勾、全站按下縮放、toast 滑入 | `tools/livereq/`、`ui/fx.css`、各工具 css | ⬜ |
+| 拼圖等分白塊不動（segmented.js 載入時按鈕還沒建立，沒監看到） | `tools/{collage,resize,watermark}/segmented.js` | ✅ |
+| 設計工具列高度 | `tools/design/design.css` | ✅ |
+| 影片停止無限迴圈（停止請求中分段傳完重設 v.next → pump 微任務無限撿起） | `tools/fbvideo/app.js` `pumpable`／`pumpOne` | ✅ |
+| 排程發布列表 | `server/fb/manage.js`（scheduled after 游標、published 50）、`tools/fbpost/manage.js`、`index.html`、`fbpost.css` | ✅ |
+| 圖片套版網址每張獨立 | `tools/pattern/quickfill.js`、`app.js` | ✅ |
+| 低優先：直播需求單複製打勾、全站按下縮放、toast 滑入 | `tools/livereq/`、`ui/fx.css`、各工具 css | ✅ |
 
 ## 測試
 `npm test`、`node build.js --check`、相關 e2e。
 
 ## 注意事項
 - 排程發布列表改後端 → 需重新部署（正式＋測試）。外掛不升版。
+
+## 結果
+- 全部完成：npm test 825、全部 e2e 303、build --check、獨立審查通過。
+- 排程發布列表由子代理做（`cbefeb6`）；審查 Minor 未修：刪除時同粉專有一次刷新在途，較早的回應可能把剛刪的貼文放回，再刷新即消失。
+- 下一步：使用者看截圖 → 說「推」併入 main（同 commit 更新 CLAUDE.md 目前進度）。後端需重新部署（正式＋測試）才有第 2 批。
