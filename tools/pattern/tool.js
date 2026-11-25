@@ -13,6 +13,7 @@ import { parseArticle } from '../../sdk/news-article.js';
 import * as compose from '../../ui/compose/render.js';
 import { createFxKit } from '../../ui/compose/fx.js';
 import { loadComposeAssets } from '../../ui/compose/assets.js';
+import '../../ui/fx.js';   // 按鈕回饋：一般腳本（app.js、quickfill.js）用 window.tbxFx
 
 tb.init('pattern');
 

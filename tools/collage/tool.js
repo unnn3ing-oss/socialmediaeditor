@@ -10,6 +10,7 @@
 // 搬進小編工具箱：選檔／拖曳／貼上改用 SDK（tb.files.bind），下載改用 tb.download，其餘照舊。
 // =====================================================================================
 import { tb } from '../../sdk/toolbox.js';
+import * as fx from '../../ui/fx.js';
 import { askConfirm, isImageFile } from './confirm.js';
 
 tb.init('collage');
@@ -474,13 +475,20 @@ tb.init('collage');
   }
   const pad2 = n => String(n).padStart(2, '0');
   const stampDay = () => { const d = new Date(); return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`; };
-  async function guarded(fn) {
+  // 按鈕回饋（ui/fx.js）：處理中轉圈，成功打勾 1.5 秒，失敗抖動；fn 回傳 false＝失敗（原因已寫在狀態列）
+  async function guarded(btn, doing, done, fn) {
     if (busy) return;
-    busy = true; syncUI();
-    try { await fn(); } catch (err) { say(`失敗：${err.message || err}`); }
-    finally { busy = false; syncUI(); }
+    const back = fx.restLabel(btn);
+    busy = true; fx.busy(btn, doing); syncUI();
+    let good = false;
+    try { good = (await fn()) !== false; } catch (err) { say(`失敗：${err.message || err}`); }
+    finally {
+      busy = false;
+      if (good) fx.ok(btn, done, back, syncUI); else fx.fail(btn, back);
+      syncUI();
+    }
   }
-  $('cgDownloadBtn').addEventListener('click', () => guarded(async () => {
+  $('cgDownloadBtn').addEventListener('click', (e) => guarded(e.currentTarget, '產生中', '已下載', async () => {
     const c = offscreen();
     const raw = await new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('產生圖片失敗'))), 'image/jpeg', 0.95));
     const blob = await withDpi(raw, 300);
@@ -488,11 +496,11 @@ tb.init('collage');
     tb.download(blob, name);
     say(`已下載：${name}（${S}×${c.height}）`);
   }));
-  $('cgCopyBtn').addEventListener('click', () => guarded(async () => {
+  $('cgCopyBtn').addEventListener('click', (e) => guarded(e.currentTarget, '複製中', '已複製', async () => {
     const c = offscreen();
     const blob = await new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('產生圖片失敗'))), 'image/png'));
     try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); say('已複製拼圖，可以直接貼到別的地方'); }
-    catch (e) { say('複製失敗：瀏覽器不允許寫入剪貼簿，請改用「下載這張」'); }
+    catch (e) { say('複製失敗：瀏覽器不允許寫入剪貼簿，請改用「下載這張」'); return false; }
   }));
 
   $('cgResetBtn').addEventListener('click', async () => {

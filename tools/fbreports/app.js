@@ -4,6 +4,7 @@
 //   請求序號 S.seq：換查詢後舊回應一律丟掉；範圍變更（report_scope）→ 停止、清除、重新讀取粉專
 //   分頁、類型篩選、排序、下鑽只用已載入結果；工具內切換一律 hidden
 import { tb } from '../../sdk/toolbox.js';
+import * as fx from '../../ui/fx.js';
 import { COMPANY_KEY } from '../../sdk/api.js';
 import {
   TYPES, TYPE_NAME, METRICS, METRIC_NAME, METRIC_NOTE, summarize, byDate, groupBy, typeRows, sortItems, mergeItems,
@@ -243,6 +244,7 @@ async function scopeChanged(msg) {
 }
 function clearAll(msg) {
   S.seq++; S.running = false; S.q = null; S.items = new Map(); S.last = null; S.drill = null;
+  fx.idle($('queryBtn'), '查詢');
   $('report').hidden = true; $('qstate').hidden = true;
   for (const id of ['kpis', 'trend', 'rank', 'trafficTrends', 'trafficPages', 'clickRank', 'pageTable', 'typeTable', 'postTable', 'pager']) $(id).innerHTML = '';
   if (msg) toast(msg);
@@ -269,7 +271,12 @@ function renderState() {
   $('qsText').textContent = text;
   $('stopBtn').hidden = !S.running; $('stopBtn').disabled = false;
   $('moreBtn').hidden = S.running || c.complete;
-  $('queryBtn').disabled = false;
+  // 查詢鈕回饋（ui/fx.js）：讀取中轉圈（查詢與繼續讀取都算，仍可按）；讀完打勾、失敗抖動、暫停／停止直接恢復
+  const qb = $('queryBtn');
+  if (S.running) { fx.busy(qb, '讀取中'); qb.disabled = false; }   // 讀取中仍可改條件重查（原本行為）
+  else if (qb.classList.contains('fx-busy')) {
+    if (q.err) fx.fail(qb, '查詢'); else if (c.complete) fx.ok(qb, '已完成', '查詢'); else fx.idle(qb, '查詢');
+  } else if (!qb.classList.contains('fx-ok')) qb.disabled = false;
   const span = `${q.from.replaceAll('-', '/')}～${q.to.replaceAll('-', '/')}`;
   const asOf = q.restored || q.asOf;
   $('qsMeta').textContent = `依貼文發布日統計（${span}，台北時間）· 累計成效 · ` + (asOf ? `資料讀取時間 ${fmtTime(asOf)}` : '尚未讀到資料') + (q.restored ? '（重查失敗，顯示上次結果）' : '');
@@ -445,11 +452,11 @@ $('probeBtn').addEventListener('click', () => {
 });
 $('probeClose').addEventListener('click', () => $('probeDlg').close());
 $('probeRun').addEventListener('click', async () => {
-  const b = $('probeRun'); b.disabled = true; $('probeOut').textContent = '檢查中…'; $('probeCopy').disabled = true;
+  const b = $('probeRun'); fx.busy(b, '檢查中'); $('probeOut').textContent = '檢查中…'; $('probeCopy').disabled = true;
   try {
     const r = await tb.api.call('/fb/reports/probe?page=' + encodeURIComponent($('probePage').value));
     $('probeOut').textContent = JSON.stringify(r, null, 2); $('probeCopy').disabled = false;
-  } catch (e) { $('probeOut').textContent = '失敗：' + errText(e); }
-  b.disabled = false;
+    fx.ok(b, '完成', '開始檢查');
+  } catch (e) { $('probeOut').textContent = '失敗：' + errText(e); fx.fail(b, '開始檢查'); }
 });
 $('probeCopy').addEventListener('click', () => navigator.clipboard.writeText($('probeOut').textContent).then(() => toast('已複製'), () => toast('複製失敗')));

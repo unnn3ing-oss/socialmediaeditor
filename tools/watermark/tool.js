@@ -7,6 +7,7 @@
 // 沒密碼時只有「上傳自己的 Logo」。
 // =====================================================================================
 import { tb } from '../../sdk/toolbox.js';
+import * as fx from '../../ui/fx.js';
 import { askConfirm, isImageFile } from './confirm.js';
 
 tb.init('watermark');
@@ -51,6 +52,7 @@ tb.init('watermark');
   const sliders = { size: $('wmSize'), transparency: $('wmTransparency'), margin: $('wmMargin') };
   const outs = { size: $('wmSizeOut'), transparency: $('wmTransparencyOut'), margin: $('wmMarginOut') };
   let busy = false;
+  const fxOn = (b) => b.classList.contains('fx-busy') || b.classList.contains('fx-ok');   // 按鈕正在轉圈／打勾時 render 不改字
 
   let company = false;                    // 已登入、而且拿得到公司 Logo 才是 true
   const logoField = $('wmLogoField');
@@ -225,12 +227,12 @@ tb.init('watermark');
     emptyEl.hidden = !!p;
     const ready = !!p && !!logo;
     downloadBtn.disabled = busy || !ready;
-    downloadBtn.textContent = '下載這張';
+    if (!fxOn(downloadBtn)) downloadBtn.textContent = '下載這張';
     const why = busy ? '' : !p ? '先加入照片' : !logo ? '先上傳浮水印圖' : '';
     downloadBtn.title = why; downloadAllBtn.title = busy ? '' : !logo ? '先上傳浮水印圖' : '';
     downloadAllBtn.hidden = n < 2;
     downloadAllBtn.disabled = busy || !logo;
-    downloadAllBtn.textContent = `全部下載（${n} 張）`;
+    if (!fxOn(downloadAllBtn)) downloadAllBtn.textContent = `全部下載（${n} 張）`;
     if (!busy) {
       statusEl.textContent = !p ? '請先上傳照片' : !logo ? '請上傳浮水印圖' : (n > 1 ? `預覽已更新（第 ${st.cur + 1}／${n} 張）` : '預覽已更新');
     }
@@ -517,29 +519,37 @@ tb.init('watermark');
     const blob = await new Promise((resolve, reject) => c.toBlob(b => (b ? resolve(b) : reject(new Error('產生圖片失敗'))), ext === 'png' ? 'image/png' : 'image/jpeg', 0.95));
     return { blob, filename: `${safeBase(p.name)}_浮水印.${ext}`, note };
   }
-  async function run(fn) {
+  // 下載按鈕回饋（ui/fx.js）：處理中轉圈＋進度，成功打勾 1.5 秒，失敗抖動；原因與進度照舊寫在狀態列
+  async function run(btn, fn) {
     if (busy) return;
-    busy = true; render();
-    try { await fn(); } catch (err) { statusEl.textContent = `下載失敗：${err.message || err}`; }
-    finally { busy = false; const keep = statusEl.textContent; render(); statusEl.textContent = keep; }
+    const back = fx.restLabel(btn);
+    busy = true; fx.busy(btn, '產生中'); render();
+    let okDone = false;
+    try { await fn((t) => fx.busy(btn, t)); okDone = true; } catch (err) { statusEl.textContent = `下載失敗：${err.message || err}`; }
+    finally {
+      busy = false;
+      if (okDone) fx.ok(btn, '已下載', back, render); else fx.fail(btn, back);
+      const keep = statusEl.textContent; render(); statusEl.textContent = keep;
+    }
   }
 
-  downloadBtn.addEventListener('click', () => run(async () => {
+  downloadBtn.addEventListener('click', () => run(downloadBtn, async () => {
     const { blob, filename, note } = await exportPhoto(photo());
     tb.download(blob, filename);
     statusEl.textContent = `已下載：${filename}${note}`;
   }));
   // 全部下載：檔名是「YYMMDDHHMM_第幾張」，例如 2610122312_1。時間只在按下按鈕的那一刻取一次；每張之間隔 0.5～1 秒（tb.download.batch）。
-  downloadAllBtn.addEventListener('click', () => run(async () => {
+  downloadAllBtn.addEventListener('click', () => run(downloadAllBtn, async (say) => {
     const list = [...st.photos], notes = [], items = [];
     const now = new Date();
     for (let i = 0; i < list.length; i++) {
       statusEl.textContent = `產生中 ${i + 1}／${list.length}：${list[i].name}`;
+      say(`產生中 ${i + 1}／${list.length}`);
       const { blob, note } = await exportPhoto(list[i]);
       if (note) notes.push(note);
       items.push({ blob, name: `${tb.stampName(now, i + 1)}.${extFor(list[i])}` });
     }
-    await tb.download.batch(items, { onProgress: (i, total) => { statusEl.textContent = `儲存第 ${i}／${total} 張`; } });
+    await tb.download.batch(items, { onProgress: (i, total) => { statusEl.textContent = `儲存第 ${i}／${total} 張`; say(`儲存第 ${i}／${total} 張`); } });
     statusEl.textContent = `已下載 ${list.length} 張（${items[0].name} ～ ${items[items.length - 1].name}）${notes.join('')}`;
   }));
 
