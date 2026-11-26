@@ -1,8 +1,9 @@
 /* 全站共用：按鈕回饋與動畫（搭配 ui/fx.js）
    適用 .btn（tokens.css）與管理頁的一般 <button>／button.primary
    系統設定「減少動態」時全部關掉，只留文字 */
-.btn, button.primary, button.danger { transition: transform .1s ease, background-color .15s ease, color .15s ease, border-color .15s ease; }
-.btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { transform: scale(.97); }
+.btn, button.primary, button.danger { transition: transform .1s ease, scale .1s ease, background-color .15s ease, color .15s ease, border-color .15s ease; }
+/* 按下縮小用獨立的 scale（不用 transform）：有些按鈕靠 transform 定位（例：LINE 推播浮在格子上的「複製推播連結」translate(-50%,-50%)），蓋掉會跑位、點不到 */
+.btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { scale: .97; }
 /* 處理中：用 disabled 擋重複按，但不要看起來像「不能按」的灰色 */
 .fx-busy[disabled], .fx-busy[disabled]:hover { cursor: progress; opacity: 1; background: var(--surface, #fff); border-color: var(--accent, #155eef); color: var(--accent, #155eef); }
 .btn-primary.fx-busy[disabled], .btn-primary.fx-busy[disabled]:hover, button.primary.fx-busy[disabled], button.primary.fx-busy[disabled]:hover { background: #3b78f2; border-color: #3b78f2; color: #fff; }
@@ -44,7 +45,7 @@ button.danger.fx-busy[disabled], button.danger.fx-busy[disabled]:hover, .btn-dan
   .btn, button.primary, button.danger, .fx-lbl, .fx-spin, .fx-chk path, .fx-shake, .fx-dots::after, .fx-flash, .fx-enter, .fx-gone, .fx-skrow > span { animation: none !important; transition: none !important; }
   :where(button):active { scale: none !important; }
   #toast, .toast, .acct-toast { animation: none !important; }
-  .btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { transform: none; }
+  .btn:active:not([disabled]), button.primary:active:not([disabled]), button.danger:active:not([disabled]), button.fx-press:active:not([disabled]) { scale: none; }
   .fx-chk path { stroke-dashoffset: 0; }
   .fx-spin { border-right-color: currentColor; opacity: .6; }
 }

@@ -28,3 +28,8 @@
 - [x] 實作與測試（npm test 831、全部 e2e 313、build --check）
 - [x] 獨立審查（修 2 個 Important：重查時 A 法無可拆文字改用 B；用了移除預覽就不再呼叫舊實驗 editAfterPost，避免重抓預覽）
 - [ ] 給使用者看、等「推」
+
+## 追加：LINE 推播複製鈕按下跑位（2026-11-26）
+- 原因：`ui/fx.css` 按下 `transform: scale(.97)` 蓋掉 `.cell-copy` 的 `translate(-50%,-50%)`，按住時往右下跳半個按鈕，放開時游標不在按鈕上 → 沒有 click、沒複製（使用者影片確認）
+- 修正：按下改用獨立屬性 `scale: .97`（減少動態時 `scale: none`），transition 加 scale
+- 測試：`linepush.e2e.js`「按住時按鈕不跑位」（舊程式重現偏移 65px/22px）；全部 e2e 314、npm test 831
