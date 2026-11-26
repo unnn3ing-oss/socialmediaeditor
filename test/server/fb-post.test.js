@@ -539,3 +539,60 @@ test('第 1 則留言移除預覽：A 法編輯兩次都失敗＝留言只有文
   assert.equal(npHead('看更多新聞內容\nhttps://x'), '看更多新聞內容');
   assert.equal(npHead('https://x'), '');
 });
+
+test('警語留言：立即＝第 1 則成功後馬上留，不佔第 2、3 則名額', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => ({ id: 'C1' })
+  });
+  const r = await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: null }]), warn: '💬珍愛生命請撥打1925', comments: JSON.stringify([{ message: '二', delay: 5 }, { message: '三', delay: 5 }]) });
+  assert.equal(r.status, 200);
+  const x = r.body.data.results[0];
+  assert.equal(x.comment, 'done'); assert.equal(x.warn, 'done'); assert.equal(x.extra, 2);
+  const cs = f.calls.filter((c) => /comments$/.test(c.path));
+  assert.equal(cs.length, 2, '第 1 則＋警語馬上留');
+  const arm = RecTimer.log[0][1];
+  assert.deepEqual(arm.items.map((i) => [i.n, i.message, i.offset]), [[3, '二', 5], [4, '三', 10]], '警語佔第 2 則，後面照編號');
+});
+
+test('警語留言：排程＝排在第 1 則之後、同一時間（offset 0）', async (t) => {
+  const at = nowSec() + 3600;
+  const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_7' }) });
+  const r = await send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at }]), warn: '▲危險動作，請勿模仿' });
+  assert.equal(r.body.data.results[0].warn, 'armed');
+  assert.deepEqual(RecTimer.log[0][1].items.map((i) => [i.n, i.offset]), [[1, 0], [2, 0]]);
+  assert.equal(RecTimer.log[0][1].items[1].message, '▲危險動作，請勿模仿');
+});
+
+test('警語留言：第 1 則失敗＝警語交給計時器排在第 1 則後面；臉書沒回應＝先查再留', async (t) => {
+  let n = 0;
+  const { env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => (++n === 1 ? gErr(100, 400, 'bad') : ({ id: 'C' }))
+  });
+  const r = await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: null }]), warn: 'W' });
+  assert.equal(r.body.data.results[0].warn, 'retry');
+  assert.equal(n, 1, '第 1 則沒留上前不留警語');
+  assert.deepEqual(RecTimer.log[0][1].items.map((i) => [i.n, i.message.split('\n')[0]]), [[1, '看更多新聞內容'], [2, 'W']]);
+});
+
+test('警語留言：第 1 則成功、警語沒收到回應＝計時器先查再留（recheck）', async (t) => {
+  let n = 0;
+  const { env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => (++n === 1 ? ({ id: 'C1' }) : Response.json({ error: { code: 2, message: 'temporary' } }, { status: 500 }))
+  });
+  const r = await send(env, headers, { message: 'm', image: img(), targets: JSON.stringify([{ page: '111', at: null }]), warn: 'W' });
+  assert.equal(r.body.data.results[0].warn, 'retry');
+  const it = RecTimer.log[0][1].items;
+  assert.equal(it.length, 1); assert.equal(it[0].n, 2); assert.equal(it[0].recheck, true);
+});
+
+test('警語留言驗證：超過 2000 字 400；空白＝不留', async (t) => {
+  const { env, headers } = await setup(t, { 'POST /111/feed': () => ({ id: '111_7' }) });
+  const at = nowSec() + 3600;
+  assert.equal((await send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at }]), warn: 'x'.repeat(2001) })).status, 400);
+  const r = await send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at }]), warn: '  ' });
+  assert.equal(r.body.data.results[0].warn, undefined);
+  assert.equal(RecTimer.log[0][1].items.length, 1);
+});

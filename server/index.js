@@ -15,6 +15,7 @@ import { adminStaff, cleanupAudit } from './core/staff.js';
 import { adminMsgs, cleanupMsgs } from './core/msgs.js';
 import { handleSiteVis, adminSiteVis } from './core/sitevis.js';
 import { adminSelfReg } from './core/selfreg.js';
+import { blockAiBot } from './core/aibots.js';
 
 adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff, adminMsgs, adminSiteVis, adminSelfReg);
 
@@ -37,6 +38,8 @@ export default {
     try {
       if (request.method === 'OPTIONS') return preflight(request, env);
       const path = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      const bot = blockAiBot(request, path);   // 防 AI 解析：自報身分的 AI 爬蟲一律 403
+      if (bot) return bot;
 
       const tm = TOOL_PREFIX.exec(path);
       if (tm) {

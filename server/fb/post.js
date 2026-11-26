@@ -38,6 +38,14 @@ export function parseExtras(raw) {
   return out;
 }
 
+// 警語留言（2026-11-26）：獨立一則，與第 1 則同時（排在第 1 則之後、offset 0），不佔第 2、3 則名額
+export const MAX_WARN = 2000;
+export function parseWarn(raw) {
+  if (raw === null || raw === undefined) return '';
+  const w = String(raw).replace(/\r\n/g, '\n').trim();
+  return [...w].length > MAX_WARN ? null : w;
+}
+
 export const KINDS = ['template', 'textimg', 'text'];
 // 通知用的貼文摘要（≤40 字）：有整行【標題】用標題，沒有用第一行有字的
 export const TITLE_MAX = 40;
@@ -76,6 +84,8 @@ export function parsePostForm(fd) {
   }
   const extras = parseExtras(fd.get('comments'));
   if (!extras) return null;
+  const warn = parseWarn(fd.get('warn'));
+  if (warn === null) return null;
   // sendId：前端每則發文一組（防重複發文）；沒帶＝不記錄（舊頁面）
   const sendId = fd.has('sendId') ? String(fd.get('sendId')) : '';
   if (sendId && !/^[A-Za-z0-9-]{8,64}$/.test(sendId)) return null;
@@ -89,7 +99,7 @@ export function parsePostForm(fd) {
   const kind = KINDS.includes(String(fd.get('kind') || '')) ? String(fd.get('kind')) : '';
   // noPreview：這次送出要不要試著移除第 1 則留言的連結預覽（實驗功能，後端再查發文者適不適用）
   const noPreview = String(fd.get('noPreview') || '') === '1';
-  return { message, link, lead, file, bg, extras, sendId, retry, kind, noPreview, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  return { message, link, lead, file, bg, extras, warn, sendId, retry, kind, noPreview, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
 async function publishOne(env, page, token, { message, file, bg, at }) {
@@ -164,18 +174,21 @@ export async function createPosts(env, form, who = null) {
       continue;
     }
     const extras = form.extras || [];
+    const warnItem = form.warn ? [{ message: form.warn, offset: 0, warn: true }] : [];
     const first = form.link ? commentText(form.link, await pageUtm(env, t.page, !form.file), form.lead) : null;
     const errText = (e) => String((e && e.message) || e).slice(0, 200);
     if (scheduled) {
       // 排程：第 1 則（有網址才有）與第 2、3 則一起交給計時器，發布後依序留
-      const items = [...(first ? [{ message: first, offset: 0, n: 1, ...(np ? { np } : {}) }] : []), ...numbered(extras)];
+      const items = [...(first ? [{ message: first, offset: 0, n: 1, ...(np ? { np } : {}) }] : []), ...numbered([...warnItem, ...extras])];
       if (!items.length) continue;
       try {
         await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by, title, ptype: form.kind || undefined, pageName: p.name });
         if (first) r.comment = 'armed';
+        if (warnItem.length) r.warn = 'armed';
         if (extras.length) r.extra = extras.length;
       } catch (e) {
         if (first) { r.comment = 'failed'; r.commentError = errText(e); }
+        if (warnItem.length) { r.warn = 'failed'; r.warnError = errText(e); }
         if (extras.length) r.extraError = errText(e);
       }
       continue;
@@ -192,15 +205,25 @@ export async function createPosts(env, form, who = null) {
       }
       catch (e) { r.comment = 'failed'; r.commentError = errText(e); firstUnsure = !(e instanceof GraphError) || !!e.uncertain; }
     }
+    // 警語：第 1 則成功（或沒有第 1 則）就馬上留；失敗交給計時器（沒收到回應＝先查再留）
+    let warnLeft = warnItem;
+    if (warnItem.length && (firstOk || !first)) {
+      try { await postComment(env, p.token, r.postId, form.warn); r.warn = 'done'; warnLeft = []; }
+      catch (e) { warnLeft = [{ ...warnItem[0], ...(!(e instanceof GraphError) || e.uncertain ? { recheck: true } : {}) }]; }
+    }
     // 第 1 則：臉書明確回錯誤＝確定沒留，計時器直接重留；沒收到回應＝可能已留，計時器先查再留（recheck）
-    const items = [...(first && !firstOk ? [{ message: first, offset: 0, n: 1, ...(firstUnsure ? { recheck: true } : {}), ...(np ? { np } : {}) }] : []), ...numbered(extras)];
+    // 已留成功的警語仍佔編號（第 2 則），後面的照原編號
+    const rest = numbered([...warnItem, ...extras]).filter((x) => !x.warn || warnLeft.length).map((x) => (x.warn && warnLeft[0].recheck ? { ...x, recheck: true } : x));
+    const items = [...(first && !firstOk ? [{ message: first, offset: 0, n: 1, ...(firstUnsure ? { recheck: true } : {}), ...(np ? { np } : {}) }] : []), ...rest];
     if (items.length) {
       try {
         // published：貼文剛剛由臉書回應成功發出，計時器不用再問「發布了沒」（那一步需要讀取權限，可能被擋）
         await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), published: true, items, by, title, ptype: form.kind || undefined, pageName: p.name });
         if (first && !firstOk) r.comment = 'retry';
+        if (warnLeft.length) r.warn = 'retry';
         if (extras.length) r.extra = extras.length;
       } catch (e) {
+        if (warnLeft.length) { r.warn = 'failed'; r.warnError = errText(e); }
         if (extras.length) r.extraError = errText(e);
       }
     }

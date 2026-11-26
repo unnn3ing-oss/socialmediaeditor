@@ -513,7 +513,7 @@ $('sendBtn').addEventListener('click', async () => {
     const p = v.ed.pagesForSend();
     if (p.error) { select(v); v.ed.el.querySelector('.pg-dd').open = true; toast(label + '：' + p.error); return; }
     if (v.upload === 'stopped' || v.upload === 'error') { select(v); toast(label + '：上傳已停止或失敗，請按「重新上傳」'); return; }
-    forms.push({ v, body: { uploadId: v.uploadId, title: c.title, description: c.description, comments: c.comments, pages: p.pages } });
+    forms.push({ v, body: { uploadId: v.uploadId, title: c.title, description: c.description, comments: c.comments, ...(c.warn ? { warn: c.warn } : {}), pages: p.pages } });
   }
   sending = true;
   const btn = $('sendBtn');

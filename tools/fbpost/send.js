@@ -1,6 +1,8 @@
 // 送出：組 FormData（圖、內文、文章網址、留言文字、各粉專目標）→ /fb/post → 排入 RD → 顯示每個粉專的結果
 // 全部粉專成功＝清空頁面、跳「送出完成」（再發一則／返回列表）；有任一失敗＝結果留在頁面、不清空
 import { $, fmt, errText, COMMENT, confirmBox, copyText } from './util.js';
+
+const WARN = { done: '警語已留言', armed: '警語排程後補留言', retry: '警語稍後重試', failed: '警語排定失敗' };
 import { BG_MAX } from './compose.js';
 import { busy, idle, fail } from '../../ui/fx.js';
 
@@ -32,6 +34,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
         t += '；' + (COMMENT[r.comment] || '') + ((r.comment === 'failed' || r.comment === 'retry') && r.commentError ? '（' + r.commentError + '）' : '');
         if (r.preview === 'tried') t += '；第 1 則已試移除預覽（請到粉專確認）';
         else if (r.preview === 'failed') t += '；第 1 則移除預覽失敗' + (r.previewError ? '（' + r.previewError + '）' : '');
+        if (r.warn) t += '；' + (WARN[r.warn] || '') + ((r.warn === 'failed' || r.warn === 'retry') && r.warnError ? '（' + r.warnError + '）' : '');
         if (r.extra) t += `；另排 ${r.extra} 則留言`;
         if (r.extraError) t += `；第 2、3 則留言排定失敗（${r.extraError}）`;
       } else if (r.unknown) {
@@ -91,6 +94,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
         if (!$('npChk').hidden && $('noPreview').checked) fd.append('noPreview', '1');   // 實驗功能：只限這次
       }
       if (extra.comments.length) fd.append('comments', JSON.stringify(extra.comments));
+      if (extra.warn) fd.append('warn', extra.warn);
       if (image) fd.append('image', image, image.name);
       if (bg) fd.append('bg', bg);
       fd.append('kind', { image: 'template', color: 'textimg', text: 'text' }[composer.mode()] || '');   // 操作紀錄：套版／字圖／文字

@@ -156,6 +156,10 @@ test('Reels_ 檔名：去前後綴當標題、自動 hashtag、按鈕與自訂�
   assert.equal(seen.length, new Set(seen).size, '同一段不重送');
   await page.click(ED + ' .cm-add');
   await page.selectOption(ED + ' .cm-row select.preset', '0');
+  await page.click(ED + ' .warn-btn');
+  await page.click(ED + ' .warn-opt[data-w="▲不良行為，請勿模仿"]');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.inputValue(ED + ' .warn-text'), '▲不良行為，請勿模仿');
   await page.click('.rd-switch .track');
   assert.equal(await page.isChecked('#rdOn'), true);
   await page.click('#sendBtn');
@@ -165,6 +169,7 @@ test('Reels_ 檔名：去前後綴當標題、自動 hashtag、按鈕與自訂�
   assert.equal(b.description, '小編第一行\n小編第二行\n【立法院今三讀】\n#焦點新聞影音都在TVBS #颱風動態\n畫面來源：讀者提供');
   assert.deepEqual(b.pages, [{ page: '111', at: null }, { page: '222', at: null }]);
   assert.deepEqual(b.comments, [{ message: '留言抽獎！', delay: 0 }]);
+  assert.equal(b.warn, '▲不良行為，請勿模仿', '警語另外帶，不佔 3 則');
   await until(() => api.rundown.length === 1);
   assert.deepEqual(api.rundown[0].entries.map((e) => [e.page, e.text, e.style]), [['news', 'Reels/立法院今', 'video'], ['ent', 'Reels/立法院今', 'video']]);
   assert.equal(await page.isDisabled(ED + ' .title'), true, '送出後鎖住');

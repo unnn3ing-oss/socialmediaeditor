@@ -2,6 +2,7 @@
 <html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noai, noimageai">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>排程發布</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -9,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800;900&display=swap">
 <link rel="stylesheet" href="../../ui/tokens.css">
 <link rel="stylesheet" href="../../ui/fx.css">
+<link rel="stylesheet" href="../../ui/warnings.css">
 <link rel="stylesheet" href="fbpost.css">
 <link rel="stylesheet" href="../../ui/compose/fx.css">
 <script>
@@ -169,9 +171,14 @@
           <div class="lbl-row">
             <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
             <label class="np-chk" id="npChk" hidden title="實驗功能：只對這一次送出有效"><input type="checkbox" id="noPreview"> 移除預覽</label>
+            <span class="warn-anchor"><button type="button" class="warn-btn" id="warnBtn">警語 ▾</button></span>
           </div>
           <input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）">
           <p class="np-note" id="npNote" hidden>這則貼文的第 1 則留言會試著移除連結預覽（只限這次送出，請到粉專確認效果）</p>
+          <div class="warn-box" id="warnBox" hidden>
+            <div class="warn-head"><strong>警語留言</strong><small>與第 1 則同時發，不佔 3 則名額</small><button type="button" class="warn-del" id="warnDel">移除警語</button></div>
+            <textarea id="warnText" rows="2" aria-label="警語留言內容"></textarea>
+          </div>
           <div id="extras" class="extras"></div>
           <button type="button" class="add-comment" id="addComment">＋ 再新增一則留言（最多 3 則）</button>
           <ul class="results" id="results" aria-live="polite"></ul>

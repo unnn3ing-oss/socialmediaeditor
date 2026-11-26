@@ -9,7 +9,7 @@ import { zhError } from './errzh.js';
 import { graph, graphVideo, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
 import { armTimer, timerStatus } from './timer.js';
-import { summaryOf } from './post.js';
+import { summaryOf, parseWarn } from './post.js';
 import { audit } from '../core/staff.js';
 
 class StartError extends Error {}
@@ -250,6 +250,10 @@ export function parsePublish(b) {
     offset += d;
     comments.push({ message, offset });
   }
+  // 警語（2026-11-26）：獨立一則、與第 1 則同時（沒有第 1 則＝發布後就留），不佔 3 則名額
+  const warn = parseWarn(b.warn);
+  if (warn === null) return null;
+  if (warn) comments.splice(comments.length ? 1 : 0, 0, { message: warn, offset: comments.length ? comments[0].offset : 0 });
   return { uploadId: b.uploadId, title, description, pages, comments };
 }
 export const timeOkFor = (kind, at, now = nowSec()) => at === null || (Number.isInteger(at) && at >= now + MIN_LEAD && at <= now + MAX_LEAD[kind]);

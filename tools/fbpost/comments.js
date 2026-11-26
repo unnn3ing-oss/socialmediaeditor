@@ -1,6 +1,7 @@
 // 第 2、3 則留言：「＋ 再新增一則留言」最多到第 3 則；每則可選管理頁存的活動留言帶入（帶入後可再改）、
 // 距上一則幾分鐘（5 的倍數，預設 5）。不帶連結。
 import { $ } from './util.js';
+import { createWarnPicker } from '../../ui/warnings.js';
 
 const MAX_EXTRAS = 2;   // 第 1 則以外最多 2 則（共 3 則）
 const DELAYS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 90, 120, 180, 240, 360, 720, 1440];
@@ -50,9 +51,11 @@ export function createComments({ tb }) {
   }
   addBtn.addEventListener('click', add);
   renumber();
+  // 警語留言：獨立一則、與第 1 則同時，不佔第 2、3 則名額
+  const warn = createWarnPicker({ button: $('warnBtn'), box: $('warnBox'), textarea: $('warnText'), clear: $('warnDel') });
 
   return {
-    // 回傳 { comments: [{ message, delay }] } 或 { error }
+    // 回傳 { comments: [{ message, delay }], warn } 或 { error }
     collect() {
       const comments = [];
       for (const [i, el] of [...box.children].entries()) {
@@ -60,8 +63,8 @@ export function createComments({ tb }) {
         if (!message) return { error: `第 ${i + 2} 則留言沒有內容（不需要就按刪除）。` };
         comments.push({ message, delay: +el.querySelector('select.delay').value });
       }
-      return { comments };
+      return { comments, warn: warn.value() };
     },
-    reset() { box.textContent = ''; renumber(); }
+    reset() { box.textContent = ''; renumber(); warn.reset(); }
   };
 }

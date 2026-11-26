@@ -2,6 +2,7 @@
 <html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noai, noimageai">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>影片發布</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -9,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="../../ui/tokens.css">
 <link rel="stylesheet" href="../../ui/fx.css">
+<link rel="stylesheet" href="../../ui/warnings.css">
 <link rel="stylesheet" href="fbvideo.css">
 </head>
 <body>
@@ -140,10 +142,14 @@
         <button type="button" class="btn btn-secondary btn-sm tag-add-btn">＋ 加入</button>
       </div>
       <label class="lbl">授權<input type="text" class="lic" placeholder="照原樣放在 hashtag 下一行，空白＝不放"></label>
-      <span class="lbl">留言（選填）</span>
+      <div class="cm-lbl-row"><span class="lbl">留言（選填）</span><span class="warn-anchor"><button type="button" class="warn-btn">警語 ▾</button></span></div>
       <p class="cm-note hint" hidden></p>
       <div class="cm-list"></div>
       <button type="button" class="btn btn-secondary btn-sm cm-add">＋ 新增留言</button>
+      <div class="warn-box" hidden>
+        <div class="warn-head"><strong>警語留言</strong><small>與第 1 則同時發，不佔 3 則名額</small><button type="button" class="warn-del">移除警語</button></div>
+        <textarea class="warn-text" rows="2" aria-label="警語留言內容"></textarea>
+      </div>
       <label class="lbl rd-slug-l">RD SLUG<input type="text" class="slug" maxlength="20"></label>
     </fieldset>
   </section>

@@ -1,6 +1,7 @@
 // 每支影片一個內容區（從 <template> 複製；切換影片只隱藏，內容保留）
 // 由上而下：上傳狀態、類型、影片標題、影片內文、標籤（按鈕＋自訂）、授權、發布粉專（各自立即／排程）、留言、RD SLUG
 import * as fx from '../../ui/fx.js';
+import { createWarnPicker } from '../../ui/warnings.js';
 import { titleFromName, isReelsName, defaultText, setTitle, toggleTag, tagsIn, setLicense, stripLead, slugOf, q2359At, routeOf, routeText } from './rules.js';
 import { segmented, sizeText, fmt, toLocalInput, MIN_S, MAX_S, rangeText } from './util.js';
 
@@ -276,6 +277,8 @@ export function createEditor(v, ctx) {
     ta.focus();
   });
   renumber();
+  // 警語留言：獨立一則、與第 1 則同時（沒有留言＝發布後就留），不佔 3 則名額
+  const warnCm = createWarnPicker({ button: q('.warn-btn'), box: q('.warn-box'), textarea: q('.warn-text'), clear: q('.warn-del') });
 
   // ===== 上傳進度與各粉專狀態：畫在底部工具列（只畫目前選中的影片） =====
   // 這支影片的上傳狀態（編輯區「發布粉專」下方）：一行總結＋每個粉專一行
@@ -407,7 +410,7 @@ export function createEditor(v, ctx) {
         if (!m) return { error: `第 ${i + 1} 則留言沒有內容（不需要就按刪除）` };
         comments.push({ message: m, delay: +row.querySelector('select.delay').value });
       }
-      return { title: t, description, comments };
+      return { title: t, description, comments, warn: warnCm.value() };
     },
     lock() {
       el.classList.add('locked');

@@ -33,7 +33,7 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 const toSec = (v) => (typeof v === 'number' ? v : Number.isFinite(Date.parse(v)) ? Math.floor(Date.parse(v) / 1000) : null);
 const reply = (o) => Response.json(o);
 
-export const MAX_ITEMS = 3;                 // 一則貼文最多 3 則留言（第 1 則＋第 2、3 則）
+export const MAX_ITEMS = 4;                 // 一則貼文最多 4 則留言（第 1 則＋警語＋第 2、3 則）
 
 // rec：{ pageId, postId, at（貼文發布時間，秒）, published, retimes, kind?（'video'＝影片物件）,
 //        items: [{ message, offset（距發布幾分鐘）, status: pending|posting|done|failed|canceled, attempts, commentId?, error? }] }
