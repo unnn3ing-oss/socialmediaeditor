@@ -42,3 +42,9 @@
 ## 注意事項
 - 後端需重新部署（正式＋測試），不用手動 SQL。外掛不升版號。
 - 註冊帳號 grp=0：權限組刪除、發送通知「權限組」等路徑不受影響（grp 對不到任何組）。
+
+## 追加：註冊帳號的專屬頁面（2026-11-26）
+- 使用者：新創帳號不要顯示「功能停用」，改顯示「尚未開通〇〇」（選 B：只改註冊帳號，一般員工沒權限維持原樣；不要複製鈕）。
+- 後端 `server/fb/access.js`：`self` 回新代碼 `fb_self_pending`（403，`http.js`）。
+- 前端 `tools/fbpost|fbvideo|fbreports/index.html` 的 `#offMain` 內新區塊 `#selfPend`（標題「尚未開通排程發布／影片發布／數據報表」、說明兩行、「重新檢查」＝重新載入）；`app.js` 收到 `fb_self_pending` 隱藏原停用卡片、顯示此區塊。
+- 測試：`test/server/selfreg.test.js` 驗代碼；新 `test/e2e/selfpend.e2e.js`（三個工具）。npm test 837、相關 e2e 86 通過。後端需重新部署。

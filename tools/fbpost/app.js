@@ -34,6 +34,13 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
     // 關閉中：有填關閉原因才顯示；其他（token 過期、沒設定、沒有粉專）把錯誤原因顯示出來
+    // 自行註冊、還沒指派權限組：專屬頁面「尚未開通」（不顯示功能停用）
+    if (e && e.code === 'fb_self_pending') {
+      document.querySelector('#offMain .off-box:not(#selfPend)').hidden = true;
+      $('selfPend').hidden = false;
+      $('selfPendBtn').onclick = () => location.reload();
+      booted(false); return;
+    }
     if (e && e.code === 'fb_need_staff') {   // 舊版憑證沒有員工編號：請重新用員工編號登入
       $('needStaff').hidden = false;
       $('needStaffBtn').onclick = () => tb.company.login();

@@ -49,7 +49,7 @@ export async function fbAccess(request, env, need = null) {
   // 系統管理者（SYS_STAFF_ID）：等同舊版首頁管理員，全部權限、關閉時也能用，操作紀錄記本人
   if (t.staff.level === 'sys') return { who: { uid: t.staff.id, name: t.staff.name }, admin: true, staff: t.staff, perms, mode: st.mode, reason: st.reason };
   // 自行註冊、還沒指派權限組：臉書功能一律不開放（連 need=null 的唯讀路由也擋）
-  if (t.staff.self) return { denied: fail(request, env, 'fb_no_perm') };
+  if (t.staff.self) return { denied: fail(request, env, 'fb_self_pending') };
   if (st.mode !== 'company' && !perms.includes('bypass')) return { denied: fail(request, env, 'fb_forbidden', undefined, { reason: st.reason }) };
   if (need && !(Array.isArray(need) ? need : [need]).some((p) => perms.includes(p))) return { denied: fail(request, env, 'fb_no_perm') };
   return { who: { uid: t.staff.id, name: t.staff.name }, admin: false, staff: t.staff, perms, mode: st.mode, reason: st.reason };

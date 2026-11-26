@@ -46,6 +46,13 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   if (!st || !st.company) { booted(false); return; }
   let pages;
   try { pages = await tb.api.call('/fb/pages'); } catch (e) {
+    // 自行註冊、還沒指派權限組：專屬頁面「尚未開通」（不顯示功能停用）
+    if (e && e.code === 'fb_self_pending') {
+      document.querySelector('#offMain .off-box:not(#selfPend)').hidden = true;
+      $('selfPend').hidden = false;
+      $('selfPendBtn').onclick = () => location.reload();
+      booted(false); return;
+    }
     if (e && e.code === 'fb_need_staff') { $('needStaff').hidden = false; $('needStaffBtn').onclick = () => tb.company.login(); booted(false); return; }
     const why = e && e.code === 'fb_forbidden' ? ((e.detail && e.detail.reason) || '') : errText(e);
     if (why) { $('offReason').textContent = '原因：' + why; $('offReason').hidden = false; }
