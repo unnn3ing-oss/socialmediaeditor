@@ -140,6 +140,7 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
       } catch (err) {
         if (gen.get(page) !== g) return;
         loading.delete(page);
+        if (auto && old) old.at = Date.now();   // 自動刷新失敗：10 分鐘後再試，不每分鐘重打
         if (cur() === page) { L.render(); if (!auto) hint(errText(err), true); }
         return false;
       }

@@ -828,3 +828,13 @@ test('已發布後留言 100-33（不是還沒發布）：不再查貼文，照�
   assert.equal((await post('status')).items[0].attempts, 1);
   assert.ok(!f.calls.some((c) => c.method === 'GET' && c.path === '/111_5'));
 });
+
+test('先 100-33 後改因別的錯誤失敗：不再顯示「貼文還沒發布」', async (t) => {
+  let n = 0;
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': () => (n++ === 0 ? NOT_YET() : gErr(2, 500, 'temporary')), 'GET /111_5': () => ({ is_published: false }), 'GET /111_5/comments': () => ({ data: [] }) });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal((await post('status')).items[0].notYet, true);
+  await obj.alarm();
+  assert.equal((await post('status')).items[0].notYet, undefined);
+});

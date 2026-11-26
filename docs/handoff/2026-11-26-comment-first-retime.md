@@ -1,5 +1,5 @@
 # 留言先留再查＋列表校正計時器＋10 分鐘刷新＋錯誤紀錄複製
-- 狀態：進行中　- 分支：claude/zealous-euler-v7417y　- 最後更新：2026-11-26
+- 狀態：完成，待使用者確認後推 main　- 分支：claude/zealous-euler-v7417y　- 最後更新：2026-11-26
 - 使用者原始需求：「文章被改往後發也已經成功發布，但還是會通知失敗」；錯誤紀錄＝「留言：找不到這個物件（臉書碼 100-33）」。要「先直接留一次，失敗後才查詢貼文狀態，也可用使用者當前列表讀取是被往後還往前」、列表 10 分鐘自動刷新、錯誤紀錄可複製。
 
 ## 根因（已查證）
@@ -22,17 +22,23 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/timer.js` | 先留再查、重試時間、2 分鐘提醒、sync 動作、刪除寫操作紀錄、讀取被拒通知 | ⬜ |
-| `server/fb/manage.js` | 列表 status 帶 at／published 給計時器 | ⬜ |
-| `server/core/msgs.js` | 系統發送訊息（讀取被拒） | ⬜ |
-| `tools/fbpost/manage.js` | 10 分鐘自動刷新兩個列表 | ⬜ |
-| `admin/admin.js`、`admin/admin.css` | 錯誤紀錄複製按鈕 | ⬜ |
-| 測試 | `test/` timer 相關單元、admin e2e | ⬜ |
+| `server/fb/timer.js` | 先留再查、重試時間、2 分鐘提醒、sync 動作、刪除寫操作紀錄、讀取被拒通知 | ✅ |
+| `server/fb/manage.js` | 列表 status 帶 at／published 給計時器 | ✅ |
+| `server/core/msgs.js` | 系統發送訊息（讀取被拒） | ✅ |
+| `tools/fbpost/manage.js` | 10 分鐘自動刷新兩個列表 | ✅ |
+| `admin/admin.js`、`admin/admin.css` | 錯誤紀錄複製按鈕 | ✅ |
+| 測試 | `test/` timer 相關單元、admin e2e | ✅ |
 
 ## 下一步
-- [ ] 後端 timer／manage／msgs
-- [ ] 前端刷新、管理頁複製
-- [ ] 測試、審查、更新本檔
+- [x] 後端 timer／manage／msgs（`systemMsg`）、staff `TOOL_ACTIONS` 加 `post_gone`
+- [x] 前端刷新（`load(force, auto)`、`autoAll`）、管理頁複製（`lgText`／`lgCopy`）、操作紀錄顯示「貼文已刪除（系統偵測）」、錯誤紀錄 `read_denied`＝「讀不到貼文狀態」
+- [x] 測試、獨立審查（通過；Minor 兩項已修：非 100-33 失敗清 notYet、自動刷新失敗 10 分鐘後再試）
+- [ ] 使用者說「推」→ 併 main、更新 CLAUDE.md 目前進度
+- [ ] 使用者部署後端（正式＋測試），實測：臉書後台改晚一則排程貼文 → 2 分鐘通知 → 列表刷新後通知撤掉、新時間到自動留上
+
+## 結果
+npm test 848、admin／fbpost／company e2e 126 通過、build --check 通過。
+已知限制：讀取被拒的粉專，查貼文也回 100-33 時會被判成「已刪除」而取消；列表之後若在已排程看到它，會自動恢復。
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/admin*.e2e.js test/e2e/fbpost.e2e.js`（沙盒 chromium `/opt/pw-browsers/chromium`）。

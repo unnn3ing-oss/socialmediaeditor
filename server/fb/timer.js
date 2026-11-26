@@ -440,6 +440,7 @@ export class FbCommentTimer {
     const msg = ((step ? step + '：' : '') + String((e && e.message) || e)).slice(0, 200);
     if (!it) return;
     if (it.status === 'posting') it.unsure = true;   // 標失敗後也記得「可能已留」，按重新留言時先查再留
+    if (!isGone(e)) delete it.notYet;   // 改因別的錯誤失敗：不再算「貼文還沒發布」
     it.attempts = (it.attempts || 0) + 1;
     it.error = msg;
     if (e instanceof GraphError && Number.isInteger(e.code) && e.code > 0) it.ecode = e.code; else delete it.ecode;
