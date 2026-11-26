@@ -30,7 +30,8 @@
 - [x] 1（測試：`test/server/sitevis.test.js`、`test/e2e/toolvis.e2e.js`、admin e2e 一項）
 - [x] 2（fbvideo e2e「送出紀錄」）
 - [x] 3（npm test 831、全部 e2e 313）
-- [ ] 獨立審查 → 給使用者看、等「推」，各自測試，最後獨立審查，給使用者看，等「推」
+- [x] 獨立審查通過（Minor：有存憑證但連不上後端時當訪客 → 已修；停在被隱藏工具頁時登出不立即跳登入框 → 未改）
+- [ ] 給使用者看、等「推」，各自測試，最後獨立審查，給使用者看，等「推」
 
 ## 測試
 `npm test`、相關 e2e（shell／company／admin／fbvideo／fbpost）、`node build.js --check`
