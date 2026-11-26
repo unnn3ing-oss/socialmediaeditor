@@ -118,7 +118,7 @@ test('權限組：檢視組不能發文／改時間／刪除；/fb/me 回權限�
   await post(env, adm, '/admin/staff', { id: 'V1', name: '看', group: groupId(d, '檢視') });
   const h = bearer((await login(env, 'V1')).body.data.token);
   const me = await call(env, '/fb/me', { headers: h });
-  assert.deepEqual(me.body.data, { admin: false, id: 'V1', name: '看', group: '檢視', perms: ['view', 'vview', 'report'], mode: 'company', tokenWarn: null, hideComment: false });
+  assert.deepEqual(me.body.data, { admin: false, id: 'V1', name: '看', group: '檢視', perms: ['view', 'vview', 'report'], mode: 'company', tokenWarn: null, noPreview: false });
   const fd = new FormData(); fd.set('message', 'x');
   const w = await load();
   const rp = await w.fetch(new Request('https://api.test/fb/post', { method: 'POST', headers: { origin: ORIGIN, ...h }, body: fd }), env, { waitUntil() {} });

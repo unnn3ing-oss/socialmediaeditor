@@ -19,9 +19,9 @@ async function commentState(env, id) {
     const d = await timerStatus(env, id);
     // 失敗累計 ≥2 次或已失敗：回物件（前端紅字＋「重新留言」）；其他照舊回狀態字串
     if (d && d.alert) return { status: d.status || 'pending', alert: true, seq: d.alert.seq, error: d.alert.error, failed: d.alert.failed };
-    // 第 1 則留言隱藏（實驗功能）結果：hidden｜failed
-    const h = d && Array.isArray(d.items) ? d.items.find((x) => x && x.hide && x.hidden) : null;
-    if (h) return { status: (d && d.status) || 'none', hidden: h.hidden };
+    // 第 1 則留言移除預覽（實驗功能）結果：tried｜failed
+    const h = d && Array.isArray(d.items) ? d.items.find((x) => x && x.np && x.preview) : null;
+    if (h) return { status: (d && d.status) || 'none', preview: h.preview };
     return (d && d.status) || 'none';
   } catch { return 'none'; }
 }

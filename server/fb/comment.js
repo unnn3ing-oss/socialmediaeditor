@@ -75,46 +75,80 @@ export async function editAfterPost(env, token, commentId, message, by) {
   catch (e) { console.warn('comment edit failed', commentId, String((e && e.message) || e).slice(0, 200)); return 'failed'; }
 }
 
-// ---- 實驗功能：第一則留言發出後隱藏（2026-11-26）----
-// 設定存 D1 fb_settings k='hide_opts'：{ hide, who:'all'|'some', staff:[員工編號] }；預設關；對象看「發文的人」
-// 開啟且適用時，排程發布「留言內容」旁出現勾選，只對那一次送出有效（表單 hideFirst=1）
-// 隱藏＝POST /{comment-id} is_hidden=true；臉書是否允許粉專隱藏自己的留言未證實，失敗不影響留言、不重試
-const HIDE_KEY = 'hide_opts';
-export function normHideOpts(v) {
-  const o = normOpts(v ? { edit: v.hide, who: v.who, staff: v.staff } : null);
-  return { hide: o.edit, who: o.who, staff: o.staff };
+
+// ---- 實驗功能：第一則留言移除連結預覽（2026-11-26，取代同日的「隱藏留言」）----
+// 臉書 API 沒有「不要預覽／移除預覽」參數（Graph v27.0），以下兩種都是推論、要實測（臉書回成功不代表預覽消失）：
+//   A：先留不含連結的文字（拿掉含網址的行），再編輯成完整內容（臉書可能只在新增時抓預覽）
+//   B：留完整內容後，編輯時帶空的 attachment_share_url
+// 設定存 D1 fb_settings k='preview_opts'：{ on, who, staff, method:'a'|'b' }；預設關；對象看「發文的人」
+// 開啟且適用時，排程發布「留言內容」旁出現「移除預覽」勾選，只對那一次送出有效（表單 noPreview=1）
+const NP_KEY = 'preview_opts';
+export const NP_METHODS = ['a', 'b'];
+export function normNpOpts(v) {
+  const o = normOpts(v ? { edit: v.on, who: v.who, staff: v.staff } : null);
+  return { on: o.edit, who: o.who, staff: o.staff, method: v && NP_METHODS.includes(v.method) ? v.method : 'a' };
 }
-export function validHideOpts(b) {
-  if (!b || typeof b.hide !== 'boolean') return null;
-  const o = validOpts({ edit: b.hide, who: b.who, staff: b.staff });
-  return o ? { hide: o.edit, who: o.who, staff: o.staff } : null;
+export function validNpOpts(b) {
+  if (!b || typeof b.on !== 'boolean') return null;
+  if (b.method !== undefined && !NP_METHODS.includes(b.method)) return null;
+  const o = validOpts({ edit: b.on, who: b.who, staff: b.staff });
+  return o ? { on: o.edit, who: o.who, staff: o.staff, method: b.method || 'a' } : null;
 }
-async function readHideOpts(env) {
+async function readNpOpts(env) {
   await ensureSettings(env);
-  const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(HIDE_KEY).first();
+  const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(NP_KEY).first();
   let v = null;
   try { v = r ? JSON.parse(r.v) : null; } catch { v = null; }
-  return normHideOpts(v);
+  return normNpOpts(v);
 }
-export async function hideOpts(env) {
-  if (!env || !env.DB) return normHideOpts(null);
-  try { return await cached(env.DB, HIDE_KEY, 60000, () => readHideOpts(env)); } catch { return normHideOpts(null); }
+export async function npOpts(env) {
+  if (!env || !env.DB) return normNpOpts(null);
+  try { return await cached(env.DB, NP_KEY, 60000, () => readNpOpts(env)); } catch { return normNpOpts(null); }
 }
-export async function saveHideOpts(env, opts) {
+export async function saveNpOpts(env, opts) {
   await ensureSettings(env);
   await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
-    .bind(HIDE_KEY, JSON.stringify(normHideOpts(opts)), Date.now()).run();
-  forget(env.DB, HIDE_KEY);
-  return readHideOpts(env);
+    .bind(NP_KEY, JSON.stringify(normNpOpts(opts)), Date.now()).run();
+  forget(env.DB, NP_KEY);
+  return readNpOpts(env);
 }
-export const hideApplies = (opts, by) => editApplies({ edit: opts.hide, who: opts.who, staff: opts.staff }, by);
+export const npApplies = (opts, by) => editApplies({ edit: opts.on, who: opts.who, staff: opts.staff }, by);
+// 這次送出要用的方法：勾了、開啟、適用 → 'a'|'b'；否則 null
+export async function npMethodFor(env, asked, by) {
+  if (!asked) return null;
+  const o = await npOpts(env);
+  return npApplies(o, by) ? o.method : null;
+}
 
-// 回 { hidden: 'hidden' } 或 { hidden: 'failed', hideError }
-export async function hideComment(env, token, commentId) {
-  if (!commentId) return { hidden: 'failed', hideError: '沒有留言 ID' };
-  try {
-    const d = await graph(env, 'POST', '/' + commentId, { is_hidden: 'true' }, token);
-    if (d && d.success === false) return { hidden: 'failed', hideError: '臉書沒有隱藏' };
-    return { hidden: 'hidden' };
-  } catch (e) { return { hidden: 'failed', hideError: String((e && e.message) || e).slice(0, 200) }; }
+// A 法第一次留的文字：拿掉含網址的行；沒有文字回 ''
+export function npHead(message) {
+  return String(message || '').split('\n').filter((l) => !/https?:\/\//i.test(l)).join('\n').trim();
+}
+// 留言已存在後的第二步：A＝編輯成完整內容（失敗再試一次）；B＝編輯帶空附件
+//   回 { preview: 'tried' } 或 { preview: 'failed', previewError }；A 失敗＝留言只有文字、沒有連結
+export async function finishNoPreview(env, token, commentId, message, method) {
+  const params = method === 'a' ? { message } : { message, attachment_share_url: '' };
+  let err = null;
+  for (let i = 0; i < (method === 'a' ? 2 : 1); i++) {
+    try {
+      const d = await graph(env, 'POST', '/' + commentId, params, token);
+      if (d && d.success === false) throw new Error('臉書沒有更新留言');
+      return { preview: 'tried' };
+    } catch (e) { err = e; }
+  }
+  const msg = String((err && err.message) || err).slice(0, 200);
+  return { preview: 'failed', previewError: method === 'a' ? '留言只有文字、沒有連結：' + msg : msg };
+}
+// 留第 1 則並試著移除預覽；留言本身失敗照樣丟出（呼叫端照原本的重試規則）
+//   A 法但留言沒有文字（只有連結）→ 改用 B
+export async function postFirstNoPreview(env, token, postId, message, method) {
+  if (method === 'a') {
+    const head = npHead(message);
+    if (head && head !== message) {
+      const id = await postComment(env, token, postId, head);
+      return { id, ...(await finishNoPreview(env, token, id, message, 'a')) };
+    }
+  }
+  const id = await postComment(env, token, postId, message);
+  return { id, ...(await finishNoPreview(env, token, id, message, 'b')) };
 }

@@ -1532,18 +1532,21 @@ if (window.top !== window.self) {
 
   // ---- 實驗功能（敏感卡片 labs）：每一項＝開關＋對象（全部人／指定員工）----
   //   lab：/admin/fb/comment-opts（第一則留言發出後再編輯一次，看發文者）；labV：/admin/fb/video-opts（影片串流上傳，看上傳的人）
-  //   labH：/admin/fb/hide-opts（第一則留言發出後隱藏，看發文者；排程發布勾選只限單次送出）
+  //   labP：/admin/fb/preview-opts（第一則留言移除連結預覽，看發文者；方法 A／B；排程發布勾選只限單次送出）
+  //   有 <p>Method 單選（name=<p>Method）的項目，讀寫時多帶 method
   var labLoaded = false;
   function makeLab(p, path, field) {
     function who() { var r = document.querySelector('input[name=' + p + 'Who]:checked'); return r ? r.value : 'all'; }
     function sync() {
       var on = $(p + 'On').checked;
       $(p + 'WhoBox').disabled = !on;
+      if ($(p + 'MethodBox')) $(p + 'MethodBox').disabled = !on;
       $(p + 'People').hidden = !(on && who() === 'some');
     }
     function render(d) {
       $(p + 'On').checked = !!d[field];
       Array.prototype.forEach.call(document.querySelectorAll('input[name=' + p + 'Who]'), function (r) { r.checked = r.value === (d.who || 'all'); });
+      Array.prototype.forEach.call(document.querySelectorAll('input[name=' + p + 'Method]'), function (r) { r.checked = r.value === (d.method || 'a'); });
       var people = d.people || [], box = $(p + 'People'), picked = d.staff || [];
       box.textContent = '';
       if (!people.length) { var em = document.createElement('p'); em.className = 'hint'; em.textContent = '授權名單還沒有員工。'; box.appendChild(em); }
@@ -1577,6 +1580,7 @@ if (window.top !== window.self) {
       if ($(p + 'On').checked && w === 'some' && !staff.length) return say($(p + 'Msg'), '選「指定員工」要至少勾一位。', 'err');
       fxStart($(p + 'Save'), '儲存中'); say($(p + 'Msg'), '儲存中…');
       var body = { who: w, staff: staff }; body[field] = $(p + 'On').checked;
+      var mt = document.querySelector('input[name=' + p + 'Method]:checked'); if (mt) body.method = mt.value;
       api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (res) {
         if (res.ok) { render(res.data); var d = res.data; say($(p + 'Msg'), !d[field] ? '已關閉' : d.who === 'all' ? '已啟用：全部人（約 1 分鐘內生效）' : '已啟用：指定 ' + d.staff.length + ' 位員工（約 1 分鐘內生效）', 'good'); }
         else if (res.code === 'unauthorized') expired(); else say($(p + 'Msg'), res.error || '儲存失敗。', 'err');
@@ -1584,7 +1588,7 @@ if (window.top !== window.self) {
     };
     return load;
   }
-  var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream'), makeLab('labH', '/admin/fb/hide-opts', 'hide')];
+  var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream'), makeLab('labP', '/admin/fb/preview-opts', 'on')];
   // 依序讀：權杖過期時只彈一次（第一個讀到 unauthorized 就停）
   function labLoad() { labLoaded = true; return labLoads.reduce(function (p, f) { return p.then(function () { if (labLoaded) return f(); }); }, Promise.resolve()); }
   // ---- 進階設定「未登入時隱藏的工具」（GET／POST /admin/site/vis，只有已解鎖系統管理者）；工具清單來自網站的 shell/catalog.json ----

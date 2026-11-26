@@ -336,3 +336,24 @@ test('載入：套版還沒好時畫布、版面頁籤顯示骨架動畫，好�
   assert.equal(await t.frame.evaluate(() => getComputedStyle(document.querySelector('canvas')).animationName), 'none');
   await t.page.close();
 });
+
+test('複製推播連結：按住時按鈕不跑位（按下縮小不能蓋掉置中定位），放開才算點到並複製', async () => {
+  const t = await open();
+  await useClipboard(t);
+  await fillLink(t, 'https://news.tvbs.com.tw/life/1234567', '第一則標題\nhttps://news.tvbs.com.tw/life/1234567\n★第二則\n★第三則\n★第四則\n★第五則\n★第六則');
+  await t.frame.click('#nextStepBtn');
+  await hoverCell(t);
+  const btn = t.frame.locator('#cellCopyBtn');
+  const before = await btn.boundingBox();
+  const cx = before.x + before.width / 2, cy = before.y + before.height / 2;
+  await t.page.mouse.move(cx, cy);
+  await t.page.mouse.down();
+  await new Promise((r) => setTimeout(r, 250));   // 真人按住約 0.1～0.3 秒，等縮小動畫跑完
+  const held = await btn.boundingBox();
+  assert.ok(Math.abs((held.x + held.width / 2) - cx) < 2 && Math.abs((held.y + held.height / 2) - cy) < 2, `按住時中心不能偏移（${JSON.stringify(before)} → ${JSON.stringify(held)}）`);
+  assert.ok(held.width < before.width, '按下仍有縮小效果');
+  await t.page.mouse.up();
+  await t.frame.waitForFunction(() => (window.__copied || []).length === 1);
+  assert.equal(await t.frame.textContent('#cellCopyBtn'), '已複製 ✓');
+  await t.page.close();
+});

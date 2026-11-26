@@ -30,8 +30,8 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
         t += r.scheduled ? '排程成功' : '發布成功';
         if (r.scheduled && r.at) t += '（' + fmt(r.at * 1000) + '）';
         t += '；' + (COMMENT[r.comment] || '') + ((r.comment === 'failed' || r.comment === 'retry') && r.commentError ? '（' + r.commentError + '）' : '');
-        if (r.hidden === 'hidden') t += '；第 1 則已隱藏';
-        else if (r.hidden === 'failed') t += '；第 1 則隱藏失敗' + (r.hideError ? '（' + r.hideError + '）' : '');
+        if (r.preview === 'tried') t += '；第 1 則已試移除預覽（請到粉專確認）';
+        else if (r.preview === 'failed') t += '；第 1 則移除預覽失敗' + (r.previewError ? '（' + r.previewError + '）' : '');
         if (r.extra) t += `；另排 ${r.extra} 則留言`;
         if (r.extraError) t += `；第 2、3 則留言排定失敗（${r.extraError}）`;
       } else if (r.unknown) {
@@ -88,7 +88,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
         fd.append('link', link);
         const lead = $('lead').value.trim();
         if (lead) fd.append('commentLead', lead);   // 沒輸入＝後端預設「看更多新聞內容」
-        if (!$('hideChk').hidden && $('hideFirst').checked) fd.append('hideFirst', '1');   // 實驗功能：只限這次
+        if (!$('npChk').hidden && $('noPreview').checked) fd.append('noPreview', '1');   // 實驗功能：只限這次
       }
       if (extra.comments.length) fd.append('comments', JSON.stringify(extra.comments));
       if (image) fd.append('image', image, image.name);
@@ -120,7 +120,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
   function clearAll() {
     sendId = newSendId(); sentLink = null; unknown.clear();
     composer.reset(); targets.reset(); rd.reset(); comments.reset();
-    $('hideFirst').checked = false; $('hideNote').hidden = true;
+    $('noPreview').checked = false; $('npNote').hidden = true;
     $('results').textContent = ''; $('sendErr').textContent = '';
   }
   $('clearBtn').addEventListener('click', async () => {

@@ -60,7 +60,7 @@ const DASH_ITEMS = [
   { key: 'online', name: '目前在線', level: 'info', text: '3 人', tab: 'people' }];
 const CO = { edit: false, who: 'all', staff: [], people: [{ id: 'A001', name: '王小明', enabled: true }, { id: 'A002', name: '李小華', enabled: false }], posts: [] };
 const VO = { stream: false, who: 'all', staff: [], posts: [] };
-const HO = { hide: false, who: 'all', staff: [], posts: [] };
+const HO = { on: false, who: 'all', staff: [], method: 'a', posts: [] };
 const TV = { on: false, hide: ['fbpost', 'fbvideo', 'fbreports'], posts: [] };
 const DATA = {
   'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
@@ -85,8 +85,8 @@ const DATA = {
   'POST /admin/fb/backgrounds/random': (b) => { BG.posts.push(b); BG.list.forEach((x) => { if (b.ids.includes(x.id)) x.rnd = b.rnd; }); return { list: BG.list, batch: 10 }; },
   'GET /admin/fb/comment-opts': () => ({ edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }),
   'POST /admin/fb/comment-opts': (b) => { CO.edit = b.edit; CO.who = b.who; CO.staff = b.staff; CO.posts.push(b); return { edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }; },
-  'GET /admin/fb/hide-opts': () => ({ hide: HO.hide, who: HO.who, staff: HO.staff, people: CO.people }),
-  'POST /admin/fb/hide-opts': (b) => { HO.hide = b.hide; HO.who = b.who; HO.staff = b.staff; HO.posts.push(b); return { hide: HO.hide, who: HO.who, staff: HO.staff, people: CO.people }; },
+  'GET /admin/fb/preview-opts': () => ({ on: HO.on, who: HO.who, staff: HO.staff, method: HO.method, people: CO.people }),
+  'POST /admin/fb/preview-opts': (b) => { HO.on = b.on; HO.who = b.who; HO.staff = b.staff; HO.method = b.method; HO.posts.push(b); return { on: HO.on, who: HO.who, staff: HO.staff, method: HO.method, people: CO.people }; },
   'GET /admin/fb/video-opts': () => ({ stream: VO.stream, who: VO.who, staff: VO.staff, people: CO.people }),
   'POST /admin/fb/video-opts': (b) => { VO.stream = b.stream; VO.who = b.who; VO.staff = b.staff; VO.posts.push(b); return { stream: VO.stream, who: VO.who, staff: VO.staff, people: CO.people }; },
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
@@ -1383,17 +1383,22 @@ test('進階設定「未登入時隱藏的工具」：讀取預設勾選、改�
   assert.deepEqual(b.hide.slice().sort(), ['fbpost', 'fbvideo', 'livereq']);
 });
 
-test('進階設定「實驗功能」：第一則留言發出後隱藏（獨立開關、指定員工）', async () => {
-  HO.hide = false; HO.who = 'all'; HO.staff = []; HO.posts = [];
+test('進階設定「實驗功能」：第一則留言移除連結預覽（方法 A／B、指定員工）', async () => {
+  HO.on = false; HO.who = 'all'; HO.staff = []; HO.method = 'a'; HO.posts = [];
   const { page } = await open({ width: 1280, height: 900 }, '#adv');
   await login(page);
   await page.click('#tab-adv'); await show(page, 'labCard');
-  await page.waitForFunction(() => !document.getElementById('labHSave').disabled);
-  assert.equal(await page.isChecked('#labHOn'), false);
-  await page.check('#labHOn');
-  await page.check('input[name=labHWho][value=some]');
-  await page.check('#labHPeople input[value=A001]');
-  await page.click('#labHSave');
-  await page.waitForFunction(() => /已啟用：指定 1 位員工/.test(document.getElementById('labHMsg').textContent));
-  assert.deepEqual(HO.posts.at(-1), { hide: true, who: 'some', staff: ['A001'] });
+  await page.waitForFunction(() => !document.getElementById('labPSave').disabled);
+  assert.equal(await page.isChecked('#labPOn'), false);
+  assert.equal(await page.isChecked('input[name=labPMethod][value=a]'), true, '預設 A');
+  assert.equal(await page.isDisabled('input[name=labPMethod][value=b]'), true, '沒啟用時方法灰掉');
+  await page.check('#labPOn');
+  await page.check('input[name=labPMethod][value=b]');
+  await page.check('input[name=labPWho][value=some]');
+  await page.check('#labPPeople input[value=A001]');
+  if (SHOT) await page.locator('#labCard').screenshot({ path: path.join(SHOT, 'admin-labs-np.png') });
+  await page.click('#labPSave');
+  await page.waitForFunction(() => /已啟用：指定 1 位員工/.test(document.getElementById('labPMsg').textContent));
+  assert.deepEqual(HO.posts.at(-1), { on: true, who: 'some', staff: ['A001'], method: 'b' });
+  assert.equal(await page.isChecked('input[name=labPMethod][value=b]'), true, '存檔後回填');
 });

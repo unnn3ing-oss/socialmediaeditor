@@ -1,7 +1,7 @@
 // 排程貼文發布後補第一則留言的計時器（Durable Object，每則貼文一個實例，以貼文 ID 命名）
 import { graph, isRateLimit, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
-import { postComment, editAfterPost, hideComment } from './comment.js';
+import { postComment, editAfterPost, postFirstNoPreview, finishNoPreview, npHead, NP_METHODS } from './comment.js';
 import { setNotice, logCommentFail } from './notices.js';
 import { PTYPES } from '../core/logs.js';
 async function callTimer(env, postId, action, body) {
@@ -106,7 +106,7 @@ function normItems(body, allowEmpty) {
     // recheck：這則可能其實已經留成功（立即發布時沒收到臉書回應），當成「留言途中」，到點先查再留，避免重複
     // n：第幾則（顯示用）；沒給就照順序
     const n = Number(x.n);
-    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0, ...(Number.isInteger(n) && n >= 1 && n <= MAX_ITEMS ? { n } : {}), ...(x.recheck ? { unsure: true } : {}), ...(x.hide === true ? { hide: true } : {}) });
+    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0, ...(Number.isInteger(n) && n >= 1 && n <= MAX_ITEMS ? { n } : {}), ...(x.recheck ? { unsure: true } : {}), ...(NP_METHODS.includes(x.np) ? { np: x.np } : {}) });
   }
   return out;
 }
@@ -114,12 +114,6 @@ function normItems(body, allowEmpty) {
 export class FbCommentTimer {
   constructor(state, env) { this.state = state; this.env = env; }
 
-  // 送出時勾了「隱藏留言」的那則（只有第 1 則會帶 hide）：留成功後隱藏一次；結果記在 it.hidden（hidden｜failed），失敗不重試
-  async hideIfAsked(rec, it, token) {
-    if (!it.hide || it.hidden || !it.commentId) return;
-    Object.assign(it, await hideComment(this.env, token, it.commentId));
-    await this.state.storage.put('rec', rec);
-  }
 
   async fetch(request) {
     const action = new URL(request.url).pathname.slice(1);
@@ -272,18 +266,29 @@ export class FbCommentTimer {
           const d = await graph(this.env, 'GET', '/' + rec.postId + '/comments', { fields: 'from{id},message', limit: 100 }, page.token);
           // 同樣內容的另一則已經留過的不算（兩則可能一字不差）
           const used = new Set(rec.items.filter((x) => x !== it && x.commentId).map((x) => String(x.commentId)));
-          const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && c.message === it.message && !used.has(String(c.id)));
-          if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure; await s.put('rec', rec); await this.hideIfAsked(rec, it, page.token); continue; }
+          // 移除預覽 A 法：可能只留了前半（不含連結的文字），也算已留，接著補完編輯
+          const head = it.np === 'a' ? npHead(it.message) : '';
+          const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && (c.message === it.message || (head && c.message === head)) && !used.has(String(c.id)));
+          if (mine) {
+            Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure;
+            if (it.np && !it.preview) {
+              if (head && head !== it.message && mine.message === head) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'a'));
+              else if (it.np === 'b' || !head || head === it.message) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'b'));   // B，或 A 但沒有可拆的文字（與 postFirstNoPreview 同樣改用 B）
+              else it.preview = 'tried';
+            }
+            await s.put('rec', rec); continue;
+          }
         }
         step = STEP.comment;
         it.status = 'posting';
         await s.put('rec', rec);
-        const id = await postComment(this.env, page.token, rec.postId, it.message);
-        Object.assign(it, { status: 'done', commentId: id });
+        let id, np = {};
+        if (it.np) { const x = await postFirstNoPreview(this.env, page.token, rec.postId, it.message, it.np); id = x.id; np = { preview: x.preview, ...(x.previewError ? { previewError: x.previewError } : {}) }; }
+        else id = await postComment(this.env, page.token, rec.postId, it.message);
+        Object.assign(it, { status: 'done', commentId: id }, np);
         delete it.unsure;
         await s.put('rec', rec);
-        if (seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
-        await this.hideIfAsked(rec, it, page.token);
+        if (!it.np && seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
       } catch (e) {
         // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
         if (step === STEP.comment) {

@@ -1,7 +1,7 @@
 // 發文：依序對每個粉專立即或排程；有圖排程照 Meta 官方範例（暫存照片 → /feed attached_media）
 import { graph, GraphError } from './graph.js';
 import { pageTokens, pageUtm } from './pages.js';
-import { commentText, postComment, editAfterPost, hideOpts, hideApplies, hideComment, MAX_LEAD as MAX_COMMENT_LEAD } from './comment.js';
+import { commentText, postComment, editAfterPost, npMethodFor, postFirstNoPreview, MAX_LEAD as MAX_COMMENT_LEAD } from './comment.js';
 import { armTimer } from './timer.js';
 import { claimSend, finishSend } from './sends.js';
 import { BG_MAX_CHARS } from './bgpresets.js';
@@ -87,9 +87,9 @@ export function parsePostForm(fd) {
   }
   // kind：發文類型（只用在操作紀錄）；沒帶或不認得＝不記
   const kind = KINDS.includes(String(fd.get('kind') || '')) ? String(fd.get('kind')) : '';
-  // hideFirst：這次送出要不要隱藏第 1 則留言（實驗功能，後端再查發文者適不適用）
-  const hideFirst = String(fd.get('hideFirst') || '') === '1';
-  return { message, link, lead, file, bg, extras, sendId, retry, kind, hideFirst, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  // noPreview：這次送出要不要試著移除第 1 則留言的連結預覽（實驗功能，後端再查發文者適不適用）
+  const noPreview = String(fd.get('noPreview') || '') === '1';
+  return { message, link, lead, file, bg, extras, sendId, retry, kind, noPreview, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
 async function publishOne(env, page, token, { message, file, bg, at }) {
@@ -128,7 +128,7 @@ async function publishOne(env, page, token, { message, file, bg, at }) {
 export async function createPosts(env, form, who = null) {
   const by = who && who.uid ? String(who.uid).slice(0, 20) : '';
   const title = summaryOf(form.message);
-  const hide = !!form.hideFirst && !!form.link && hideApplies(await hideOpts(env), by);   // 第 1 則發出後隱藏（實驗功能）
+  const np = form.link ? await npMethodFor(env, !!form.noPreview, by) : null;   // 第 1 則移除連結預覽（實驗功能）：'a'|'b'|null
   const tokens = await pageTokens(env);
   const now = Math.floor(Date.now() / 1000);
   const results = [];
@@ -168,7 +168,7 @@ export async function createPosts(env, form, who = null) {
     const errText = (e) => String((e && e.message) || e).slice(0, 200);
     if (scheduled) {
       // 排程：第 1 則（有網址才有）與第 2、3 則一起交給計時器，發布後依序留
-      const items = [...(first ? [{ message: first, offset: 0, n: 1, ...(hide ? { hide: true } : {}) }] : []), ...numbered(extras)];
+      const items = [...(first ? [{ message: first, offset: 0, n: 1, ...(np ? { np } : {}) }] : []), ...numbered(extras)];
       if (!items.length) continue;
       try {
         await armTimer(env, { pageId: t.page, postId: r.postId, at: t.at, items, by, title, ptype: form.kind || undefined, pageName: p.name });
@@ -184,14 +184,16 @@ export async function createPosts(env, form, who = null) {
     let firstOk = false, firstUnsure = false;
     if (first) {
       try {
-        const cid = await postComment(env, p.token, r.postId, first); r.comment = 'done'; firstOk = true;
-        await editAfterPost(env, p.token, cid, first, by);
-        if (hide) Object.assign(r, await hideComment(env, p.token, cid));
+        let cid;
+        if (np) { const x = await postFirstNoPreview(env, p.token, r.postId, first, np); cid = x.id; r.preview = x.preview; if (x.previewError) r.previewError = x.previewError; }
+        else cid = await postComment(env, p.token, r.postId, first);
+        r.comment = 'done'; firstOk = true;
+        if (!np) await editAfterPost(env, p.token, cid, first, by);
       }
       catch (e) { r.comment = 'failed'; r.commentError = errText(e); firstUnsure = !(e instanceof GraphError) || !!e.uncertain; }
     }
     // 第 1 則：臉書明確回錯誤＝確定沒留，計時器直接重留；沒收到回應＝可能已留，計時器先查再留（recheck）
-    const items = [...(first && !firstOk ? [{ message: first, offset: 0, n: 1, ...(firstUnsure ? { recheck: true } : {}), ...(hide ? { hide: true } : {}) }] : []), ...numbered(extras)];
+    const items = [...(first && !firstOk ? [{ message: first, offset: 0, n: 1, ...(firstUnsure ? { recheck: true } : {}), ...(np ? { np } : {}) }] : []), ...numbered(extras)];
     if (items.length) {
       try {
         // published：貼文剛剛由臉書回應成功發出，計時器不用再問「發布了沒」（那一步需要讀取權限，可能被擋）

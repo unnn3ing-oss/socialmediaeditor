@@ -58,8 +58,8 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     $('noView').hidden = perms.includes('view');
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
-    // 實驗功能「第一則留言隱藏」：管理頁開啟且這個人適用才顯示（勾選只對這一次送出有效）
-    $('hideChk').hidden = !me.hideComment;
+    // 實驗功能「第一則留言移除連結預覽」：管理頁開啟且這個人適用才顯示（勾選只對這一次送出有效）
+    $('npChk').hidden = !me.noPreview;
     if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
   }).catch(() => {}).then(() => {
     $('dutyBtn').hidden = !canPost; duty.check();
@@ -68,7 +68,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   });
   booted(true);
   $('fbpostApp').hidden = false;
-  $('hideFirst').addEventListener('change', () => { $('hideNote').hidden = !$('hideFirst').checked; });
+  $('noPreview').addEventListener('change', () => { $('npNote').hidden = !$('noPreview').checked; });
   // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
   let currentPages = pages, targets = null, loading = null, composer = null, sender = null;
   const history = createHistory();
