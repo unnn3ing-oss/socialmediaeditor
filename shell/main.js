@@ -147,6 +147,7 @@ window.tbxShell = {
     getCatalog: () => catalog,
     setCompany(next) {
       companyState = { ...next };
+      authPending = false;   // 登入／登出／過期都是確定的狀態
       if (loaded) renderCatalog();
       for (const fn of companySubs) fn({ ...companyState });
     },
@@ -180,7 +181,8 @@ window.tbxShell.onStatus(() => toolbar.setAlert(statuses.get('company')?.state =
 initApiEnv({ shell: window.tbxShell });
 Promise.resolve(initCompany({ shell: window.tbxShell, button: $('company-btn') }))
   .catch(() => {})
-  .then(() => { authPending = false; if (loaded) { renderCatalog(); promptIfHidden(); } });
+  // 有存憑證但連不上後端（狀態列「無法確認登入狀態」）：不當訪客，工具照常顯示、不跳登入框
+  .then(() => { authPending = statuses.get('company')?.state === 'warn'; if (loaded) { renderCatalog(); promptIfHidden(); } });
 // 偵測不到外掛時不自動跳出教學；使用者按頂列膠囊／「安裝外掛」才開。
 status.runAll();
 
