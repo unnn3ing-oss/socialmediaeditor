@@ -465,3 +465,65 @@ test('實驗功能（第 1 則留言再編輯）：全部人／指定員工（�
   assert.deepEqual(normOpts({ edit: true }), { edit: true, who: 'all', staff: [] }, '舊設定＝全部人');
   assert.equal(editApplies(normOpts({ edit: true, who: 'some', staff: ['A1'] }), ''), false, '沒有發文者＝指定員工時不適用');
 });
+
+test('實驗功能（第 1 則留言隱藏）：開啟＋適用＋這次勾選才隱藏；排程交給計時器帶 hide；/fb/me 回 hideComment', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => ({ id: 'C1' }),
+    'POST /C1': () => ({ success: true }),
+    'POST /111/feed': () => ({ id: '111_7' })
+  });
+  const w = await load();
+  const { signToken } = await tok();
+  const adm = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'admin', nowSec() + 600)) };
+  const call = async (path, h, body) => {
+    const r = await w.fetch(new Request('https://api.test' + path, { method: body ? 'POST' : 'GET', headers: { origin: ORIGIN, 'content-type': 'application/json', ...h }, body: body ? JSON.stringify(body) : undefined }), env, { waitUntil() {} });
+    return { status: r.status, body: await r.json() };
+  };
+  assert.equal((await call('/admin/fb/hide-opts', headers)).status, 403, '未解鎖不能進實驗功能');
+  const g = (await call('/admin/fb/hide-opts', adm)).body.data;
+  assert.deepEqual([g.hide, g.who, g.staff], [false, 'all', []]);
+  assert.ok(Array.isArray(g.people));
+  assert.equal((await call('/admin/fb/hide-opts', adm, { hide: 'y' })).status, 400);
+  assert.equal((await call('/admin/fb/hide-opts', adm, { hide: true, who: 'some', staff: ['bad id!'] })).status, 400);
+  assert.equal((await call('/fb/me', headers)).body.data.hideComment, false, '預設關');
+  const hides = () => f.calls.filter((c) => c.method === 'POST' && c.path === '/C1');
+  const go = (extra) => send(env, headers, { message: '【標題】', link: LINK, image: img(), targets: JSON.stringify([{ page: '111', at: null }]), ...extra });
+  // 關閉：勾了也不隱藏
+  let r = (await go({ hideFirst: '1' })).body.data.results[0];
+  assert.equal(r.comment, 'done'); assert.equal(r.hidden, undefined); assert.equal(hides().length, 0);
+  // 開啟、指定別人：不適用
+  await call('/admin/fb/hide-opts', adm, { hide: true, who: 'some', staff: ['A1'] });
+  assert.equal((await call('/fb/me', headers)).body.data.hideComment, false);
+  await go({ hideFirst: '1' }); assert.equal(hides().length, 0);
+  // 開啟、全部人：沒勾不隱藏，勾了才隱藏
+  await call('/admin/fb/hide-opts', adm, { hide: true, who: 'all' });
+  assert.equal((await call('/fb/me', headers)).body.data.hideComment, true);
+  r = (await go()).body.data.results[0];
+  assert.equal(hides().length, 0, '這次沒勾');
+  r = (await go({ hideFirst: '1' })).body.data.results[0];
+  assert.equal(hides().length, 1);
+  assert.equal(hides()[0].body.is_hidden, 'true');
+  assert.deepEqual([r.comment, r.hidden], ['done', 'hidden']);
+  // 排程：第 1 則帶 hide 交給計時器，第 2 則不帶
+  RecTimer.log = [];
+  r = (await send(env, headers, { message: '純文字', link: LINK, hideFirst: '1', comments: JSON.stringify([{ message: '第二則', delay: 5 }]), targets: JSON.stringify([{ page: '111', at: nowSec() + 3600 }]) })).body.data.results[0];
+  assert.equal(r.comment, 'armed');
+  const arm = RecTimer.log.find((x) => x[0] === '/arm')[1];
+  assert.deepEqual(arm.items.map((x) => [x.n, !!x.hide]), [[1, true], [2, false]]);
+});
+
+test('第 1 則留言隱藏：失敗不影響留言、不重試', async (t) => {
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'P1', post_id: '111_9' }),
+    'POST /111_9/comments': () => ({ id: 'C1' }),
+    'POST /C1': () => gErr(10, 400, 'Permission denied')
+  });
+  const { saveHideOpts } = await import('../../server/fb/comment.js');
+  await saveHideOpts(env, { hide: true });
+  const r = (await send(env, headers, { message: '【標題】', link: LINK, image: img(), hideFirst: '1', targets: JSON.stringify([{ page: '111', at: null }]) })).body.data.results[0];
+  assert.deepEqual([r.ok, r.comment, r.hidden], [true, 'done', 'failed']);
+  assert.match(r.hideError, /Permission|權限/);
+  assert.equal(f.calls.filter((c) => c.path === '/C1').length, 1);
+  assert.equal(RecTimer.log.length, 0, '不交給計時器重試');
+});

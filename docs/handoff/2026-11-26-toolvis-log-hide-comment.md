@@ -24,12 +24,13 @@
 | 1 `shell/main.js` | 過濾＋跳登入框（`/site/vis` 最多等 1.5 秒；有存憑證確認中先全部顯示） | ✅ |
 | 1 `admin/index.html`、`admin/admin.js` | 進階設定卡片 `tvCard`（進分類自動讀取，同儀表板卡片） | ✅ |
 | 2 `tools/fbvideo/app.js`（`logCard`、`pubTime`、`openLink`）、css | 收合卡片（展開記在 `logOpen`，刷新維持） | ✅ |
-| 3 後端計時器、`server/fb/index.js` comment-opts、前端 fbpost、管理頁 labs | 隱藏留言 | ⬜ |
+| 3 `server/fb/comment.js`（hide_opts、`hideComment`）、`post.js`（表單 hideFirst）、`timer.js`（`hideIfAsked`）、`manage.js`（列表 hidden）、`index.js`（`/fb/me` hideComment、`/admin/fb/hide-opts`）；前端 `tools/fbpost`（index、app、send、util、css）；管理頁 labH | 隱藏留言 | ✅ |
 
 ## 下一步
 - [x] 1（測試：`test/server/sitevis.test.js`、`test/e2e/toolvis.e2e.js`、admin e2e 一項）
 - [x] 2（fbvideo e2e「送出紀錄」）
-- [ ] 3，各自測試，最後獨立審查，給使用者看，等「推」
+- [x] 3（npm test 831、全部 e2e 313）
+- [ ] 獨立審查 → 給使用者看、等「推」，各自測試，最後獨立審查，給使用者看，等「推」
 
 ## 測試
 `npm test`、相關 e2e（shell／company／admin／fbvideo／fbpost）、`node build.js --check`

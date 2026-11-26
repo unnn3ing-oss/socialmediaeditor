@@ -451,6 +451,19 @@
           <div class="row"><button class="primary" id="labVSave" type="button" disabled>儲存</button></div>
           <p class="msg" id="labVMsg" role="status"></p>
         </div>
+        <div class="lab-item">
+          <h3>第一則留言發出後隱藏</h3>
+          <p class="hint">啟用後，適用的人在排程發布「留言內容」右側會多一個「隱藏留言」勾選，<b>只對那一次送出有效</b>；勾了，第 1 則留言（看更多新聞內容＋連結）發出後會設成隱藏。臉書是否允許粉專隱藏自己的留言<b>還沒證實</b>，隱藏失敗不影響留言，只會顯示「隱藏失敗」。對象看的是<b>發文的人</b>，約 1 分鐘內生效。</p>
+          <label class="check"><input type="checkbox" id="labHOn"> 啟用</label>
+          <fieldset class="lab-who" id="labHWhoBox">
+            <legend>對象</legend>
+            <label class="check"><input type="radio" name="labHWho" value="all" checked> 全部人</label>
+            <label class="check"><input type="radio" name="labHWho" value="some"> 指定員工</label>
+          </fieldset>
+          <div id="labHPeople" class="lab-people" hidden></div>
+          <div class="row"><button class="primary" id="labHSave" type="button" disabled>儲存</button></div>
+          <p class="msg" id="labHMsg" role="status"></p>
+        </div>
       </section>
 
       <section class="card" id="tpCard" data-card="profiles">

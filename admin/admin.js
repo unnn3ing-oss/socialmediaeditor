@@ -1532,6 +1532,7 @@ if (window.top !== window.self) {
 
   // ---- 實驗功能（敏感卡片 labs）：每一項＝開關＋對象（全部人／指定員工）----
   //   lab：/admin/fb/comment-opts（第一則留言發出後再編輯一次，看發文者）；labV：/admin/fb/video-opts（影片串流上傳，看上傳的人）
+  //   labH：/admin/fb/hide-opts（第一則留言發出後隱藏，看發文者；排程發布勾選只限單次送出）
   var labLoaded = false;
   function makeLab(p, path, field) {
     function who() { var r = document.querySelector('input[name=' + p + 'Who]:checked'); return r ? r.value : 'all'; }
@@ -1583,7 +1584,7 @@ if (window.top !== window.self) {
     };
     return load;
   }
-  var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream')];
+  var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream'), makeLab('labH', '/admin/fb/hide-opts', 'hide')];
   // 依序讀：權杖過期時只彈一次（第一個讀到 unauthorized 就停）
   function labLoad() { labLoaded = true; return labLoads.reduce(function (p, f) { return p.then(function () { if (labLoaded) return f(); }); }, Promise.resolve()); }
   // ---- 進階設定「未登入時隱藏的工具」（GET／POST /admin/site/vis，只有已解鎖系統管理者）；工具清單來自網站的 shell/catalog.json ----

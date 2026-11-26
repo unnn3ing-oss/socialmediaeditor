@@ -8,7 +8,7 @@ import { GraphError, checkAppCred, graph } from './graph.js';
 import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
-import { commentOpts, saveCommentOpts, validOpts } from './comment.js';
+import { commentOpts, saveCommentOpts, validOpts, hideOpts, saveHideOpts, validHideOpts, hideApplies } from './comment.js';
 import { videoOpts, saveVideoOpts, validVideoOpts, streamApplies, receiveChunkStream } from './videostream.js';
 import { ensureStaff } from '../core/staff.js';
 import { listBackgrounds, findBackground } from './bgpresets.js';
@@ -42,7 +42,9 @@ export function route(method, re, handler, need = null) { routes.push([method, r
 // tokenWarn＝臉書權杖快到期／失效的提醒（只給管理員；不呼叫臉書）
 route('GET', /^\/fb\/me$/, async (request, env, ctx, m, me) => ok(request, env, {
   admin: me.admin, id: me.staff ? me.staff.id : '', name: me.who.name, group: me.staff ? me.staff.groupName : '', perms: me.perms, mode: me.mode,
-  tokenWarn: me.admin ? await quickWarn(env).catch(() => null) : null
+  tokenWarn: me.admin ? await quickWarn(env).catch(() => null) : null,
+  // 實驗功能「第一則留言隱藏」：這個人適用時，新增發文「留言內容」旁顯示勾選
+  hideComment: hideApplies(await hideOpts(env), me.staff ? me.staff.id : '')
 }));
 
 route('GET', /^\/fb\/pages$/, async (request, env) => {
@@ -236,6 +238,13 @@ adminRoute('POST', /^\/admin\/fb\/video-opts$/, async (request, env) => {
   const opts = validVideoOpts(await readJsonBody(request, 40000));
   if (!opts) return fail(request, env, 'bad_request');
   return ok(request, env, { ...(await saveVideoOpts(env, opts)), people: await labPeople(env) });
+});
+// 實驗功能：第一則留言發出後隱藏（看發文的人）；回傳附同一份員工名單
+adminRoute('GET', /^\/admin\/fb\/hide-opts$/, async (request, env) => ok(request, env, { ...(await hideOpts(env)), people: await labPeople(env) }));
+adminRoute('POST', /^\/admin\/fb\/hide-opts$/, async (request, env) => {
+  const opts = validHideOpts(await readJsonBody(request, 40000));
+  if (!opts) return fail(request, env, 'bad_request');
+  return ok(request, env, { ...(await saveHideOpts(env, opts)), people: await labPeople(env) });
 });
 adminRoute('GET', /^\/admin\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
