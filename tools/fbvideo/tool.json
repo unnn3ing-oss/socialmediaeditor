@@ -8,7 +8,7 @@
   "entry": "index.html",
   "tier": "public",
   "requires": [],
-  "gate": { "check": "/fb/open", "badge": "管理員測試", "desc": "多粉專上傳影片（橫式／Reels），測試中僅管理員可用" },
+  "gate": { "check": "/fb/open", "badge": "管理員測試" },
   "assets": {},
   "ext": null,
   "api": null,

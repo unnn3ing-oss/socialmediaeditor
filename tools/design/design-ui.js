@@ -305,7 +305,7 @@
         </div>
         <div class="dz-status" id="dzStatus" role="status" aria-live="polite"></div>
         <div class="dz-hint">
-          <button type="button" class="dz-keys-btn" id="dzKeysBtn" aria-expanded="false" aria-controls="dzKeys">？快捷鍵</button>
+          <button type="button" class="dz-keys-btn" id="dzKeysBtn" aria-expanded="false" aria-controls="dzKeys">？<span class="dz-desk">快捷鍵</span><span class="dz-touch">操作說明</span></button>
           <div class="dz-keys" id="dzKeys" role="region" aria-label="快捷鍵說明" hidden><span class="dz-desk">雙擊文字可以直接編輯、雙擊群組可以選取裡面的單一物件；Ctrl＋G 群組、Ctrl＋7 剪裁遮色片；Ctrl＋滾輪縮放、按住空白鍵拖曳平移；Delete 刪除、Ctrl＋Z 復原、Ctrl＋C／V／D 複製貼上與重複、方向鍵微調（Shift 一次 10px）、] [ 調圖層。</span><span class="dz-touch">雙指縮放畫布、在空白處拖曳平移；文字內容請點下方「屬性」修改。</span></div>
         </div>
       </div>

@@ -36,6 +36,8 @@ test('沒密碼：只有「上傳自己的 Logo」，沒有 TVBS 字樣或公司
   assert.equal(await frame.isVisible('#wmLogoDrop'), true);
   assert.doesNotMatch(await frame.evaluate(() => document.body.innerText), /TVBS|新版 NEWS|舊版|新聞網/i);
   assert.deepEqual(requested, []);
+  // 還沒有照片：自動模式不先標某個角（避免看起來同時選了兩個）
+  assert.equal(await frame.locator('#wmGrid .auto-pick, #wmGrid button[data-px].active').count(), 0);
 });
 
 test('沒密碼：上傳自訂 Logo 與照片後能產出圖（單張與全部下載）', async () => {

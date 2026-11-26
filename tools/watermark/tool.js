@@ -205,7 +205,7 @@ tb.init('watermark');
     for (const b of $('wmGrid').querySelectorAll('button[data-px]')) {
       const at = Number(b.dataset.px) === curPos[0] && Number(b.dataset.py) === curPos[1];
       b.classList.toggle('active', at && (!st.auto || !!(p && p.pos)));
-      b.classList.toggle('auto-pick', at && st.auto && !(p && p.pos));     // 自動挑到的角：淡一點的框，跟手動選的區分
+      b.classList.toggle('auto-pick', at && st.auto && !!p && !p.pos);     // 自動挑到的角：淡一點的框，跟手動選的區分；沒照片時不標
     }
     $('wmAutoBtn').classList.toggle('active', st.auto);
     $('wmPosHint').textContent = p && p.pos

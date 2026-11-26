@@ -28,8 +28,7 @@
 
 <section id="login" class="card login">
   <h1>管理登入</h1>
-  <p>公開與公司素材、臉書發文的設定都在這裡，不用改程式也不用重新部署。</p>
-  <p class="hint" id="loginHint">管理者請先回<a href="../">工具箱首頁</a>用員工編號登入，再從右上角帳號選單按「管理頁」。</p>
+  <p class="hint" id="loginHint">這裡只給系統管理者用管理密碼登入。其他人請回<a href="../">工具箱首頁</a>用員工編號登入，再從右上角帳號選單按「管理頁」。</p>
   <form id="loginForm">
     <label for="pw">管理密碼</label>
     <input id="pw" type="password" autocomplete="current-password" required>
@@ -386,7 +385,7 @@
       <p>只有系統管理者能用，要先輸入管理員密碼解鎖。</p>
       <section class="card unlock" id="unlockBar" hidden>
         <h2>進階設定已鎖住</h2>
-        <p>排程發布開關、儀表板顯示項目、實驗功能、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
+        <p>臉書工具開放／關閉、儀表板顯示項目、實驗功能、權杖組別、臉書連線、Webhook、權限組，要輸入管理員密碼才能看和改。解鎖只在這個分頁有效，重新整理要再輸入一次。</p>
         <form id="unlockForm" class="sf-add">
           <label class="sf-f">管理員密碼<input id="unlockPw" type="password" autocomplete="current-password" required></label>
           <button class="primary" type="submit" id="unlockBtn">解鎖</button>
@@ -394,8 +393,8 @@
         <p class="msg" id="unlockMsg" role="status"></p>
       </section>
       <section class="card" id="acCard" data-card="access">
-        <h2>排程發布</h2>
-        <p>開放時，授權名單內的人依權限組使用；關閉時，只有系統管理者與權限組勾了「關閉時仍可使用」的人能用，其他人會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
+        <h2>臉書工具開放／關閉</h2>
+        <p>同時管排程發布、影片發布、數據報表。開放時，授權名單內的人依權限組使用；關閉時，只有系統管理者與權限組勾了「關閉時仍可使用」的人能用，其他人會看到「功能停用」和下面填的原因。切換後馬上生效，已排定的貼文與留言不受影響。</p>
         <p class="fb-state" id="acState">狀態：尚未讀取</p>
         <div class="row ac-row"><button id="acOpen" type="button" aria-pressed="false">開放</button><button id="acClose" type="button" aria-pressed="false">關閉</button></div>
         <label for="acReason">關閉原因（選填，最多 100 字；公司帳號會看到）</label>

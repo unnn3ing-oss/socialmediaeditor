@@ -58,7 +58,7 @@
           <div class="btn-row"><button type="button" id="cgAddBtn">＋新增框（接在最下方）</button><button type="button" id="cgFitImgBtn">框貼合圖片比例</button></div>
           <div class="btn-row"><button type="button" id="cgUpBtn">▲ 上下換位（往上）</button><button type="button" id="cgDownBtn">▼ 上下換位（往下）</button></div>
           <div class="btn-row"><button type="button" id="cgFrontBtn">移到最上層</button><button type="button" id="cgBackBtn">移到最下層</button><button type="button" id="cgDeleteBtn">刪除此框</button></div>
-          <div class="hint">做直式長圖（例如多張橫向圖上下疊）：先調畫布高度，再「＋新增框」貼圖，按「框貼合圖片比例」讓框吻合圖片、不裁切，下方的框會跟著往下推。<br>「調整框」時：在空白處拖曳拉出新框、拖曳框內可移動、拉邊角可改大小，靠近邊緣會自動貼齊；按 Delete 也能刪除選取的框。切到「調整照片」再移動、縮放框內照片。</div>
+          <div class="hint">做直式長圖：先調畫布高度，再「＋新增框」，按「框貼合圖片比例」避免裁切。<br>調整框：空白處拖曳拉新框、拖曳移動、拉邊角改大小，Delete 刪除；切到「調整照片」移動、縮放照片。</div>
         </div>
 
         <div class="field" style="margin-bottom:0; margin-top:16px">
@@ -81,7 +81,7 @@
         <canvas id="cgCanvas" width="1080" height="1080"></canvas>
       </div>
       <div class="status" id="cgStatus"></div>
-      <div class="hint preview-hint">點一格選取，拖曳照片調整位置，<span class="hint-desk">滑鼠停在格子上滾動滾輪可放大縮小；</span><span class="hint-touch">用上面的「照片縮放」滑桿放大縮小；</span>雙擊格子可以換照片，也能把照片直接拖到格子上。等分時拖曳格子之間的分隔線調整比例；自由框時可以拉出、移動、縮放每一個框。</div>
+      <div class="hint preview-hint">點格子選取、拖曳調整位置<span class="hint-desk">、滾輪縮放</span><span class="hint-touch">、用「照片縮放」滑桿縮放</span>，雙擊換照片。</div>
 
     </div>
   </div>

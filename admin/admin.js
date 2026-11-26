@@ -1650,7 +1650,7 @@ if (window.top !== window.self) {
     people: [['online', '目前在線', 'olCard'], ['msg', '發送通知', 'msCard'], ['staff', '授權名單', 'sfCard']],
     conn: [['fb', '臉書粉專連線狀態', 'fsCard'], ['rd', 'Rundown 連線', 'rdCard'], ['usage', '速率限制', 'usCard']],
     rec: [['audit', '操作紀錄', 'auCard'], ['logs', '錯誤紀錄', 'lgCard']],
-    adv: [['access', '排程發布', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['toolvis', '未登入隱藏工具', 'tvCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
+    adv: [['access', '臉書工具開關', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['toolvis', '未登入隱藏工具', 'tvCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
   };
   var curSub = {};   // 每個分類目前的功能
   var assetsLoaded = false;

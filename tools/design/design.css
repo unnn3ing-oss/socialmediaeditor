@@ -330,14 +330,24 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 /* ---- 手機（≤820px）：單欄，畫布在最上面，工具列橫向捲動，屬性面板在畫布下方 ---- */
 @media (max-width: 820px) {
   .dz { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .dz-main { order: 1; }
+  /* 主區塊拆開排：工具列緊接在畫布下面，頁面列與說明排在後面 */
+  .dz-main { display: contents; }
+  .dz-viewbar { order: 1; margin-bottom: 0; }
+  .dz-stage { order: 2; }
+  .dz-pagebar { order: 4; margin-top: 0; }
+  .dz-status { order: 5; margin-top: 0; }
+  .dz-status:empty { display: none; }
+  .dz-hint { order: 6; margin-top: 0; }
   .dz-tools {
-    order: 2; position: static; max-height: none;
+    order: 3; position: static; max-height: none;
     flex-direction: row; align-items: center; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
-    padding: 8px; border-radius: var(--radius-card);
+    padding: 8px 32px 8px 8px; border-radius: var(--radius-card);
+    /* 右緣淡出：提示還能往右滑（右側多留內距，滑到底最後一顆不被淡掉） */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
   .dz-tool { flex: 0 0 auto; min-width: 56px; }
-  .dz-tool-label { flex: 0 0 auto; margin: 0 2px; writing-mode: vertical-rl; letter-spacing: .1em; }
+  .dz-tool-label { flex: 0 0 auto; margin: 0 2px 0 6px; padding-left: 8px; border-left: 1px solid var(--line); white-space: nowrap; }
   /* 屬性／圖層：底部抽屜（hidden 式切換，內容不重建）；畫布優先 */
   .dz-panel { position: fixed; left: 0; right: 0; bottom: 56px; z-index: 60; max-height: min(58dvh, 520px); max-height: min(58vh, 520px); overflow-y: auto; overscroll-behavior: contain;
     border-radius: var(--radius-dialog) var(--radius-dialog) 0 0; box-shadow: var(--shadow-menu); padding: 8px 14px 18px; }

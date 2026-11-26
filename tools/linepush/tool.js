@@ -128,12 +128,12 @@ const LAYOUTS = {
     sub: '「娛樂」：拍立得四格，兩頁各自獨立，每頁輸出 1040×1040。',
   },
   grid4: {
-    name: '四格 A', W: G4_SIZE, H: G4_SIZE, exportW: G4_SIZE, exportH: G4_SIZE, cellCount: 4,
+    name: '四格', W: G4_SIZE, H: G4_SIZE, exportW: G4_SIZE, exportH: G4_SIZE, cellCount: 4,
     cellLabels: ['左上', '右上', '左下', '右下'],
     lineColors: ['#ffffff'],
     tagColors: ['#ff0000'],
     stickerBase: 110, previewMaxWidth: 620,
-    sub: '「四格 A」：白底 2×2 四格，兩頁各自獨立，每頁輸出 1040×1040。',
+    sub: '「四格」：白底 2×2 四格，兩頁各自獨立，每頁輸出 1040×1040。',
   },
 };
 if (!COMPANY) { LAYOUTS.news.name = '六宮格'; LAYOUTS.news.sub = '「六宮格」：兩頁各自獨立，每頁輸出 1040×800。'; }

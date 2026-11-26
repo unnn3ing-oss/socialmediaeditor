@@ -20,7 +20,7 @@ function shell(root) {
   root.textContent = '';
   const inner = el('div', 'showcase-inner');
   const head = el('div', 'showcase-head');
-  head.append(el('h1', null, '今天要完成什麼？'), el('p', 'lead', '製圖、整理需求、下載素材，從這裡開始。'));
+  head.append(el('h1', null, '今天要完成什麼？'));
   inner.appendChild(head);
   root.appendChild(inner);
   return inner;

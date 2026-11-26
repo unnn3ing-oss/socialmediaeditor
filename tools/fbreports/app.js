@@ -388,7 +388,7 @@ $('drillClear').addEventListener('click', () => { S.drill = null; S.page = 1; re
 function renderTypes(items) {
   const rows = typeRows(items);
   $('typeTable').innerHTML = '<table class="tbl"><thead><tr><th scope="col">類型</th>' + METRICS.map(([, n]) => `<th scope="col">${n}</th>`).join('')
-    + '<th scope="col">發文占比</th><th scope="col">每篇平均互動</th><th scope="col">每篇平均觸及</th><th scope="col">有效樣本</th></tr></thead><tbody>'
+    + '<th scope="col">發文占比</th><th scope="col">每篇平均互動</th><th scope="col">每篇平均觸及</th><th scope="col">有數據篇數</th></tr></thead><tbody>'
     + (rows.length ? rows.map((r) => `<tr><td>${esc(r.name)}</td>` + METRICS.map(([mk]) => `<td>${esc(fmtAgg(mk, r.summary[mk]))}</td>`).join('')
       + `<td>${fmtRate(r.share)}</td><td>${r.avgEngagement === null ? '—' : r.avgEngagement.toFixed(1)}</td><td>${r.avgReach === null ? '—' : fmtNum(r.avgReach)}</td>`
       + `<td title="互動／觸及有資料的篇數">${r.summary.engagement.known}／${r.summary.reach.known}（${r.items.length} 篇）</td></tr>`).join('')

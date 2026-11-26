@@ -9,18 +9,18 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=6a2f96d5b7"
+      "entry": "tools/pattern/index.html?v=702788d0dd"
     },
     {
       "id": "linepush",
       "name": "LINE 推播",
       "group": "做圖",
-      "desc": "LINE 推播圖：單張或四格",
+      "desc": "LINE 推播圖：六宮格或四格",
       "tier": "public",
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=2905805cb9"
+      "entry": "tools/linepush/index.html?v=678cfdbfe5"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=4b4276e910"
+      "entry": "tools/collage/index.html?v=ba452d1015"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=14ad047d1c"
+      "entry": "tools/watermark/index.html?v=2cc0ac881f"
     },
     {
       "id": "resize",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=025fe08873"
+      "entry": "tools/design/index.html?v=6e0033e03d"
     },
     {
       "id": "fbpost",
@@ -75,12 +75,11 @@
       "requires": [],
       "gate": {
         "check": "/fb/open",
-        "badge": "管理員測試",
-        "desc": "測試中，僅管理員可用"
+        "badge": "管理員測試"
       },
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=c25b862877"
+      "entry": "tools/fbpost/index.html?v=e07faf0c27"
     },
     {
       "id": "fbvideo",
@@ -91,12 +90,11 @@
       "requires": [],
       "gate": {
         "check": "/fb/open",
-        "badge": "管理員測試",
-        "desc": "多粉專上傳影片（橫式／Reels），測試中僅管理員可用"
+        "badge": "管理員測試"
       },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=a40a1ab7e3"
+      "entry": "tools/fbvideo/index.html?v=448cf6f46d"
     },
     {
       "id": "fbreports",
@@ -107,12 +105,11 @@
       "requires": [],
       "gate": {
         "check": "/fb/open",
-        "badge": "管理員測試",
-        "desc": "粉專發文量與成效、類型比較、貼文明細，測試中僅管理員可用"
+        "badge": "管理員測試"
       },
       "icon": "tools/fbreports/icon.svg",
       "thumb": "tools/fbreports/thumb.svg",
-      "entry": "tools/fbreports/index.html?v=95969b8fcb"
+      "entry": "tools/fbreports/index.html?v=699071b71f"
     },
     {
       "id": "livereq",
@@ -123,7 +120,7 @@
       "requires": [],
       "icon": "tools/livereq/icon.svg",
       "thumb": "tools/livereq/thumb.svg",
-      "entry": "tools/livereq/index.html?v=d640647eb5"
+      "entry": "tools/livereq/index.html?v=5ce45a9f9d"
     },
     {
       "id": "ytdl",

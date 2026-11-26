@@ -8,7 +8,7 @@
   "entry": "index.html",
   "tier": "public",
   "requires": [],
-  "gate": { "check": "/fb/open", "badge": "管理員測試", "desc": "測試中，僅管理員可用" },
+  "gate": { "check": "/fb/open", "badge": "管理員測試" },
   "assets": {
     "sticker.smile": {
       "company": "tbao-smile",

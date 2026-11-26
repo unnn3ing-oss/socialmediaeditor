@@ -2,7 +2,7 @@
   "id": "linepush",
   "name": "LINE 推播",
   "group": "做圖",
-  "desc": "LINE 推播圖：單張或四格",
+  "desc": "LINE 推播圖：六宮格或四格",
   "icon": "icon.svg",
   "thumb": "thumb.svg",
   "entry": "index.html",

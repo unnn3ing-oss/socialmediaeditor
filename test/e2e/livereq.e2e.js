@@ -28,6 +28,10 @@ async function paste(frame, text) {
 
 test('貼上 6 場：拆卡片、缺值班小編與粉專時不能複製', async () => {
   const { frame, page, errors } = await open();
+  // 一打開還沒操作：值班欄位不標紅；離開空的欄位才標
+  for (const id of ['dutyName', 'dutyContact']) assert.equal(await frame.getAttribute('#' + id, 'aria-invalid'), 'false');
+  await frame.focus('#dutyName'); await frame.focus('#dutyContact');
+  assert.equal(await frame.getAttribute('#dutyName', 'aria-invalid'), 'true');
   await paste(frame, fs.readFileSync(path.join(FIX, 'batch.txt'), 'utf8'));
   assert.equal(await frame.locator('.lr-card').count(), 6);
   assert.equal(await frame.textContent('#count'), '共 6 場');

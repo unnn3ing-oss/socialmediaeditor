@@ -8,7 +8,7 @@
   "entry": "index.html",
   "tier": "public",
   "requires": [],
-  "gate": { "check": "/fb/open", "badge": "管理員測試", "desc": "粉專發文量與成效、類型比較、貼文明細，測試中僅管理員可用" },
+  "gate": { "check": "/fb/open", "badge": "管理員測試" },
   "assets": {},
   "ext": null,
   "api": null,

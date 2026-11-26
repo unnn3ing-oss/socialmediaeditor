@@ -20,10 +20,11 @@ let dutyExp = 0;
 const fmt = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 // 分機：剛好 5 位數字就在前面加 #（手機或已經有 # 的不動）
 export const fmtContact = (v) => { const t = String(v || '').trim(); return /^\d{5}$/.test(t) ? '#' + t : t; };
-// 值班姓名、分機或手機都必填：空的那一欄紅框（不列在底列狀態鈕）
+// 值班姓名、分機或手機都必填：空的那一欄紅框（不列在底列狀態鈕）；
+// 一打開還沒操作不標，貼上需求單後或離開過這一欄才標
 function markDuty() {
   for (const el of [dutyName, dutyContact]) {
-    const bad = !el.value.trim();
+    const bad = !el.value.trim() && (cards.length > 0 || el.dataset.touched === '1');
     el.classList.toggle('is-bad', bad); el.setAttribute('aria-invalid', String(bad));
   }
 }
@@ -97,6 +98,7 @@ function expireDuty() {
   }
 }
 dutyName.addEventListener('input', saveDuty);
+for (const el of [dutyName, dutyContact]) el.addEventListener('blur', () => { el.dataset.touched = '1'; markDuty(); });
 dutyContact.addEventListener('input', () => {
   saveDuty();
   if (staff) { clearTimeout(staffTimer); staffTimer = setTimeout(saveStaffContact, 600); }
@@ -316,6 +318,7 @@ function run() {
     return b;
   }));
   stage.hidden = bar.hidden = !all.length;
+  markDuty();
   cur = 0;
   show(0);
   empty.hidden = !!all.length || !src.value.trim();
