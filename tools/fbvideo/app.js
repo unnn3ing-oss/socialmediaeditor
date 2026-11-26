@@ -617,15 +617,81 @@ function rdFail(text, why) {
 }
 
 // ===== 送出紀錄 =====
+// 每支影片一張卡片：預設收合（標題、類型、送出時間、大小＋狀態膠囊），點開才列出粉專／狀態／發布時間／開啟貼文
+//   展開過的卡片記在 logOpen（刷新後維持展開；重新整理頁面清除）
+const logOpen = new Set();
+// 膠囊分類：[class, 文字]；同類合併計數
+const PILL = {
+  published: ['ok', '已發布'], done: ['ok', '已多文'], scheduled: ['sch', '已排程'], draft: ['sch', '草稿'],
+  processing: ['wait', '處理中'], uploading: ['wait', '上傳中'], uploaded: ['wait', '等送出'], finishing: ['wait', '送出中'],
+  pending: ['wait', '等待多文'], posting: ['wait', '多文中'],
+  failed: ['bad', '失敗'], unknown: ['warn', '待確認'], stopped: ['muted', '已停止'], canceled: ['muted', '已取消']
+};
+// 發布時間（方案 A）：排程＝排程時間；立即與草稿＝送出時間；沒發出去＝—
+function pubTime(j) {
+  if (['failed', 'stopped', 'canceled', 'uploading', 'uploaded'].includes(j.state)) return '—';
+  if (j.at) return fmt(j.at * 1000);
+  return j.created ? fmt(j.created) : '—';
+}
+function logCard(list) {
+  const j0 = list[0];
+  const li = document.createElement('li'); li.className = 'log-card';
+  const head = document.createElement('button'); head.type = 'button'; head.className = 'log-head';
+  const bodyId = 'log-' + j0.uploadId;
+  head.setAttribute('aria-controls', bodyId);
+  const chev = document.createElement('span'); chev.className = 'log-chev'; chev.setAttribute('aria-hidden', 'true');
+  const txt = document.createElement('span'); txt.className = 'log-txt';
+  const h = document.createElement('span'); h.className = 'log-title'; h.textContent = j0.title || j0.name;
+  const m = document.createElement('span'); m.className = 'log-meta';
+  m.textContent = [j0.kind === 'reel' ? 'Reels' : '橫式影片', '送出 ' + fmt(j0.created), sizeText(j0.size)].join('．');
+  txt.append(h, m);
+  // 膠囊：各粉專＋多文目標的狀態數量
+  const counts = new Map();
+  const bump = (k) => { const p = PILL[k] || ['muted', k]; const key = p.join('|'); counts.set(key, (counts.get(key) || 0) + 1); };
+  for (const j of list) { bump(j.state); for (const c of j.cross || []) bump(c.status); }
+  const pills = document.createElement('span'); pills.className = 'log-pills';
+  for (const [key, n] of counts) { const [cls, t] = key.split('|'); const p = document.createElement('span'); p.className = 'log-pill p-' + cls; p.textContent = `${t} ${n}`; pills.append(p); }
+  head.append(chev, txt, pills);
+  // 展開內容
+  const body = document.createElement('div'); body.className = 'log-body'; body.id = bodyId;
+  const tb = document.createElement('table'); tb.className = 'log-table';
+  const thead = document.createElement('thead'); const hr = document.createElement('tr');
+  for (const t of ['粉專', '狀態', '發布時間', '貼文']) { const th = document.createElement('th'); th.scope = 'col'; th.textContent = t; hr.append(th); }
+  thead.append(hr);
+  const tbody = document.createElement('tbody');
+  const row = (name, cls, state, time, link) => {
+    const tr = document.createElement('tr');
+    const a = document.createElement('td'); a.textContent = name;
+    const b = document.createElement('td'); b.className = 'job s-' + cls; b.textContent = state;
+    const c = document.createElement('td'); c.textContent = time;
+    const d = document.createElement('td'); if (link) d.append(link);
+    tr.append(a, b, c, d); tbody.append(tr);
+  };
+  for (const j of list) {
+    row(pageName(j.page), j.state, (STATE_TEXT[j.state] || j.state) + (j.error ? '（' + j.error + '）' : ''), pubTime(j),
+      LINK_STATES.includes(j.state) ? openLink(j.videoId, j.state === 'published' ? '' : '草稿、排程或處理中的影片只有粉專管理員看得到') : null);
+    for (const c of j.cross || []) {
+      row(`${pageName(c.page)}（多文自 ${pageName(j.page)}）`, c.status === 'done' ? 'published' : c.status,
+        (CROSS_TEXT[c.status] || c.status) + (c.error ? '（' + c.error + '）' : ''), c.status === 'done' ? '同原粉專' : '—',
+        c.status === 'done' ? openLink(c.videoId, '') : null);
+    }
+  }
+  tb.append(thead, tbody); body.append(tb);
+  const set = (on) => { head.setAttribute('aria-expanded', String(on)); body.hidden = !on; li.classList.toggle('open', on); };
+  set(logOpen.has(j0.uploadId));
+  head.addEventListener('click', () => { const on = body.hidden; if (on) logOpen.add(j0.uploadId); else logOpen.delete(j0.uploadId); set(on); });
+  li.append(head, body);
+  return li;
+}
 // 有貼文的狀態才給「開啟貼文」連結（另開分頁）；ID 格式不對不顯示
 const LINK_STATES = ['published', 'scheduled', 'processing', 'draft'];
-function addOpen(el, id, tip) {
+function openLink(id, tip) {
   const href = fbPostUrl(id);
-  if (!href) return;
+  if (!href) return null;
   const a = document.createElement('a'); a.className = 'log-open'; a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
   a.textContent = '開啟貼文 ↗';
   if (tip) a.title = tip;
-  el.append(' ', a);
+  return a;
 }
 let logLoaded = false;
 async function loadLog() {
@@ -641,28 +707,7 @@ async function loadLog() {
     const groups = new Map();
     for (const j of jobs) { if (!groups.has(j.uploadId)) groups.set(j.uploadId, []); groups.get(j.uploadId).push(j); }
     const ul = $('logList'); ul.textContent = '';
-    for (const list of groups.values()) {
-      const j0 = list[0];
-      const li = document.createElement('li');
-      const h = document.createElement('div'); h.className = 'log-title'; h.textContent = j0.title || j0.name;
-      const m = document.createElement('div'); m.className = 'hint';
-      m.textContent = [j0.kind === 'reel' ? 'Reels' : '橫式影片', '送出 ' + fmt(j0.created), sizeText(j0.size)].join('．');
-      const st = document.createElement('div'); st.className = 'log-pages';
-      for (const j of list) {
-        const s = document.createElement('span'); s.className = 'job s-' + j.state;
-        s.textContent = `${pageName(j.page)}：${STATE_TEXT[j.state] || j.state}${j.at ? ' ' + fmt(j.at * 1000) : ''}${j.error ? '（' + j.error + '）' : ''}`;
-        if (LINK_STATES.includes(j.state)) addOpen(s, j.videoId, j.state === 'published' ? '' : '草稿、排程或處理中的影片只有粉專管理員看得到');
-        st.append(s);
-        for (const c of j.cross || []) {
-          const x = document.createElement('span'); x.className = 'job s-' + (c.status === 'done' ? 'published' : c.status);
-          x.textContent = `${pageName(c.page)}（多文自 ${pageName(j.page)}）：${CROSS_TEXT[c.status] || c.status}${c.error ? '（' + c.error + '）' : ''}`;
-          if (c.status === 'done') addOpen(x, c.videoId, '');
-          st.append(x);
-        }
-      }
-      li.append(h, m, st);
-      ul.append(li);
-    }
+    for (const list of groups.values()) ul.append(logCard(list));
     $('logHint').textContent = groups.size ? `最近 7 天 ${groups.size} 支影片` : '最近 7 天沒有送出的影片';
     okLoad = true;
   } catch (e) { $('logHint').textContent = '讀取失敗：' + errText(e) + (keep.length ? '（保留上次的內容）' : ''); $('logList').replaceChildren(...keep); }

@@ -578,7 +578,7 @@ test('停止上傳：停止請求還沒回來時分段剛好傳完，網頁不�
   await page.close();
 });
 
-test('送出紀錄：有貼文的狀態附「開啟貼文」連結（含多文目標），失敗不附', async () => {
+test('送出紀錄：每支影片一張卡片預設收合＋狀態膠囊；點開列粉專／狀態／發布時間／開啟貼文（失敗不附）；刷新維持展開', async () => {
   const jobs = [
     { uploadId: 'u1', page: '111', kind: 'video', name: 'a.mp4', size: 4, state: 'published', videoId: '9001', sent: true, at: null, title: 'A', error: '', created: Date.now(), cross: [{ page: '222', status: 'done', error: '', videoId: '9002' }, { page: '333', status: 'failed', error: '不行' }] },
     { uploadId: 'u1', page: '444', kind: 'video', name: 'a.mp4', size: 4, state: 'failed', videoId: '9003', sent: true, at: null, title: 'A', error: '錯', created: Date.now(), cross: [] },
@@ -588,9 +588,21 @@ test('送出紀錄：有貼文的狀態附「開啟貼文」連結（含多文�
   await page.waitForSelector('#app:not([hidden])');
   await page.click('[data-tab="log"]');
   await page.click('#logReload');
-  await page.waitForSelector('#logList .log-open');
+  await page.waitForSelector('#logList .log-card');
+  assert.equal(await page.locator('#logList .log-card').count(), 2, '一支影片一張卡片');
+  assert.equal(await page.isVisible('#logList .log-open >> nth=0'), false, '預設收合');
+  assert.deepEqual(await page.$$eval('#logList .log-card:first-child .log-pill', (p) => p.map((x) => x.textContent)), ['已發布 1', '已多文 1', '失敗 2']);
+  if (SHOT) await page.locator('#tab-log').screenshot({ path: SHOT + '/fbvideo-log-closed.png' });
+  for (const h of await page.$$('#logList .log-head')) await h.click();
+  assert.equal(await page.getAttribute('#logList .log-head >> nth=0', 'aria-expanded'), 'true');
+  const rows = await page.$$eval('#logList .log-card:first-child tbody tr', (t) => t.map((r) => [...r.cells].map((c) => c.textContent)));
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows[1].slice(0, 3), ['娛樂（多文自 新聞）', '已多文', '同原粉專']);
+  assert.equal(rows[3][2], '—', '失敗沒有發布時間');
   const links = await page.$$eval('#logList .log-open', (as) => as.map((a) => [a.href, a.target, a.title !== '']));
-  if (SHOT) await page.locator('#tab-log').screenshot({ path: SHOT + '/fbvideo-log-links.png' });
+  if (SHOT) await page.locator('#tab-log').screenshot({ path: SHOT + '/fbvideo-log-open.png' });
+  await page.click('#logReload');
+  await page.waitForFunction(() => document.querySelectorAll('#logList .log-head[aria-expanded=true]').length === 2);
   assert.deepEqual(links.sort(), [
     ['https://www.facebook.com/9001', '_blank', false],
     ['https://www.facebook.com/9002', '_blank', false],
