@@ -17,19 +17,24 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `ui/warnings.js`（新） | 清單＋「警語 ▾」多選元件 | ⬜ |
-| `tools/fbpost/index.html`、`send.js`、`app.js`／`compose.js` | 留言列加警語、送出帶 `warn`、清空 | ⬜ |
-| `server/fb/post.js` | `parsePostForm` 收 `warn`（≤2000 字），插在第 1 則後、offset 0 | ⬜ |
-| `server/fb/timer.js` | `MAX_ITEMS` 4 | ⬜ |
-| `tools/fbvideo/editor.js`、`server/fb/video.js` | 影片留言加警語、後端收 `warn` | ⬜ |
-| 全部 `*.html` | robots meta＋測試檢查 | ⬜ |
-| `server/core/aibots.js`（新）、`server/index.js` | AI 爬蟲 UA 擋 403 | ⬜ |
+| `ui/warnings.js`（新） | 清單＋「警語 ▾」多選元件 | ✅ |
+| `tools/fbpost/index.html`、`send.js`、`app.js`／`compose.js` | 留言列加警語、送出帶 `warn`、清空 | ✅ |
+| `server/fb/post.js` | `parsePostForm` 收 `warn`（≤2000 字），插在第 1 則後、offset 0 | ✅ |
+| `server/fb/timer.js` | `MAX_ITEMS` 4 | ✅ |
+| `tools/fbvideo/editor.js`、`server/fb/video.js` | 影片留言加警語、後端收 `warn` | ✅ |
+| 全部 `*.html` | robots meta＋測試檢查 | ✅ |
+| `server/core/aibots.js`（新）、`server/index.js` | AI 爬蟲 UA 擋 403 | ✅ |
 
 ## 下一步
-- [ ] 後端 warn＋測試 → 前端 fbpost → fbvideo → robots meta → AI UA → 測試、截圖、審查
+- [x] 後端 warn＋測試 → 前端 fbpost → fbvideo → robots meta → AI UA → 測試、截圖、獨立審查（通過，Minor：沒網址只有警語時編號顯示第 2 則，不修）
+- [ ] 使用者看截圖確認 → 說「推」才併入 main（同一 commit 更新 CLAUDE.md 目前進度）→ 使用者部署後端（正式＋測試）
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/fbpost*.e2e.js test/e2e/fbvideo.e2e.js`、`node build.js --check`
 
 ## 注意事項／不能做的事
 - 不推 main；後端改動需使用者重新部署（正式＋測試）
+
+## 結果
+- npm test 857 全過；fbpost／fbvideo／fbpost-compose／sidepanel e2e 106 項中 105 過，比對圖那項為既知並跑偶發，單獨重跑 26/26 過；build --check 通過（順帶重產過期的 shell/catalog.json）。
+- `shell/install.html` 是片段（沒有 head），不加 meta；`extension/` 不改（避免升版）。
