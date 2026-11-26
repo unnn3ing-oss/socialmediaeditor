@@ -20,7 +20,8 @@
 
 ## 下一步
 - [x] 實作與測試（npm test 826、fbvideo e2e 17、build --check）
-- [ ] 獨立審查 → 給使用者看
+- [x] 獨立審查通過
+- [ ] 給使用者看、等「推」
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/fbvideo.e2e.js`、`node build.js --check`
