@@ -98,6 +98,9 @@ test('註冊帳號：公司素材只放行勾選工具用到的；臉書路由�
   assert.equal(await get('tvbs-news-logo'), 200);
   assert.deepEqual(await manifest(), ['tvbs-news-logo']);
   assert.notEqual((await call(env, '/fb/pages', { headers: me })).status, 200, '臉書路由沒權限');
+  // 臉書工具開放時，沒有權限組的註冊帳號連 need=null 的唯讀路由也不能讀
+  assert.ok((await post(env, '/admin/fb/access', { mode: 'company' }, adm)).body.ok);
+  for (const p of ['/fb/pages', '/fb/presets', '/fb/backgrounds', '/fb/me', '/fb/access']) assert.equal((await call(env, p, { headers: me })).status, 403, p);
   // 名單：self 標記；指派權限組後全開
   const list = (await call(env, '/admin/staff', { headers: adm })).body.data;
   const row = list.staff.find((s) => s.id === 'R1');
