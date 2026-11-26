@@ -162,3 +162,18 @@ test('已發佈載入更多：長游標（800 字）可以翻頁；怪字元或�
   assert.equal((await call('/fb/published?page=111&after=' + encodeURIComponent('a b<'))).status, 400);
   assert.equal((await call('/fb/published?page=111&after=' + 'a'.repeat(4001))).status, 400);
 });
+
+// ===== 2026-11-26：列表讀取順便校正計時器 =====
+test('已排程列表：臉書時間和計時器不同（後台改晚）→ 計時器跟著改；已發佈列表出現 → 計時器馬上留', async (t) => {
+  const later = nowSec() + 7200;
+  const { env, call, armTimer, timerStatus } = await setup(t, {
+    'GET /111/scheduled_posts': () => ({ data: [{ id: '111_1', message: 'm', scheduled_publish_time: later }] }),
+    'GET /111/published_posts': () => ({ data: [{ id: '111_2', message: 'p', created_time: '2026-11-26T01:00:00+0000' }] })
+  });
+  await armTimer(env, { pageId: '111', postId: '111_1', message: '看更多', at: nowSec() + 600 });
+  await armTimer(env, { pageId: '111', postId: '111_2', message: '看更多', at: nowSec() + 3600 });
+  assert.equal((await call('/fb/scheduled?page=111')).status, 200);
+  assert.equal((await timerStatus(env, '111_1')).at, later);
+  assert.equal((await call('/fb/published?page=111')).status, 200);
+  assert.ok((await timerStatus(env, '111_2')).at <= nowSec() - 60, '改早：當成已發布、到點時間拉到現在');
+});

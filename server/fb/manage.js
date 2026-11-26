@@ -13,10 +13,11 @@ export async function pageToken(env, pageId) {
   return p ? p.token : null;
 }
 
-async function commentState(env, id) {
+// sync：順便校正計時器（已排程帶 { at }、已發佈帶 { published: true }），不另打臉書
+async function commentState(env, id, sync = null) {
   if (!env.FB_TIMER) return 'none';
   try {
-    const d = await timerStatus(env, id);
+    const d = await timerStatus(env, id, sync);
     // 失敗累計 ≥2 次或已失敗：回物件（前端紅字＋「重新留言」）；其他照舊回狀態字串
     if (d && d.alert) return { status: d.status || 'pending', alert: true, seq: d.alert.seq, error: d.alert.error, failed: d.alert.failed };
     // 第 1 則留言移除預覽（實驗功能）結果：tried｜failed
@@ -33,7 +34,8 @@ export async function listScheduled(env, page, token, after) {
   const d = await graph(env, 'GET', '/' + page + '/scheduled_posts', { fields: 'id,message,scheduled_publish_time,full_picture,created_time', limit: 50, after: after || undefined }, token);
   const out = [];
   for (const p of d.data || []) {
-    out.push({ id: String(p.id), message: p.message || '', at: toSec(p.scheduled_publish_time), picture: p.full_picture || null, comment: await commentState(env, String(p.id)) });
+    const at = toSec(p.scheduled_publish_time);
+    out.push({ id: String(p.id), message: p.message || '', at, picture: p.full_picture || null, comment: await commentState(env, String(p.id), at ? { at } : null) });
   }
   return { items: out, next: nextOf(d) };
 }
@@ -42,7 +44,7 @@ export async function listPublished(env, page, token, after) {
   const d = await graph(env, 'GET', '/' + page + '/published_posts', { fields: 'id,message,created_time,full_picture,permalink_url', limit: 50, after: after || undefined }, token);
   const items = [];
   for (const p of d.data || []) {
-    items.push({ id: String(p.id), message: p.message || '', time: p.created_time || null, picture: p.full_picture || null, url: p.permalink_url || null, comment: await commentState(env, String(p.id)) });
+    items.push({ id: String(p.id), message: p.message || '', time: p.created_time || null, picture: p.full_picture || null, url: p.permalink_url || null, comment: await commentState(env, String(p.id), { published: true }) });
   }
   return { items, next: nextOf(d) };
 }

@@ -111,3 +111,16 @@ test('30 天清除：舊訊息與收件紀錄刪掉，新的留著', async (t) =
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM staff_msg_to WHERE msg_id = ?').bind(a.id).first()).n, 0);
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM staff_msg_to WHERE msg_id = ?').bind(b.id).first()).n, 1);
 });
+
+test('systemMsg：系統自動通知發給系統管理者＋權限組有 notify 的啟用員工；同 key 24 小時內只發一次', async (t) => {
+  const { env, g2 } = await setup(t);
+  const perms = JSON.parse(env.DB.raw.prepare('SELECT perms FROM staff_groups WHERE id = ?').get(g2).perms);
+  env.DB.raw.prepare('UPDATE staff_groups SET perms = ? WHERE id = ?').run(JSON.stringify([...perms, 'notify']), g2);
+  const { systemMsg } = await import('../../server/core/msgs.js');
+  assert.equal(await systemMsg(env, '新聞 讀不到貼文狀態', 'rd:111'), 2);
+  const to = env.DB.raw.prepare('SELECT uid FROM staff_msg_to ORDER BY uid').all().map((r) => r.uid);
+  assert.deepEqual(to, ['B1', 'SYS1']);
+  assert.equal(env.DB.raw.prepare('SELECT from_uid FROM staff_msgs').get().from_uid, 'SYSTEM');
+  assert.equal(await systemMsg(env, '再一次', 'rd:111'), null, '同 key 去重');
+  assert.equal(await systemMsg(env, '別的粉專', 'rd:222'), 2);
+});

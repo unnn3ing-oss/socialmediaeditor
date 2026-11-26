@@ -1434,3 +1434,21 @@ test('進階設定「自行註冊」：讀取（預設開放、全部工具）�
   await page.waitForFunction(() => /已更新「林新人」的權限組/.test(document.getElementById('sfMsg').textContent));
   assert.deepEqual(SF.bodies.at(-1), { key: 'POST /admin/staff/R77', body: { group: 'viewer' } });
 });
+
+test('錯誤紀錄：每筆「複製」按鈕複製完整錯誤文字（時間、粉專、貼文、連結、錯誤說明、臉書原文）', async () => {
+  const keep = DATA['GET /admin/logs'];
+  DATA['GET /admin/logs'] = [{ id: 7, at: Date.UTC(2026, 10, 26, 8, 21), tool: 'fbpost', code: 'comment_failed:100', page: '220050085932', pageName: '新聞', page_name: 'TVBS 新聞', post: '220050085932_1368607782354030', title: '評鑑竟全合格？', ptype: 'template', pub_at: Math.floor(Date.UTC(2026, 10, 26, 8, 20) / 1000), detail: '留言：找不到這個物件（臉書碼 100-33）\n臉書原文：Unsupported post request.', st: 'open' }];
+  try {
+    const { page } = await open({ width: 1280, height: 860 }, '#rec/logs');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: srv.url });
+    await login(page);
+    await page.click('#sub-rec-logs');
+    await page.click('#logBtn');
+    await page.waitForSelector('#logRows .lg-copy');
+    await page.click('#logRows .lg-copy');
+    await page.waitForFunction(() => document.querySelector('#logRows .lg-copy').textContent === '已複製');
+    const t = await page.evaluate(() => navigator.clipboard.readText());
+    for (const re of [/^時間：/, /工具：排程發布/, /粉專：新聞（TVBS 新聞）／ID 220050085932/, /貼文：評鑑竟全合格？（套版・發布 /, /連結：https:\/\/www\.facebook\.com\/220050085932\/posts\/1368607782354030/, /錯誤：留言失敗（臉書碼 100）\n留言：找不到這個物件（臉書碼 100-33）/, /臉書原文：Unsupported post request\./]) assert.match(t, re);
+    await page.context().close();
+  } finally { DATA['GET /admin/logs'] = keep; }
+});

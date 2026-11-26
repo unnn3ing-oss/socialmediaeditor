@@ -6,7 +6,7 @@
 import { ok, fail, readBody } from './http.js';
 import { all, first, run } from './db.js';
 import { ensureOnce } from './once.js';
-import { ensureStaff, audit, normId } from './staff.js';
+import { ensureStaff, audit, normId, sysId } from './staff.js';
 
 export const MAX_BODY = 200;
 export const MAX_RECIPIENTS = 500;
@@ -95,6 +95,30 @@ async function recall(request, env, who, id) {
     await audit(env, auditWho(who), 'msg_recall', '', String(id), '');
   }
   return ok(request, env, { id, recalled: true });
+}
+
+// 系統自動發的通知（2026-11-26，例：粉專讀不到貼文狀態）：收件人＝系統管理者＋權限組有 notify 的啟用員工
+//   key：去重代號，同一個 key 在 dedupMs 內只發一次（記在 KV；沒有 KV 就每次都發）。回發給幾人；去重略過回 null
+export async function systemMsg(env, body, key = '', dedupMs = DAY) {
+  if (!env.DB) return null;
+  const k = key ? 'sysmsg:' + key : '';
+  if (k && env.CACHE) { try { if (await env.CACHE.get(k)) return null; } catch { /* 讀不到就照發 */ } }
+  const mark = async () => { if (k && env.CACHE) { try { await env.CACHE.put(k, '1', { expirationTtl: Math.max(60, Math.round(dedupMs / 1000)) }); } catch { /* 記不了就算了 */ } } };
+  await ensureMsgs(env);
+  const rows = await all(env, 'SELECT s.id, g.perms FROM staff s LEFT JOIN staff_groups g ON g.id = s.grp WHERE s.enabled = 1');
+  const sys = sysId(env);
+  const uids = rows.filter((r) => {
+    if (r.id === sys) return true;
+    try { const p = JSON.parse(r.perms || '[]'); return Array.isArray(p) && p.includes('notify'); } catch { return false; }
+  }).map((r) => r.id);
+  if (sys && !uids.includes(sys)) uids.push(sys);
+  if (!uids.length) { await mark(); return 0; }
+  const text = [...cleanBody(body)].slice(0, MAX_BODY).join('');
+  const ins = await run(env, 'INSERT INTO staff_msgs (at, from_uid, from_name, body) VALUES (?, ?, ?, ?)', Date.now(), 'SYSTEM', '系統', text);
+  const id = Number(ins.meta && ins.meta.last_row_id);
+  await env.DB.batch(uids.map((u) => env.DB.prepare('INSERT OR IGNORE INTO staff_msg_to (msg_id, uid, read_at) VALUES (?, ?, 0)').bind(id, u)));
+  await mark();
+  return uids.length;
 }
 
 // 管理路由（adminExtras）；只有系統管理者（不用解鎖）

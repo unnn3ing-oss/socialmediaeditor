@@ -64,7 +64,7 @@ export const MAX_GROUPS = 20;
 export const AUDIT_KEEP_DAYS = 90;
 export const MAX_AUDIT = 500;
 // 工具送出的動作（操作紀錄「類別」＝工具；其他＝後台）。管理頁 admin.js AU_TOOL 同一份
-export const TOOL_ACTIONS = ['publish', 'schedule', 'reschedule', 'delete', 'video_publish', 'video_schedule', 'video_draft', 'comment_retry'];
+export const TOOL_ACTIONS = ['publish', 'schedule', 'reschedule', 'delete', 'video_publish', 'video_schedule', 'video_draft', 'comment_retry', 'post_gone'];
 const DAY = 86400000;
 
 // 員工編號一律大寫、去空白；不合格回 ''
