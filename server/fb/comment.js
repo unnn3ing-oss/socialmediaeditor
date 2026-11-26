@@ -74,3 +74,47 @@ export async function editAfterPost(env, token, commentId, message, by) {
   try { await graph(env, 'POST', '/' + commentId, { message }, token); return 'edited'; }
   catch (e) { console.warn('comment edit failed', commentId, String((e && e.message) || e).slice(0, 200)); return 'failed'; }
 }
+
+// ---- 實驗功能：第一則留言發出後隱藏（2026-11-26）----
+// 設定存 D1 fb_settings k='hide_opts'：{ hide, who:'all'|'some', staff:[員工編號] }；預設關；對象看「發文的人」
+// 開啟且適用時，排程發布「留言內容」旁出現勾選，只對那一次送出有效（表單 hideFirst=1）
+// 隱藏＝POST /{comment-id} is_hidden=true；臉書是否允許粉專隱藏自己的留言未證實，失敗不影響留言、不重試
+const HIDE_KEY = 'hide_opts';
+export function normHideOpts(v) {
+  const o = normOpts(v ? { edit: v.hide, who: v.who, staff: v.staff } : null);
+  return { hide: o.edit, who: o.who, staff: o.staff };
+}
+export function validHideOpts(b) {
+  if (!b || typeof b.hide !== 'boolean') return null;
+  const o = validOpts({ edit: b.hide, who: b.who, staff: b.staff });
+  return o ? { hide: o.edit, who: o.who, staff: o.staff } : null;
+}
+async function readHideOpts(env) {
+  await ensureSettings(env);
+  const r = await env.DB.prepare('SELECT v FROM fb_settings WHERE k = ?').bind(HIDE_KEY).first();
+  let v = null;
+  try { v = r ? JSON.parse(r.v) : null; } catch { v = null; }
+  return normHideOpts(v);
+}
+export async function hideOpts(env) {
+  if (!env || !env.DB) return normHideOpts(null);
+  try { return await cached(env.DB, HIDE_KEY, 60000, () => readHideOpts(env)); } catch { return normHideOpts(null); }
+}
+export async function saveHideOpts(env, opts) {
+  await ensureSettings(env);
+  await env.DB.prepare('INSERT INTO fb_settings (k, v, updated) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated = excluded.updated')
+    .bind(HIDE_KEY, JSON.stringify(normHideOpts(opts)), Date.now()).run();
+  forget(env.DB, HIDE_KEY);
+  return readHideOpts(env);
+}
+export const hideApplies = (opts, by) => editApplies({ edit: opts.hide, who: opts.who, staff: opts.staff }, by);
+
+// 回 { hidden: 'hidden' } 或 { hidden: 'failed', hideError }
+export async function hideComment(env, token, commentId) {
+  if (!commentId) return { hidden: 'failed', hideError: '沒有留言 ID' };
+  try {
+    const d = await graph(env, 'POST', '/' + commentId, { is_hidden: 'true' }, token);
+    if (d && d.success === false) return { hidden: 'failed', hideError: '臉書沒有隱藏' };
+    return { hidden: 'hidden' };
+  } catch (e) { return { hidden: 'failed', hideError: String((e && e.message) || e).slice(0, 200) }; }
+}

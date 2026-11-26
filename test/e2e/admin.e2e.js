@@ -60,10 +60,14 @@ const DASH_ITEMS = [
   { key: 'online', name: '目前在線', level: 'info', text: '3 人', tab: 'people' }];
 const CO = { edit: false, who: 'all', staff: [], people: [{ id: 'A001', name: '王小明', enabled: true }, { id: 'A002', name: '李小華', enabled: false }], posts: [] };
 const VO = { stream: false, who: 'all', staff: [], posts: [] };
+const HO = { hide: false, who: 'all', staff: [], posts: [] };
+const TV = { on: false, hide: ['fbpost', 'fbvideo', 'fbreports'], posts: [] };
 const DATA = {
   'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
   'GET /admin/dash/config': () => ({ items: ['access', 'fbtoken', 'logs'], all: [{ key: 'access', name: '排程發布' }, { key: 'fbtoken', name: '臉書權杖' }, { key: 'logs', name: '未處理錯誤' }, { key: 'online', name: '目前在線' }] }),
   'POST /admin/dash/config': (b) => { DASH.cfgSaved = b; return b; },
+  'GET /admin/site/vis': () => ({ on: TV.on, hide: TV.hide }),
+  'POST /admin/site/vis': (b) => { TV.posts.push(b); TV.on = b.on; TV.hide = b.hide; return { on: b.on, hide: b.hide }; },
   // 時間以「回應當下」往前推（測試跑很久時「3 分鐘前」才不會變成 4 分鐘前）
   'GET /admin/fb/usage': () => usageNow(),
   'POST /admin/fb/usage/refresh': () => ({ ...usageNow(), asked: 3, failed: 1 }),
@@ -81,6 +85,8 @@ const DATA = {
   'POST /admin/fb/backgrounds/random': (b) => { BG.posts.push(b); BG.list.forEach((x) => { if (b.ids.includes(x.id)) x.rnd = b.rnd; }); return { list: BG.list, batch: 10 }; },
   'GET /admin/fb/comment-opts': () => ({ edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }),
   'POST /admin/fb/comment-opts': (b) => { CO.edit = b.edit; CO.who = b.who; CO.staff = b.staff; CO.posts.push(b); return { edit: CO.edit, who: CO.who, staff: CO.staff, people: CO.people }; },
+  'GET /admin/fb/hide-opts': () => ({ hide: HO.hide, who: HO.who, staff: HO.staff, people: CO.people }),
+  'POST /admin/fb/hide-opts': (b) => { HO.hide = b.hide; HO.who = b.who; HO.staff = b.staff; HO.posts.push(b); return { hide: HO.hide, who: HO.who, staff: HO.staff, people: CO.people }; },
   'GET /admin/fb/video-opts': () => ({ stream: VO.stream, who: VO.who, staff: VO.staff, people: CO.people }),
   'POST /admin/fb/video-opts': (b) => { VO.stream = b.stream; VO.who = b.who; VO.staff = b.staff; VO.posts.push(b); return { stream: VO.stream, who: VO.who, staff: VO.staff, people: CO.people }; },
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
@@ -166,7 +172,7 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'labs', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'labs', 'toolvis', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 // front：首頁登入存在 localStorage 的憑證（{ token, me }），/admin/me 依 Authorization 回身分；'T'＝管理頁密碼登入（系統管理者已解鎖）
 async function open(viewport, hash = '', front = null) {
@@ -825,7 +831,7 @@ test('首頁員工沒有任何卡片：顯示密碼登入與原因', async () =>
 });
 
 test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖區；輸入密碼解鎖後出現，按「鎖定」回到未解鎖', async () => {
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs', 'toolvis'].includes(k)) };
   const { page } = await open({ width: 1280, height: 860 }, '', { token: 'F3', me: locked });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#unlockBar'), false, '其他分類不顯示解鎖區');
@@ -911,7 +917,7 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   const { page: p2 } = await open({ width: 1280, height: 860 }, '#fb', { token: 'F9', me });
   await p2.waitForSelector('#app:not([hidden])'); await p2.waitForTimeout(500);
   await p2.screenshot({ path: path.join(SHOT, 'admin-mgr-fb.png') });
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs', 'toolvis'].includes(k)) };
   const { page: p3 } = await open({ width: 390, height: 844 }, '#adv', { token: 'F8', me: locked });
   await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
@@ -1355,4 +1361,39 @@ test('進階設定「實驗功能」：影片串流上傳（獨立開關、指�
   assert.deepEqual(VO.posts.at(-1), { who: 'some', staff: ['A001'], stream: true });
   assert.equal(CO.posts.length, 0);
   if (SHOT) await page.locator('#labCard').screenshot({ path: path.join(SHOT, 'admin-labs-video.png') });
+});
+
+test('進階設定「未登入時隱藏的工具」：讀取預設勾選、改了儲存送 on＋hide', async () => {
+  TV.on = false; TV.hide = ['fbpost', 'fbvideo', 'fbreports']; TV.posts = [];
+  const { page } = await open({ width: 1280, height: 900 }, '#adv');
+  await login(page);
+  await page.click('#tab-adv'); await show(page, 'tvCard');
+  await page.waitForFunction(() => !document.getElementById('tvSave').disabled);
+  assert.equal(await page.isChecked('#tvOn'), false);
+  assert.equal(await page.isChecked('#tvList input[value=fbpost]'), true);
+  assert.equal(await page.isChecked('#tvList input[value=livereq]'), false);
+  await page.check('#tvOn');
+  await page.uncheck('#tvList input[value=fbreports]');
+  await page.check('#tvList input[value=livereq]');
+  if (SHOT) await page.locator('#tvCard').screenshot({ path: path.join(SHOT, 'admin-toolvis.png') });
+  await page.click('#tvSave');
+  await page.waitForFunction(() => /已儲存/.test(document.getElementById('tvMsg').textContent));
+  const b = TV.posts.at(-1);
+  assert.equal(b.on, true);
+  assert.deepEqual(b.hide.slice().sort(), ['fbpost', 'fbvideo', 'livereq']);
+});
+
+test('進階設定「實驗功能」：第一則留言發出後隱藏（獨立開關、指定員工）', async () => {
+  HO.hide = false; HO.who = 'all'; HO.staff = []; HO.posts = [];
+  const { page } = await open({ width: 1280, height: 900 }, '#adv');
+  await login(page);
+  await page.click('#tab-adv'); await show(page, 'labCard');
+  await page.waitForFunction(() => !document.getElementById('labHSave').disabled);
+  assert.equal(await page.isChecked('#labHOn'), false);
+  await page.check('#labHOn');
+  await page.check('input[name=labHWho][value=some]');
+  await page.check('#labHPeople input[value=A001]');
+  await page.click('#labHSave');
+  await page.waitForFunction(() => /已啟用：指定 1 位員工/.test(document.getElementById('labHMsg').textContent));
+  assert.deepEqual(HO.posts.at(-1), { hide: true, who: 'some', staff: ['A001'] });
 });

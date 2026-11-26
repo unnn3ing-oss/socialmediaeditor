@@ -161,8 +161,12 @@
           </div>
           <label class="lbl" for="msg" id="msgLbl">貼文內容 <small id="msgCount"></small></label>
           <textarea id="msg" rows="4" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
-          <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
+          <div class="lbl-row">
+            <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
+            <label class="hide-chk" id="hideChk" hidden title="實驗功能：只對這一次送出有效"><input type="checkbox" id="hideFirst"> 隱藏留言</label>
+          </div>
           <input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）">
+          <p class="hide-note" id="hideNote" hidden>這則貼文的第 1 則留言發出後會自動隱藏（只限這次送出）</p>
           <div id="extras" class="extras"></div>
           <button type="button" class="add-comment" id="addComment">＋ 再新增一則留言（最多 3 則）</button>
           <ul class="results" id="results" aria-live="polite"></ul>

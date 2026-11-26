@@ -687,3 +687,22 @@ test('第 1 則留言再編輯一次：開關打開才編輯（相同內容）�
   await m.post('arm', { ...REC(nowSec() - 60), by: 'A1' }); await m.obj.alarm();
   assert.equal(edits(m.f).length, 1, '發文者在名單');
 });
+
+test('第 1 則留言隱藏（hide）：留成功後隱藏一次並記在 items；失敗記 failed 不重試；沒帶 hide 不隱藏', async (t) => {
+  const items = (hide) => [{ message: '看更多新聞內容\nhttps://x', offset: 0, n: 1, ...(hide ? { hide: true } : {}) }, { message: '第二則', offset: 5, n: 2, hide: true }];
+  const hides = (f) => f.calls.filter((c) => c.method === 'POST' && c.path === '/C9');
+  let m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(true) }); await m.obj.alarm();
+  assert.equal(hides(m.f).length, 1);
+  assert.equal(hides(m.f)[0].body.is_hidden, 'true');
+  let st = await m.post('status');
+  assert.equal(st.items[0].hidden, 'hidden');
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => gErr(10, 'nope') });
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(true).slice(0, 1) }); await m.obj.alarm(); await m.obj.alarm();
+  st = await m.post('status');
+  assert.deepEqual([st.status, st.items[0].hidden], ['done', 'failed']);
+  assert.equal(hides(m.f).length, 1, '失敗不重試');
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(false).slice(0, 1) }); await m.obj.alarm();
+  assert.equal(hides(m.f).length, 0);
+});

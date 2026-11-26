@@ -81,7 +81,7 @@ export const view = (r) => ({
     const wait = !x.status || x.status === 'pending' || x.status === 'posting';
     return wait && ['failed', 'unknown', 'stopped', 'canceled'].includes(r.state)
       ? { page: String(x.page), status: 'failed', error: '原影片沒有發布' }
-      : { page: String(x.page), status: String(x.status || 'pending'), error: String(x.error || '') };
+      : { page: String(x.page), status: String(x.status || 'pending'), error: String(x.error || ''), ...(x.status === 'done' && /^\d{1,30}$/.test(String(x.videoId || '')) ? { videoId: String(x.videoId) } : {}) };
   })
 });
 
@@ -355,7 +355,7 @@ export async function refreshStatus(env, uploadId) {
     try {
       const d = await timerStatus(env, r.video_id);
       if (d && Array.isArray(d.cross)) {
-        const next = xs.map((x) => { const y = d.cross.find((c) => String(c.page) === String(x.page)); return y ? { page: x.page, status: y.status, ...(y.error ? { error: String(y.error).slice(0, 200) } : {}) } : x; });
+        const next = xs.map((x) => { const y = d.cross.find((c) => String(c.page) === String(x.page)); return y ? { page: x.page, status: y.status, ...(y.videoId ? { videoId: String(y.videoId).slice(0, 40) } : {}), ...(y.error ? { error: String(y.error).slice(0, 200) } : {}) } : x; });
         if (JSON.stringify(next) !== JSON.stringify(xs)) await update(env, r, { xpost: JSON.stringify(next) });
       }
     } catch { /* 下次再問 */ }

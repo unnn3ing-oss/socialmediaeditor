@@ -13,14 +13,14 @@ const vm = async () => (videoMod = videoMod || (await import('../../server/fb/vi
 const ACCOUNTS = { data: [{ id: '111', name: '新聞', access_token: 'PT111' }, { id: '222', name: '少康', access_token: 'PT222' }] };
 const UID = 'a'.repeat(32);
 
-class RecTimer { constructor(state) { this.state = state; } async fetch(req) { const u = new URL(req.url); const b = await req.json().catch(() => ({})); RecTimer.log.push([u.pathname, b]); return Response.json({ ok: true }); } }
+class RecTimer { constructor(state) { this.state = state; } async fetch(req) { const u = new URL(req.url); const b = await req.json().catch(() => ({})); RecTimer.log.push([u.pathname, b]); return Response.json(u.pathname === '/status' && RecTimer.status ? RecTimer.status : { ok: true }); } }
 RecTimer.log = [];
 
 async function setup(t, handlers) {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS, ...handlers }); t.after(f.restore);
   let env;
   env = mkEnv({ FB_USER_TOKEN: 'U', FB_TIMER: fakeNamespace(RecTimer, () => env) });
-  RecTimer.log = [];
+  RecTimer.log = []; RecTimer.status = null;
   const { signToken } = await tok();
   env.SYS_STAFF_ID = 'SYS1';
   const headers = { authorization: 'Bearer ' + (await signToken(env.SESSION_SECRET, 'company', nowSec() + 600, false, 'SYS1', 1)) };
@@ -385,4 +385,19 @@ test('分段轉送：明確錯誤（400）不重試', async (t) => {
   const r = await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(5));
   assert.deepEqual(states(r), [['111', 'failed']]);
   assert.equal(n, 1);
+});
+
+test('多文完成：查狀態時存下目標粉專的影片 ID，送出紀錄回傳 videoId（失敗不回）', async (t) => {
+  const { env, headers } = await setup(t, {
+    'POST video:/222/videos': (c) => c.body.upload_phase === 'start' ? { upload_session_id: 'S222', video_id: 'V222', start_offset: '0', end_offset: '4' } : c.body.upload_phase === 'transfer' ? { start_offset: '4', end_offset: '4' } : { success: true },
+    'GET /V222': () => ({ status: { video_status: 'processing' } })
+  });
+  await call(env, headers, '/fb/video/start', { uploadId: UID, name: 'a.mp4', size: 4, kind: 'video', pages: ['222'] });
+  await call(env, headers, '/fb/video/chunk?u=' + UID + '&start=0', undefined, bytes(4));
+  await call(env, headers, '/fb/video/publish', { uploadId: UID, title: 't', description: 'd', pages: [{ page: '222', at: null, cross: ['333', '444'] }] });
+  RecTimer.status = { ok: true, cross: [{ page: '333', status: 'done', videoId: '98765' }, { page: '444', status: 'failed', videoId: '55555', error: '不行' }] };
+  await call(env, headers, '/fb/video/status?u=' + UID);
+  const r = await call(env, headers, '/fb/video/jobs');
+  assert.deepEqual(r.body.data[0].cross, [{ page: '333', status: 'done', error: '', videoId: '98765' }, { page: '444', status: 'failed', error: '不行' }]);
+  assert.equal(r.body.data[0].videoId, 'V222');
 });

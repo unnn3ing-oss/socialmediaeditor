@@ -80,6 +80,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
       return json(u ? view(b.uploadId) : { next: null, jobs: [] });
     }
     if (p === '/fb/video/status') { const id = url.searchParams.get('u'); for (const j of Object.values(ups.get(id).pages)) if (j.state === 'processing') j.state = 'published'; return json(view(id)); }
+    if (p === '/fb/video/jobs' && opts.jobs) return json(opts.jobs);
     if (p === '/fb/video/jobs') return json([...ups.keys()].flatMap((id) => view(id).jobs.filter((j) => j.sent)));
     if (p === '/rundown') { const b = JSON.parse(req.postData()); api.rundown.push(b); return json({ results: b.entries.map((e) => ({ ok: true, page: e.page, time: e.time })) }); }
     return r.fulfill({ status: 404, headers: CORS, json: { ok: false, code: 'not_found' } });
@@ -573,6 +574,40 @@ test('停止上傳：停止請求還沒回來時分段剛好傳完，網頁不�
   await page.waitForSelector(ED + ' .up-msg:has-text("已停止上傳")');
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(api.chunk.length, n, '停止後不再送下一段');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('送出紀錄：每支影片一張卡片預設收合＋狀態膠囊；點開列粉專／狀態／發布時間／開啟貼文（失敗不附）；刷新維持展開', async () => {
+  const jobs = [
+    { uploadId: 'u1', page: '111', kind: 'video', name: 'a.mp4', size: 4, state: 'published', videoId: '9001', sent: true, at: null, title: 'A', error: '', created: Date.now(), cross: [{ page: '222', status: 'done', error: '', videoId: '9002' }, { page: '333', status: 'failed', error: '不行' }] },
+    { uploadId: 'u1', page: '444', kind: 'video', name: 'a.mp4', size: 4, state: 'failed', videoId: '9003', sent: true, at: null, title: 'A', error: '錯', created: Date.now(), cross: [] },
+    { uploadId: 'u2', page: '111', kind: 'reel', name: 'b.mp4', size: 4, state: 'scheduled', videoId: '9004', sent: true, at: Math.floor(Date.now() / 1000) + 3600, title: 'B', error: '', created: Date.now(), cross: [] }
+  ];
+  const { page, errors } = await newPage('admin', undefined, { jobs });
+  await page.waitForSelector('#app:not([hidden])');
+  await page.click('[data-tab="log"]');
+  await page.click('#logReload');
+  await page.waitForSelector('#logList .log-card');
+  assert.equal(await page.locator('#logList .log-card').count(), 2, '一支影片一張卡片');
+  assert.equal(await page.isVisible('#logList .log-open >> nth=0'), false, '預設收合');
+  assert.deepEqual(await page.$$eval('#logList .log-card:first-child .log-pill', (p) => p.map((x) => x.textContent)), ['已發布 1', '已多文 1', '失敗 2']);
+  if (SHOT) await page.locator('#tab-log').screenshot({ path: SHOT + '/fbvideo-log-closed.png' });
+  for (const h of await page.$$('#logList .log-head')) await h.click();
+  assert.equal(await page.getAttribute('#logList .log-head >> nth=0', 'aria-expanded'), 'true');
+  const rows = await page.$$eval('#logList .log-card:first-child tbody tr', (t) => t.map((r) => [...r.cells].map((c) => c.textContent)));
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows[1].slice(0, 3), ['娛樂（多文自 新聞）', '已多文', '同原粉專']);
+  assert.equal(rows[3][2], '—', '失敗沒有發布時間');
+  const links = await page.$$eval('#logList .log-open', (as) => as.map((a) => [a.href, a.target, a.title !== '']));
+  if (SHOT) await page.locator('#tab-log').screenshot({ path: SHOT + '/fbvideo-log-open.png' });
+  await page.click('#logReload');
+  await page.waitForFunction(() => document.querySelectorAll('#logList .log-head[aria-expanded=true]').length === 2);
+  assert.deepEqual(links.sort(), [
+    ['https://www.facebook.com/9001', '_blank', false],
+    ['https://www.facebook.com/9002', '_blank', false],
+    ['https://www.facebook.com/9004', '_blank', true]
+  ]);
   assert.deepEqual(errors, []);
   await page.close();
 });

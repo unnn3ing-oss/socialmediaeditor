@@ -1,7 +1,7 @@
 // 排程貼文發布後補第一則留言的計時器（Durable Object，每則貼文一個實例，以貼文 ID 命名）
 import { graph, isRateLimit, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
-import { postComment, editAfterPost } from './comment.js';
+import { postComment, editAfterPost, hideComment } from './comment.js';
 import { setNotice, logCommentFail } from './notices.js';
 import { PTYPES } from '../core/logs.js';
 async function callTimer(env, postId, action, body) {
@@ -106,13 +106,20 @@ function normItems(body, allowEmpty) {
     // recheck：這則可能其實已經留成功（立即發布時沒收到臉書回應），當成「留言途中」，到點先查再留，避免重複
     // n：第幾則（顯示用）；沒給就照順序
     const n = Number(x.n);
-    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0, ...(Number.isInteger(n) && n >= 1 && n <= MAX_ITEMS ? { n } : {}), ...(x.recheck ? { unsure: true } : {}) });
+    out.push({ message: x.message, offset: off, status: x.recheck ? 'posting' : 'pending', attempts: 0, ...(Number.isInteger(n) && n >= 1 && n <= MAX_ITEMS ? { n } : {}), ...(x.recheck ? { unsure: true } : {}), ...(x.hide === true ? { hide: true } : {}) });
   }
   return out;
 }
 
 export class FbCommentTimer {
   constructor(state, env) { this.state = state; this.env = env; }
+
+  // 送出時勾了「隱藏留言」的那則（只有第 1 則會帶 hide）：留成功後隱藏一次；結果記在 it.hidden（hidden｜failed），失敗不重試
+  async hideIfAsked(rec, it, token) {
+    if (!it.hide || it.hidden || !it.commentId) return;
+    Object.assign(it, await hideComment(this.env, token, it.commentId));
+    await this.state.storage.put('rec', rec);
+  }
 
   async fetch(request) {
     const action = new URL(request.url).pathname.slice(1);
@@ -266,7 +273,7 @@ export class FbCommentTimer {
           // 同樣內容的另一則已經留過的不算（兩則可能一字不差）
           const used = new Set(rec.items.filter((x) => x !== it && x.commentId).map((x) => String(x.commentId)));
           const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && c.message === it.message && !used.has(String(c.id)));
-          if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure; await s.put('rec', rec); continue; }
+          if (mine) { Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure; await s.put('rec', rec); await this.hideIfAsked(rec, it, page.token); continue; }
         }
         step = STEP.comment;
         it.status = 'posting';
@@ -276,6 +283,7 @@ export class FbCommentTimer {
         delete it.unsure;
         await s.put('rec', rec);
         if (seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
+        await this.hideIfAsked(rec, it, page.token);
       } catch (e) {
         // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
         if (step === STEP.comment) {
