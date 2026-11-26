@@ -232,6 +232,7 @@ if (window.top !== window.self) {
   var LG_TYPE = { template: '套版', textimg: '字圖', text: '文字', video: '橫式影片', reels: 'Reels' };
   function lgCode(code) {
     var m = /^comment_failed(?::(\d+))?$/.exec(code || '');
+    if (code === 'read_denied') return '讀不到貼文狀態';
     return m ? '留言失敗' + (m[1] ? '（臉書碼 ' + m[1] + '）' : '') : code;
   }
   function lgState(r) {
@@ -241,6 +242,28 @@ if (window.top !== window.self) {
     if (r.st === 'retry') return { cls: 'is-handled', text: (who || '發文者') + ' 已補留言', tip: at };
     if (r.st === 'closed') return { cls: 'is-closed', text: '已結案', tip: (who ? who + '・' : '') + at };
     return { cls: '', text: '—' };
+  }
+  // 複製一筆錯誤紀錄的完整文字（回報問題用）
+  function lgText(r) {
+    var det = String(r.detail || ''), i = det.indexOf('臉書原文：');
+    var desc = i > 0 ? det.slice(0, i).trim() : (i < 0 ? det : ''), raw = i >= 0 ? det.slice(i) : '';
+    var pg = [r.pageName, r.page_name && r.page_name !== r.pageName ? '（' + r.page_name + '）' : ''].join('') || '';
+    var meta = [LG_TYPE[r.ptype] || '', r.pub_at ? '發布 ' + fmtTime(r.pub_at * 1000) : ''].filter(Boolean).join('・');
+    return [
+      '時間：' + fmtTime(r.at),
+      '工具：' + (LG_TOOL[r.tool] || r.tool || ''),
+      r.page || pg ? '粉專：' + [pg, r.page ? 'ID ' + r.page : ''].filter(Boolean).join('／') : '',
+      r.post ? '貼文：' + (r.title || r.post) + (meta ? '（' + meta + '）' : '') : '',
+      r.post && /^\d{1,30}(_\d{1,30})?$/.test(r.post) ? '連結：' + fbPostUrl(r.post) : '',
+      '錯誤：' + lgCode(r.code) + (desc ? '\n' + desc : ''),
+      raw
+    ].filter(Boolean).join('\n');
+  }
+  function lgCopy(r, btn) {
+    var t = lgText(r);
+    var done = function (ok) { btn.textContent = ok ? '已複製' : '複製失敗'; setTimeout(function () { btn.textContent = '複製'; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { done(true); }, function () { window.prompt('請手動複製：', t); done(false); });
+    else { window.prompt('請手動複製：', t); done(false); }
   }
   function lgRender(rows) {
     var tb = $('logRows'); tb.textContent = '';
@@ -253,6 +276,9 @@ if (window.top !== window.self) {
       var hasDesc = det.indexOf('臉書原文：') > 0;
       if (hasDesc) tc.appendChild(sfEl('div', 'lg-desc', det.split('\n')[0]));
       tc.title = det ? (hasDesc || det.indexOf('臉書原文：') === 0 ? det : '臉書原文：' + det) : r.code;
+      var cp = sfEl('button', 'lg-copy', '複製'); cp.type = 'button'; cp.title = '複製這筆錯誤（時間、粉專、貼文、連結、錯誤說明、臉書原文）';
+      cp.onclick = function () { lgCopy(r, cp); };
+      tc.appendChild(cp);
       tr.appendChild(tc);
       // 粉專：簡稱（完整名稱），游標移上去看 ID
       var pg = r.pageName && r.page_name && r.page_name !== r.pageName ? r.pageName + '（' + r.page_name + '）' : (r.pageName || r.page_name || r.page || '');
@@ -1162,7 +1188,7 @@ if (window.top !== window.self) {
 
     // ---- 授權名單／權限組／操作紀錄（後端 /admin/staff、/admin/staff-groups、/admin/audit）----
   var sfState = null, sfPending = null, staffLoaded = false;
-  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言', comment_retry: '重新留言', msg_send: '發送通知', msg_recall: '撤回通知' };
+  var SF_ACT = { reset: '重置密碼', add: '新增人員', staff_rename: '修改姓名', publish: '立即發布', schedule: '排程', reschedule: '改時間', delete: '刪除', video_publish: '影片立即發布', video_schedule: '影片排程', video_draft: '影片存草稿', guard_mode: '留言管理模式', guard_hide: '隱藏留言', guard_unhide: '取消隱藏留言', comment_retry: '重新留言', msg_send: '發送通知', msg_recall: '撤回通知', post_gone: '貼文已刪除（系統偵測）' };
   function sfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function sfCall(path, method, body, msgEl, done) {
     var o = { method: method };
@@ -1443,7 +1469,7 @@ if (window.top !== window.self) {
     });
   };
   // 操作紀錄：類別（工具／後台）依動作判斷；發文類型從 detail 的 kind= 讀（舊紀錄沒有）
-  var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };
+  var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1, post_gone: 1 };
   var AU_OPEN = { publish: 1, schedule: 1, reschedule: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };   // 這些的 post 是貼文／影片 ID
   var AU_KIND = { template: '套版', textimg: '字圖', text: '文字' };
   function auKind(detail) { var m = /(?:^|\s)kind=(\w+)/.exec(detail || ''); return m && AU_KIND[m[1]] ? AU_KIND[m[1]] : ''; }
@@ -1453,7 +1479,7 @@ if (window.top !== window.self) {
     list.forEach(function (r) {
       var tr = document.createElement('tr'), tool = !!AU_TOOL[r.action];
       tr.appendChild(sfEl('td', 'num', fmtTime(r.at)));
-      tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
+      tr.appendChild(sfEl('td', '', r.uid === 'ADMIN' ? 'ADMIN（管理員密碼）' : r.uid === 'SYSTEM' ? '系統' : r.uid)); tr.appendChild(sfEl('td', '', r.name || ''));
       var ts = document.createElement('td'); ts.appendChild(sfEl('span', 'au-src' + (tool ? '' : ' is-admin'), tool ? '工具' : '後台')); tr.appendChild(ts);
       var k = auKind(r.detail), act = SF_ACT[r.action] || r.action;
       tr.appendChild(sfEl('td', '', k ? act + '（' + k + '）' : act));

@@ -3,7 +3,9 @@ import { graph, isRateLimit, GraphError } from './graph.js';
 import { pageTokens } from './pages.js';
 import { postComment, editAfterPost, postFirstNoPreview, finishNoPreview, npHead, NP_METHODS } from './comment.js';
 import { setNotice, logCommentFail } from './notices.js';
-import { PTYPES } from '../core/logs.js';
+import { PTYPES, logEvent } from '../core/logs.js';
+import { audit } from '../core/staff.js';
+import { systemMsg } from '../core/msgs.js';
 async function callTimer(env, postId, action, body) {
   if (!env.FB_TIMER) throw new Error('FB_TIMER 未綁定');
   const stub = env.FB_TIMER.get(env.FB_TIMER.idFromName(String(postId)));
@@ -15,12 +17,14 @@ async function callTimer(env, postId, action, body) {
 export const armTimer = (env, rec) => callTimer(env, rec.postId, 'arm', rec);
 export const retimeTimer = (env, postId, at) => callTimer(env, postId, 'retime', { at });
 export const cancelTimer = (env, postId) => callTimer(env, postId, 'cancel');
-export const timerStatus = (env, postId) => callTimer(env, postId, 'status');
+// sync（列表讀取時順便校正，2026-11-26）：{ at }＝還在已排程、臉書上的排定時間；{ published: true }＝出現在已發佈
+export const timerStatus = (env, postId, sync = null) => callTimer(env, postId, 'status', sync ? { sync } : undefined);
 export const retryTimer = (env, postId, pageId, by = null) => callTimer(env, postId, 'retry', { pageId: String(pageId), ...(by ? { by: { uid: String(by.uid || '').slice(0, 20), name: String(by.name || '').slice(0, 30) } } : {}) });
 
 
 const FIRST_DELAY = 60;                    // 排定時間後 60 秒第一次檢查
-const RETRY = [30, 60, 120, 240];          // 一般錯誤的重試間隔（秒）；第 5 次失敗就停
+// 一般錯誤的重試間隔（秒）：到點、+30、+60、+120（第 4 次失敗＝2 分鐘，提醒）、+360（第 5 次，最後）
+const RETRY = [30, 30, 60, 240];
 const MAX_ATTEMPTS = 5;
 const MAX_RETIMES = 20;                    // 到點還沒發布的追蹤次數上限
 const MAX_RETIMES_VIDEO = 60;              // 影片：臉書處理長影片可能超過 20 分鐘，放寬到約 1 小時
@@ -56,11 +60,15 @@ function summary(rec) {
 }
 
 // 要提醒的留言：第一則「失敗」或「失敗累計 ≥ ALERT_AT 次還在重試」的；沒有＝null
-// 到點第 1 次、30 秒後第 2 次、60 秒後第 3 次都沒成功（約 1.5 分鐘）就提醒；之後照常自動重試，成功就撤掉提醒
-export const ALERT_AT = 3;
+// 到點、+30、+60、+120 秒都沒成功（2 分鐘）就提醒；之後照常自動重試，成功就撤掉提醒
+export const ALERT_AT = 4;
 const CASCADE = '前一則留言失敗，未留';
 // 讀取被擋（權限不足）：(#10)、(#200～299)
 const isReadDenied = (e) => e instanceof GraphError && (e.code === 10 || (e.code >= 200 && e.code < 300));
+// 找不到物件：HTTP 404 或 (#100) subcode 33。對排程中（還沒發布）的貼文留言，臉書也回這個
+const isGone = (e) => e instanceof GraphError && (e.status === 404 || (e.code === 100 && e.subcode === 33));
+const SYSTEM = { uid: 'SYSTEM', name: '系統' };
+const DAY_MS = 86400000;
 // 計時器每一步的名稱（錯誤說明前綴）：讀取類（確認發布、確認是否已留）被擋不代表留言沒留上
 export const STEP = { token: '取得粉專權杖', published: '確認發布', check: '確認是否已留', comment: '留言' };
 // 留言失敗的簡短概述（依臉書錯誤碼／步驟）
@@ -68,7 +76,7 @@ export function briefOf(it) {
   const c = it.ecode, msg = String(it.error || '');
   if (msg === CASCADE) return '前一則失敗，未留';
   if (msg.includes('找不到粉專 token')) return '找不到粉專權杖';
-  if (msg.includes('貼文遲遲未發布')) return '貼文還沒發布';
+  if (msg.includes('貼文遲遲未發布') || it.notYet) return '貼文還沒發布';
   if (it.status === 'failed' && it.unsure) return '可能已留上，請到臉書確認';
   if ([4, 17, 32, 613, 80001].includes(c)) return '臉書限流';
   if (c === 190 || c === 102) return '權杖失效';
@@ -111,6 +119,25 @@ function normItems(body, allowEmpty) {
   return out;
 }
 
+// 可以恢復的留言（2026-11-26）：還在等的、因「貼文還沒發布」失敗的（含其後連帶失敗的）、因「貼文已刪除」取消的
+function stuckOf(rec) {
+  const i = rec.items.findIndex((x) => x.status === 'failed');
+  const notYet = i >= 0 && rec.items[i].notYet ? i : -1;
+  return { notYet, gone: !!rec.gone && rec.items.some((x) => x.status === 'canceled') };
+}
+const revivable = (rec) => { const k = stuckOf(rec); return rec.items.some(open) || k.notYet >= 0 || k.gone; };
+// 恢復：次數歸零、清錯誤；沒收到回應過的（unsure）保持先查再留
+function revive(rec) {
+  const k = stuckOf(rec);
+  rec.items.forEach((x, j) => {
+    if (!(open(x) || (k.notYet >= 0 && j >= k.notYet && x.status === 'failed') || (k.gone && x.status === 'canceled'))) return;
+    x.status = x.unsure || x.status === 'posting' ? 'posting' : 'pending';
+    x.attempts = 0; delete x.error; delete x.ecode; delete x.eraw; delete x.logged; delete x.notYet;
+  });
+  if (k.gone) { delete rec.canceled; delete rec.gone; }
+  delete rec.purgeAt;
+}
+
 export class FbCommentTimer {
   constructor(state, env) { this.state = state; this.env = env; }
 
@@ -133,9 +160,9 @@ export class FbCommentTimer {
     }
     if (action === 'retime') {
       const at = Number(body.at);
-      if (!rec || rec.published || !anyOpen(rec) || !Number.isInteger(at)) return reply({ ok: false, error: '沒有等待中的留言' });
+      if (!rec || rec.published || !revivable(rec) || !Number.isInteger(at)) return reply({ ok: false, error: '沒有等待中的留言' });
       rec.at = at;
-      rec.items.forEach((x) => { if (open(x)) x.attempts = 0; });
+      revive(rec);
       await s.put('rec', rec);
       await this.schedule(rec);
       return reply({ ok: true });
@@ -167,6 +194,7 @@ export class FbCommentTimer {
     }
     if (action === 'status') {
       if (!rec) return reply({ ok: true, status: 'none' });
+      if (body.sync && typeof body.sync === 'object') { try { await this.sync(rec, body.sync); } catch { /* 校正失敗不影響查狀態 */ } }
       if (!rec.purgeAt && !anyOpen(rec)) await this.schedule(rec);   // 舊紀錄（沒排清除）被查到時補排 14 天清除
       const first = rec.items[0] || {};
       // 頂層欄位沿用第 1 則（列表顯示用），items 是每則的狀態
@@ -174,6 +202,67 @@ export class FbCommentTimer {
         cross: crossOf(rec).map((c) => ({ page: c.page, status: c.status, ...(c.videoId ? { videoId: c.videoId } : {}), ...(c.error ? { error: c.error } : {}) })) });
     }
     return reply({ ok: false, error: '不支援的動作' });
+  }
+
+  // 列表讀取時校正（只限排程發布的貼文，影片不做）：
+  //   { at }：還在已排程，臉書上的時間和計時器不同（改晚／改早）或留言卡在「還沒發布」→ 改用臉書時間、恢復等待
+  //   { published: true }：出現在已發佈，計時器還以為沒發布 → 當成已發布、馬上留
+  async sync(rec, b) {
+    if (rec.kind === 'video' || rec.published || !revivable(rec)) return;
+    const now = nowSec(), k = stuckOf(rec), stuck = !anyOpen(rec) && (k.notYet >= 0 || k.gone);
+    if (b.published === true) {
+      rec.published = true;
+      if (rec.at > now - FIRST_DELAY) rec.at = now - FIRST_DELAY;
+    } else {
+      const at = Number(b.at);
+      if (!Number.isInteger(at) || at <= now || (at === rec.at && !stuck)) return;
+      rec.at = at;
+    }
+    revive(rec);
+    await this.state.storage.put('rec', rec);
+    await this.schedule(rec);
+  }
+
+  // 貼文已刪除：留言取消、通知收掉、操作紀錄記一筆（系統偵測）
+  async gone(rec) {
+    [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) x.status = 'canceled'; });
+    rec.canceled = true; rec.gone = true;
+    await this.state.storage.put('rec', rec);
+    try { await audit(this.env, SYSTEM, 'post_gone', rec.pageId, rec.postId, [rec.title || '', rec.kind === 'video' ? 'kind=video' : ''].filter(Boolean).join(' ')); } catch { /* 記不了不影響 */ }
+    return this.schedule(rec);
+  }
+
+  // 讀取被拒：馬上通知系統管理者（＋notify 權限組），同粉專 24 小時一次；錯誤紀錄記一筆。失敗不影響留言流程
+  async readDenied(rec, e) {
+    try {
+      const name = rec.pageName || rec.pageId;
+      const code = e instanceof GraphError && e.code ? '（臉書碼 ' + e.code + '）' : '';
+      const sent = await systemMsg(this.env, name + ' 讀不到貼文狀態' + code + '，粉專權杖可能缺 pages_read_engagement。貼文：' + (rec.title || rec.postId), 'rd:' + rec.pageId, DAY_MS);
+      if (sent !== null) await logEvent(this.env, rec.kind === 'video' ? 'fbvideo' : 'fbpost', 'read_denied', rec.pageId, String((e && e.raw) || (e && e.message) || ''), { post: rec.postId, title: rec.title, ptype: rec.ptype, pubAt: rec.at, pageName: rec.pageName });
+    } catch { /* 通知失敗不影響 */ }
+  }
+
+  // 留言回「找不到物件」（還沒發布時）：這時才查貼文狀態
+  async notYet(rec, page, it, e) {
+    it.status = 'pending'; delete it.unsure;
+    let post;
+    try {
+      post = await graph(this.env, 'GET', '/' + rec.postId, { fields: 'is_published,scheduled_publish_time' }, page.token);
+    } catch (e2) {
+      if (isGone(e2)) return this.gone(rec);
+      if (isReadDenied(e2)) await this.readDenied(rec, e2);
+      it.notYet = true;
+      return this.retry(rec, it, e, STEP.comment);
+    }
+    if (post.is_published) { rec.published = true; delete it.notYet; return this.retry(rec, it, e, STEP.comment); }
+    const fbAt = toSec(post.scheduled_publish_time);
+    if (fbAt && fbAt !== rec.at) {
+      // 臉書上改了時間（改晚或改早）：跟著新時間、次數歸零、不提醒
+      rec.retimes = (rec.retimes || 0) + 1;
+      if (rec.retimes <= MAX_RETIMES) { rec.at = fbAt; revive(rec); await this.state.storage.put('rec', rec); return this.schedule(rec); }
+    }
+    it.notYet = true;
+    return this.retry(rec, it, e, STEP.comment);
   }
 
   // 通知與錯誤日誌（notices.js）：提醒狀態有變才寫 D1；每則最後失敗只記一次錯誤日誌。寫失敗不影響留言
@@ -220,21 +309,18 @@ export class FbCommentTimer {
     try { tokens = await pageTokens(this.env); page = tokens.get(rec.pageId); } catch (e) { return rec.items.some(open) ? this.retry(rec, rec.items.find(open), e, STEP.token) : this.crossWait(rec, e); }
     if (!page) { [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) { x.status = 'failed'; x.error = '找不到粉專 token'; } }); await s.put('rec', rec); return this.schedule(rec); }
 
-    // 先確認貼文已發布（確認過就不再查）
-    if (!rec.published) {
+    // 影片：先確認已發布（確認過就不再查）。排程貼文不先查：直接留，臉書回「找不到物件」才查（notYet）
+    if (!rec.published && rec.kind === 'video') {
       let post;
       try {
         // 影片（tools/fbvideo）是影片物件：欄位叫 published
         post = await graph(this.env, 'GET', '/' + rec.postId, { fields: rec.kind === 'video' ? 'published,scheduled_publish_time' : 'is_published,scheduled_publish_time' }, page.token);
         if (rec.kind === 'video') post.is_published = !!post.published;
       } catch (e) {
-        if (e instanceof GraphError && (e.status === 404 || (e.code === 100 && e.subcode === 33))) {
-          [...rec.items, ...crossOf(rec)].forEach((x) => { if (open(x)) x.status = 'canceled'; });
-          await s.put('rec', rec); return this.schedule(rec);
-        }
+        if (isGone(e)) return this.gone(rec);
         if (!rec.items.some(open)) return this.crossWait(rec, e);
-        // 讀取被擋（權限碼 10／200 系列）：不卡在這步，直接試著留言，以臉書對留言的回應為準
-        if (isReadDenied(e)) post = { is_published: true };
+        // 讀取被擋（權限碼 10／200 系列）：通知系統管理者，不卡在這步，直接試著留言，以臉書對留言的回應為準
+        if (isReadDenied(e)) { await this.readDenied(rec, e); post = { is_published: true }; }
         else return this.retry(rec, rec.items.find(open), e, STEP.published);
       }
       if (!post.is_published) {
@@ -270,7 +356,8 @@ export class FbCommentTimer {
           const head = it.np === 'a' ? npHead(it.message) : '';
           const mine = (d.data || []).find((c) => c.from && String(c.from.id) === rec.pageId && (c.message === it.message || (head && c.message === head)) && !used.has(String(c.id)));
           if (mine) {
-            Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure;
+            Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure; delete it.notYet;
+            rec.published = true;
             if (it.np && !it.preview) {
               if (head && head !== it.message && mine.message === head) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'a'));
               else if (it.np === 'b' || !head || head === it.message) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'b'));   // B，或 A 但沒有可拆的文字（與 postFirstNoPreview 同樣改用 B）
@@ -286,11 +373,14 @@ export class FbCommentTimer {
         if (it.np) { const x = await postFirstNoPreview(this.env, page.token, rec.postId, it.message, it.np); id = x.id; np = { preview: x.preview, ...(x.previewError ? { previewError: x.previewError } : {}) }; }
         else id = await postComment(this.env, page.token, rec.postId, it.message);
         Object.assign(it, { status: 'done', commentId: id }, np);
-        delete it.unsure;
+        delete it.unsure; delete it.notYet;
+        rec.published = true;   // 留得上＝已發布
         await s.put('rec', rec);
         if (!it.np && seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
       } catch (e) {
         // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
+        // 還沒確認發布的排程貼文：留言回「找不到物件」才查貼文狀態（改時間／還沒發布／已刪除）
+        if ((step === STEP.comment || step === STEP.check) && !rec.published && rec.kind !== 'video' && isGone(e)) return this.notYet(rec, page, it, e);
         if (step === STEP.comment) {
           if (e instanceof GraphError && !e.uncertain) { it.status = 'pending'; delete it.unsure; }
           else it.unsure = true;
@@ -350,6 +440,7 @@ export class FbCommentTimer {
     const msg = ((step ? step + '：' : '') + String((e && e.message) || e)).slice(0, 200);
     if (!it) return;
     if (it.status === 'posting') it.unsure = true;   // 標失敗後也記得「可能已留」，按重新留言時先查再留
+    if (!isGone(e)) delete it.notYet;   // 改因別的錯誤失敗：不再算「貼文還沒發布」
     it.attempts = (it.attempts || 0) + 1;
     it.error = msg;
     if (e instanceof GraphError && Number.isInteger(e.code) && e.code > 0) it.ecode = e.code; else delete it.ecode;

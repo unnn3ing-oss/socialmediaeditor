@@ -18,6 +18,8 @@ async function mk(t, handlers) {
   return { f, state, obj, post, env };
 }
 const REC = (at) => ({ pageId: '111', postId: '111_5', message: '看更多新聞內容\nhttps://x', at });
+// 對排程中（還沒發布）的貼文留言：臉書回 (#100) subcode 33
+const NOT_YET = () => Response.json({ error: { code: 100, error_subcode: 33, message: "Unsupported post request. Object with ID '111_5' does not exist, cannot be loaded due to missing permissions" } }, { status: 400 });
 const comments = (f) => f.calls.filter((c) => c.method === 'POST' && /\/comments$/.test(c.path));
 // 留言都結束後：鬧鐘改排 14 天後清除
 const DAY = 86400 * 1000;
@@ -49,31 +51,35 @@ test('到點已發布 → 留言一次、done', async (t) => {
   assert.equal(comments(f).length, 1, '再觸發也不重複留言');
 });
 
-test('到點未發布且臉書時間變了 → 跟著新時間，不留言', async (t) => {
+test('先留言；臉書回 100-33 才查，臉書時間變了 → 跟著新時間、次數歸零、不提醒', async (t) => {
   const newAt = nowSec() + 7200;
-  const { f, state, obj, post } = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: false, scheduled_publish_time: newAt }) });
+  const { f, state, obj, post } = await mk(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => ({ id: '111_5', is_published: false, scheduled_publish_time: newAt }) });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   const s = await post('status');
   assert.equal(s.status, 'pending'); assert.equal(s.at, newAt); assert.equal(s.retimes, 1);
+  assert.equal(s.items[0].attempts, 0); assert.equal(s.alert, null);
   assert.equal(await state.storage.getAlarm(), (newAt + 60) * 1000);
-  assert.equal(comments(f).length, 0);
+  assert.equal(comments(f).length, 1, '先試留一次');
 });
 
 test('臉書時間是 ISO 字串也能比對', async (t) => {
   const newAt = nowSec() + 7200;
-  const { obj, post } = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: false, scheduled_publish_time: new Date(newAt * 1000).toISOString() }) });
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => ({ id: '111_5', is_published: false, scheduled_publish_time: new Date(newAt * 1000).toISOString() }) });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   assert.equal((await post('status')).at, newAt);
 });
 
-test('貼文不存在（HTTP 404）→ canceled', async (t) => {
-  const { f, obj, post } = await mk(t, { 'GET /111_5': () => gErr(100, 404, 'does not exist') });
-  await post('arm', REC(nowSec() - 60));
+test('留言 100-33、查貼文也不存在（HTTP 404）→ canceled，操作紀錄記一筆', async (t) => {
+  const { f, obj, post, env } = await mk(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => gErr(100, 404, 'does not exist') });
+  await post('arm', { ...REC(nowSec() - 60), title: '測試標題' });
   await obj.alarm();
-  assert.equal((await post('status')).status, 'canceled');
-  assert.equal(comments(f).length, 0);
+  const s = await post('status');
+  assert.equal(s.status, 'canceled'); assert.equal(s.alert, null);
+  assert.equal(comments(f).length, 1);
+  const a = env.DB.raw.prepare("SELECT * FROM fb_audit WHERE action = 'post_gone'").all();
+  assert.equal(a.length, 1); assert.equal(a[0].uid, 'SYSTEM'); assert.equal(a[0].page, '111'); assert.equal(a[0].post, '111_5'); assert.match(a[0].detail, /測試標題/);
 });
 
 test('posting 中斷後重跑：臉書上已有相同留言 → done，不再留言', async (t) => {
@@ -89,9 +95,8 @@ test('posting 中斷後重跑：臉書上已有相同留言 → done，不再留
   assert.equal(comments(f).length, 0);
 });
 
-test('一般錯誤重試 30/60/120/240 秒，第 5 次失敗 → failed', async (t) => {
-  const { state, obj, post } = await mk(t, {
-    'GET /111_5': () => ({ id: '111_5', is_published: true }),
+test('一般錯誤重試 30/30/60/240 秒（到點、+30、+60、+120、+360），第 5 次失敗 → failed', async (t) => {
+  const { f, state, obj, post } = await mk(t, {
     'POST /111_5/comments': () => gErr(2, 500, 'temporary'),
     'GET /111_5/comments': () => ({ data: [] })
   });
@@ -103,14 +108,15 @@ test('一般錯誤重試 30/60/120/240 秒，第 5 次失敗 → failed', async 
     gaps.push(Math.round(((await state.storage.getAlarm()) - before) / 1000));
     assert.equal((await post('status')).items[0].status, 'posting');
   }
-  assert.deepEqual(gaps, [30, 60, 120, 240]);
+  assert.deepEqual(gaps, [30, 30, 60, 240]);
   await obj.alarm();
   const s = await post('status');
   assert.equal(s.status, 'failed'); assert.equal(s.attempts, 5); assert.match(s.error, /暫時無法使用/);
+  assert.ok(!f.calls.some((c) => c.method === 'GET' && c.path === '/111_5'), '不是 100-33 不查貼文狀態');
 });
 
 test('限流錯誤 → 立刻 failed', async (t) => {
-  const { obj, post } = await mk(t, { 'GET /111_5': () => gErr(32, 400, 'page rate limit') });
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': () => gErr(32, 400, 'page rate limit') });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   const s = await post('status');
@@ -139,13 +145,16 @@ test('沒有紀錄時 status 回 none、retime／cancel 不出錯', async (t) =>
   assert.equal((await post('cancel')).ok, true);
 });
 
-test('遲遲未發布：超過 20 次 → failed', async (t) => {
-  const { obj, state, post } = await mk(t, { 'GET /111_5': () => ({ is_published: false }) });
-  const at = nowSec() - 60;
-  await post('arm', REC(at));
-  for (let i = 0; i < 21; i++) await obj.alarm();
+test('還沒發布、臉書沒給新時間：照重試，第 4 次（2 分鐘）提醒「貼文還沒發布」，第 5 次 failed', async (t) => {
+  const { obj, state, post } = await mk(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => ({ is_published: false }) });
+  await post('arm', REC(nowSec() - 60));
+  for (let i = 0; i < 3; i++) await obj.alarm();
+  assert.equal((await post('status')).alert, null);
+  await obj.alarm();
+  assert.equal((await post('status')).alert.error, '貼文還沒發布');
+  await obj.alarm();
   const s = await post('status');
-  assert.equal(s.status, 'failed'); assert.match(s.error, /未發布/);
+  assert.equal(s.status, 'failed'); assert.equal(s.alert.error, '貼文還沒發布');
   await assertPurge(state);
 });
 
@@ -165,8 +174,8 @@ test('留言送出後回應遺失：重試前先查，臉書上已有就不再�
   assert.equal(n, 1);
 });
 
-test('code 100 但不是「物件不存在」→ 不當成取消，走重試', async (t) => {
-  const { obj, post } = await mk(t, { 'GET /111_5': () => Response.json({ error: { code: 100, message: 'Tried accessing nonexisting field' } }, { status: 400 }) });
+test('code 100 但不是「物件不存在」→ 不查貼文、不當成取消，走重試', async (t) => {
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': () => Response.json({ error: { code: 100, message: 'Tried accessing nonexisting field' } }, { status: 400 }) });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   const s = await post('status');
@@ -174,8 +183,8 @@ test('code 100 但不是「物件不存在」→ 不當成取消，走重試', a
   assert.equal(s.attempts, 1);
 });
 
-test('code 100 subcode 33（物件不存在）→ canceled', async (t) => {
-  const { obj, post } = await mk(t, { 'GET /111_5': () => Response.json({ error: { code: 100, error_subcode: 33, message: 'does not exist' } }, { status: 400 }) });
+test('留言 100-33、查貼文也 100-33（物件不存在）→ canceled', async (t) => {
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => Response.json({ error: { code: 100, error_subcode: 33, message: 'does not exist' } }, { status: 400 }) });
   await post('arm', REC(nowSec() - 60));
   await obj.alarm();
   assert.equal((await post('status')).status, 'canceled');
@@ -207,7 +216,7 @@ test('多則留言：到點的依序留，沒到的排下一個鬧鐘；全部�
   assert.equal(s.status, 'done');
   assert.deepEqual(comments(f).map((c) => c.body.message), ['看更多\nhttps://x', '第二則', '第三則'], '依序留');
   await assertPurge(state);
-  assert.equal(f.calls.filter((c) => c.method === 'GET' && c.path === '/111_5').length, 1, '確認發布後不再重複查');
+  assert.equal(f.calls.filter((c) => c.method === 'GET' && c.path === '/111_5').length, 0, '排程貼文不先查發布，直接留');
 });
 
 test('多則留言：中間一則失敗重試，不影響已留的；取消後剩下的不留', async (t) => {
@@ -310,7 +319,7 @@ test('錯誤說明標出步驟：確認是否已留被擋（#10）→「確認�
 test('錯誤說明標出步驟：確認發布失敗 →「確認發布：」；留言本身失敗 →「留言：」', async (t) => {
   const deny = () => Response.json({ error: { code: 10, message: 'denied' } }, { status: 400 });
   const a = await mk(t, { 'GET /111_5': () => gErr(2, 500, '(#2) temporary') });
-  await a.post('arm', REC(nowSec() - 60));
+  await a.post('arm', { ...REC(nowSec() - 60), kind: 'video' });   // 只有影片先查發布
   await a.obj.alarm();
   assert.match((await a.post('status')).error, /^確認發布：/);
   a.f.restore();
@@ -364,7 +373,7 @@ test('提醒後自動重試成功：通知消失，錯誤日誌保留並由系�
     'POST /111_5/comments': () => (fail ? gErr(100, 400, 'bad') : { id: 'C1' })
   });
   await post('arm', REC(nowSec() - 60));
-  for (let i = 0; i < 3; i++) await obj.alarm();
+  for (let i = 0; i < 4; i++) await obj.alarm();
   assert.equal(notices(env).length, 1);
   assert.equal(failLogs(env).length, 1);
   fail = false;
@@ -381,7 +390,7 @@ test('通知只放簡短概述；錯誤日誌 detail 放完整說明（含步驟
     'POST /111_5/comments': () => Response.json({ error: { code: 10, message: '(#10) Permission denied' } }, { status: 400 })
   });
   await post('arm', REC(nowSec() - 60));
-  for (let i = 0; i < 3; i++) await obj.alarm();
+  for (let i = 0; i < 4; i++) await obj.alarm();
   assert.equal(notices(env)[0].error, '權限不足');
   assert.equal((await post('status')).alert.error, '權限不足');
   const d = failLogs(env)[0].detail;
@@ -537,25 +546,24 @@ test('多文：cancel 一起取消；非影片不收 cross', async (t) => {
 // ===== 留言失敗提醒（2026-11-22）：第 2 次失敗起紅字＋通知；最後失敗寫錯誤日誌一次；重新留言 =====
 const notices = (env) => { try { return env.DB.raw.prepare('SELECT * FROM fb_notices').all(); } catch { return []; } };
 const failLogs = (env) => env.DB.raw.prepare("SELECT * FROM logs WHERE code LIKE 'comment_failed%'").all();
-async function mkEnvTimer(t, handlers) {
+async function mkEnvTimer(t, handlers, extra = {}) {
   const f = installFetch({ 'GET /me/accounts': () => ACCOUNTS, ...handlers }); t.after(f.restore);
   const { FbCommentTimer } = await lm();
   const state = { storage: fakeStorage() };
-  const env = mkEnv({ FB_USER_TOKEN: 'U' });
+  const env = mkEnv({ FB_USER_TOKEN: 'U', ...extra });
   const obj = new FbCommentTimer(state, env);
   const post = async (action, body) => (await obj.fetch(new Request('https://timer/' + action, { method: 'POST', body: JSON.stringify(body || {}) }))).json();
   return { f, state, obj, post, env };
 }
 
-test('提醒：第 1、2 次失敗不提醒；第 3 次失敗（約 1.5 分鐘）起 alert＋通知＋寫一次錯誤日誌（含粉專 ID 與錯誤碼）', async (t) => {
+test('提醒：第 1～3 次失敗不提醒；第 4 次失敗（2 分鐘）起 alert＋通知＋寫一次錯誤日誌（含粉專 ID 與錯誤碼）', async (t) => {
   const { obj, post, env } = await mkEnvTimer(t, {
     'GET /111_5': () => ({ id: '111_5', is_published: true }),
     'POST /111_5/comments': () => gErr(2, 500, '(#2) temporary'),
     'GET /111_5/comments': () => ({ data: [] })
   });
   await post('arm', REC(nowSec() - 60));
-  await obj.alarm();
-  await obj.alarm();
+  for (let i = 0; i < 3; i++) await obj.alarm();
   assert.equal((await post('status')).alert, null);
   assert.equal(notices(env).length, 0);
   await obj.alarm();
@@ -564,7 +572,7 @@ test('提醒：第 1、2 次失敗不提醒；第 3 次失敗（約 1.5 分鐘�
   const n = notices(env);
   assert.equal(n.length, 1); assert.equal(n[0].post_id, '111_5'); assert.equal(n[0].page, '111'); assert.equal(n[0].kind, 'post'); assert.equal(n[0].failed, 0);
   assert.equal(failLogs(env).length, 1, '跳出提醒就寫錯誤日誌');
-  for (let i = 0; i < 2; i++) await obj.alarm();
+  await obj.alarm();
   assert.equal((await post('status')).alert.failed, true);
   assert.equal(notices(env)[0].failed, 1);
   const logs = failLogs(env);
@@ -720,4 +728,113 @@ test('第 1 則留言移除預覽（np）：A＝先文字再編輯、B＝帶空�
   assert.equal(eds(m.f)[0].body.message, FULL);
   st = await m.post('status');
   assert.deepEqual([st.status, st.items[0].commentId, st.items[0].preview], ['done', 'C9', 'tried']);
+});
+
+// ===== 2026-11-26：先留再查、讀取被拒通知、列表校正 =====
+test('先留言：一次就成功只打留言一次，不查發布狀態', async (t) => {
+  const { f, obj, post } = await mk(t, { 'POST /111_5/comments': () => ({ id: 'C1' }) });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal((await post('status')).status, 'done');
+  const fb = f.calls.filter((c) => c.path.startsWith('/111_5'));
+  assert.deepEqual(fb.map((c) => c.method + ' ' + c.path), ['POST /111_5/comments']);
+});
+
+test('讀取被拒：馬上通知系統管理者＋錯誤紀錄 read_denied（同粉專 24 小時一次）；發文者照 2 分鐘規則', async (t) => {
+  const deny = () => Response.json({ error: { code: 10, message: "(#10) requires 'pages_read_engagement'" } }, { status: 400 });
+  const { obj, post, env } = await mkEnvTimer(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': deny }, { SYS_STAFF_ID: 'SYS1' });
+  await post('arm', { ...REC(nowSec() - 60), pageName: '新聞', title: '標題甲', by: 'A1' });
+  await obj.alarm();
+  const msgs = () => env.DB.raw.prepare('SELECT m.body, t.uid FROM staff_msgs m JOIN staff_msg_to t ON t.msg_id = m.id').all();
+  assert.equal(msgs().length, 1); assert.equal(msgs()[0].uid, 'SYS1'); assert.match(msgs()[0].body, /新聞 讀不到貼文狀態（臉書碼 10）.*標題甲/);
+  assert.equal(env.DB.raw.prepare("SELECT * FROM logs WHERE code = 'read_denied'").all().length, 1);
+  assert.equal(notices(env).length, 0, '發文者還沒通知');
+  for (let i = 0; i < 2; i++) await obj.alarm();
+  assert.equal(msgs().length, 1, '24 小時內不重複');
+  assert.equal(notices(env).length, 0);
+  await obj.alarm();
+  assert.equal(notices(env).length, 1, '第 4 次（2 分鐘）通知發文者');
+  assert.equal(notices(env)[0].error, '貼文還沒發布');
+});
+
+test('列表校正（已排程）：100-33 失敗的貼文，列表看到新時間 → 恢復等待、通知撤掉、改用臉書時間', async (t) => {
+  const { obj, post, env, state } = await mkEnvTimer(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => ({ is_published: false }) });
+  await post('arm', MULTI(nowSec() - 60));
+  for (let i = 0; i < 5; i++) await obj.alarm();
+  let s = await post('status');
+  assert.deepEqual(s.items.map((x) => x.status), ['failed', 'failed', 'failed']);
+  assert.equal(notices(env).length, 1);
+  const newAt = nowSec() + 7200;
+  s = await post('status', { sync: { at: newAt } });
+  assert.deepEqual(s.items.map((x) => x.status), ['pending', 'pending', 'pending']);
+  assert.equal(s.at, newAt); assert.equal(s.alert, null); assert.equal(s.items[0].attempts, 0);
+  assert.equal(notices(env).length, 0, '通知撤掉');
+  assert.equal(await state.storage.getAlarm(), (newAt + 60) * 1000);
+});
+
+test('列表校正（已排程）：時間相同且還在等 → 不動次數；時間不同（改早）→ 跟著改', async (t) => {
+  const { obj, post, state } = await mk(t, { 'POST /111_5/comments': () => gErr(2, 500, 'temporary'), 'GET /111_5/comments': () => ({ data: [] }) });
+  const at = nowSec() + 3600;
+  await post('arm', REC(at));
+  let s = await post('status', { sync: { at } });
+  assert.equal(s.at, at);
+  const rec = await state.storage.get('rec'); rec.items[0].attempts = 2; await state.storage.put('rec', rec);
+  s = await post('status', { sync: { at } });
+  assert.equal(s.items[0].attempts, 2, '同時間不歸零（才不會蓋掉提醒）');
+  const early = nowSec() + 600;
+  s = await post('status', { sync: { at: early } });
+  assert.equal(s.at, early); assert.equal(await state.storage.getAlarm(), (early + 60) * 1000);
+  void obj;
+});
+
+test('列表校正（已發佈）：計時器還在等較晚的時間（臉書改早）→ 當成已發布、馬上留', async (t) => {
+  const { f, obj, post, state } = await mk(t, { 'POST /111_5/comments': () => ({ id: 'C1' }) });
+  await post('arm', REC(nowSec() + 3600));
+  await post('status', { sync: { published: true } });
+  assert.ok((await state.storage.getAlarm()) <= Date.now());
+  await obj.alarm();
+  assert.equal((await post('status')).status, 'done');
+  assert.equal(comments(f).length, 1);
+});
+
+test('列表校正：已發布確認過的、影片、沒紀錄都不動', async (t) => {
+  const { post, state } = await mk(t, {});
+  await post('arm', { ...REC(nowSec() + 3600), published: true });
+  const before = (await state.storage.get('rec')).at;
+  await post('status', { sync: { at: nowSec() + 9999 } });
+  assert.equal((await state.storage.get('rec')).at, before);
+  await post('arm', { ...REC(nowSec() + 3600), kind: 'video' });
+  const vb = (await state.storage.get('rec')).at;
+  await post('status', { sync: { published: true } });
+  assert.equal((await state.storage.get('rec')).at, vb);
+  assert.equal((await state.storage.get('rec')).published, false);
+});
+
+test('工具改時間（retime）也能救回 100-33 失敗的留言', async (t) => {
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': NOT_YET, 'GET /111_5': () => ({ is_published: false }) });
+  await post('arm', REC(nowSec() - 60));
+  for (let i = 0; i < 5; i++) await obj.alarm();
+  assert.equal((await post('status')).status, 'failed');
+  const at = nowSec() + 3600;
+  assert.equal((await post('retime', { at })).ok, true);
+  const s = await post('status');
+  assert.equal(s.status, 'pending'); assert.equal(s.at, at);
+});
+
+test('已發布後留言 100-33（不是還沒發布）：不再查貼文，照一般重試', async (t) => {
+  const { f, obj, post } = await mk(t, { 'POST /111_5/comments': NOT_YET });
+  await post('arm', { ...REC(nowSec() - 60), published: true });
+  await obj.alarm();
+  assert.equal((await post('status')).items[0].attempts, 1);
+  assert.ok(!f.calls.some((c) => c.method === 'GET' && c.path === '/111_5'));
+});
+
+test('先 100-33 後改因別的錯誤失敗：不再顯示「貼文還沒發布」', async (t) => {
+  let n = 0;
+  const { obj, post } = await mk(t, { 'POST /111_5/comments': () => (n++ === 0 ? NOT_YET() : gErr(2, 500, 'temporary')), 'GET /111_5': () => ({ is_published: false }), 'GET /111_5/comments': () => ({ data: [] }) });
+  await post('arm', REC(nowSec() - 60));
+  await obj.alarm();
+  assert.equal((await post('status')).items[0].notYet, true);
+  await obj.alarm();
+  assert.equal((await post('status')).items[0].notYet, undefined);
 });

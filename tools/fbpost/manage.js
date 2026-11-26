@@ -121,24 +121,30 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
       hint(ph === 'more' ? `共 ${all.length} 則，讀取更多中…` : all.length ? `共 ${all.length} 則${e.next ? '（還有更多）' : ''}` : empty);
     },
     // 讀目前粉專。force＝按刷新／自動刷新（成功才換掉快取）；沒 force 且記憶體有就直接顯示
-    async load(force) {
+    // auto＝每 10 分鐘自動刷新：只讀第一批、不顯示骨架；之前讀過更多的，後面那些保留（不重查）、頁碼不跳回
+    async load(force, auto = false) {
       const page = cur(); if (!page) return;
       if (cache.has(page) && !force) { L.render(); return true; }
-      const g = (gen.get(page) || 0) + 1; gen.set(page, g); loading.set(page, 'first');
-      L.render();
+      const old = cache.get(page);
+      const g = (gen.get(page) || 0) + 1; gen.set(page, g);
+      if (!auto) { loading.set(page, 'first'); L.render(); }
       let e;
       try {
         const [d, i] = await Promise.all([fetchBatch(page, null), recIndex()]);
         if (gen.get(page) !== g) return;
         idx = i;
         e = { items: dedupe(d.items), next: d.next || null, batches: 1, at: Date.now(), pageNo: 0 };
+        if (auto && old && old.batches > 1) { e.items = dedupe([...e.items, ...old.items]); e.next = old.next; e.batches = old.batches; }
+        if (auto && old) e.pageNo = old.pageNo || 0;
         cache.set(page, e);
       } catch (err) {
         if (gen.get(page) !== g) return;
         loading.delete(page);
-        if (cur() === page) { L.render(); hint(errText(err), true); }
+        if (auto && old) old.at = Date.now();   // 自動刷新失敗：10 分鐘後再試，不每分鐘重打
+        if (cur() === page) { L.render(); if (!auto) hint(errText(err), true); }
         return false;
       }
+      if (auto) { loading.delete(page); if (cur() === page) L.render(); return true; }
       // 第 1 批先顯示；第 2 批背景接著讀
       if (e.next && e.batches < AUTO_BATCHES) { loading.set(page, 'more'); if (cur() === page) L.render(); return await L.more(page, g); }
       loading.delete(page); if (cur() === page) L.render();
@@ -288,17 +294,22 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
     if (changed) { sched.render(); const n = total(sched); say('schedHint', n ? `共 ${n} 則` : '沒有排程貼文'); }
   }
   setInterval(pruneSched, 60 * 1000);
-  // 已排程每 30 分鐘自動刷新：分頁在背景時先不查，切回來超過 30 分鐘就補查；正在改時間時延後
-  const AUTO_MS = 30 * 60 * 1000;
-  function autoSched() {
-    if (document.visibilityState !== 'visible' || !$('schedPage').value) return;
-    const e = sched.entry();
+  // 已排程、已發佈每 10 分鐘自動刷新（只讀第一批；後端順便校正留言計時器：改時間、提早發布）
+  // 分頁在背景時先不查，切回來超過 10 分鐘就補查；正在改時間時延後
+  const AUTO_MS = 10 * 60 * 1000;
+  function autoList(L, listId) {
+    if (!$(listId === 'schedList' ? 'schedPage' : 'pubPage').value) return;
+    const e = L.entry();
     if (!e || Date.now() - e.at < AUTO_MS) return;
-    if ([...$('schedList').querySelectorAll('.edit')].some((x) => !x.hidden)) return;
-    sched.load(true);
+    if ([...$(listId).querySelectorAll('.edit')].some((x) => !x.hidden)) return;
+    L.load(true, true);
   }
-  setInterval(autoSched, 60 * 1000);
-  document.addEventListener('visibilitychange', autoSched);
+  function autoAll() {
+    if (document.visibilityState !== 'visible') return;
+    autoList(sched, 'schedList'); autoList(pub, 'pubList');
+  }
+  setInterval(autoAll, 60 * 1000);
+  document.addEventListener('visibilitychange', autoAll);
 
   const reloader = (id, L) => async () => {
     const b = $(id); fx.busy(b, '刷新中');

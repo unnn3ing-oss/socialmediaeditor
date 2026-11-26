@@ -1310,27 +1310,32 @@ test('留言失敗：重新留言失敗顯示原因、按鈕可再按；沒有�
   await b.page.close();
 });
 
-test('已排程每 30 分鐘自動刷新；不到 30 分鐘不查；分頁在背景時不查', async () => {
+test('已排程、已發佈每 10 分鐘自動刷新；不到 10 分鐘不查；分頁在背景時不查', async () => {
   const { page, fbCalls } = await newPage('admin');
   await page.clock.install();
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await page.waitForSelector('#fbpostApp:not([hidden])');
   const n = () => fbCalls.filter((p) => p === '/fb/scheduled').length;
+  const m = () => fbCalls.filter((p) => p === '/fb/published').length;
   await page.waitForFunction(() => /共 1 則/.test(document.getElementById('schedHint').textContent));
+  await page.waitForFunction(() => /共 \d+ 則/.test(document.getElementById('pubHint').textContent));
   assert.equal(n(), 1, '開頁自動讀一次');
-  await page.clock.fastForward('29:00');
-  assert.equal(n(), 1);
+  const p0 = m();
+  await page.clock.fastForward('09:00');
+  assert.equal(n(), 1); assert.equal(m(), p0);
   await page.clock.fastForward('02:00');
   await page.waitForFunction(() => /共 1 則/.test(document.getElementById('schedHint').textContent));
-  assert.equal(n(), 2);
-  await page.clock.fastForward('10:00');
+  await page.waitForTimeout(50);
+  assert.equal(n(), 2); assert.equal(m(), p0 + 1, '已發佈也自動刷新');
+  await page.clock.fastForward('05:00');
   assert.equal(n(), 2, '剛查過不再查');
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); });
-  await page.clock.fastForward('40:00');
+  await page.clock.fastForward('20:00');
   assert.equal(n(), 2, '背景不查');
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await page.waitForFunction(() => document.getElementById('schedList').getAttribute('aria-busy') === 'false');
-  assert.equal(n(), 3, '切回來超過 30 分鐘補查');
+  await page.waitForTimeout(50);
+  assert.equal(n(), 3, '切回來超過 10 分鐘補查');
   await page.close();
 });
 
