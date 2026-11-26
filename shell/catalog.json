@@ -79,7 +79,7 @@
       },
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=4daff09ae6"
+      "entry": "tools/fbpost/index.html?v=b6ae27ec02"
     },
     {
       "id": "fbvideo",
@@ -94,7 +94,7 @@
       },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=d3b9dc26d5"
+      "entry": "tools/fbvideo/index.html?v=e15540378c"
     },
     {
       "id": "fbreports",
@@ -109,7 +109,7 @@
       },
       "icon": "tools/fbreports/icon.svg",
       "thumb": "tools/fbreports/thumb.svg",
-      "entry": "tools/fbreports/index.html?v=c65e6aa3af"
+      "entry": "tools/fbreports/index.html?v=b35f95ba99"
     },
     {
       "id": "livereq",

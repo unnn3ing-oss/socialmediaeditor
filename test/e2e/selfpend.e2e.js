@@ -28,8 +28,7 @@ for (const [id, name] of [['fbpost', '排程發布'], ['fbvideo', '影片發布'
     await page.goto(srv.url + `tools/${id}/index.html`);
     await page.waitForSelector('#selfPend:not([hidden])');
     assert.equal(await page.textContent('#selfPendTitle'), '尚未開通' + name);
-    assert.match(await page.textContent('#selfPend'), /你的帳號是自行註冊，還沒有指派權限組，暫時不能使用這個工具。/);
-    assert.match(await page.textContent('#selfPend'), /開通後重新整理這頁就能使用。/);
+    assert.match(await page.textContent('#selfPend'), /帳號尚未指派權限組，請聯絡管理者。/);
     assert.equal(await page.isVisible('#offTitle'), false, '不顯示功能停用');
     if (SHOT && id === 'fbpost') await page.screenshot({ path: path.join(SHOT, 'selfpend-fbpost.png') });
     const before = statusCalls;
