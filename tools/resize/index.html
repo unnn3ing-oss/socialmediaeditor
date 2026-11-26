@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="segmented.css">
 <link rel="stylesheet" href="resize.css">
 <link rel="stylesheet" href="../../ui/fx.css">
+<link rel="stylesheet" href="../../ui/dock.css">
 </head>
 <body>
 <div class="wrap">
@@ -22,11 +23,6 @@
       </div>
       <div class="hint" id="rsHint">輸入想要的寬高，所有照片一起轉換</div>
 
-      <div class="btn-row" style="margin-top:16px; margin-bottom:20px">
-        <button id="rsResetBtn" style="flex:1">全部清除</button>
-        <button class="primary" id="rsDownloadBtn" style="flex:1" disabled title="先加入照片">下載這張</button>
-        <button class="primary" id="rsDownloadAllBtn" style="flex:1 1 100%" hidden>全部下載</button>
-      </div>
 
       <div class="edit-box">
         <div class="field">
@@ -64,7 +60,6 @@
         <div class="wm-empty" id="rsEmpty">上傳或貼上照片，輸入寬高就會顯示轉換後的樣子</div>
         <canvas id="rsCanvas" width="1080" height="1080" hidden></canvas>
       </div>
-      <div class="status" id="rsStatus">請先上傳照片</div>
       <div class="thumbs-shelf" id="rsShelf" hidden>
         <button type="button" class="shelf-nav" id="rsShelfPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
         <div class="batch-thumbs" id="rsThumbs"></div>
@@ -91,6 +86,14 @@
   </div>
 </div>
 
+<!-- 底部工具列（ui/dock.css）：左側狀態｜全部清除｜（全部下載／複製圖片）｜下載這張 -->
+<div class="tool-dock" id="rsDock" role="toolbar" aria-label="下載與清除">
+  <div class="status" id="rsStatus">請先上傳照片</div>
+  <span class="dock-sep" aria-hidden="true"></span>
+  <button id="rsResetBtn">全部清除</button>
+  <button id="rsDownloadAllBtn" hidden>全部下載</button>
+  <button class="primary" id="rsDownloadBtn" disabled title="先加入照片">下載這張</button>
+</div>
 <script src="segmented.js"></script>
 <script type="module" src="tool.js"></script>
 </body>

@@ -1,6 +1,6 @@
 // 圖片套版的排版切換（只管版面，不碰畫圖與輸出）：
 //  - 手機（≤820px）：工具內「編輯／預覽」局部切換（ARIA tabs；用 hidden 切換，共用同一份 DOM，不複製、不重建）
-//  - 手機：「全部下載」「全部清除」放進底部操作列的「更多」；桌面放回縮圖列右側
+//  - 手機：「全部下載」「全部清除」放進底部操作列的「更多」；桌面放進底部浮動工具列
 //  - 回到桌面寬度：兩區都顯示、左右並列
 (function () {
   const mq = window.matchMedia('(max-width: 820px)');
@@ -8,7 +8,7 @@
   const tabs = $('mTabs'), tabEdit = $('tabEdit'), tabPreview = $('tabPreview');
   const panelEdit = $('panelEdit'), panelPreview = $('panelPreview');
   const moreWrap = $('moreWrap'), moreBtn = $('moreBtn'), moreMenu = $('moreMenu');
-  const dlAll = $('batchDownloadAllBtn'), dlReset = $('batchResetBtn'), dlAllSlot = $('dlAllSlot');
+  const dlAll = $('batchDownloadAllBtn'), dlReset = $('batchResetBtn'), dlBtn = $('dlBtn');
   let mode = 'edit';
 
   function setMode(next, { focus = false } = {}) {
@@ -40,10 +40,9 @@
       if (mobile) { panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tab.id); panel.removeAttribute('aria-label'); }
       else { panel.removeAttribute('role'); panel.removeAttribute('aria-labelledby'); panel.setAttribute('aria-label', panel === panelEdit ? '設定' : '預覽'); }
     }
-    // 全部下載、全部清除：手機在「更多」，桌面在縮圖列右側（同一個按鈕，事件不變）
-    const dest = mobile ? moreMenu : dlAllSlot;
-    dest.appendChild(dlAll);
-    dest.appendChild(dlReset);
+    // 全部下載、全部清除：手機在「更多」，桌面在底部工具列「下載這張」左邊（全部清除｜全部下載｜下載這張；同一個按鈕，事件不變）
+    if (mobile) { moreMenu.appendChild(dlAll); moreMenu.appendChild(dlReset); }
+    else { const row = dlBtn.parentElement; row.insertBefore(dlReset, dlBtn); row.insertBefore(dlAll, dlBtn); }
     if (!mobile) closeMore();
     setMode(mode);
   }

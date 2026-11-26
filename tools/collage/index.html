@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="segmented.css">
 <link rel="stylesheet" href="collage.css">
 <link rel="stylesheet" href="../../ui/fx.css">
+<link rel="stylesheet" href="../../ui/dock.css">
 </head>
 <body>
 <div class="wrap">
@@ -22,11 +23,6 @@
       </div>
       <div class="hint" id="cgHint">輸出 1080×1080、300 DPI 的 JPG</div>
 
-      <div class="btn-row" style="margin-top:16px; margin-bottom:20px">
-        <button id="cgResetBtn" style="flex:1">全部清除</button>
-        <button id="cgCopyBtn" style="flex:1" disabled>複製圖片</button>
-        <button class="primary" id="cgDownloadBtn" style="flex:1" disabled>下載這張</button>
-      </div>
 
       <div class="edit-box">
         <div class="field">
@@ -80,7 +76,6 @@
       <div class="canvas-wrap cg-stage" id="cgStage">
         <canvas id="cgCanvas" width="1080" height="1080"></canvas>
       </div>
-      <div class="status" id="cgStatus"></div>
       <div class="hint preview-hint">點格子選取、拖曳調整位置<span class="hint-desk">、滾輪縮放</span><span class="hint-touch">、用「照片縮放」滑桿縮放</span>，雙擊換照片。</div>
 
     </div>
@@ -102,6 +97,14 @@
   </div>
 </div>
 
+<!-- 底部工具列（ui/dock.css）：左側狀態｜全部清除｜（全部下載／複製圖片）｜下載這張 -->
+<div class="tool-dock" id="cgDock" role="toolbar" aria-label="下載與清除">
+  <div class="status" id="cgStatus"></div>
+  <span class="dock-sep" aria-hidden="true"></span>
+  <button id="cgResetBtn">全部清除</button>
+  <button id="cgCopyBtn" disabled>複製圖片</button>
+  <button class="primary" id="cgDownloadBtn" disabled>下載這張</button>
+</div>
 <script src="segmented.js"></script>
 <script type="module" src="tool.js"></script>
 </body>

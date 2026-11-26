@@ -101,3 +101,27 @@ test('沒照片時下載按鈕停用並有原因；批次下載顯示「儲存�
   assert.equal(await f.locator('#wmDownloadBtn').getAttribute('title'), '先加入照片');
   await t.page.close();
 });
+
+test('浮水印／拼圖／尺寸：底部工具列（電腦置中浮動、手機全寬貼底），狀態在左、下載這張在最右', async () => {
+  const cases = [['watermark', 'wmDock', ['wmResetBtn', 'wmDownloadAllBtn', 'wmDownloadBtn']], ['collage', 'cgDock', ['cgResetBtn', 'cgCopyBtn', 'cgDownloadBtn']], ['resize', 'rsDock', ['rsResetBtn', 'rsDownloadAllBtn', 'rsDownloadBtn']]];
+  for (const [id, dock, order] of cases) {
+    for (const vp of [{ width: 1280, height: 800 }, { width: 375, height: 740 }]) {
+      const t = await openTool(browser, srv.url, id, { viewport: vp });
+      await t.frame.waitForSelector('#' + dock);
+      const r = await t.frame.evaluate((d) => {
+        const el = document.getElementById(d), b = el.getBoundingClientRect();
+        return { pos: getComputedStyle(el).position, l: b.left, r: b.right, bottom: b.bottom, vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight,
+          first: el.firstElementChild.classList.contains('status'), btns: [...el.querySelectorAll(':scope > button')].map((x) => x.id), parent: el.parentElement.tagName,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      }, dock);
+      assert.equal(r.pos, 'fixed', id);
+      assert.equal(r.parent, 'BODY', id);
+      assert.ok(r.first, id + '：狀態在最左');
+      assert.deepEqual(r.btns, order, id);
+      assert.equal(r.overflow, 0, id);
+      if (vp.width > 820) assert.ok(Math.abs((r.l + r.r) / 2 - r.vw / 2) < 2 && r.bottom < r.vh, id + '：電腦版置中浮動');
+      else assert.ok(r.l === 0 && Math.abs(r.r - r.vw) < 1 && Math.abs(r.bottom - r.vh) < 1, id + '：手機全寬貼底');
+      await t.page.close();
+    }
+  }
+});

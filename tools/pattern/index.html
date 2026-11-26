@@ -64,13 +64,13 @@
           <button type="button" class="shelf-nav" id="batchThumbsPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
           <div class="batch-thumbs" id="batchThumbs"></div>
           <button type="button" class="shelf-nav" id="batchThumbsNext" aria-label="往右看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button>
-          <!-- 桌面：全部下載、全部清除在縮圖列右側；手機：layout.js 把它們移進「更多」 -->
+          <!-- 全部下載、全部清除：layout.js 桌面移到底部工具列、手機移進「更多」；這裡只是起始位置 -->
           <div class="shelf-act" id="dlAllSlot"><button id="batchDownloadAllBtn" type="button">全部下載</button><button id="batchResetBtn" type="button">全部清除</button></div>
         </div>
       </div>
     </section>
 
-    <!-- 桌面：左設定欄尾端；手機：sticky 在工具內容底部（safe-area 只在這一層處理） -->
+    <!-- 桌面：底部中央浮動工具列；手機：sticky 在工具內容底部（safe-area 只在這一層處理） -->
     <div class="actions" id="actionBar">
       <div class="act-row">
         <button type="button" id="dlBtn" class="primary" disabled>下載這張</button>

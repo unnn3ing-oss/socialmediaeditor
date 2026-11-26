@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="segmented.css">
 <link rel="stylesheet" href="watermark.css">
 <link rel="stylesheet" href="../../ui/fx.css">
+<link rel="stylesheet" href="../../ui/dock.css">
 </head>
 <body>
 <div class="wrap">
@@ -23,11 +24,6 @@
       </div>
       <div class="hint" id="wmPhotoHint">輸出會保持原圖尺寸</div>
 
-      <div class="btn-row" style="margin-top:16px; margin-bottom:20px">
-        <button id="wmResetBtn" style="flex:1">全部清除</button>
-        <button class="primary" id="wmDownloadBtn" style="flex:1" disabled title="先加入照片">下載這張</button>
-        <button class="primary" id="wmDownloadAllBtn" style="flex:1 1 100%" hidden>全部下載</button>
-      </div>
 
       <div class="edit-box">
         <!-- 沒密碼：只有「上傳自己的 Logo」；有密碼：多出公司 Logo（新版／舊版）選項。由 tool.js 依 tb.assets.get 的結果決定 -->
@@ -86,7 +82,6 @@
         <div class="wm-empty" id="wmEmpty">上傳或貼上照片，浮水印會自動疊上去</div>
         <canvas id="wmCanvas" width="1080" height="720" hidden></canvas>
       </div>
-      <div class="status" id="wmStatus">請先上傳照片</div>
       <!-- 展示窗：跟「圖片套版」的批次一樣，多張照片排成一列，點一張就在上面預覽 -->
       <div class="thumbs-shelf" id="wmShelf" hidden>
         <button type="button" class="shelf-nav" id="wmShelfPrev" aria-label="往左看"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 3l-3 3 3 3"/></svg></button>
@@ -114,6 +109,14 @@
   </div>
 </div>
 
+<!-- 底部工具列（ui/dock.css）：左側狀態｜全部清除｜（全部下載／複製圖片）｜下載這張 -->
+<div class="tool-dock" id="wmDock" role="toolbar" aria-label="下載與清除">
+  <div class="status" id="wmStatus">請先上傳照片</div>
+  <span class="dock-sep" aria-hidden="true"></span>
+  <button id="wmResetBtn">全部清除</button>
+  <button id="wmDownloadAllBtn" hidden>全部下載</button>
+  <button class="primary" id="wmDownloadBtn" disabled title="先加入照片">下載這張</button>
+</div>
 <script src="segmented.js"></script>
 <script type="module" src="tool.js"></script>
 </body>

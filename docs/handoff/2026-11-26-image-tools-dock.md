@@ -14,15 +14,15 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `ui/dock.css` | `.tool-dock` 浮動／手機全寬、狀態、分隔線、按鈕尺寸 | ⬜ |
-| `tools/watermark/index.html` | 按鈕列＋`#wmStatus` 搬進 `.tool-dock` | ⬜ |
-| `tools/collage/index.html` | 同上（`#cgStatus`、複製圖片） | ⬜ |
-| `tools/resize/index.html` | 同上（`#rsStatus`） | ⬜ |
-| `tools/pattern/index.html`、`pattern.css`、`layout.js` | 電腦版 `#actionBar` 浮動、全部下載／清除移入、版面高度扣工具列、toast 上移 | ⬜ |
+| `ui/dock.css` | `.tool-dock` 浮動／手機全寬、狀態、分隔線、按鈕尺寸 | ✅ |
+| `tools/watermark/index.html` | 按鈕列＋`#wmStatus` 搬進 `.tool-dock` | ✅ |
+| `tools/collage/index.html` | 同上（`#cgStatus`、複製圖片） | ✅ |
+| `tools/resize/index.html` | 同上（`#rsStatus`） | ✅ |
+| `tools/pattern/index.html`、`pattern.css`、`layout.js` | 電腦版 `#actionBar` 浮動、全部下載／清除移入、版面高度扣工具列、toast 上移 | ✅ |
 
 ## 下一步
-- [ ] 實作上表
-- [ ] 相關 e2e（watermark、collage、resize、pattern、round-close、tool-internal）＋npm test＋build --check
+- [x] 實作上表
+- [x] npm test 831、相關 e2e 72（pattern 桌面版面測試改寫、watermark 加三工具工具列測試）、build --check；獨立審查通過（Minor：窄視窗狀態文字最多 360px，未改）
 - [ ] 截圖（電腦＋手機）給使用者；說「推」才併 main
 
 ## 注意事項

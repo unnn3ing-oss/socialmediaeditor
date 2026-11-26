@@ -1,0 +1,39 @@
+/* 做圖工具底部工具列（浮水印、拼圖、尺寸、圖片套版共用；樣式照 LINE 推播 .dock）
+   電腦：畫面下方中央浮動；手機（≤820px）：全寬固定在最下方，狀態一行、按鈕一列平分。
+   結構：<div class="tool-dock"><div class="status">…</div><span class="dock-sep"></span><button>…</button>…</div> */
+.tool-dock {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 45;
+  display: flex; align-items: center; gap: 10px;
+  width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+  padding: 10px 14px 10px 18px;
+  background: var(--surface, #fff); color: var(--text, #182230);
+  border: 1px solid var(--line, #dce2ea); border-radius: var(--radius-card, 18px);
+  box-shadow: 0 4px 16px rgba(16, 24, 40, .08);
+}
+/* 狀態：放在工具列左側，拿掉原本的膠囊外框（📢 保留） */
+.tool-dock .status {
+  margin: 0; padding: 0 4px 0 0; width: auto; max-width: 360px;
+  border: 0; background: transparent; box-shadow: none;
+  font-size: 14px; line-height: 1.4; color: var(--muted, #526175); text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tool-dock .status:empty { display: none; }
+.dock-sep { flex: 0 0 auto; width: 1px; height: 28px; background: var(--line, #dce2ea); }
+.tool-dock .status:empty + .dock-sep { display: none; }
+.tool-dock > button { flex: 0 0 auto; min-width: 96px; min-height: 44px; margin: 0; white-space: nowrap; }
+.tool-dock > button[hidden] { display: none; }
+/* 工具列不要蓋到頁面最下面的內容 */
+body:has(> .tool-dock) { padding-bottom: 96px; }
+
+@media (max-width: 820px) {
+  .tool-dock {
+    left: 0; right: 0; bottom: 0; transform: none; width: auto; max-width: none;
+    flex-wrap: wrap; gap: 8px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0; border-radius: 0;
+  }
+  .tool-dock .status { flex: 1 1 100%; max-width: none; padding: 0; text-align: center; font-size: 13px; }
+  .dock-sep { display: none; }
+  .tool-dock > button { flex: 1 1 0; min-width: 0; min-height: 48px; padding-left: 8px; padding-right: 8px; }
+  body:has(> .tool-dock) { padding-bottom: 140px; }
+}

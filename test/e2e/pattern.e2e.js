@@ -309,28 +309,30 @@ async function putPhoto(page, frame, title) {
   if (title) await frame.fill('.batch-item-block textarea', title);
 }
 
-test('桌面 1280：設定欄與預覽左右並列，沒有編輯／預覽切換，下載這張在設定欄尾端', async () => {
+test('桌面 1280：設定欄與預覽左右並列，沒有編輯／預覽切換；全部清除｜全部下載｜下載這張在底部中央浮動工具列', async () => {
   const { page, frame } = await openTool(browser, srv.url, 'pattern', mobile(1280, 800));
   await frame.waitForSelector('.batch-item-block');
   const r = await frame.evaluate(() => {
     const b = (id) => document.getElementById(id).getBoundingClientRect();
+    const bar = document.getElementById('actionBar');
     return {
       tabsHidden: document.getElementById('mTabs').hidden,
-      edit: b('panelEdit'), preview: b('panelPreview'), act: b('actionBar'), gen: b('dlBtn'),
-      dlAllInShelf: document.getElementById('dlAllSlot').contains(document.getElementById('batchDownloadAllBtn')),
-      resetInShelf: document.getElementById('dlAllSlot').contains(document.getElementById('batchResetBtn')),
+      edit: b('panelEdit'), preview: b('panelPreview'), act: b('actionBar'),
+      order: [...bar.querySelectorAll('.act-row > button')].map((x) => x.id),
+      fixed: getComputedStyle(bar).position,
       moreHidden: document.getElementById('moreWrap').hidden,
       settingsW: b('panelEdit').width,
+      vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
   assert.ok(r.tabsHidden && r.moreHidden);
   assert.ok(r.edit.right <= r.preview.left, '設定欄在預覽左邊');
   assert.ok(Math.abs(r.settingsW - 340) < 2, `設定欄 340px，實際 ${r.settingsW}`);
-  assert.ok(r.gen.left >= r.edit.left && r.gen.right <= r.edit.right + 1, '下載這張在左設定欄內');
-  assert.ok(r.act.top >= r.edit.bottom - 1, '操作列在設定欄尾端');
-  assert.ok(r.dlAllInShelf, '全部下載在縮圖列右側');
-  assert.ok(r.resetInShelf, '全部清除在縮圖列右側');
+  assert.equal(r.fixed, 'fixed');
+  assert.deepEqual(r.order, ['batchResetBtn', 'batchDownloadAllBtn', 'dlBtn']);
+  assert.ok(Math.abs((r.act.left + r.act.right) / 2 - r.vw / 2) < 2, '工具列水平置中');
+  assert.ok(r.act.bottom <= r.vh && r.act.top >= Math.max(r.edit.bottom, r.preview.bottom) - 1, '工具列在底部、不蓋到設定欄與預覽');
   assert.equal(r.overflow, 0);
   await page.close();
 });
