@@ -1,0 +1,29 @@
+# 做圖工具底部工具列（浮水印、拼圖、尺寸、圖片套版）
+- 狀態：進行中　- 分支：claude/lucid-ride-7o4zf2　- 最後更新：2026-11-26
+- 使用者原始需求：「#2+#8 照圖做，圖片套版也一起改」（設計圖＝2026-11-26 對話中 scratchpad `mock/`，照 LINE 推播底部工具列）
+
+## 已定案的決定
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| 電腦版 | 畫面下方中央浮動工具列（同 LINE 推播 `.dock`）：左側狀態（保留 📢）｜分隔線｜全部清除｜全部下載（拼圖＝複製圖片）｜下載這張（主要） | 使用者看圖同意 |
+| 手機版（≤820px） | 全寬固定底列，狀態一行、按鈕一列平分 | 同上 |
+| 圖片套版 | 電腦版 `#actionBar` 變浮動工具列，「全部下載／全部清除」從縮圖列右側搬進工具列；手機版維持原本底部列＋「更多」 | 使用者要一起改；手機原本就是底部列 |
+| #8 提示 | 三個工具的狀態固定在工具列左側；圖片套版短暫提示（toast）移到工具列上方 | 設計圖 |
+| 共用樣式 | 新檔 `ui/dock.css`（四個工具共用） | 不在三份 base.css 各寫一份 |
+
+## 做法（改哪裡）
+| 檔案 | 內容 | 狀態 |
+|---|---|---|
+| `ui/dock.css` | `.tool-dock` 浮動／手機全寬、狀態、分隔線、按鈕尺寸 | ⬜ |
+| `tools/watermark/index.html` | 按鈕列＋`#wmStatus` 搬進 `.tool-dock` | ⬜ |
+| `tools/collage/index.html` | 同上（`#cgStatus`、複製圖片） | ⬜ |
+| `tools/resize/index.html` | 同上（`#rsStatus`） | ⬜ |
+| `tools/pattern/index.html`、`pattern.css`、`layout.js` | 電腦版 `#actionBar` 浮動、全部下載／清除移入、版面高度扣工具列、toast 上移 | ⬜ |
+
+## 下一步
+- [ ] 實作上表
+- [ ] 相關 e2e（watermark、collage、resize、pattern、round-close、tool-internal）＋npm test＋build --check
+- [ ] 截圖（電腦＋手機）給使用者；說「推」才併 main
+
+## 注意事項
+- 不改 `server/`、不升外掛版號、不動 📢、不改輸出。
