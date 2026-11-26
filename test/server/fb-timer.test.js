@@ -254,10 +254,10 @@ test('多則留言：改時間後全部跟著平移', async (t) => {
   assert.equal(await state.storage.getAlarm(), (at2 + 60) * 1000);
 });
 
-test('arm 驗證：最多 3 則、offset 不可倒退', async (t) => {
+test('arm 驗證：最多 4 則（含警語）、offset 不可倒退', async (t) => {
   const { post } = await mk(t, {});
   const at = nowSec() + 3600;
-  assert.equal((await post('arm', { ...MULTI(at), items: [...MULTI(at).items, { message: 'x', offset: 20 }] })).ok, false);
+  assert.equal((await post('arm', { ...MULTI(at), items: [...MULTI(at).items, { message: 'x', offset: 20 }, { message: 'y', offset: 25 }] })).ok, false);
   assert.equal((await post('arm', { ...MULTI(at), items: [{ message: 'a', offset: 10 }, { message: 'b', offset: 5 }] })).ok, false);
 });
 

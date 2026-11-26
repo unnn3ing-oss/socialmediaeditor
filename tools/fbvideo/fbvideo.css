@@ -252,3 +252,7 @@ main.off { min-height: 100vh; display: flex; align-items: center; justify-conten
 .toast:not([hidden]) { animation: fv-toast .2s ease; }
 @keyframes fv-toast { from { opacity: 0; transform: translate(-50%, 8px); } }
 @media (prefers-reduced-motion: reduce) { .toast:not([hidden]) { animation: none; } }
+
+/* 留言標題列右側「警語 ▾」 */
+.cm-lbl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cm-lbl-row .lbl { margin: 0; }

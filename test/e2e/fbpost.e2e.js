@@ -572,6 +572,38 @@ test('第 2、3 則留言：新增、選活動留言帶入可改、距上一則�
   await page.close();
 });
 
+test('警語留言：選單多選（打勾）、再點拿掉、Esc 關閉；警語框可改；送出帶 warn；清空後消失', async () => {
+  const { page, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.fill('#msg', 'm');
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
+  await page.click(chip(111) + ' .chip-l');
+  assert.equal(await page.isHidden('#warnBox'), true, '沒選警語不顯示警語框');
+  await page.click('#warnBtn');
+  assert.equal(await page.getAttribute('#warnBtn', 'aria-expanded'), 'true');
+  const opt = (w) => `.warn-opt[data-w="${w}"]`;
+  await page.click(opt('💬珍愛生命請撥打1925'));
+  await page.click(opt('▲危險動作，請勿模仿'));
+  assert.equal(await page.getAttribute(opt('💬珍愛生命請撥打1925'), 'aria-checked'), 'true');
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-warn-menu.png') });
+  assert.equal(await page.inputValue('#warnText'), '💬珍愛生命請撥打1925\n▲危險動作，請勿模仿');
+  assert.equal(await page.isVisible('#warnBox'), true);
+  await page.click(opt('▲危險動作，請勿模仿'));
+  assert.equal(await page.inputValue('#warnText'), '💬珍愛生命請撥打1925', '再點一次拿掉');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.isHidden('.warn-menu'), true, 'Esc 關閉選單');
+  assert.equal(await page.isVisible('#postDlg'), true, 'Esc 只關選單，不關新增發文');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'warnBtn', '焦點回按鈕');
+  assert.equal(await page.inputValue('#msg'), 'm', '警語不放進貼文內容');
+  if (SHOT) await page.locator('#warnBox').scrollIntoViewIfNeeded().then(() => page.screenshot({ path: path.join(SHOT, 'fbpost-warn-box.png') }));
+  await withPhoto(page);
+  await page.click('#sendBtn');
+  await page.waitForSelector('#doneList li');
+  assert.equal(/name="warn"\r\n\r\n([^\r]*)\r\n/.exec(api.posts[0])[1], '💬珍愛生命請撥打1925');
+  await page.close();
+});
+
 test('全部成功：跳送出完成，再發一則清空並留在視窗；返回列表關視窗回已排程、不自動查詢', async () => {
   const { page, api, fbCalls, errors } = await newPage('admin');
   await page.goto(srv.url + 'tools/fbpost/index.html');

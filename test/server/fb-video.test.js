@@ -188,6 +188,11 @@ test('驗證：start／publish 表單', async () => {
   assert.equal(parsePublish({ ...p, comments: [{ message: 'a', delay: 0 }, { message: 'b', delay: 3 }] }), null);
   assert.equal(parsePublish({ ...p, comments: [{ message: 'a', delay: 1441 }] }), null);
   assert.equal(parsePublish({ ...p, comments: [1, 2, 3, 4].map(() => ({ message: 'a', delay: 5 })) }), null);
+  // 警語：插在第 1 則之後、同一時間，不佔 3 則名額；沒有留言＝發布後就留
+  assert.deepEqual(parsePublish({ ...p, warn: ' W ', comments: [{ message: 'a', delay: 3 }, { message: 'b', delay: 5 }, { message: 'c', delay: 5 }] }).comments.map((c) => [c.message, c.offset]), [['a', 3], ['W', 3], ['b', 8], ['c', 13]]);
+  assert.deepEqual(parsePublish({ ...p, warn: 'W' }).comments, [{ message: 'W', offset: 0 }]);
+  assert.deepEqual(parsePublish({ ...p, warn: '' }).comments, []);
+  assert.equal(parsePublish({ ...p, warn: 'x'.repeat(2001) }), null);
   const now = nowSec();
   assert.ok(timeOkFor('video', now + 100 * 86400, now));
   assert.ok(!timeOkFor('reel', now + 100 * 86400, now));
