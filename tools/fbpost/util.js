@@ -15,7 +15,7 @@ export const commentState = (c) => {
   if (typeof c === 'string') return '留言：' + (COMMENT[c] || c);
   // 失敗提醒（後端 alert）：第 N 則失敗／重試中，附原因
   if (c.alert) return '留言：' + (c.failed ? '留言失敗' : '留言重試中') + '（第 ' + c.seq + ' 則' + (c.error ? '：' + c.error : '') + '）';
-  const hid = c.hidden === 'hidden' ? '．第 1 則已隱藏' : c.hidden === 'failed' ? '．第 1 則隱藏失敗' : '';
+  const hid = c.preview === 'tried' ? '．第 1 則已試移除預覽' : c.preview === 'failed' ? '．第 1 則移除預覽失敗' : '';
   return '留言：' + (COMMENT[c.status] || c.status || '') + (c.error ? '（' + c.error + '）' : '') + hid;
 };
 

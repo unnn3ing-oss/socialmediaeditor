@@ -452,17 +452,22 @@
           <p class="msg" id="labVMsg" role="status"></p>
         </div>
         <div class="lab-item">
-          <h3>第一則留言發出後隱藏</h3>
-          <p class="hint">啟用後，適用的人在排程發布「留言內容」右側會多一個「隱藏留言」勾選，<b>只對那一次送出有效</b>；勾了，第 1 則留言（看更多新聞內容＋連結）發出後會設成隱藏。臉書是否允許粉專隱藏自己的留言<b>還沒證實</b>，隱藏失敗不影響留言，只會顯示「隱藏失敗」。對象看的是<b>發文的人</b>，約 1 分鐘內生效。</p>
-          <label class="check"><input type="checkbox" id="labHOn"> 啟用</label>
-          <fieldset class="lab-who" id="labHWhoBox">
-            <legend>對象</legend>
-            <label class="check"><input type="radio" name="labHWho" value="all" checked> 全部人</label>
-            <label class="check"><input type="radio" name="labHWho" value="some"> 指定員工</label>
+          <h3>第一則留言移除連結預覽</h3>
+          <p class="hint">啟用後，適用的人在排程發布「留言內容」右側會多一個「移除預覽」勾選，<b>只對那一次送出有效</b>。臉書 API 沒有移除預覽的參數，下面兩種方法都是<b>推測、不一定有效</b>，臉書回成功也不代表預覽消失，請到粉專確認。對象看的是<b>發文的人</b>，約 1 分鐘內生效。</p>
+          <label class="check"><input type="checkbox" id="labPOn"> 啟用</label>
+          <fieldset class="lab-who" id="labPMethodBox">
+            <legend>方法</legend>
+            <label class="check"><input type="radio" name="labPMethod" value="a" checked> A：先留「看更多新聞內容」，再編輯加上連結（編輯失敗時留言只有文字、沒有連結）</label>
+            <label class="check"><input type="radio" name="labPMethod" value="b"> B：留完整內容後，編輯時清空附件</label>
           </fieldset>
-          <div id="labHPeople" class="lab-people" hidden></div>
-          <div class="row"><button class="primary" id="labHSave" type="button" disabled>儲存</button></div>
-          <p class="msg" id="labHMsg" role="status"></p>
+          <fieldset class="lab-who" id="labPWhoBox">
+            <legend>對象</legend>
+            <label class="check"><input type="radio" name="labPWho" value="all" checked> 全部人</label>
+            <label class="check"><input type="radio" name="labPWho" value="some"> 指定員工</label>
+          </fieldset>
+          <div id="labPPeople" class="lab-people" hidden></div>
+          <div class="row"><button class="primary" id="labPSave" type="button" disabled>儲存</button></div>
+          <p class="msg" id="labPMsg" role="status"></p>
         </div>
       </section>
 

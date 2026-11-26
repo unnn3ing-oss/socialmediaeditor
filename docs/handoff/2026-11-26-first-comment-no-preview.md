@@ -15,11 +15,15 @@
 ## 做法
 | 檔案 | 狀態 |
 |---|---|
-| `server/fb/comment.js`（取代 hide 段） | ⬜ |
-| `server/fb/post.js`、`timer.js`（含 A 法 recheck 比對只有文字的留言）、`manage.js`、`index.js`、`server/core/adminperm.js` | ⬜ |
-| `tools/fbpost/`（index、app、send、util、css） | ⬜ |
-| `admin/`（labH → labP＋方法選擇） | ⬜ |
-| 測試 | ⬜ |
+| `server/fb/comment.js`（取代 hide 段） | ✅ |
+| `server/fb/post.js`、`timer.js`（含 A 法 recheck 比對只有文字的留言）、`manage.js`、`index.js`、`server/core/adminperm.js` | ✅ |
+| `tools/fbpost/`（index、app、send、util、css） | ✅ |
+| `admin/`（labH → labP＋方法選擇） | ✅ |
+| 測試 | ✅ |
 
 ## 注意
 臉書回成功不代表預覽消失，要使用者目視。後端需重新部署（正式＋測試）。
+
+## 進度
+- [x] 實作與測試（npm test 831、全部 e2e 313、build --check）
+- [ ] 獨立審查 → 給使用者看、等「推」

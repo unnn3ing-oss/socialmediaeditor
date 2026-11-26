@@ -688,21 +688,36 @@ test('第 1 則留言再編輯一次：開關打開才編輯（相同內容）�
   assert.equal(edits(m.f).length, 1, '發文者在名單');
 });
 
-test('第 1 則留言隱藏（hide）：留成功後隱藏一次並記在 items；失敗記 failed 不重試；沒帶 hide 不隱藏', async (t) => {
-  const items = (hide) => [{ message: '看更多新聞內容\nhttps://x', offset: 0, n: 1, ...(hide ? { hide: true } : {}) }, { message: '第二則', offset: 5, n: 2, hide: true }];
-  const hides = (f) => f.calls.filter((c) => c.method === 'POST' && c.path === '/C9');
+test('第 1 則留言移除預覽（np）：A＝先文字再編輯、B＝帶空附件；結果記在 items；A 中斷後查到只有文字的留言會補編輯、不重留', async (t) => {
+  const FULL = '看更多新聞內容\nhttps://x';
+  const items = (np) => [{ message: FULL, offset: 0, n: 1, ...(np ? { np } : {}) }];
+  const posts = (f) => comments(f).map((c) => c.body.message);
+  const eds = (f) => f.calls.filter((c) => c.method === 'POST' && c.path === '/C9');
+  // A
   let m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
-  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(true) }); await m.obj.alarm();
-  assert.equal(hides(m.f).length, 1);
-  assert.equal(hides(m.f)[0].body.is_hidden, 'true');
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items('a') }); await m.obj.alarm();
+  assert.deepEqual(posts(m.f), ['看更多新聞內容']);
+  assert.equal(eds(m.f)[0].body.message, FULL);
   let st = await m.post('status');
-  assert.equal(st.items[0].hidden, 'hidden');
-  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => gErr(10, 'nope') });
-  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(true).slice(0, 1) }); await m.obj.alarm(); await m.obj.alarm();
-  st = await m.post('status');
-  assert.deepEqual([st.status, st.items[0].hidden], ['done', 'failed']);
-  assert.equal(hides(m.f).length, 1, '失敗不重試');
+  assert.deepEqual([st.status, st.items[0].preview], ['done', 'tried']);
+  // B
   m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
-  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(false).slice(0, 1) }); await m.obj.alarm();
-  assert.equal(hides(m.f).length, 0);
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items('b') }); await m.obj.alarm();
+  assert.deepEqual(posts(m.f), [FULL]);
+  assert.equal(eds(m.f)[0].body.attachment_share_url, '');
+  // 沒帶 np：照舊
+  m = await mk(t, { 'GET /111_5': () => ({ id: '111_5', is_published: true }), 'POST /111_5/comments': () => ({ id: 'C9' }), 'POST /C9': () => ({ success: true }) });
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, items: items(null) }); await m.obj.alarm();
+  assert.equal(eds(m.f).length, 0);
+  // A 中斷（上次可能已留前半）：查到只有文字的留言 → 不重留，補編輯
+  m = await mk(t, {
+    'GET /111_5': () => ({ id: '111_5', is_published: true }),
+    'GET /111_5/comments': () => ({ data: [{ id: 'C9', from: { id: '111' }, message: '看更多新聞內容' }] }),
+    'POST /111_5/comments': () => ({ id: 'C8' }), 'POST /C9': () => ({ success: true })
+  });
+  await m.post('arm', { pageId: '111', postId: '111_5', at: nowSec() - 60, published: true, items: [{ ...items('a')[0], recheck: true }] }); await m.obj.alarm();
+  assert.equal(comments(m.f).length, 0, '不重複留言');
+  assert.equal(eds(m.f)[0].body.message, FULL);
+  st = await m.post('status');
+  assert.deepEqual([st.status, st.items[0].commentId, st.items[0].preview], ['done', 'C9', 'tried']);
 });

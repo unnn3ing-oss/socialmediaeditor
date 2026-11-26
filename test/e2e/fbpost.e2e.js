@@ -1530,38 +1530,38 @@ test('控制列在分頁右邊同一列；窄版與側邊欄換到下一行、�
   await phone.page.close();
 });
 
-test('第一則留言隱藏（實驗功能）：/fb/me 沒開不顯示；開了在「留言內容」右側，勾了才送 hideFirst、結果顯示已隱藏、送出完成恢復不勾', async () => {
+test('第一則留言移除預覽（實驗功能）：/fb/me 沒開不顯示；開了在「留言內容」右側，勾了才送 noPreview、結果顯示已試移除預覽、送出完成恢復不勾', async () => {
   // 沒開：不顯示、不送
-  let t = await newPage('admin', undefined, { me: { admin: true, perms: [], hideComment: false } });
+  let t = await newPage('admin', undefined, { me: { admin: true, perms: [], noPreview: false } });
   await t.page.goto(srv.url + 'tools/fbpost/index.html');
   await openPost(t.page);
-  assert.equal(await t.page.isVisible('#hideChk'), false);
+  assert.equal(await t.page.isVisible('#npChk'), false);
   await t.page.close();
   // 開了
   const { page, api, errors } = await newPage('admin', undefined, {
-    me: { admin: true, perms: [], hideComment: true },
-    post: (targets, body) => ({ results: targets.map((x) => ({ page: x.page, ok: true, postId: x.page + '_9', scheduled: false, comment: 'done', ...(/name="hideFirst"/.test(body) ? { hidden: 'hidden' } : {}) })) })
+    me: { admin: true, perms: [], noPreview: true },
+    post: (targets, body) => ({ results: targets.map((x) => ({ page: x.page, ok: true, postId: x.page + '_9', scheduled: false, comment: 'done', ...(/name="noPreview"/.test(body) ? { preview: 'tried' } : {}) })) })
   });
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await openPost(page);
-  await page.waitForSelector('#hideChk:not([hidden])');
-  const lbl = await page.locator('label[for=lead]').boundingBox(), chk = await page.locator('#hideChk').boundingBox();
+  await page.waitForSelector('#npChk:not([hidden])');
+  const lbl = await page.locator('label[for=lead]').boundingBox(), chk = await page.locator('#npChk').boundingBox();
   assert.ok(chk.x > lbl.x && Math.abs((chk.y + chk.height / 2) - (lbl.y + lbl.height / 2)) < 8, '在留言內容標題右側同一列');
-  assert.equal(await page.isChecked('#hideFirst'), false, '預設不勾');
-  assert.equal(await page.isVisible('#hideNote'), false);
-  await page.check('#hideFirst');
-  assert.equal(await page.isVisible('#hideNote'), true);
-  if (SHOT) await page.locator('.lbl-row').screenshot({ path: path.join(SHOT, 'fbpost-hide-chk.png') });
+  assert.equal(await page.isChecked('#noPreview'), false, '預設不勾');
+  assert.equal(await page.isVisible('#npNote'), false);
+  await page.check('#noPreview');
+  assert.equal(await page.isVisible('#npNote'), true);
+  if (SHOT) await page.locator('.lbl-row').screenshot({ path: path.join(SHOT, 'fbpost-np-chk.png') });
   await page.fill('#link', 'https://news.tvbs.com.tw/life/1');
   await page.fill('#msg', '第一則');
   await withPhoto(page);
   await page.click(chip(111) + ' .chip-l');
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
-  assert.match(api.posts[0], /name="hideFirst"\r\n\r\n1\r\n/);
-  assert.match(await page.textContent('#doneList'), /第 1 則已隱藏/);
-  assert.equal(await page.isChecked('#hideFirst'), false, '送出完成恢復不勾');
-  assert.equal(await page.isVisible('#hideNote'), false);
+  assert.match(api.posts[0], /name="noPreview"\r\n\r\n1\r\n/);
+  assert.match(await page.textContent('#doneList'), /第 1 則已試移除預覽/);
+  assert.equal(await page.isChecked('#noPreview'), false, '送出完成恢復不勾');
+  assert.equal(await page.isVisible('#npNote'), false);
   await page.click('#doneAgain');
   // 沒勾：不送
   await page.fill('#link', 'https://news.tvbs.com.tw/life/2');
@@ -1570,17 +1570,17 @@ test('第一則留言隱藏（實驗功能）：/fb/me 沒開不顯示；開了�
   await page.click(chip(111) + ' .chip-l');
   await page.click('#sendBtn');
   await page.waitForSelector('#doneDlg[open]');
-  assert.doesNotMatch(api.posts[1], /name="hideFirst"/);
+  assert.doesNotMatch(api.posts[1], /name="noPreview"/);
   assert.deepEqual(errors, []);
   await page.close();
 });
 
-test('已排程／已發佈列表：第 1 則留言隱藏結果接在留言狀態後面', async () => {
-  const { page } = await newPage('admin', undefined, { pub: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: null, comment: { status: 'done', hidden: 'hidden' } }, { id: '111_6', message: '另一則', time: new Date().toISOString(), picture: null, url: null, comment: { status: 'done', hidden: 'failed' } }] });
+test('已排程／已發佈列表：第 1 則留言移除預覽結果接在留言狀態後面', async () => {
+  const { page } = await newPage('admin', undefined, { pub: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: null, comment: { status: 'done', preview: 'tried' } }, { id: '111_6', message: '另一則', time: new Date().toISOString(), picture: null, url: null, comment: { status: 'done', preview: 'failed' } }] });
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await page.click('#tabs [data-tab=pub]');
   await page.waitForSelector('#tab-pub li[data-id="111_6"]');
-  assert.match(await page.textContent('#tab-pub li[data-id="111_5"] .cm'), /已留言．第 1 則已隱藏/);
-  assert.match(await page.textContent('#tab-pub li[data-id="111_6"] .cm'), /第 1 則隱藏失敗/);
+  assert.match(await page.textContent('#tab-pub li[data-id="111_5"] .cm'), /已留言．第 1 則已試移除預覽/);
+  assert.match(await page.textContent('#tab-pub li[data-id="111_6"] .cm'), /第 1 則移除預覽失敗/);
   await page.close();
 });
