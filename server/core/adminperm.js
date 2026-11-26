@@ -12,6 +12,7 @@ import { cardsOf, dashOf } from './staff.js';
 // 完整比對；順序：staff-groups 在 staff 前
 export const ROUTES = [
   [/^\/admin\/dash\/config$/, 'dashcfg'],
+  [/^\/admin\/site\/vis$/, 'toolvis'],
   [/^\/admin\/fb\/access$/, 'access'],
   [/^\/admin\/fb\/profiles(\/p[0-9a-f]{1,8}(\/activate)?)?$/, 'profiles'],
   [/^\/admin\/fb\/(status|token|app|refresh)$/, 'fbconn'],

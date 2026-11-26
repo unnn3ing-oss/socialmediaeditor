@@ -100,7 +100,7 @@ if (window.top !== window.self) {
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
-  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; labLoaded = false; }
+  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; labLoaded = false; tvLoaded = false; }
   // 用目前的 token 讀身分；成功就進入管理頁
   function enter(msgEl) {
     return api('/admin/me').then(function (res) {
@@ -1586,6 +1586,31 @@ if (window.top !== window.self) {
   var labLoads = [makeLab('lab', '/admin/fb/comment-opts', 'edit'), makeLab('labV', '/admin/fb/video-opts', 'stream')];
   // 依序讀：權杖過期時只彈一次（第一個讀到 unauthorized 就停）
   function labLoad() { labLoaded = true; return labLoads.reduce(function (p, f) { return p.then(function () { if (labLoaded) return f(); }); }, Promise.resolve()); }
+  // ---- 進階設定「未登入時隱藏的工具」（GET／POST /admin/site/vis，只有已解鎖系統管理者）；工具清單來自網站的 shell/catalog.json ----
+  var tvLoaded = false;
+  function tvLoad() {
+    tvLoaded = true; $('tvSave').disabled = true; say($('tvMsg'), '讀取中…');
+    Promise.all([api('/admin/site/vis'), fetch('../shell/catalog.json').then(function (r) { return r.json(); })]).then(function (x) {
+      var res = x[0], tools = (x[1] && x[1].tools) || [];
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      $('tvOn').checked = !!res.data.on;
+      var box = $('tvList'); box.textContent = '';
+      tools.forEach(function (t) {
+        var l = document.createElement('label'), c = document.createElement('input');
+        c.type = 'checkbox'; c.value = t.id; c.checked = res.data.hide.indexOf(t.id) >= 0;
+        l.appendChild(c); l.appendChild(document.createTextNode(t.name + (t.group ? '（' + t.group + '）' : ''))); box.appendChild(l);
+      });
+      $('tvSave').disabled = false; say($('tvMsg'), '');
+    }).catch(function (e) { tvLoaded = false; say($('tvMsg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請切換分類再回來。', 'err'); });
+  }
+  $('tvSave').onclick = function () {
+    var hide = Array.prototype.filter.call($('tvList').querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+    fxStart($('tvSave'), '儲存中'); say($('tvMsg'), '儲存中…');
+    api('/admin/site/vis', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: $('tvOn').checked, hide: hide }) }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      say($('tvMsg'), '已儲存，網站約 1 分鐘內生效（重新整理）。', 'good');
+    }).catch(function (e) { say($('tvMsg'), '儲存失敗' + (e && e.message ? '：' + e.message : ''), 'err'); }).then(function () { fxEnd($('tvSave'), $('tvMsg'), '已儲存'); });
+  };
   // ---- 進階設定「儀表板顯示項目」（GET／POST /admin/dash/config，只有已解鎖系統管理者）----
   var dcLoaded = false;
   function dcLoad() {
@@ -1620,7 +1645,7 @@ if (window.top !== window.self) {
     people: [['online', '目前在線', 'olCard'], ['msg', '發送通知', 'msCard'], ['staff', '授權名單', 'sfCard']],
     conn: [['fb', '臉書粉專連線狀態', 'fsCard'], ['rd', 'Rundown 連線', 'rdCard'], ['usage', '速率限制', 'usCard']],
     rec: [['audit', '操作紀錄', 'auCard'], ['logs', '錯誤紀錄', 'lgCard']],
-    adv: [['access', '排程發布', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
+    adv: [['access', '排程發布', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['toolvis', '未登入隱藏工具', 'tvCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
   };
   var curSub = {};   // 每個分類目前的功能
   var assetsLoaded = false;
@@ -1697,6 +1722,7 @@ if (window.top !== window.self) {
     if (id === 'assets' && !assetsLoaded && token && can('assets')) { assetsLoaded = true; load(); }
     if (id === 'home' && !dashLoaded && token && me && me.dash && me.dash.length) dashLoad(false);
     if (id === 'adv' && !dcLoaded && token && can('dashcfg')) dcLoad();
+    if (id === 'adv' && !tvLoaded && token && can('toolvis')) tvLoad();
     if (id === 'adv' && !labLoaded && token && can('labs')) labLoad();
   }
   function showHash() { var h = parseHash(); showTab(h.tab, false, h.sub); }

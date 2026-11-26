@@ -20,14 +20,15 @@
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
 | 0 `server/fb/video.js`、`tools/fbvideo/app.js`、css、測試 | 送出紀錄連結 | ✅ |
-| 1 `server/core/sitevis.js`（新）、`server/index.js`、`server/core/admin.js`、`levels.js`、`adminperm.js` | 設定與路由 | ⬜ |
-| 1 `shell/main.js` | 過濾＋跳登入框 | ⬜ |
-| 1 `admin/index.html`、`admin/admin.js` | 進階設定卡片 | ⬜ |
+| 1 `server/core/sitevis.js`（新）、`server/index.js`、`levels.js`、`adminperm.js` | 設定與路由（卡片 toolvis） | ✅ |
+| 1 `shell/main.js` | 過濾＋跳登入框（`/site/vis` 最多等 1.5 秒；有存憑證確認中先全部顯示） | ✅ |
+| 1 `admin/index.html`、`admin/admin.js` | 進階設定卡片 `tvCard`（進分類自動讀取，同儀表板卡片） | ✅ |
 | 2 `tools/fbvideo/app.js`、css | 收合卡片 | ⬜ |
 | 3 後端計時器、`server/fb/index.js` comment-opts、前端 fbpost、管理頁 labs | 隱藏留言 | ⬜ |
 
 ## 下一步
-- [ ] 1 → 2 → 3，各自測試，最後獨立審查，給使用者看，等「推」
+- [x] 1（測試：`test/server/sitevis.test.js`、`test/e2e/toolvis.e2e.js`、admin e2e 一項）
+- [ ] 2 → 3，各自測試，最後獨立審查，給使用者看，等「推」
 
 ## 測試
 `npm test`、相關 e2e（shell／company／admin／fbvideo／fbpost）、`node build.js --check`

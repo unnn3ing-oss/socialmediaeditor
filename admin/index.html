@@ -412,6 +412,16 @@
         <p class="msg" id="dcMsg" role="status"></p>
       </section>
 
+      <section class="card" id="tvCard" data-card="toolvis">
+        <h2>未登入時隱藏的工具</h2>
+        <p>啟用後，勾選的工具在<b>沒登入</b>時不會出現在網站首頁與上方選單；登入後立即出現。直接開工具網址時照樣打開並跳出登入框。只影響顯示，工具的權限仍由後端檢查。</p>
+        <label class="check"><input type="checkbox" id="tvOn"> 啟用（關閉＝所有人都看得到全部工具）</label>
+        <p class="hint">沒登入時隱藏：</p>
+        <div class="dc-list" id="tvList"></div>
+        <div class="row"><button class="primary" id="tvSave" type="button" disabled>儲存</button></div>
+        <p class="msg" id="tvMsg" role="status"></p>
+      </section>
+
       <section class="card" id="labCard" data-card="labs">
         <h2>實驗功能</h2>
         <p>還沒確認有效的功能，可以只開給指定的員工試用。</p>

@@ -13,14 +13,16 @@ import { cleanupSends } from './fb/sends.js';
 import { cleanupNotices } from './fb/notices.js';
 import { adminStaff, cleanupAudit } from './core/staff.js';
 import { adminMsgs, cleanupMsgs } from './core/msgs.js';
+import { handleSiteVis, adminSiteVis } from './core/sitevis.js';
 
-adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff, adminMsgs);
+adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff, adminMsgs, adminSiteVis);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 
 // 依序嘗試各模組；模組不處理就回 null
 const modules = [
   (req, env, ctx, path) => handleAuth(req, env, path),
+  (req, env, ctx, path) => handleSiteVis(req, env, path),
   (req, env, ctx, path) => handleAssets(req, env, path),
   (req, env, ctx, path) => handleLogs(req, env, path),
   (req, env, ctx, path) => handleFetch(req, env, path),
