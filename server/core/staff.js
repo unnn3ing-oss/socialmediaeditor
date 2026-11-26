@@ -59,6 +59,7 @@ export const MAX_CONTACT = 30;
 const CONTACT_RE = /^[0-9#+\-() \u3000（）]*$/;
 export const cleanContact = (v) => { if (typeof v !== 'string') return null; const s = v.trim(); return [...s].length <= MAX_CONTACT && CONTACT_RE.test(s) ? s : null; };
 export const MAX_STAFF = 500;
+export const MAX_PENDING = 50;   // 自行註冊、還沒指派權限組的人最多幾位（避免換 IP 塞滿名單）
 export const MAX_GROUPS = 20;
 export const AUDIT_KEEP_DAYS = 90;
 export const MAX_AUDIT = 500;
@@ -247,12 +248,12 @@ async function resetPassword(env, id, bump = true) {
 }
 
 // 自行註冊（selfreg.js 設定）：只有完全不存在的編號能註冊；grp=0（沒有權限組）、發 10 分鐘一次性密碼（存在設定碼欄位）
-//   回 { code, exp }；已存在（含停用、系統管理者）或名單已滿回 null
+//   回 { code, exp }；名單或待指派已滿回 { full:true }；已存在（含停用、系統管理者）回 null
 export async function registerStaff(env, id, name) {
   await ensureStaff(env);
   if (!id || id === sysId(env)) return null;
-  const n = await first(env, 'SELECT COUNT(*) AS n FROM staff');
-  if (n && n.n >= MAX_STAFF) return null;
+  const n = await first(env, 'SELECT COUNT(*) AS n, SUM(CASE WHEN grp = 0 THEN 1 ELSE 0 END) AS self FROM staff');
+  if (n && (n.n >= MAX_STAFF || Number(n.self) >= MAX_PENDING)) return { full: true };
   const now = Date.now(), code = newSetupCode(), exp = now + REG_MS;
   const r = await run(env, 'INSERT OR IGNORE INTO staff (id, name, grp, contact, level, enabled, created, updated, setup_hash, setup_exp) VALUES (?, ?, 0, \'\', \'user\', 1, ?, ?, ?, ?)',
     id, name, now, now, await codeHash(env.SESSION_SECRET, id, code), exp);

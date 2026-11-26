@@ -71,6 +71,14 @@ test('註冊檢查：兩次編號不同、姓名、已存在／停用／系統�
   assert.deepEqual((await auth(env, { staffId: 'C1' })).body.detail, { register: false });
 });
 
+test('待指派的註冊帳號超過上限：reg_full', async () => {
+  const env = mkEnv();
+  const { MAX_PENDING } = await import('../../server/core/staff.js');
+  for (let i = 0; i < MAX_PENDING; i++) assert.ok((await reg(env, 'P' + i, '甲', 'P' + i, '9.9.' + i + '.1')).body.ok);
+  const r = await reg(env, 'PX', '甲', 'PX', '9.9.9.9');
+  assert.equal(r.body.code, 'reg_full'); assert.equal(r.status, 503);
+});
+
 test('一次性密碼 10 分鐘過期：setup_expired，要管理者重置', async (t) => {
   const env = mkEnv();
   const r = await reg(env, 'E1');

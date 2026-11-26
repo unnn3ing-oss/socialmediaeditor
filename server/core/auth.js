@@ -145,6 +145,7 @@ async function selfRegister(request, env, body) {
   if (!name || [...name].length > MAX_NAME) return fail(request, env, 'bad_request', '姓名必填，最多 ' + MAX_NAME + ' 字。');
   if (!(await takeRegSlot(env, request))) return fail(request, env, 'reg_limit');
   const r = await registerStaff(env, id, name).catch(() => null);
+  if (r && r.full) return fail(request, env, 'reg_full');
   if (!r) { await sleep(failDelay(env)); return fail(request, env, 'reg_taken'); }
   return ok(request, env, { staffId: id, code: r.code, exp: r.exp });
 }

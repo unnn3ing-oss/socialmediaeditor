@@ -1,5 +1,5 @@
 # 登入時自行註冊（員工編號＋姓名 → 10 分鐘一次性密碼）
-- 狀態：進行中　- 分支：claude/tender-einstein-shzdha　- 最後更新：2026-11-26
+- 狀態：已完成（已併入 main）　- 分支：claude/tender-einstein-shzdha　- 最後更新：2026-11-26
 - 使用者原始需求：「登入時如果沒查到已有的員工編號，則多增加『註冊』，並須填寫『員工編號/姓名』，完成後回傳10分鐘的『一次性密碼』。」「按送出時需要再次輸入員工編號確認。」「方案 B，但可解鎖常用功能（進階設定可調整），先撇除排程發布相關的」「馬上設定自己的」
 
 ## 已定案的決定
@@ -32,11 +32,12 @@
 - [x] 後端＋單元測試
 - [x] 前端登入框＋e2e
 - [x] 管理頁＋e2e
-- [ ] 獨立審查、全部 e2e
-- [ ] 給使用者截圖確認 → 說「推」才併入 main（同時更新 CLAUDE.md 目前進度）
+- [x] 獨立審查（修：`fbAccess` 擋 self 的唯讀臉書路由）、全部 e2e 319
+- [x] 待指派上限 50（`reg_full`）、管理頁提醒核對本人
+- [x] 使用者說「完成後直接先推」→ 併入 main
 
 ## 測試
-`npm test`（836 過）、`node build.js --check`、`node --test test/e2e/company.e2e.js test/e2e/admin.e2e.js`
+`npm test`（837 過）、`node build.js --check`、`node --test test/e2e/company.e2e.js test/e2e/admin.e2e.js`
 
 ## 注意事項
 - 後端需重新部署（正式＋測試），不用手動 SQL。外掛不升版號。
