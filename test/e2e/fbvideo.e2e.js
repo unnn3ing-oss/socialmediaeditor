@@ -80,6 +80,7 @@ async function newPage(mode = 'admin', viewport = { width: 1280, height: 900 }, 
       return json(u ? view(b.uploadId) : { next: null, jobs: [] });
     }
     if (p === '/fb/video/status') { const id = url.searchParams.get('u'); for (const j of Object.values(ups.get(id).pages)) if (j.state === 'processing') j.state = 'published'; return json(view(id)); }
+    if (p === '/fb/video/jobs' && opts.jobs) return json(opts.jobs);
     if (p === '/fb/video/jobs') return json([...ups.keys()].flatMap((id) => view(id).jobs.filter((j) => j.sent)));
     if (p === '/rundown') { const b = JSON.parse(req.postData()); api.rundown.push(b); return json({ results: b.entries.map((e) => ({ ok: true, page: e.page, time: e.time })) }); }
     return r.fulfill({ status: 404, headers: CORS, json: { ok: false, code: 'not_found' } });
@@ -573,6 +574,28 @@ test('停止上傳：停止請求還沒回來時分段剛好傳完，網頁不�
   await page.waitForSelector(ED + ' .up-msg:has-text("已停止上傳")');
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(api.chunk.length, n, '停止後不再送下一段');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('送出紀錄：有貼文的狀態附「開啟貼文」連結（含多文目標），失敗不附', async () => {
+  const jobs = [
+    { uploadId: 'u1', page: '111', kind: 'video', name: 'a.mp4', size: 4, state: 'published', videoId: '9001', sent: true, at: null, title: 'A', error: '', created: Date.now(), cross: [{ page: '222', status: 'done', error: '', videoId: '9002' }, { page: '333', status: 'failed', error: '不行' }] },
+    { uploadId: 'u1', page: '444', kind: 'video', name: 'a.mp4', size: 4, state: 'failed', videoId: '9003', sent: true, at: null, title: 'A', error: '錯', created: Date.now(), cross: [] },
+    { uploadId: 'u2', page: '111', kind: 'reel', name: 'b.mp4', size: 4, state: 'scheduled', videoId: '9004', sent: true, at: Math.floor(Date.now() / 1000) + 3600, title: 'B', error: '', created: Date.now(), cross: [] }
+  ];
+  const { page, errors } = await newPage('admin', undefined, { jobs });
+  await page.waitForSelector('#app:not([hidden])');
+  await page.click('[data-tab="log"]');
+  await page.click('#logReload');
+  await page.waitForSelector('#logList .log-open');
+  const links = await page.$$eval('#logList .log-open', (as) => as.map((a) => [a.href, a.target, a.title !== '']));
+  if (SHOT) await page.locator('#tab-log').screenshot({ path: SHOT + '/fbvideo-log-links.png' });
+  assert.deepEqual(links.sort(), [
+    ['https://www.facebook.com/9001', '_blank', false],
+    ['https://www.facebook.com/9002', '_blank', false],
+    ['https://www.facebook.com/9004', '_blank', true]
+  ]);
   assert.deepEqual(errors, []);
   await page.close();
 });

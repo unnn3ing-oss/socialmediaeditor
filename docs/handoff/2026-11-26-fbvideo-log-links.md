@@ -13,13 +13,14 @@
 ## 做法（改哪裡）
 | 檔案 | 內容 | 狀態 |
 |---|---|---|
-| `server/fb/video.js` | `refreshStatus` 多文帶 videoId；`view()` cross 回 videoId | ⬜ |
-| `tools/fbvideo/app.js` `loadLog` | 加連結 | ⬜ |
-| `tools/fbvideo/fbvideo.css` | `.log-open` 樣式 | ⬜ |
-| 測試 | `test/server/fb-video.test.js`、`test/e2e/fbvideo.e2e.js` | ⬜ |
+| `server/fb/video.js` | `refreshStatus` 多文帶 videoId；`view()` cross 回 videoId | ✅ |
+| `tools/fbvideo/app.js` `loadLog` | 加連結 | ✅ |
+| `tools/fbvideo/fbvideo.css` | `.log-open` 樣式 | ✅ |
+| 測試 | `test/server/fb-video.test.js`、`test/e2e/fbvideo.e2e.js` | ✅ |
 
 ## 下一步
-- [ ] 以上各項，跑測試，獨立審查，給使用者看
+- [x] 實作與測試（npm test 826、fbvideo e2e 17、build --check）
+- [ ] 獨立審查 → 給使用者看
 
 ## 測試
 `npm test`、`npx playwright test test/e2e/fbvideo.e2e.js`、`node build.js --check`

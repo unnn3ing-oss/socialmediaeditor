@@ -124,6 +124,9 @@ main.off { min-height: 100vh; display: flex; align-items: center; justify-conten
 .log li { padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .log-title { font-weight: 500; }
 .log-pages { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin-top: 4px; }
+.log-open { display: inline-flex; align-items: center; margin-left: 4px; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--accent); font-size: 13px; line-height: 1.4; font-weight: 600; text-decoration: none; white-space: nowrap; vertical-align: baseline; }
+.log-open:hover { border-color: var(--accent); background: var(--accent-soft); }
+.log-open:focus-visible { outline: 2px solid var(--accent, #155eef); outline-offset: 2px; }
 
 /* 提示、對話框 */
 .toast { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); background: #1f2328; color: #fff; padding: 10px 16px; border-radius: var(--radius-control); font-size: 14px; z-index: 20; box-shadow: 0 4px 16px rgba(0, 0, 0, .2); }

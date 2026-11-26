@@ -10,6 +10,7 @@ import { createEditor, STATE_TEXT, CROSS_TEXT } from './editor.js';
 import { pickCover } from './cover.js';
 import { $, errText, toast, confirmBox, newId, sizeText, durText, dateStr, timeStr, fmt } from './util.js';
 import * as fx from '../../ui/fx.js';
+import { fbPostUrl } from '../../shell/notices.js';
 
 tb.init('fbvideo');
 
@@ -616,6 +617,16 @@ function rdFail(text, why) {
 }
 
 // ===== 送出紀錄 =====
+// 有貼文的狀態才給「開啟貼文」連結（另開分頁）；ID 格式不對不顯示
+const LINK_STATES = ['published', 'scheduled', 'processing', 'draft'];
+function addOpen(el, id, tip) {
+  const href = fbPostUrl(id);
+  if (!href) return;
+  const a = document.createElement('a'); a.className = 'log-open'; a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.textContent = '開啟貼文 ↗';
+  if (tip) a.title = tip;
+  el.append(' ', a);
+}
 let logLoaded = false;
 async function loadLog() {
   logLoaded = true;
@@ -640,10 +651,12 @@ async function loadLog() {
       for (const j of list) {
         const s = document.createElement('span'); s.className = 'job s-' + j.state;
         s.textContent = `${pageName(j.page)}：${STATE_TEXT[j.state] || j.state}${j.at ? ' ' + fmt(j.at * 1000) : ''}${j.error ? '（' + j.error + '）' : ''}`;
+        if (LINK_STATES.includes(j.state)) addOpen(s, j.videoId, j.state === 'published' ? '' : '草稿、排程或處理中的影片只有粉專管理員看得到');
         st.append(s);
         for (const c of j.cross || []) {
           const x = document.createElement('span'); x.className = 'job s-' + (c.status === 'done' ? 'published' : c.status);
           x.textContent = `${pageName(c.page)}（多文自 ${pageName(j.page)}）：${CROSS_TEXT[c.status] || c.status}${c.error ? '（' + c.error + '）' : ''}`;
+          if (c.status === 'done') addOpen(x, c.videoId, '');
           st.append(x);
         }
       }
