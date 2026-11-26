@@ -167,9 +167,9 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-ctl > select, .dz-ctl > textarea { width: 100%; min-width: 0; }
 .dz-panel input[type="number"], .dz-panel select {
   font: inherit; font-size: 13px; padding: 6px 10px; border-radius: var(--radius-control);
-  border: 1px solid var(--border); background: var(--field-bg); color: var(--text);
+  border: 1px solid var(--line-strong); background: var(--field-bg); color: var(--text);
 }
-.dz-panel input[type="color"] { width: 44px; height: 30px; padding: 2px; border-radius: 8px; border: 1px solid var(--border); background: var(--field-bg); cursor: pointer; }
+.dz-panel input[type="color"] { width: 44px; height: 30px; padding: 2px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--field-bg); cursor: pointer; }
 .dz-panel textarea { min-height: 64px; font-size: 14px; line-height: 1.5; padding: 8px 10px; }
 .dz-panel input:disabled, .dz-panel select:disabled, .dz-panel textarea:disabled { opacity: .55; cursor: not-allowed; }
 .dz-out { flex: 0 0 44px; font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
@@ -228,7 +228,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 .dz-group-note { margin: 4px 0 6px; padding: 8px 10px; border-radius: var(--radius-control); background: var(--accent-soft); color: var(--accent-dark, #004eeb); font-size: 12px; line-height: 1.5; }
 .dz-panel input[type="text"] {
   width: 100%; min-width: 0; font: inherit; font-size: 13px; padding: 6px 10px; border-radius: var(--radius-control);
-  border: 1px solid var(--border); background: var(--field-bg); color: var(--text);
+  border: 1px solid var(--line-strong); background: var(--field-bg); color: var(--text);
 }
 
 /* ---- 右側面板分頁（屬性｜圖層）---- */
@@ -272,6 +272,7 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
 
 /* ---- 檢視列右側：專案檔與匯出 ---- */
 .dz-viewbar-end { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.dz-more-btn { display: none; }
 .dz-export-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-control) !important; padding: 8px 16px !important; font-weight: 500; }
 .dz-export-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -379,7 +380,15 @@ body { margin: 0; padding: 16px; background: var(--stage, #f6f7f8); color: var(-
   .dz-rot::after { top: 22px; height: 18px; }
   .dz-lbl { flex-basis: 72px; font-size: 14px; }
   .dz-pagebar { gap: 8px; }
-  .dz-viewbar-end { width: 100%; justify-content: space-between; }
+  /* 上方列兩列：①復原重做｜更多、下載這張 ②縮放；開啟／存專案在「更多」選單裡 */
+  .dz-viewbar > .dz-group:first-child { order: 1; }
+  .dz-viewbar-end { order: 2; position: relative; }
+  .dz-viewbar > .dz-group:nth-child(2) { order: 3; }
+  .dz-more-btn { display: inline-flex; align-items: center; }
+  .dz-file-group { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 70; flex-direction: column; align-items: stretch;
+    min-width: 140px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-menu, 14px); box-shadow: var(--shadow-menu); }
+  .is-more-open > .dz-file-group { display: flex; }
+  .dz-file-group button { justify-content: flex-start; text-align: left; color: var(--text); }
   .dz-modal { padding: 0; align-items: flex-end; }
   .dz-modal-card { max-width: none; max-height: 92vh; border-radius: var(--radius-dialog) var(--radius-dialog) 0 0; }
   .dz-modal-body .dz-note { margin-left: 0; }

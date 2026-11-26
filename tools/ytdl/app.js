@@ -171,6 +171,7 @@ function renderQueueArea() {
   setText($("no-ext-text"), phoneOnly ? PHONE_UNSUPPORTED_TEXT : missing ? missing + (canOpenInstall() ? "" : "請到小編工具箱首頁，按頂列的「安裝外掛」。") : "");
   setHidden($("no-extension"), !missing && !phoneOnly);
   setHidden($("no-ext-install"), phoneOnly || !canOpenInstall());
+  setHidden($("no-ext-steps"), phoneOnly || !missing || everDetected); // 第一次使用（從沒連上過）才給三步驟
   setHidden($("work"), !detected); // 沒外掛時整個收起（只隱藏，輸入的內容還在），連上自動恢復
   setHidden($("side"), !detected);
   renderTabCard();

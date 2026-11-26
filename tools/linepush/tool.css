@@ -89,7 +89,7 @@ p.sub { margin: 0; color: var(--muted); font-size: 13px; }
     font-style: normal; font-size: 12px;
   }
 .step-btn.active { color: var(--accent); }
-.step-btn:not(.active) .step-label { display: none; }
+/* 兩個步驟名稱都顯示，讓人知道下一步是什麼；沒選到的用灰字 */
 .step-btn.active i { background: var(--accent); color: #fff; }
 .step-btn.done i { background: var(--success); color: #fff; }
 .step-line { width: 28px; height: 2px; background: rgba(0, 0, 0, .14); border-radius: 2px; }

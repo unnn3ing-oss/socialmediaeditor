@@ -256,6 +256,18 @@
     return `<div class="dz-row"><span class="dz-lbl">${label}</span><div class="dz-ctl"><div class="bg-toggle dz-toggle" id="${id}" role="group" aria-label="${label}">` +
       options.map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join('') + '</div></div></div>';
   }
+  // 手機（≤820px）：「開啟專案／存專案」收進「更多」選單；電腦版「更多」不顯示（CSS）
+  function wireMoreMenu() {
+    const btn = $('dzMoreBtn'), box = btn.parentElement;
+    const set = (open, focusBtn) => {
+      box.classList.toggle('is-more-open', open); btn.setAttribute('aria-expanded', String(open));
+      if (!open && focusBtn) btn.focus();
+    };
+    btn.addEventListener('click', (e) => { e.stopPropagation(); set(!box.classList.contains('is-more-open')); });
+    $('dzFileGroup').addEventListener('click', (e) => { if (e.target.closest('button')) set(false); });
+    document.addEventListener('pointerdown', (e) => { if (!box.contains(e.target)) set(false); });
+    box.addEventListener('keydown', (e) => { if (e.key === 'Escape' && box.classList.contains('is-more-open')) { e.stopPropagation(); set(false, true); } });
+  }
   function build() {
     app.innerHTML = `
       <div class="dz-tools" id="dzTools" role="toolbar" aria-label="加入物件">
@@ -283,7 +295,8 @@
             <button type="button" id="dzFullBtn" title="全螢幕編輯（Esc 離開）" aria-pressed="false">⛶ 全螢幕</button>
           </div>
           <div class="dz-viewbar-end">
-            <div class="dz-group">
+            <button type="button" class="dz-more-btn" id="dzMoreBtn" aria-expanded="false" aria-controls="dzFileGroup">更多</button>
+            <div class="dz-group dz-file-group" id="dzFileGroup">
               <button type="button" id="dzOpenBtn" title="開啟之前存的 .json 專案檔">開啟專案</button>
               <button type="button" id="dzSaveBtn" title="存成 .json，之後可以再開啟繼續編輯">存專案</button>
               <input type="file" id="dzOpenFile" accept=".json,application/json" hidden>
@@ -2239,6 +2252,7 @@
     wireExportDlg();
     $('dzSaveBtn').addEventListener('click', saveProject);
     $('dzOpenBtn').addEventListener('click', () => $('dzOpenFile').click());
+    wireMoreMenu();
     $('dzOpenFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; openProject(f); });
     wirePages();
     wireLayers();

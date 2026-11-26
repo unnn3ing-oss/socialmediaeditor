@@ -415,8 +415,9 @@ canvas.pannable.panning { cursor: grabbing; }
   /* 觸控目標與字級 */
   input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]), select, textarea:not(.title-overlay) { font-size: 16px; }
   .bg-toggle button { min-height: 44px; font-size: 14px; }
-  .color-swatches { gap: 16px; padding: 12px; }
-  .color-swatch::after { inset: -8px; }
+  .color-swatches { gap: 12px; padding: 12px; }
+  .color-swatch { width: 40px; height: 40px; }
+  .color-swatch::after { inset: -4px; }
   .m-pager:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); }
   .m-pager button { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
   .m-pager button svg { width: 14px; height: 14px; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }

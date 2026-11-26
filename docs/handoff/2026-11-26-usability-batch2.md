@@ -13,18 +13,23 @@
 ## 做法（改哪裡）
 | # | 檔案 | 內容 | 狀態 |
 |---|---|---|---|
-| 1 | `tools/design/design.css` | 屬性面板 number／select／text／color 邊框改 `--line-strong` | ⬜ |
-| 4 | `tools/design/design-ui.js`＋`design.css` | 手機（≤820px）「開啟專案／存專案」收進「更多」選單 | ⬜ |
-| 5 | `tools/linepush/tool.css` | 步驟列兩個步驟名稱都顯示 | ⬜ |
-| 6 | `tools/watermark/*` | 「透明度」改「淡化程度」，拿掉「0% 是完全不透明」說明 | ⬜ |
-| 7 | `tools/pattern/*.css` | 手機主色色票 ≥40px | ⬜ |
-| 9 | `tools/ytdl/*` | 沒裝外掛時顯示三步驟卡 | ⬜ |
-| 10 | `tools/livereq/index.html` | 「解析」→「重新解析」 | ⬜ |
-| 2＋8 | 設計圖（scratchpad，不進 repo） | 做圖工具底部工具列＋狀態提示位置 | ⬜ |
+| 1 | `tools/design/design.css` | 屬性面板 number／select／text／color 邊框改 `--line-strong` | ✅ |
+| 4 | `tools/design/design-ui.js`＋`design.css` | 手機（≤820px）「開啟專案／存專案」收進「更多」選單 | ✅ |
+| 5 | `tools/linepush/tool.css` | 步驟列兩個步驟名稱都顯示 | ✅ |
+| 6 | `tools/watermark/*` | 「透明度」改「淡化程度」，拿掉「0% 是完全不透明」說明 | ✅ |
+| 7 | `tools/pattern/*.css` | 手機主色色票 ≥40px | ✅ |
+| 9 | `tools/ytdl/*` | 沒裝外掛時顯示三步驟卡 | ✅ |
+| 10 | `tools/livereq/index.html` | 「解析」→「重新解析」 | ✅ |
+| 2＋8 | 設計圖（scratchpad，不進 repo） | 做圖工具底部工具列＋狀態提示位置 | ✅ |
 
 ## 下一步
-- [ ] 依上表修改並跑相關 e2e
-- [ ] 出 #2＋#8 設計圖給使用者
+- [x] 依上表修改；npm test 831、相關 e2e 87＋design 手機「更多」新測試（舊程式失敗）
+- [x] #2＋#8 設計圖給使用者（scratchpad `mock/`，用實際頁面注入樣式截圖）：底部浮動工具列＝左側狀態（保留 📢）｜全部清除｜（全部下載／複製圖片）｜下載這張（主要）；手機＝全寬固定底列，狀態一行、按鈕一列
+- [ ] 使用者看圖後決定 #2＋#8 要不要做、要怎麼調
+- [ ] 使用者說「推」才併入 main
 
 ## 注意事項
 - 不改 `server/`、不升外掛版號。📢 不動。
+
+## 實作中的調整
+- #4：手機上方列從 3 列變 2 列（①復原重做｜更多、下載這張 ②縮放），沒辦法壓成 1 列（375px 放不下）。

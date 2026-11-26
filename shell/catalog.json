@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=702788d0dd"
+      "entry": "tools/pattern/index.html?v=34b3168496"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=678cfdbfe5"
+      "entry": "tools/linepush/index.html?v=f69b1e0927"
     },
     {
       "id": "collage",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=2cc0ac881f"
+      "entry": "tools/watermark/index.html?v=3b805fc555"
     },
     {
       "id": "resize",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=6e0033e03d"
+      "entry": "tools/design/index.html?v=17d9225e18"
     },
     {
       "id": "fbpost",
@@ -120,7 +120,7 @@
       "requires": [],
       "icon": "tools/livereq/icon.svg",
       "thumb": "tools/livereq/thumb.svg",
-      "entry": "tools/livereq/index.html?v=5ce45a9f9d"
+      "entry": "tools/livereq/index.html?v=c64fcc5082"
     },
     {
       "id": "ytdl",
@@ -134,7 +134,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=e12a7566e4"
+      "entry": "tools/ytdl/index.html?v=591a8c7d3a"
     }
   ]
 }

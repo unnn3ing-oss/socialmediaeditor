@@ -220,3 +220,17 @@ test('手機：屬性／圖層抽屜切換後內容保留，ARIA 正確，320px 
     await page.close();
   }
 });
+
+test('手機：工具列在畫布正下方；開啟／存專案收在「更多」選單，Esc 關閉', async () => {
+  const { page, frame } = await open({ viewport: { width: 375, height: 740 } });
+  const box = (s) => frame.locator(s).boundingBox();
+  const stage = await box('#dzStage'), tools = await box('#dzTools'), pages = await box('.dz-pagebar');
+  assert.ok(tools.y > stage.y && tools.y < pages.y, '工具列在畫布與頁面列之間');
+  assert.equal(await frame.isVisible('#dzSaveBtn'), false);
+  await frame.click('#dzMoreBtn');
+  assert.equal(await frame.getAttribute('#dzMoreBtn', 'aria-expanded'), 'true');
+  assert.equal(await frame.isVisible('#dzSaveBtn'), true);
+  await frame.press('#dzMoreBtn', 'Escape');
+  assert.equal(await frame.isVisible('#dzSaveBtn'), false);
+  await page.close();
+});
