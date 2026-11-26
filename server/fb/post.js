@@ -188,7 +188,7 @@ export async function createPosts(env, form, who = null) {
         if (np) { const x = await postFirstNoPreview(env, p.token, r.postId, first, np); cid = x.id; r.preview = x.preview; if (x.previewError) r.previewError = x.previewError; }
         else cid = await postComment(env, p.token, r.postId, first);
         r.comment = 'done'; firstOk = true;
-        await editAfterPost(env, p.token, cid, first, by);
+        if (!np) await editAfterPost(env, p.token, cid, first, by);
       }
       catch (e) { r.comment = 'failed'; r.commentError = errText(e); firstUnsure = !(e instanceof GraphError) || !!e.uncertain; }
     }

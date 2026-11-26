@@ -272,8 +272,8 @@ export class FbCommentTimer {
           if (mine) {
             Object.assign(it, { status: 'done', commentId: String(mine.id) }); delete it.unsure;
             if (it.np && !it.preview) {
-              if (head && mine.message === head) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'a'));
-              else if (it.np === 'b') Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'b'));
+              if (head && head !== it.message && mine.message === head) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'a'));
+              else if (it.np === 'b' || !head || head === it.message) Object.assign(it, await finishNoPreview(this.env, page.token, it.commentId, it.message, 'b'));   // B，或 A 但沒有可拆的文字（與 postFirstNoPreview 同樣改用 B）
               else it.preview = 'tried';
             }
             await s.put('rec', rec); continue;
@@ -288,7 +288,7 @@ export class FbCommentTimer {
         Object.assign(it, { status: 'done', commentId: id }, np);
         delete it.unsure;
         await s.put('rec', rec);
-        if (seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
+        if (!it.np && seqOf(it, rec.items.indexOf(it)) === 1) await editAfterPost(this.env, page.token, id, it.message, rec.by);   // 第 1 則：開關打開時再編輯一次（試去連結預覽）
       } catch (e) {
         // 留言請求臉書明確回錯誤＝確定沒留：下次直接重留；沒收到回應＝可能已留：保持 posting，下次先查再留
         if (step === STEP.comment) {
