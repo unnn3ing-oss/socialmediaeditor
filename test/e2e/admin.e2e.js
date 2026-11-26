@@ -62,11 +62,15 @@ const CO = { edit: false, who: 'all', staff: [], people: [{ id: 'A001', name: '�
 const VO = { stream: false, who: 'all', staff: [], posts: [] };
 const HO = { on: false, who: 'all', staff: [], method: 'a', posts: [] };
 const TV = { on: false, hide: ['fbpost', 'fbvideo', 'fbreports'], posts: [] };
+const SR = { on: true, tools: ['pattern', 'linepush', 'watermark', 'design'], posts: [] };
+const SR_OPTIONS = [{ id: 'pattern', name: '圖片套版' }, { id: 'linepush', name: 'LINE 推播' }, { id: 'watermark', name: '浮水印' }, { id: 'design', name: '設計' }];
 const DATA = {
   'GET /admin/dash': (b, u) => { DASH.fresh.push(u.searchParams.get('fresh')); return { at: Date.UTC(2026, 10, 23, 6, 32), items: DASH_ITEMS }; },
   'GET /admin/dash/config': () => ({ items: ['access', 'fbtoken', 'logs'], all: [{ key: 'access', name: '排程發布' }, { key: 'fbtoken', name: '臉書權杖' }, { key: 'logs', name: '未處理錯誤' }, { key: 'online', name: '目前在線' }] }),
   'POST /admin/dash/config': (b) => { DASH.cfgSaved = b; return b; },
   'GET /admin/site/vis': () => ({ on: TV.on, hide: TV.hide }),
+  'GET /admin/selfreg': () => ({ on: SR.on, tools: SR.tools, options: SR_OPTIONS }),
+  'POST /admin/selfreg': (b) => { SR.posts.push(b); SR.on = b.on; SR.tools = b.tools; return { on: b.on, tools: b.tools, options: SR_OPTIONS }; },
   'POST /admin/site/vis': (b) => { TV.posts.push(b); TV.on = b.on; TV.hide = b.hide; return { on: b.on, hide: b.hide }; },
   // 時間以「回應當下」往前推（測試跑很久時「3 分鐘前」才不會變成 4 分鐘前）
   'GET /admin/fb/usage': () => usageNow(),
@@ -172,7 +176,7 @@ function resetStaff() {
     { id: 'A003', name: '林主管', group: 'lead', enabled: false, created: 1, lastLogin: null, pw: 'set', locked: true }];
 }
 
-const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'labs', 'toolvis', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
+const ALL_CARDS = ['access', 'profiles', 'fbconn', 'webhook', 'labs', 'toolvis', 'selfreg', 'guard', 'fbstate', 'usage', 'pages', 'presets', 'video', 'bg', 'staff', 'groups', 'audit', 'rundown', 'assets', 'logs'];
 const SYS = { role: 'sys', roleName: '系統管理者', unlocked: true, cards: ALL_CARDS, name: '系統管理者' };
 // front：首頁登入存在 localStorage 的憑證（{ token, me }），/admin/me 依 Authorization 回身分；'T'＝管理頁密碼登入（系統管理者已解鎖）
 async function open(viewport, hash = '', front = null) {
@@ -831,7 +835,7 @@ test('首頁員工沒有任何卡片：顯示密碼登入與原因', async () =>
 });
 
 test('首頁管理員登入（未解鎖）：敏感卡片隱藏、顯示解鎖區；輸入密碼解鎖後出現，按「鎖定」回到未解鎖', async () => {
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs', 'toolvis'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs', 'toolvis', 'selfreg'].includes(k)) };
   const { page } = await open({ width: 1280, height: 860 }, '', { token: 'F3', me: locked });
   await page.waitForSelector('#app:not([hidden])');
   assert.equal(await page.isVisible('#unlockBar'), false, '其他分類不顯示解鎖區');
@@ -917,7 +921,7 @@ test('截圖：電腦版（系統管理者、管理者）與手機版', async ()
   const { page: p2 } = await open({ width: 1280, height: 860 }, '#fb', { token: 'F9', me });
   await p2.waitForSelector('#app:not([hidden])'); await p2.waitForTimeout(500);
   await p2.screenshot({ path: path.join(SHOT, 'admin-mgr-fb.png') });
-  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs', 'toolvis'].includes(k)) };
+  const locked = { ...SYS, unlocked: false, cards: ALL_CARDS.filter((k) => !['access', 'profiles', 'fbconn', 'webhook', 'groups', 'labs', 'toolvis', 'selfreg'].includes(k)) };
   const { page: p3 } = await open({ width: 390, height: 844 }, '#adv', { token: 'F8', me: locked });
   await p3.waitForSelector('#app:not([hidden])'); await p3.waitForTimeout(500);
   await p3.screenshot({ path: path.join(SHOT, 'admin-mobile-fb.png') });
@@ -1401,4 +1405,32 @@ test('進階設定「實驗功能」：第一則留言移除連結預覽（方�
   await page.waitForFunction(() => /已啟用：指定 1 位員工/.test(document.getElementById('labPMsg').textContent));
   assert.deepEqual(HO.posts.at(-1), { on: true, who: 'some', staff: ['A001'], method: 'b' });
   assert.equal(await page.isChecked('input[name=labPMethod][value=b]'), true, '存檔後回填');
+});
+
+test('進階設定「自行註冊」：讀取（預設開放、全部工具）、取消一個工具並關閉後儲存；授權名單標示自行註冊、權限組顯示未指派', async () => {
+  SR.on = true; SR.tools = SR_OPTIONS.map((o) => o.id); SR.posts = [];
+  resetStaff();
+  STAFF.push({ id: 'R77', name: '林新人', group: 0, self: true, enabled: true, created: 1, lastLogin: null, pw: 'set' });
+  const { page } = await open({ width: 1280, height: 900 }, '#adv');
+  await login(page);
+  await page.click('#tab-adv'); await show(page, 'srCard');
+  await page.waitForFunction(() => !document.getElementById('srSave').disabled);
+  assert.equal(await page.isChecked('#srOn'), true);
+  assert.deepEqual(await page.$$eval('#srList input', (a) => a.map((c) => [c.value, c.checked])), SR_OPTIONS.map((o) => [o.id, true]));
+  assert.equal(await page.locator('#srList input[value=fbpost]').count(), 0, '不列臉書工具');
+  await page.uncheck('#srList input[value=linepush]');
+  await page.uncheck('#srOn');
+  if (SHOT) await page.locator('#srCard').screenshot({ path: path.join(SHOT, 'admin-selfreg.png') });
+  await page.click('#srSave');
+  await page.waitForFunction(() => /已儲存/.test(document.getElementById('srMsg').textContent));
+  assert.deepEqual(SR.posts.at(-1), { on: false, tools: ['pattern', 'watermark', 'design'] });
+  await page.click('#tab-people'); await show(page, 'sfCard');
+  await page.waitForSelector('#sfRows tr');
+  const row = page.locator('#sfRows tr', { hasText: 'R77' });
+  assert.equal(await row.locator('.tag.warn', { hasText: '自行註冊' }).count(), 1);
+  const sel = row.locator('select');
+  assert.equal(await sel.evaluate((s) => s.options[s.selectedIndex].textContent), '（未指派）');
+  await sel.selectOption('viewer');
+  await page.waitForFunction(() => /已更新「林新人」的權限組/.test(document.getElementById('sfMsg').textContent));
+  assert.deepEqual(SF.bodies.at(-1), { key: 'POST /admin/staff/R77', body: { group: 'viewer' } });
 });

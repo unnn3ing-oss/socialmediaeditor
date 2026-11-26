@@ -1,8 +1,9 @@
 import { signToken, readToken, passwordMatches } from './token.js';
 import { ok, fail, readBody, sleep } from './http.js';
-import { findStaff, touchSeen, cardsOf, dashOf, normId, touchLogin, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
+import { findStaff, touchSeen, cardsOf, dashOf, normId, touchLogin, registerStaff, MAX_NAME, getProfile, setContact, cleanContact, CONTACT_MSG, authRow, recordFail, clearFails, storePassword } from './staff.js';
 import { listNotices, readNotice } from '../fb/notices.js';
 import { myMsgs, readMyMsg } from './msgs.js';
+import { readSelfReg, takeRegSlot } from './selfreg.js';
 import { pwProblem, hashPassword, verifyPassword, codeHash, safeEqual, MAX_FAILS, LOCK_MS } from './password.js';
 
 export const MIN_SECRET = 32;
@@ -63,6 +64,9 @@ export async function loginWith(request, env, kind, secretName, ttlSec) {
 //   { staffId }                         → 查下一步：{ next:'password' | 'setup' }（查不到或停用 bad_staff）
 //   { staffId, password }               → 登入
 //   { staffId, code, newPassword }      → 第一次登入／被重置：用設定碼設密碼並登入（系統管理者可用管理員密碼代替設定碼）
+//   { register:true, staffId, staffId2, name } → 自行註冊（selfreg.js 開放時）：兩次編號一致、編號完全不存在才建立；
+//                                          回 { code, exp }（10 分鐘一次性密碼），接著照「設定密碼」那條送 { staffId, code, newPassword }
+//   查不到時 bad_staff 的 detail.register＝目前開放註冊（前端決定要不要顯示「註冊」）
 //   連錯（密碼或設定碼）5 次鎖 15 分鐘：locked（detail.until 毫秒）；錯誤回 bad_password（detail.left 剩幾次）
 export const ADMIN_FRONT_TTL = 12 * 3600;   // 舊版首頁管理員憑證（已不再發出，留著讀舊憑證）
 const staffInfo = (s) => ({ id: s.id, name: s.name, group: s.groupName, level: s.level });
@@ -88,8 +92,13 @@ async function companyLogin(request, env) {
   const body = await readLogin(request);
   if (body === null) return fail(request, env, 'bad_request');
   if (typeof body.staffId !== 'string') return fail(request, env, 'bad_request', '請輸入員工編號。');
+  if (body.register === true) return selfRegister(request, env, body);
   const row = await authRow(env, body.staffId).catch(() => null);
-  if (!row) { await sleep(failDelay(env)); return fail(request, env, 'bad_staff'); }
+  if (!row) {
+    await sleep(failDelay(env));
+    const reg = await readSelfReg(env).catch(() => ({ on: false }));
+    return fail(request, env, 'bad_staff', undefined, { register: !!reg.on });
+  }
   if (row.lockUntil > Date.now()) return lockedRes(request, env, row);
   const next = row.hasPw ? 'password' : 'setup';
 
@@ -122,6 +131,22 @@ async function companyLogin(request, env) {
 
   // 只查下一步
   return ok(request, env, { next });
+}
+
+// 自行註冊：{ register:true, staffId, staffId2, name }
+//   已存在（含停用、系統管理者）一律回 reg_taken（不透露差別）；註冊關閉回 reg_closed；同一個 IP 每小時超過上限回 reg_limit
+async function selfRegister(request, env, body) {
+  const reg = await readSelfReg(env).catch(() => ({ on: false }));
+  if (!reg.on) return fail(request, env, 'reg_closed');
+  const id = normId(body.staffId);
+  if (!id) return fail(request, env, 'bad_request', '員工編號只能是英數字、- 或 _，最多 20 字。');
+  if (normId(body.staffId2) !== id) return fail(request, env, 'bad_request', '兩次輸入的員工編號不一樣。');
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name || [...name].length > MAX_NAME) return fail(request, env, 'bad_request', '姓名必填，最多 ' + MAX_NAME + ' 字。');
+  if (!(await takeRegSlot(env, request))) return fail(request, env, 'reg_limit');
+  const r = await registerStaff(env, id, name).catch(() => null);
+  if (!r) { await sleep(failDelay(env)); return fail(request, env, 'reg_taken'); }
+  return ok(request, env, { staffId: id, code: r.code, exp: r.exp });
 }
 
 // 變更自己的密碼：{ password（目前）, newPassword } → 新憑證（其他裝置登出）

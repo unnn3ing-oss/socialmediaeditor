@@ -8,6 +8,7 @@ export const PW_ITER = 100000;          // Workers 的 PBKDF2 上限
 export const MAX_FAILS = 5;             // 連錯 5 次
 export const LOCK_MS = 15 * 60 * 1000;  // 鎖 15 分鐘
 export const SETUP_MS = 24 * 3600 * 1000; // 設定碼 24 小時
+export const REG_MS = 10 * 60 * 1000;     // 自行註冊的一次性密碼 10 分鐘
 
 // 密碼長度檢查：合格回 ''，不合格回訊息
 export function pwProblem(pw) {

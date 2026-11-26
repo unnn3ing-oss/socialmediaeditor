@@ -83,7 +83,7 @@ test('全站開關：只有已解鎖系統管理者；關掉的項目任何人�
   assert.equal((await call(env, '/admin/dash/config', { headers: adm })).status, 403, '未解鎖不能改');
   assert.equal((await call(env, '/admin/dash/config', { headers: d1 })).status, 403);
   const g = (await call(env, '/admin/dash/config', { headers: sys })).body.data;
-  assert.equal(g.items.length, 10, '沒存過＝全部');
+  assert.equal(g.items.length, 11, '沒存過＝全部');
   assert.equal((await post(env, sys, '/admin/dash/config', { items: 'x' })).status, 400);
   const r = await post(env, sys, '/admin/dash/config', { items: ['logs', 'nope', 'access'] });
   assert.deepEqual(r.body.data.items, ['access', 'logs'], '未知 key 剔除、照固定順序');

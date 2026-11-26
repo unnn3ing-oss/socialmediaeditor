@@ -24,10 +24,13 @@ export const MESSAGES = {
   rundown_off: '後端尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN。',
   rundown_failed: '連不上 Rundown 的 Apps Script。',
   report_scope: '粉專、權杖組別或權限已變更，請重新查詢。',
-  fb_retry: '這段影片沒有完整傳到臉書，會自動重送。'
+  fb_retry: '這段影片沒有完整傳到臉書，會自動重送。',
+  reg_closed: '目前沒有開放註冊，請找管理者幫你加入授權名單。',
+  reg_taken: '無法用這個員工編號註冊。如果你已經在名單內，請直接登入；忘記密碼請找管理者重置。',
+  reg_limit: '註冊次數太多，請一小時後再試。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, forbidden: 403, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
-  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502, report_scope: 409, fb_retry: 503 };
+  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502, report_scope: 409, fb_retry: 503, reg_closed: 403, reg_taken: 200, reg_limit: 429 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

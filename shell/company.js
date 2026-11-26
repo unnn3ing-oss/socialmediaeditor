@@ -1,4 +1,5 @@
 // 公司模式：員工編號＋自己的密碼登入（第一次或被重置後用設定碼設密碼），解鎖公司工具；
+// 查不到員工編號且後端開放註冊時多一個「註冊」：員工編號＋姓名 → 送出前再輸入一次員工編號確認 → 拿 10 分鐘一次性密碼，馬上設定自己的密碼並登入。
 // 登入後右上角「● 公司模式 名字」，點了開帳號彈窗（姓名、權限組、員工編號、分機、解鎖有效、通知、管理頁、變更密碼、登出）。
 // 憑證過期時自動跳登入彈窗，已開著的公司窗格保留內容。
 import { createApi, COMPANY_KEY, readCompany } from '../sdk/api.js';
@@ -59,60 +60,140 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
   const fCode = field('設定碼', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputMode: 'numeric', spellcheck: false }, '管理者新增你或重置密碼時給你的 6 碼，24 小時內有效');
   const fNew = field('新密碼', { type: 'password', name: 'newPassword', autocomplete: 'new-password' }, `至少 ${PW_MIN} 個字`);
   const fNew2 = field('再輸入一次', { type: 'password', name: 'newPassword2', autocomplete: 'new-password' });
+  const CODE_HINT = fCode.wrap.querySelector('.login-note').textContent;
+  // 步驟 reg：註冊（員工編號＋姓名）
+  const fRegId = field('員工編號', { type: 'text', name: 'regStaffId', autocomplete: 'off', autocapitalize: 'characters', spellcheck: false });
+  const fName = field('姓名', { type: 'text', name: 'regName', autocomplete: 'name', maxLength: 20 });
+  // 註冊完成：一次性密碼＋複製＋倒數（顯示在設定密碼步驟上方）
+  const otp = mk('div', 'login-otp');
+  otp.id = 'login-otp';
+  const otpLabel = mk('span', 'login-otp-label', '一次性密碼');
+  const otpCode = mk('b', 'login-otp-code');
+  const otpCopy = mk('button', 'login-link', '複製');
+  otpCopy.type = 'button';
+  const otpLeft = mk('span', 'login-otp-left');
+  otp.append(otpLabel, otpCode, otpCopy, otpLeft);
+  otp.hidden = true;
   const err = mk('p', 'login-err', '');
   err.setAttribute('role', 'alert');
   const actions = mk('div', 'actions');
+  const regBtn = mk('button', 'btn btn-secondary login-reg', '註冊');
+  regBtn.type = 'button';
+  regBtn.hidden = true;
   const cancel = mk('button', 'btn btn-secondary', '取消');
   cancel.type = 'button';
   const submit = mk('button', 'btn btn-primary', '下一步');
   submit.type = 'submit';
-  actions.append(cancel, submit);
+  actions.append(regBtn, cancel, submit);
   // 隱藏的帳號欄：讓瀏覽器密碼管理員在密碼步驟也知道是哪個帳號
   const hiddenUser = mk('input');
   Object.assign(hiddenUser, { readOnly: true, type: 'text', name: 'username', autocomplete: 'username', tabIndex: -1 });
   hiddenUser.className = 'login-hidden-user';
   hiddenUser.setAttribute('aria-hidden', 'true');
-  form.append(title, fId.wrap, who, hiddenUser, fPw.wrap, fCode.wrap, fNew.wrap, fNew2.wrap, err, actions);
+  form.append(title, fId.wrap, fRegId.wrap, fName.wrap, who, hiddenUser, otp, fPw.wrap, fCode.wrap, fNew.wrap, fNew2.wrap, err, actions);
   dlg.appendChild(form);
   document.body.appendChild(dlg);
 
-  let step = 'id', staffId = '', expiredTitle = false;
+  // 註冊送出前：再輸入一次員工編號確認（疊在登入彈窗上）
+  const cf = mk('dialog', 'dialog');
+  cf.id = 'company-reg-confirm';
+  const cfForm = mk('form');
+  cfForm.method = 'dialog';
+  cfForm.noValidate = true;
+  const cfId = field('請再輸入一次員工編號', { type: 'text', name: 'regStaffId2', autocomplete: 'off', autocapitalize: 'characters', spellcheck: false }, '確認無誤才會送出註冊');
+  const cfErr = mk('p', 'login-err', '');
+  cfErr.setAttribute('role', 'alert');
+  const cfActions = mk('div', 'actions');
+  const cfCancel = mk('button', 'btn btn-secondary', '取消');
+  cfCancel.type = 'button';
+  const cfOk = mk('button', 'btn btn-primary', '確定送出');
+  cfOk.type = 'submit';
+  cfActions.append(cfCancel, cfOk);
+  cfForm.append(mk('h2', null, '確認員工編號'), cfId.wrap, cfErr, cfActions);
+  cf.appendChild(cfForm);
+  document.body.appendChild(cf);
+  cfCancel.addEventListener('click', () => cf.close());
+  cf.addEventListener('close', () => { if (dlg.open && step === 'reg') fName.input.focus(); });
+
+  let step = 'id', staffId = '', expiredTitle = false, canRegister = false, otpExp = 0, otpTimer = 0;
   // 用 hidden 切換步驟（不重建 DOM）
   function setStep(n) {
     step = n;
     fId.wrap.hidden = n !== 'id';
-    who.hidden = n === 'id';
-    hiddenUser.hidden = n === 'id';
+    fRegId.wrap.hidden = fName.wrap.hidden = n !== 'reg';
+    who.hidden = n === 'id' || n === 'reg';
+    hiddenUser.hidden = n === 'id' || n === 'reg';
     fPw.wrap.hidden = n !== 'pw';
     for (const f of [fCode, fNew, fNew2]) f.wrap.hidden = n !== 'setup';
+    regBtn.hidden = n !== 'id' || !canRegister;
+    if (n !== 'setup') stopOtp();
     whoText.textContent = '';
     whoText.append('員工編號 ', mk('b', null, staffId));
     hiddenUser.value = staffId;
-    title.textContent = n === 'setup' ? '第一次登入，請設定密碼' : expiredTitle ? '登入已過期，請重新登入' : '登入公司帳號';
+    title.textContent = n === 'reg' ? '註冊' : n === 'setup' ? (otpExp ? '註冊完成，請設定密碼' : '第一次登入，請設定密碼') : expiredTitle ? '登入已過期，請重新登入' : '登入公司帳號';
     idle(submit, stepLabel(n));
     err.textContent = '';
-    const focus = n === 'id' ? fId.input : n === 'pw' ? fPw.input : fCode.input;
+    const focus = n === 'id' ? fId.input : n === 'reg' ? (fRegId.input.value ? fName.input : fRegId.input) : n === 'pw' ? fPw.input : otpExp ? fNew.input : fCode.input;
     if (dlg.open) focus.focus();
   }
 
-  const stepLabel = (n) => (n === 'id' ? '下一步' : n === 'pw' ? '登入' : '設定並登入');
+  const stepLabel = (n) => (n === 'id' ? '下一步' : n === 'reg' ? '送出註冊' : n === 'pw' ? '登入' : '設定並登入');
+  // 一次性密碼：顯示、倒數，過期提示
+  const mmss = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + pad(t % 60); };
+  function tickOtp() {
+    const ms = otpExp - Date.now();
+    otpLeft.textContent = ms > 0 ? `10 分鐘內有效（剩 ${mmss(ms)}）` : '已過期，請找管理者重置密碼';
+    otp.classList.toggle('is-expired', ms <= 0);
+    if (ms <= 0) { clearInterval(otpTimer); otpTimer = 0; }
+  }
+  function startOtp(code, exp) {
+    otpExp = exp;
+    otpCode.textContent = code;
+    fCode.input.value = code;
+    fCode.wrap.querySelector('.login-note').textContent = '已自動帶入';
+    fCode.wrap.querySelector('label').firstChild.nodeValue = '一次性密碼';
+    otp.hidden = false;
+    clearInterval(otpTimer);
+    tickOtp();
+    otpTimer = setInterval(tickOtp, 1000);
+  }
+  function stopOtp() {
+    clearInterval(otpTimer); otpTimer = 0; otpExp = 0;
+    otp.hidden = true;
+    fCode.wrap.querySelector('.login-note').textContent = CODE_HINT;
+    fCode.wrap.querySelector('label').firstChild.nodeValue = '設定碼';
+  }
+  otpCopy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(otpCode.textContent); otpCopy.textContent = '已複製'; }
+    catch { otpCopy.textContent = '複製失敗'; }
+    setTimeout(() => { otpCopy.textContent = '複製'; }, 1500);
+  });
+  regBtn.addEventListener('click', () => {
+    fRegId.input.value = (fId.input.value || '').trim().toUpperCase();
+    fName.input.value = '';
+    setStep('reg');
+  });
   function openLogin(expired = false) {
     expiredTitle = expired;
-    for (const f of [fId, fPw, fCode, fNew, fNew2]) f.input.value = '';
+    canRegister = false;
+    for (const f of [fId, fPw, fCode, fNew, fNew2, fRegId, fName]) f.input.value = '';
     staffId = getId();
     fId.input.value = staffId;
     if (!dlg.open) dlg.showModal();
     setStep(staffId ? 'pw' : 'id');
   }
-  cancel.addEventListener('click', () => dlg.close());
+  cancel.addEventListener('click', () => { if (step === 'reg') setStep('id'); else dlg.close(); });
+  dlg.addEventListener('close', () => { stopOtp(); if (cf.open) cf.close(); });
   whoChange.addEventListener('click', () => { fId.input.value = staffId; setStep('id'); fId.input.select(); });
 
   const MSG = {
     bad_staff: '查不到這個員工編號，或已停用',
+    reg_closed: '目前沒有開放註冊，請找管理者幫你加入授權名單',
     setup_expired: '設定碼已過期或還沒發，請找管理者重置密碼拿新的設定碼',
   };
   function showError(ex) {
     if (isNetworkFailure(ex)) { err.textContent = '連不上伺服器，請稍後再試'; return; }
+    if (ex.code === 'bad_staff' && canRegister) { err.textContent = '查不到這個員工編號。第一次使用請按「註冊」'; return; }
     err.textContent = MSG[ex.code] || (ex.message && ex.message !== '呼叫失敗' ? ex.message.replace(/。$/, '') : '登入失敗，請再試一次');
   }
   function done(data) {
@@ -128,6 +209,18 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     if (step === 'id') {
       staffId = fId.input.value.trim().toUpperCase();
       if (!staffId) { err.textContent = '請輸入員工編號'; fId.input.focus(); return; }
+    } else if (step === 'reg') {
+      const id = fRegId.input.value.trim().toUpperCase();
+      if (!id) { err.textContent = '請輸入員工編號'; fRegId.input.focus(); return; }
+      if (!/^[A-Za-z0-9_-]{1,20}$/.test(id)) { err.textContent = '員工編號只能是英數字、- 或 _，最多 20 字'; fRegId.input.focus(); return; }
+      if (!fName.input.value.trim()) { err.textContent = '請輸入姓名'; fName.input.focus(); return; }
+      fRegId.input.value = id;
+      cfId.input.value = '';
+      cfErr.textContent = '';
+      idle(cfOk, '確定送出');
+      cf.showModal();
+      cfId.input.focus();
+      return;
     } else if (step === 'pw') {
       if (!fPw.input.value) { err.textContent = '請輸入密碼'; fPw.input.focus(); return; }
     } else {
@@ -140,6 +233,7 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
     try {
       if (step === 'id') {
         const r = await api.call('/auth', { method: 'POST', body: { staffId } });
+        canRegister = false;
         setStep(r.next === 'setup' ? 'setup' : 'pw');
       } else if (step === 'pw') {
         done(await api.call('/auth', { method: 'POST', body: { staffId, password: fPw.input.value } }));
@@ -148,12 +242,43 @@ export function initCompany({ shell, button, storage = window.localStorage, api 
       }
     } catch (ex) {
       if (ex && ex.code === 'need_setup') { setStep('setup'); return; }
-      if (ex && ex.code === 'bad_staff' && step !== 'id') { setStep('id'); fId.input.value = staffId; }
+      if (ex && ex.code === 'bad_staff') {
+        canRegister = !!(ex.detail && ex.detail.register);
+        if (step !== 'id') { setStep('id'); fId.input.value = staffId; } else regBtn.hidden = !canRegister;
+      }
       showError(ex);
       failed = true;
       if (step === 'pw') { fPw.input.value = ''; fPw.input.focus(); shake(fPw.input); }
     } finally {
       if (failed) fail(submit, stepLabel(step)); else idle(submit, stepLabel(step));
+    }
+  });
+
+  // 確認框送出：兩次一致才呼叫註冊；成功切到設定密碼並帶入一次性密碼
+  cfForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    cfErr.textContent = '';
+    const id = fRegId.input.value.trim().toUpperCase();
+    const id2 = cfId.input.value.trim().toUpperCase();
+    if (!id2) { cfErr.textContent = '請再輸入一次員工編號'; cfId.input.focus(); return; }
+    if (id2 !== id) { cfErr.textContent = '兩次輸入的員工編號不一樣'; cfId.input.select(); shake(cfId.input); return; }
+    busy(cfOk, '送出中');
+    let bad = false;
+    try {
+      const r = await api.call('/auth', { method: 'POST', body: { register: true, staffId: id, staffId2: id2, name: fName.input.value.trim() } });
+      staffId = r.staffId || id;
+      setId(staffId);
+      canRegister = false;
+      idle(cfOk, '確定送出');
+      cf.close();
+      for (const f of [fNew, fNew2]) f.input.value = '';
+      startOtp(r.code, r.exp);
+      setStep('setup');
+    } catch (ex) {
+      bad = true;
+      cfErr.textContent = isNetworkFailure(ex) ? '連不上伺服器，請稍後再試' : (MSG[ex.code] || (ex.message || '註冊失敗').replace(/。$/, ''));
+    } finally {
+      if (bad) fail(cfOk, '確定送出');
     }
   });
 

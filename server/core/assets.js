@@ -1,6 +1,7 @@
 import { ok, fail, readBody, corsHeaders } from './http.js';
 import { bearer } from './auth.js';
 import { all, first, run } from './db.js';
+import { assetAllowed } from './selfreg.js';
 
 export const ASSET_KEY_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 export const MAX_ASSET = 10 * 1024 * 1024;
@@ -25,9 +26,15 @@ export async function handleAssets(request, env, path) {
   if (request.method !== 'GET') return null;
   if (path === '/assets/manifest') {
     const company = await bearer(request, env, 'company');
-    const rows = company
+    let rows = company
       ? await all(env, 'SELECT key, tier, type, size, updated FROM assets ORDER BY key')
       : await all(env, "SELECT key, tier, type, size, updated FROM assets WHERE tier = 'public' ORDER BY key");
+    // 自行註冊帳號：只列進階設定勾選工具用到的公司素材
+    if (company && company.staff && company.staff.self) {
+      const okKeys = new Set();
+      for (const r of rows) if (r.tier !== 'company' || await assetAllowed(env, company.staff, r.key)) okKeys.add(r.key);
+      rows = rows.filter((r) => okKeys.has(r.key));
+    }
     return ok(request, env, rows.map(publicRow), { 'cache-control': 'no-store' });
   }
   const m = /^\/assets\/([^/]+)$/.exec(path);
@@ -36,7 +43,11 @@ export async function handleAssets(request, env, path) {
   if (!ASSET_KEY_RE.test(key)) return fail(request, env, 'not_found');
   const row = await first(env, 'SELECT tier, type FROM assets WHERE key = ?', key);
   if (!row) return fail(request, env, 'not_found');
-  if (row.tier === 'company' && !(await bearer(request, env, 'company'))) return fail(request, env, 'unauthorized');
+  if (row.tier === 'company') {
+    const t = await bearer(request, env, 'company');
+    if (!t) return fail(request, env, 'unauthorized');
+    if (!(await assetAllowed(env, t.staff, key))) return fail(request, env, 'forbidden', '自行註冊的帳號不能使用這個公司素材，請找管理者指派權限組。');
+  }
   const obj = await env.FILES.get('assets/' + key);
   if (!obj) return fail(request, env, 'not_found');
   const headers = {

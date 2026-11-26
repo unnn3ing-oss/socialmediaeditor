@@ -38,8 +38,14 @@ async function open(vp = { width: 1280, height: 820 }) {
       if (api.authDown) return r.abort();
       const body = JSON.parse(req.postData());
       api.bodies.push(body);
+      if (body.register) {
+        if (body.staffId !== body.staffId2) return fail('bad_request', '兩次輸入的員工編號不一樣。', 400);
+        if (staff[body.staffId]) return fail('reg_taken', '無法用這個員工編號註冊。');
+        staff[body.staffId] = { name: body.name, group: '', level: 'staff', pw: null };
+        return r.fulfill({ headers: CORS, json: { ok: true, data: { staffId: body.staffId, code: '123456', exp: Date.now() + 600000 } } });
+      }
       const s = staff[body.staffId];
-      if (!s) return fail('bad_staff', '查不到這個員工編號，或已停用。');
+      if (!s) return fail('bad_staff', '查不到這個員工編號，或已停用。', 200, api.regOpen ? { register: true } : undefined);
       if (body.newPassword !== undefined) {
         if (body.code !== '123456') return fail('bad_password', '設定碼不對，還可以再試 4 次。', 200, { left: 4 });
         s.pw = body.newPassword; return okRes(body.staffId);
@@ -157,6 +163,54 @@ test('第一次登入：自動判斷要設定密碼；設定碼＋新密碼（�
   assert.equal((await acctText(page)).replace(/\s/g, ''), '公司模式新同事');
 });
 
+test('註冊：查不到編號才出現「註冊」；送出前再輸入一次編號；拿到一次性密碼自動帶入，設定密碼後登入', async () => {
+  const { page, api } = await open();
+  api.regOpen = true;
+  await page.click('#company-btn');
+  assert.equal(await page.isVisible('#company-dialog .login-reg'), false, '一開始沒有註冊');
+  await page.fill('#company-dialog input[name=staffId]', 'r77');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForSelector('#company-dialog .login-reg', { state: 'visible' });
+  assert.match(await page.textContent('#company-dialog [role=alert]'), /按「註冊」/);
+  await page.click('#company-dialog .login-reg');
+  assert.equal(await page.textContent('#company-dialog h2'), '註冊');
+  assert.equal(await page.inputValue('#company-dialog input[name=regStaffId]'), 'R77', '帶入剛輸入的編號');
+  await page.click('#company-dialog button[type=submit]');
+  assert.match(await page.textContent('#company-dialog [role=alert]'), /請輸入姓名/);
+  await page.fill('#company-dialog input[name=regName]', '林新人');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForSelector('#company-reg-confirm', { state: 'visible' });
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/reg-confirm.png' });
+  await page.fill('#company-reg-confirm input[name=regStaffId2]', 'R78');
+  await page.click('#company-reg-confirm button[type=submit]');
+  assert.match(await page.textContent('#company-reg-confirm [role=alert]'), /不一樣/);
+  assert.equal(api.bodies.filter((b) => b.register).length, 0, '不一致不送出');
+  await page.fill('#company-reg-confirm input[name=regStaffId2]', 'r77');
+  await page.click('#company-reg-confirm button[type=submit]');
+  await page.waitForSelector('#login-otp', { state: 'visible' });
+  assert.deepEqual(api.bodies.filter((b) => b.register).at(-1), { register: true, staffId: 'R77', staffId2: 'R77', name: '林新人' });
+  assert.equal(await page.textContent('#company-dialog h2'), '註冊完成，請設定密碼');
+  assert.equal(await page.textContent('#login-otp .login-otp-code'), '123456');
+  assert.match(await page.textContent('#login-otp'), /10 分鐘內有效（剩 (10:00|9:5\d)）/);
+  assert.equal(await page.inputValue('#company-dialog input[name=code]'), '123456', '自動帶入');
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/reg-otp.png' });
+  await page.fill('#company-dialog input[name=newPassword]', 'my-pass-1');
+  await page.fill('#company-dialog input[name=newPassword2]', 'my-pass-1');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForSelector('#showcase .card[data-tool=secret]');
+  assert.deepEqual(api.bodies.at(-1), { staffId: 'R77', code: '123456', newPassword: 'my-pass-1' });
+  assert.equal(await page.evaluate(() => localStorage.getItem('tbx.staffId')), 'R77');
+});
+
+test('註冊關閉：查不到編號時不顯示「註冊」', async () => {
+  const { page } = await open();
+  await page.click('#company-btn');
+  await page.fill('#company-dialog input[name=staffId]', 'ZZZ');
+  await page.click('#company-dialog button[type=submit]');
+  await page.waitForFunction(() => document.querySelector('#company-dialog [role=alert]').textContent.includes('查不到這個員工編號，或已停用'));
+  assert.equal(await page.isVisible('#company-dialog .login-reg'), false);
+});
+
 test('記住的員工編號還沒設密碼：送密碼回 need_setup 就換到設定密碼步驟', async () => {
   const { page } = await open();
   await page.evaluate(() => localStorage.setItem('tbx.staffId', 'N9'));
@@ -218,7 +272,7 @@ test('cancel keeps locked', async () => {
   api.statusCode = 401;
   await page.evaluate(() => window.tbxShell.__checkCompany());
   await page.waitForSelector('#company-dialog[open]');
-  await page.click('#company-dialog .actions button[type=button]'); // 取消
+  await page.click('#company-dialog .actions button[type=button]:not(.login-reg)'); // 取消
   assert.equal(await page.isVisible('#company-dialog'), false);
   assert.equal(await page.locator('.pane[data-tool=secret] .pane-lock').count(), 1);
   await page.click('.pane[data-tool=secret] .pane-lock button');

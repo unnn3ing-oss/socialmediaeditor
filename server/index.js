@@ -14,8 +14,9 @@ import { cleanupNotices } from './fb/notices.js';
 import { adminStaff, cleanupAudit } from './core/staff.js';
 import { adminMsgs, cleanupMsgs } from './core/msgs.js';
 import { handleSiteVis, adminSiteVis } from './core/sitevis.js';
+import { adminSelfReg } from './core/selfreg.js';
 
-adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff, adminMsgs, adminSiteVis);
+adminExtras.push(adminLogs, adminGuard, adminFb, adminStaff, adminMsgs, adminSiteVis, adminSelfReg);
 
 const TOOL_PREFIX = /^\/t\/([a-z][a-z0-9-]{1,30})(\/.*)?$/;
 

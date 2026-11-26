@@ -5,6 +5,7 @@
 //   extension/routes.gen.js   外掛背景的工具路由表；並把 tools/<id>/ext.js 複製成 extension/tools/<id>.js
 //                             （ext.dir 時整個資料夾複製到 extension/tools/<id>/）
 //   server/routes.gen.js      後端的工具路由表（掛在 /t/<id>/）
+//   server/assettools.gen.js  公司素材代號 → 用到它的工具 id（自行註冊帳號依進階設定勾選的工具放行素材）
 // 用法：node build.js（寫檔）／node build.js --check（只檢查產生檔是否過期）
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -140,6 +141,19 @@ async function build(root, { check = false, write = true } = {}) {
   outputs['server/routes.gen.js'] = GEN_HEADER
     + withApi.map((t) => `import * as ${v(t.id)} from '../tools/${t.id}/${t.api}';\n`).join('')
     + `export const toolRoutes = {${withApi.map((t) => ` '${t.id}': ${v(t.id)}`).join(',')}${withApi.length ? ' ' : ''}};\n`;
+
+  // 公司素材代號 → 工具 id（排序固定，產生檔才穩定）
+  const assetTools = {};
+  for (const t of tools) {
+    for (const spec of Object.values(t.assets || {})) {
+      if (!spec || typeof spec.company !== 'string') continue;
+      (assetTools[spec.company] = assetTools[spec.company] || []).push(t.id);
+    }
+  }
+  const sortedAssets = Object.keys(assetTools).sort().map((k) => [k, [...new Set(assetTools[k])].sort()]);
+  outputs['server/assettools.gen.js'] = GEN_HEADER
+    + 'export const assetTools = {\n' + sortedAssets.map(([k, v]) => `  '${k}': [${v.map((x) => `'${x}'`).join(', ')}],\n`).join('') + '};\n'
+    + 'export const toolNames = {\n' + tools.filter((t) => Object.values(t.assets || {}).some((s) => s && typeof s.company === 'string')).map((t) => `  '${t.id}': ${JSON.stringify(t.name)},\n`).join('') + '};\n';
 
   // extension/tools/ 只能有這次產生的檔案
   const extToolsDir = path.join(root, 'extension/tools');

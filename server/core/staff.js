@@ -7,7 +7,7 @@
 import { withPageNames } from './pagenames.js';
 import { ok, fail, readBody } from './http.js';
 import { all, first, run } from './db.js';
-import { newSetupCode, codeHash, SETUP_MS } from './password.js';
+import { newSetupCode, codeHash, SETUP_MS, REG_MS } from './password.js';
 import { CARDS, GRANTABLE, DASH_ITEMS, readOldLevels } from './levels.js';
 import { ensureSettings } from './once.js';
 
@@ -185,7 +185,8 @@ export async function findStaff(env, id) {
     if (!r || !r.enabled) return null;
     const level = levelOf(env, r);
     const perms = level === 'sys' ? PERMS.slice() : r.gname ? parsePerms(r.perms) : [];
-    return { id: r.id, name: r.name, group: r.grp, groupName: r.gname || '', perms, level, pwVer: Number(r.pw_ver) || 1, lastSeen: Number(r.last_seen) || 0 };
+    // self：自行註冊、還沒指派權限組（grp 對不到任何權限組；系統管理者除外）
+    return { id: r.id, name: r.name, group: r.grp, groupName: r.gname || '', perms, level, self: level !== 'sys' && !r.gname, pwVer: Number(r.pw_ver) || 1, lastSeen: Number(r.last_seen) || 0 };
   } catch { return null; }
 }
 
@@ -245,6 +246,21 @@ async function resetPassword(env, id, bump = true) {
   return { id, code, exp };
 }
 
+// 自行註冊（selfreg.js 設定）：只有完全不存在的編號能註冊；grp=0（沒有權限組）、發 10 分鐘一次性密碼（存在設定碼欄位）
+//   回 { code, exp }；已存在（含停用、系統管理者）或名單已滿回 null
+export async function registerStaff(env, id, name) {
+  await ensureStaff(env);
+  if (!id || id === sysId(env)) return null;
+  const n = await first(env, 'SELECT COUNT(*) AS n FROM staff');
+  if (n && n.n >= MAX_STAFF) return null;
+  const now = Date.now(), code = newSetupCode(), exp = now + REG_MS;
+  const r = await run(env, 'INSERT OR IGNORE INTO staff (id, name, grp, contact, level, enabled, created, updated, setup_hash, setup_exp) VALUES (?, ?, 0, \'\', \'user\', 1, ?, ?, ?, ?)',
+    id, name, now, now, await codeHash(env.SESSION_SECRET, id, code), exp);
+  if (!r || !r.meta || r.meta.changes !== 1) return null;
+  await audit(env, { uid: id, name }, 'staff_register', '', '', id);
+  return { code, exp };
+}
+
 export async function touchLogin(env, id) {
   try { await run(env, 'UPDATE staff SET last_login = ? WHERE id = ?', Date.now(), id); } catch { /* 記不了不影響登入 */ }
 }
@@ -281,7 +297,7 @@ async function listStaff(env) {
   await ensureSys(env);
   const now = Date.now();
   const rows = await all(env, 'SELECT id, name, grp, contact, level, enabled, created, last_login, last_seen, pw_hash, setup_exp, lock_until FROM staff ORDER BY id');
-  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, contact: s.contact || '', sys: levelOf(env, s) === 'sys', enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null, lastSeen: s.last_seen || null,
+  return rows.map((s) => ({ id: s.id, name: s.name, group: s.grp, self: !s.grp, contact: s.contact || '', sys: levelOf(env, s) === 'sys', enabled: !!s.enabled, created: s.created, lastLogin: s.last_login || null, lastSeen: s.last_seen || null,
     pw: s.pw_hash ? 'set' : (s.setup_exp && s.setup_exp > now ? 'setup' : 'none'), setupExp: !s.pw_hash && s.setup_exp > now ? s.setup_exp : null, locked: !!(s.lock_until && s.lock_until > now) }));
 }
 

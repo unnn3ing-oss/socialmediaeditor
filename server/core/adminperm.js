@@ -13,6 +13,7 @@ import { cardsOf, dashOf } from './staff.js';
 export const ROUTES = [
   [/^\/admin\/dash\/config$/, 'dashcfg'],
   [/^\/admin\/site\/vis$/, 'toolvis'],
+  [/^\/admin\/selfreg$/, 'selfreg'],
   [/^\/admin\/fb\/access$/, 'access'],
   [/^\/admin\/fb\/profiles(\/p[0-9a-f]{1,8}(\/activate)?)?$/, 'profiles'],
   [/^\/admin\/fb\/(status|token|app|refresh)$/, 'fbconn'],

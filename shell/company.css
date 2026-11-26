@@ -86,3 +86,12 @@
 }
 .acct-toast { animation: fx-toast-in .22s ease; }   /* 從下方滑入（keyframes 在 ui/fx.css） */
 @media (prefers-reduced-motion: reduce) { .acct-toast { animation: none; } }
+/* 自行註冊：一次性密碼（設定密碼步驟上方） */
+.login-otp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 12px; padding: 12px 14px; border-radius: var(--radius-control); background: var(--fill); }
+.login-otp[hidden] { display: none; }
+.login-otp-label { font-size: 14px; color: var(--muted); }
+.login-otp-code { font: 700 22px/1.2 var(--font); letter-spacing: 3px; font-variant-numeric: tabular-nums; }
+.login-otp-left { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.login-otp.is-expired .login-otp-left { color: #b42318; }
+.login-otp.is-expired .login-otp-code { text-decoration: line-through; opacity: .5; }
+.actions .login-reg { margin-right: auto; }

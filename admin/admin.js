@@ -100,7 +100,7 @@ if (window.top !== window.self) {
     $('logout').hidden = !!frontToken && token === frontToken;
     $('logout').textContent = frontToken ? '鎖定' : '登出';
   }
-  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; labLoaded = false; tvLoaded = false; }
+  function resetLoaded() { msLoaded = false; fbLoaded = false; rdLoaded = false; staffLoaded = false; assetsLoaded = false; sfState = null; dashLoaded = false; dcLoaded = false; labLoaded = false; tvLoaded = false; srLoaded = false; }
   // 用目前的 token 讀身分；成功就進入管理頁
   function enter(msgEl) {
     return api('/admin/me').then(function (res) {
@@ -1201,6 +1201,8 @@ if (window.top !== window.self) {
   }
   function sfGroupSelect(cur, label) {
     var s = document.createElement('select'); s.setAttribute('aria-label', label);
+    // 自行註冊（group 0）：先放「未指派」，選了權限組就變一般員工
+    if (!cur) { var o0 = document.createElement('option'); o0.value = '0'; o0.textContent = '（未指派）'; o0.disabled = true; s.appendChild(o0); }
     sfState.groups.forEach(function (g) { var o = document.createElement('option'); o.value = g.id; o.textContent = g.name; if (g.assignable === false && g.id !== cur) o.disabled = true; s.appendChild(o); });
     s.value = cur; return s;
   }
@@ -1216,7 +1218,9 @@ if (window.top !== window.self) {
     var tb = $('sfRows'); tb.textContent = '';
     sfState.staff.forEach(function (s) {
       var tr = document.createElement('tr');
-      tr.appendChild(sfEl('td', '', s.id));
+      var tdId = sfEl('td', '', s.id);
+      if (s.self && !s.sys) { var sb = sfEl('span', 'tag warn', '自行註冊'); sb.title = '自己註冊的帳號，還沒指派權限組'; tdId.appendChild(document.createTextNode(' ')); tdId.appendChild(sb); }
+      tr.appendChild(tdId);
       // 姓名：只有系統管理者能改（Enter／離開欄位存，失敗還原）；其他人唯讀
       var isSysRow = !!s.sys, tn = document.createElement('td');
       if (meSt.canRename) {
@@ -1502,7 +1506,7 @@ if (window.top !== window.self) {
     });
   }
   // 儀表板項目 → 該分類裡對應的功能（跳過去直接看到那張卡片）
-  var DASH_SUB = { access: 'access', profile: 'profiles', fbtoken: 'fbconn', webhook: 'webhook', groups: 'groups', logs: 'logs', rundown: 'rd', usage: 'usage', online: 'online', bg: 'bg' };
+  var DASH_SUB = { selfreg: 'staff', access: 'access', profile: 'profiles', fbtoken: 'fbconn', webhook: 'webhook', groups: 'groups', logs: 'logs', rundown: 'rd', usage: 'usage', online: 'online', bg: 'bg' };
   function dashGo(tab, key) { return function () { if (!$('tab-' + tab).hidden) showTab(tab, true, DASH_SUB[key]); }; }
   function dashRender(d) {
     var p = function (v) { return String(v).padStart(2, '0'); }, at = new Date(d.at);
@@ -1616,6 +1620,30 @@ if (window.top !== window.self) {
       say($('tvMsg'), '已儲存，網站約 1 分鐘內生效（重新整理）。', 'good');
     }).catch(function (e) { say($('tvMsg'), '儲存失敗' + (e && e.message ? '：' + e.message : ''), 'err'); }).then(function () { fxEnd($('tvSave'), $('tvMsg'), '已儲存'); });
   };
+  // ---- 進階設定「自行註冊」（GET／POST /admin/selfreg，只有已解鎖系統管理者）；工具選項由後端給（不含臉書工具）----
+  var srLoaded = false;
+  function srLoad() {
+    srLoaded = true; $('srSave').disabled = true; say($('srMsg'), '讀取中…');
+    api('/admin/selfreg').then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      $('srOn').checked = !!res.data.on;
+      var box = $('srList'); box.textContent = '';
+      (res.data.options || []).forEach(function (t) {
+        var l = document.createElement('label'), c = document.createElement('input');
+        c.type = 'checkbox'; c.value = t.id; c.checked = res.data.tools.indexOf(t.id) >= 0;
+        l.appendChild(c); l.appendChild(document.createTextNode(t.name)); box.appendChild(l);
+      });
+      $('srSave').disabled = false; say($('srMsg'), '');
+    }).catch(function (e) { srLoaded = false; say($('srMsg'), '讀取失敗' + (e && e.message ? '：' + e.message : '') + '，請切換分類再回來。', 'err'); });
+  }
+  $('srSave').onclick = function () {
+    var tools = Array.prototype.filter.call($('srList').querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+    fxStart($('srSave'), '儲存中'); say($('srMsg'), '儲存中…');
+    api('/admin/selfreg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: $('srOn').checked, tools: tools }) }).then(function (res) {
+      if (!res.ok) { if (res.code === 'unauthorized') return expired(); throw new Error(res.error || ''); }
+      say($('srMsg'), '已儲存，約 1 分鐘內生效。', 'good');
+    }).catch(function (e) { say($('srMsg'), '儲存失敗' + (e && e.message ? '：' + e.message : ''), 'err'); }).then(function () { fxEnd($('srSave'), $('srMsg'), '已儲存'); });
+  };
   // ---- 進階設定「儀表板顯示項目」（GET／POST /admin/dash/config，只有已解鎖系統管理者）----
   var dcLoaded = false;
   function dcLoad() {
@@ -1650,7 +1678,7 @@ if (window.top !== window.self) {
     people: [['online', '目前在線', 'olCard'], ['msg', '發送通知', 'msCard'], ['staff', '授權名單', 'sfCard']],
     conn: [['fb', '臉書粉專連線狀態', 'fsCard'], ['rd', 'Rundown 連線', 'rdCard'], ['usage', '速率限制', 'usCard']],
     rec: [['audit', '操作紀錄', 'auCard'], ['logs', '錯誤紀錄', 'lgCard']],
-    adv: [['access', '臉書工具開關', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['toolvis', '未登入隱藏工具', 'tvCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
+    adv: [['access', '臉書工具開關', 'acCard'], ['dash', '儀表板顯示項目', 'dcCard'], ['toolvis', '未登入隱藏工具', 'tvCard'], ['selfreg', '自行註冊', 'srCard'], ['labs', '實驗功能', 'labCard'], ['profiles', '權杖組別', 'tpCard'], ['fbconn', '臉書連線', 'fbCard'], ['webhook', 'Webhook', 'whCard'], ['groups', '權限組', 'sgCard']]
   };
   var curSub = {};   // 每個分類目前的功能
   var assetsLoaded = false;
@@ -1728,6 +1756,7 @@ if (window.top !== window.self) {
     if (id === 'home' && !dashLoaded && token && me && me.dash && me.dash.length) dashLoad(false);
     if (id === 'adv' && !dcLoaded && token && can('dashcfg')) dcLoad();
     if (id === 'adv' && !tvLoaded && token && can('toolvis')) tvLoad();
+    if (id === 'adv' && !srLoaded && token && can('selfreg')) srLoad();
     if (id === 'adv' && !labLoaded && token && can('labs')) labLoad();
   }
   function showHash() { var h = parseHash(); showTab(h.tab, false, h.sub); }

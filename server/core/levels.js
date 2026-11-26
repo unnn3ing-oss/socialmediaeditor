@@ -19,6 +19,7 @@ export const CARDS = [
   { key: 'dashcfg', name: '儀表板顯示項目', sensitive: true },
   { key: 'labs', name: '實驗功能', sensitive: true },
   { key: 'toolvis', name: '未登入時隱藏的工具', sensitive: true },
+  { key: 'selfreg', name: '自行註冊', sensitive: true },
   { key: 'audit', name: '操作紀錄' },
   { key: 'rundown', name: 'Rundown 連線' },
   { key: 'assets', name: '素材設定' },
@@ -37,6 +38,7 @@ export const DASH_ITEMS = [
   { key: 'rundown', name: 'Rundown 連線', tab: 'conn' },
   { key: 'usage', name: '速率用量', tab: 'conn' },
   { key: 'online', name: '目前在線', tab: 'people' },
+  { key: 'selfreg', name: '自行註冊', tab: 'people' },
   { key: 'bg', name: '文字背景圖樣', tab: 'post' }
 ];
 export const DASH_KEYS = DASH_ITEMS.map((d) => d.key);

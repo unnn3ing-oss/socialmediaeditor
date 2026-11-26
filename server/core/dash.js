@@ -40,6 +40,7 @@ export function webhookItem({ signReady, last }, now = Date.now()) {
   if (!signReady) return { level: 'info', text: '未設定 App 密鑰（留言管理未使用）' };
   return { level: 'ok', text: last ? ago(last.at, now) + '收到通知' : '尚未收到通知' };
 }
+export function selfregItem(n) { return n > 0 ? { level: 'warn', text: n + ' 位自行註冊尚未指派權限組' } : { level: 'ok', text: '沒有待指派的人' }; }
 export function logsItem(n) { return n > 0 ? { level: 'bad', text: n + ' 則未處理' } : { level: 'ok', text: '沒有未處理的錯誤' }; }
 const RD_TEXT = { ok: '已設定', missing: '未設定網址與金鑰', url: '網址未設定或格式不對', token: '金鑰空白' };
 export function rundownItem(state) { return state === 'ok' ? { level: 'ok', text: RD_TEXT.ok } : { level: 'bad', text: RD_TEXT[state] || '設定有誤' }; }
@@ -91,6 +92,12 @@ async function read(env, now) {
       await ensureStaff(env);
       const r = await first(env, 'SELECT COUNT(*) AS n FROM staff WHERE enabled = 1 AND last_seen >= ?', now - ONLINE_MS);
       return { level: 'info', text: (Number(r && r.n) || 0) + ' 人' };
+    },
+    selfreg: async () => {
+      const { ensureStaff, sysId } = await import('./staff.js');
+      await ensureStaff(env);
+      const r = await first(env, 'SELECT COUNT(*) AS n FROM staff WHERE grp = 0 AND enabled = 1 AND id != ?', sysId(env) || '');
+      return selfregItem(Number(r && r.n) || 0);
     },
     bg: async () => {
       const { urlExpiry } = await import('../fb/bgstore.js');
