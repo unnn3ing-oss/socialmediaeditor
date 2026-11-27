@@ -84,10 +84,12 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
       if (link !== sentLink) { sendId = newSendId(); sentLink = link; unknown.clear(); }   // 換了文章＝新的一則
       const unsure = c.targets.map((t) => t.page).filter((id) => unknown.has(id));
       if (unsure.length && !(await confirmBox('上次送出結果不明', `${unsure.map((id) => targets.shortOf(id)).join('、')} 上次送出時沒有收到臉書的結果，可能已經發出。請先到「已排程／已發佈」確認；確定沒有發出才按「確定」重送，否則按「返回」並取消勾選這些粉專。`))) return;
+      const mkForm = (tg) => {
       const fd = new FormData();
       fd.append('message', msg);
       fd.append('sendId', sendId);
-      if (unsure.length) fd.append('retry', JSON.stringify(unsure));
+      const re = unsure.filter((id) => tg.some((t) => t.page === id));
+      if (re.length) fd.append('retry', JSON.stringify(re));
       if (link) {
         fd.append('link', link);
         const lead = $('lead').value.trim();
@@ -99,11 +101,26 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
       for (const f of images) fd.append('image', f, f.name);
       if (bg) fd.append('bg', bg);
       fd.append('kind', composer.raw() ? 'photo' : ({ image: 'template', color: 'textimg', text: 'text' }[composer.mode()] || ''));   // 操作紀錄：套版／字圖／文字／照片（照片框）
-      fd.append('targets', JSON.stringify(c.targets));
+      fd.append('targets', JSON.stringify(tg));
+      return fd;
+      };
       const sentAt = Date.now();
       const snap = composer.snapshot();   // 再發一次用（送出完成會清空，要先記下）
-      const data = await tb.api.call('/fb/post', { method: 'POST', body: fd });
-      const results = data.results || [];
+      let results;
+      if (images.length > 1 && c.targets.length > 1) {
+        // 多圖：一個粉專送一次（每個粉專要呼叫臉書「張數＋1」次，全部擠在一個請求會超過後端單次的對外呼叫上限）
+        results = [];
+        for (let i = 0; i < c.targets.length; i++) {
+          const t = c.targets[i];
+          busy(btn, `送出中（第 ${i + 1}／${c.targets.length} 個粉專）`);
+          try { results.push(...((await tb.api.call('/fb/post', { method: 'POST', body: mkForm([t]) })).results || [])); }
+          catch (e) {
+            // 連不上／後端當掉（沒有錯誤碼、回應格式不對、5xx）＝可能已發出，當待確認；後端明確拒絕（驗證、權限等）＝確定沒發
+            const unsure = !e || !e.code || e.code === 'bad_response' || /^http_5/.test(e.code);
+            results.push({ page: t.page, ok: false, unknown: unsure, error: (unsure ? '沒有收到結果，可能已經發出：' : '') + errText(e) });
+          }
+        }
+      } else results = (await tb.api.call('/fb/post', { method: 'POST', body: mkForm(c.targets) })).results || [];
       if (history) history.save(snap, results.filter((r) => r.ok && r.postId).map((r) => String(r.postId)));
       for (const r of results) { if (r.unknown) unknown.add(r.page); else unknown.delete(r.page); }
       if ($('rdOn').checked) busy(btn, '寫入 RD');

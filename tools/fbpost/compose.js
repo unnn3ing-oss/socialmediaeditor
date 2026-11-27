@@ -13,7 +13,7 @@ import { createFxKit } from '../../ui/compose/fx.js';
 
 const MAX_IMAGES = 3;
 const RAW_MAX = 8 * 1024 * 1024;   // 照片框每張送出上限（和後端 MAX_IMAGE 相同）
-const RAW_TOTAL = 40 * 1024 * 1024;   // 照片框合計上限（和後端 MAX_IMAGES_TOTAL 相同）
+const RAW_TOTAL = 25 * 1024 * 1024;   // 照片框合計上限（和後端 MAX_IMAGES_TOTAL 相同）
 export const MAX_PHOTOS = 10;
 export const BG_MAX = 130;                          // 臉書文字背景貼文字數上限
 export const BG_FONT = { max: 30, min: 14 };          // 文字背景預覽字級：塞得下的最大字級（不自動換行）
@@ -531,7 +531,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       if (isRaw()) {
         const out = [];
         for (let i = 0; i < st.photos.length; i++) out.push(await rawFile(st.photos[i], i + 1));
-        if (out.reduce((a, f) => a + f.size, 0) > RAW_TOTAL) throw new Error('照片合計超過 40MB，請減少張數或換小一點的照片');
+        if (out.reduce((a, f) => a + f.size, 0) > RAW_TOTAL) throw new Error('照片合計超過 25MB，請減少張數或換小一點的照片');
         return out;
       }
       if (titleEd) titleEd.end();

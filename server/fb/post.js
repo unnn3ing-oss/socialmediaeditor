@@ -12,7 +12,7 @@ export const MIN_LEAD = 600;            // 排程至少晚 10 分鐘
 export const MAX_LEAD = 30 * 86400;     // 最多 30 天
 export const MAX_IMAGE = 8 * 1024 * 1024;
 export const MAX_IMAGES = 10;                 // 多圖（照片框）最多 10 張
-export const MAX_IMAGES_TOTAL = 40 * 1024 * 1024;
+export const MAX_IMAGES_TOTAL = 25 * 1024 * 1024;   // 後端要先讀進記憶體再轉送臉書：合計壓在 25MB
 const MAX_MESSAGE = 63206;
 
 export const timeOk = (at, now = Math.floor(Date.now() / 1000)) => Number.isInteger(at) && at >= now + MIN_LEAD && at <= now + MAX_LEAD;

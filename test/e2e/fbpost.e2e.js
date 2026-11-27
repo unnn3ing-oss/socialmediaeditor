@@ -1591,6 +1591,26 @@ test('「照片」框：加多張、縮圖調順序／移除、不套框不加�
   await page.close();
 });
 
+test('多圖發多個粉專：一個粉專送一次請求（避免單次請求對外呼叫過多），結果合在一起', async () => {
+  const { page, errors, api } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  await page.click('#frameSeg [data-frame=photo]');
+  await pasteImage(page, fakeAsset()); await pasteImage(page, fakeAsset());
+  await page.waitForFunction(() => document.querySelectorAll('#psList .ps-thumb').length === 2);
+  await page.fill('#link', 'https://example.com/a');
+  await page.click(chip(111) + ' .chip-l'); await page.click(chip(333) + ' .chip-l');
+  await page.click('#sendBtn');
+  for (let i = 0; api.posts.length < 2 && i < 200; i++) await page.waitForTimeout(30);
+  assert.equal(api.posts.length, 2);
+  const tg = api.posts.map((b) => JSON.parse(/name="targets"\r\n\r\n([^\r]*)\r\n/.exec(b)[1]).map((t) => t.page));
+  assert.deepEqual(tg, [['111'], ['333']]);
+  assert.ok(api.posts.every((b) => [...b.matchAll(/name="image"/g)].length === 2));
+  assert.ok(api.posts.every((b) => /name="sendId"\r\n\r\n([^\r]+)\r\n/.exec(b)[1] === /name="sendId"\r\n\r\n([^\r]+)\r\n/.exec(api.posts[0])[1]), '同一則（同 sendId）');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('手機（390px）：刪除是 44px 垃圾桶', async () => {
   const { page } = await newPage('admin', { width: 390, height: 800 });
   await page.goto(srv.url + 'tools/fbpost/index.html');
