@@ -563,6 +563,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     // 再發一次：清空後帶回（不自動重新帶入文章、不帶貼文內容）
     async restore(rec) {
       this.reset();
+      if (rec.mode === 'photo') rec = { ...rec, mode: 'image', frame: 'photo' };   // 舊記錄的「原圖」＝現在的照片框
       if (['image', 'color', 'text'].includes(rec.mode)) { st.mode = rec.mode; setMode(rec.mode); }
       if ((assets.company && (rec.frame === 'news' || rec.frame === 'entertainment')) || rec.frame === 'photo') { st.frame = rec.frame; setFrame(rec.frame); }
       if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; setColor(rec.color); }
