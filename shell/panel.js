@@ -119,7 +119,8 @@ window.addEventListener('message', async (e) => {
 });
 
 async function start() {
-  try { catalog = (await (await fetch('shell/catalog.json')).json()).tools || []; } catch { catalog = []; }
+  // 重新開啟側邊欄時，先驗證工具目錄，避免載到舊版 iframe 入口。
+  try { catalog = (await (await fetch('shell/catalog.json', { cache: 'no-cache' })).json()).tools || []; } catch { catalog = []; }
   tool = catalog.find((t) => t.id === toolId) || null;
   if (!tool) {
     $('panelSk').hidden = true; $('panelErr').hidden = false; $('panel').setAttribute('aria-busy', 'false');
