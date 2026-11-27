@@ -15,8 +15,8 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
   function updateButton() {
     const n = targets.count(), noPhoto = composer.needsPhoto();
     if ($('sendBtn').getAttribute('aria-busy') !== 'true' && !$('sendBtn').classList.contains('fx-bad')) idle($('sendBtn'), `全部送出（${n} 個粉專）`, { disabled: n === 0 || noPhoto });
-    // 自動提示（沒勾粉專、照片套圖／原圖沒照片）：使用者送出時的錯誤訊息不蓋掉
-    const auto = !n ? '請先勾選要發的粉專' : noPhoto ? '照片套圖／原圖需要照片，請貼上或選一張照片，或改用純文字' : '';
+    // 自動提示（沒勾粉專、照片套圖沒照片）：使用者送出時的錯誤訊息不蓋掉
+    const auto = !n ? '請先勾選要發的粉專' : noPhoto ? '照片套圖需要照片，請貼上或選一張照片，或改用純文字' : '';
     if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = auto; $('sendErr').dataset.auto = auto ? '1' : ''; }
   }
 
@@ -65,11 +65,12 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
     if (extra.error) { err.textContent = extra.error; return; }
     if (!/^https?:\/\/\S+$/i.test($('link').value.trim())) { err.textContent = '請貼上文章網址（第 1 則留言和排入 RD 都要用到）。'; return; }
     if (!c.targets.length) return;
-    if (composer.needsPhoto()) { err.textContent = '照片套圖／原圖需要照片，請貼上或選一張照片，或改用純文字'; return; }
+    if (composer.needsPhoto()) { err.textContent = '照片套圖需要照片，請貼上或選一張照片，或改用純文字'; return; }
     const btn = $('sendBtn'); busy(btn, `送出中（${c.targets.length} 個粉專）`);
     let failed = false;
     try {
-      const image = await composer.image();
+      const images = await composer.images();   // 照片框可多張；其他 0 或 1 張
+      const image = images[0] || null;
       const msg = composer.text();   // 純文字＝標題框；其他＝貼文內容（開頭空行已拿掉）
       if (!msg.trim() && !image) { err.textContent = composer.mode() === 'text' ? '請輸入標題（純文字貼文只發標題框的內容）。' : '請輸入貼文內容，或貼上網址帶入照片。'; failed = true; return; }
       const bg = image ? '' : composer.bg();
@@ -95,9 +96,9 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
       }
       if (extra.comments.length) fd.append('comments', JSON.stringify(extra.comments));
       if (extra.warn) fd.append('warn', extra.warn);
-      if (image) fd.append('image', image, image.name);
+      for (const f of images) fd.append('image', f, f.name);
       if (bg) fd.append('bg', bg);
-      fd.append('kind', { image: 'template', color: 'textimg', text: 'text', photo: 'photo' }[composer.mode()] || '');   // 操作紀錄：套版／字圖／文字／照片
+      fd.append('kind', composer.raw() ? 'photo' : ({ image: 'template', color: 'textimg', text: 'text' }[composer.mode()] || ''));   // 操作紀錄：套版／字圖／文字／照片（照片框）
       fd.append('targets', JSON.stringify(c.targets));
       const sentAt = Date.now();
       const snap = composer.snapshot();   // 再發一次用（送出完成會清空，要先記下）

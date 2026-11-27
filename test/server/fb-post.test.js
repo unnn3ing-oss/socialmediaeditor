@@ -31,7 +31,7 @@ async function setup(t, handlers) {
 async function send(env, headers, fields) {
   if (!('link' in fields)) fields = { link: 'https://news.tvbs.com.tw/sports/4051394', ...fields };   // 文章網址必填：沒指定就帶預設
   const fd = new FormData();
-  for (const [k, v] of Object.entries(fields)) if (v !== undefined) fd.set(k, v);
+  for (const [k, v] of Object.entries(fields)) if (Array.isArray(v)) v.forEach((x) => fd.append(k, x)); else if (v !== undefined) fd.set(k, v);
   const w = await load();
   const r = await w.fetch(new Request('https://api.test/fb/post', { method: 'POST', body: fd, headers: { origin: ORIGIN, ...headers } }), env, { waitUntil() {} });
   return { status: r.status, body: await r.json() };
@@ -595,4 +595,45 @@ test('警語留言驗證：超過 2000 字 400；空白＝不留', async (t) => 
   const r = await send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at }]), warn: '  ' });
   assert.equal(r.body.data.results[0].warn, undefined);
   assert.equal(RecTimer.log[0][1].items.length, 1);
+});
+
+test('多圖（照片框）立即：每張 /photos published=false → /feed attached_media；排程加 temporary＋SCHEDULED', async (t) => {
+  let n = 0;
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => ({ id: 'M' + (++n) }),
+    'POST /111/feed': () => ({ id: '111_88' }),
+    'POST /111_88/comments': () => ({ id: 'C1' })
+  });
+  const r = await send(env, headers, { message: '多圖', image: [img(), img(), img()], kind: 'photo', targets: JSON.stringify([{ page: '111', at: null }]) });
+  const x = r.body.data.results[0];
+  assert.deepEqual([x.ok, x.postId], [true, '111_88']);
+  const ph = f.calls.filter((c) => c.path === '/111/photos');
+  assert.equal(ph.length, 3);
+  assert.ok(ph.every((c) => c.body.published === 'false' && !('temporary' in c.body) && !('caption' in c.body)));
+  const feed = f.calls.find((c) => c.path === '/111/feed').body;
+  assert.equal(feed.message, '多圖');
+  assert.deepEqual([0, 1, 2].map((i) => JSON.parse(feed[`attached_media[${i}]`]).media_fbid), ['M1', 'M2', 'M3']);
+  assert.ok(!('published' in feed) && !('scheduled_publish_time' in feed));
+  // 排程
+  const at = nowSec() + 3600;
+  const r2 = await send(env, headers, { message: '多圖排程', image: [img(), img()], targets: JSON.stringify([{ page: '111', at }]) });
+  assert.equal(r2.body.data.results[0].ok, true);
+  const ph2 = f.calls.filter((c) => c.path === '/111/photos').slice(3);
+  assert.ok(ph2.length === 2 && ph2.every((c) => c.body.temporary === 'true'));
+  const feed2 = f.calls.filter((c) => c.path === '/111/feed')[1].body;
+  assert.deepEqual([feed2.published, feed2.scheduled_publish_time, feed2.unpublished_content_type], ['false', String(at), 'SCHEDULED']);
+});
+
+test('多圖：中途照片上傳失敗＝這個粉專失敗、不呼叫 /feed、不是待確認；超過 10 張 400', async (t) => {
+  let n = 0;
+  const { f, env, headers } = await setup(t, {
+    'POST /111/photos': () => (++n === 2 ? gErr(324, 400, 'bad image') : { id: 'M' + n }),
+    'POST /111/feed': () => ({ id: '111_1' })
+  });
+  const r = await send(env, headers, { message: 'x', image: [img(), img(), img()], targets: JSON.stringify([{ page: '111', at: null }]) });
+  const x = r.body.data.results[0];
+  assert.equal(x.ok, false); assert.ok(!x.unknown);
+  assert.ok(!f.calls.some((c) => c.path === '/111/feed'));
+  const r2 = await send(env, headers, { message: 'x', image: Array.from({ length: 11 }, img), targets: JSON.stringify([{ page: '111', at: null }]) });
+  assert.equal(r2.status, 400);
 });

@@ -189,7 +189,7 @@ test('幫直出 source：大圖經後端轉 base64、連結從計時器紀錄拿
   assert.equal(r.status, 200);
   assert.equal(r.body.data.message, '小編文\n【標題】');
   assert.equal(r.body.data.link, 'https://news.tvbs.com.tw/a/123?x=1');
-  assert.deepEqual(r.body.data.image, { type: 'image/jpeg', data: Buffer.from([1, 2, 3]).toString('base64') });
+  assert.deepEqual(r.body.data.images, [{ type: 'image/jpeg', data: Buffer.from([1, 2, 3]).toString('base64') }]);
   assert.equal(f.calls.some((c) => c.path === '/111_5/comments'), false);
 });
 
@@ -200,7 +200,20 @@ test('幫直出 source：沒有計時器紀錄改讀粉專自己的留言；圖�
   });
   const r = await call('/fb/posts/111_6/source?page=111');
   assert.equal(r.body.data.link, 'https://news.tvbs.com.tw/a/9');
-  assert.equal(r.body.data.image, null);
+  assert.deepEqual(r.body.data.images, []);
   assert.equal(f.calls.some((c) => c.path.includes('evil')), false);
   assert.equal((await call('/fb/posts/111_6/source?page=222')).status, 400);
+});
+
+test('幫直出 source：多圖貼文每張都帶（照順序）', async (t) => {
+  const A = 'https://scontent.xx.fbcdn.net/a.jpg', B = 'https://scontent.xx.fbcdn.net/b.png';
+  const { call } = await setup(t, {
+    'GET /111_8': () => ({ message: 'x', attachments: { data: [{ type: 'album', subattachments: { data: [{ media: { image: { src: A } } }, { media: { image: { src: B } } }] } }] } }),
+    [A]: () => new Response(new Uint8Array([1]), { headers: { 'content-type': 'image/jpeg' } }),
+    [B]: () => new Response(new Uint8Array([2]), { headers: { 'content-type': 'image/png' } }),
+    'GET /111_8/comments': () => ({ data: [] })
+  });
+  const r = await call('/fb/posts/111_8/source?page=111');
+  assert.deepEqual(r.body.data.images.map((x) => x.type), ['image/jpeg', 'image/png']);
+  assert.equal(r.body.data.imageFailed, false);
 });

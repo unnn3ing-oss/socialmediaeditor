@@ -11,6 +11,8 @@ export { commentLink, commentText } from './comment.js';
 export const MIN_LEAD = 600;            // 排程至少晚 10 分鐘
 export const MAX_LEAD = 30 * 86400;     // 最多 30 天
 export const MAX_IMAGE = 8 * 1024 * 1024;
+export const MAX_IMAGES = 10;                 // 多圖（照片框）最多 10 張
+export const MAX_IMAGES_TOTAL = 40 * 1024 * 1024;
 const MAX_MESSAGE = 63206;
 
 export const timeOk = (at, now = Math.floor(Date.now() / 1000)) => Number.isInteger(at) && at >= now + MIN_LEAD && at <= now + MAX_LEAD;
@@ -59,16 +61,21 @@ export function summaryOf(message) {
 export function parsePostForm(fd) {
   const message = String(fd.get('message') || '');
   const link = String(fd.get('link') || '').trim();
-  const image = fd.get('image');
+  const images = fd.getAll('image').filter((x) => x && typeof x === 'object' && x.size > 0);
   const lead = fd.has('commentLead') ? String(fd.get('commentLead')) : undefined;   // 沒給＝預設「看更多新聞內容」
   if (message.length > MAX_MESSAGE) return null;
   if (lead !== undefined && ([...lead.trim()].length > MAX_COMMENT_LEAD || /[\r\n]/.test(lead.trim()))) return null;
   if (!link || !/^https?:\/\/[^\s]+$/i.test(link)) return null;   // 文章網址必填（第 1 則留言、RD 都要用）
-  let file = null;
-  if (image && typeof image === 'object' && image.size > 0) {
-    if (!['image/jpeg', 'image/png'].includes(image.type) || image.size > MAX_IMAGE) return null;
-    file = image;
+  // 圖片：1 張＝一般有圖貼文；2～10 張＝多圖貼文（照片框）
+  if (images.length > MAX_IMAGES) return null;
+  let total = 0;
+  for (const im of images) {
+    if (!['image/jpeg', 'image/png'].includes(im.type) || im.size > MAX_IMAGE) return null;
+    total += im.size;
   }
+  if (total > MAX_IMAGES_TOTAL) return null;
+  const files = images;
+  const file = files[0] || null;
   if (!message.trim() && !file) return null;
   // 文字背景（只限純文字、≤130 字）；代號是否在清單由路由查 findBackground
   const bg = fd.has('bg') ? String(fd.get('bg')) : '';
@@ -99,10 +106,29 @@ export function parsePostForm(fd) {
   const kind = KINDS.includes(String(fd.get('kind') || '')) ? String(fd.get('kind')) : '';
   // noPreview：這次送出要不要試著移除第 1 則留言的連結預覽（實驗功能，後端再查發文者適不適用）
   const noPreview = String(fd.get('noPreview') || '') === '1';
-  return { message, link, lead, file, bg, extras, warn, sendId, retry, kind, noPreview, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
+  return { message, link, lead, file, files, bg, extras, warn, sendId, retry, kind, noPreview, targets: targets.map((t) => ({ page: t.page, at: t.at })) };
 }
 
-async function publishOne(env, page, token, { message, file, bg, at }) {
+// 多圖：每張先上傳成未發布照片（排程另加 temporary），再用 /feed 的 attached_media 合成一則貼文
+//   照片上傳失敗＝還沒有貼文，可安全重送（不算結果不明）
+async function publishMulti(env, page, token, { message, files, at }) {
+  const ids = [];
+  for (const f of files) {
+    const fd = new FormData();
+    fd.set('source', f, f.name || 'image.jpg');
+    fd.set('published', 'false');
+    if (at !== null) fd.set('temporary', 'true');
+    try { ids.push(String((await graph(env, 'POST', '/' + page + '/photos', fd, token)).id)); }
+    catch (e) { if (e instanceof GraphError) e.uncertain = false; throw e; }
+  }
+  const params = { message };
+  ids.forEach((id, i) => { params[`attached_media[${i}]`] = { media_fbid: id }; });
+  if (at !== null) Object.assign(params, { published: 'false', scheduled_publish_time: at, unpublished_content_type: 'SCHEDULED' });
+  const d = await graph(env, 'POST', '/' + page + '/feed', params, token);
+  return String(d.id);
+}
+async function publishOne(env, page, token, { message, file, files, bg, at }) {
+  if (files && files.length > 1) return publishMulti(env, page, token, { message, files, at });
   if (file) {
     if (at === null) {
       const fd = new FormData();
@@ -163,7 +189,7 @@ export async function createPosts(env, form, who = null) {
       }
     }
     try {
-      r.postId = await publishOne(env, t.page, p.token, { message: form.message, file: form.file, bg: form.bg, at: t.at });
+      r.postId = await publishOne(env, t.page, p.token, { message: form.message, file: form.file, files: form.files, bg: form.bg, at: t.at });
       r.ok = true;
       if (sid) await finishSend(env, sid, t.page, 'ok', r.postId);
     } catch (e) {

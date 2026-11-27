@@ -5,7 +5,7 @@ import { audit } from '../core/staff.js';
 import { listPages, validPages, savePages, clearPageCache, tokenStatus, connectToken, refreshPages, quickWarn, FbSetupError, activePageTokens, pageTokens } from './pages.js';
 import { saveToken, clearToken, savePageTokens, appCred, saveAppCred, clearAppCred, APP_ID_RE, APP_SECRET_RE, readProfiles, createProfile, renameProfile, activateProfile, deleteProfile, forProfile, storedPageTokens, userToken, brokenAt, PROFILE_ID_RE, MAX_PROFILES } from './tokenstore.js';
 import { GraphError, checkAppCred, graph } from './graph.js';
-import { parsePostForm, createPosts, MAX_IMAGE } from './post.js';
+import { parsePostForm, createPosts, MAX_IMAGES_TOTAL } from './post.js';
 import { rundownAdd, adminRundown } from './rundown.js';
 import { listPresets, validPresets, savePresets } from './presets.js';
 import { commentOpts, saveCommentOpts, validOpts, npOpts, saveNpOpts, validNpOpts, npApplies } from './comment.js';
@@ -71,7 +71,7 @@ route('GET', /^\/fb\/bg\/(\d{6,20})$/, async (request, env, ctx, m) => bgImageRe
 route('POST', /^\/fb\/post$/, async (request, env, ctx, m, me) => {
   const ct = request.headers.get('content-type') || '';
   if (!ct.includes('multipart/form-data')) return fail(request, env, 'bad_request');
-  const buf = await readBody(request, MAX_IMAGE + 512 * 1024);
+  const buf = await readBody(request, MAX_IMAGES_TOTAL + 512 * 1024);   // 多圖合計上限（每張上限在 parsePostForm）
   if (!buf) return fail(request, env, 'too_large');
   let fd;
   try { fd = await new Response(buf, { headers: { 'content-type': ct } }).formData(); } catch { return fail(request, env, 'bad_request'); }

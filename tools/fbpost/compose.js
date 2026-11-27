@@ -1,4 +1,4 @@
-// 做圖＋帶入：貼上文章網址就自動帶入標題、主圖、貼文內容、框；[照片套圖｜純文字圖｜純文字｜原圖]。
+// 做圖＋帶入：貼上文章網址就自動帶入標題、主圖、貼文內容、框；[照片套圖｜純文字圖｜純文字]，照片套圖的框可選 新聞｜娛樂｜照片（不套框、1～10 張原樣送出）。
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：照片套圖 66px、純文字圖 76px。框的判斷用 rules.js。
 import { $, errText, say, confirmBox, segmented, stripLead, hscroll } from './util.js';
 import { frameForUrl } from './rules.js';
@@ -12,7 +12,9 @@ import {
 import { createFxKit } from '../../ui/compose/fx.js';
 
 const MAX_IMAGES = 3;
-const RAW_MAX = 8 * 1024 * 1024;   // 原圖送出上限（和後端 MAX_IMAGE 相同）
+const RAW_MAX = 8 * 1024 * 1024;   // 照片框每張送出上限（和後端 MAX_IMAGE 相同）
+const RAW_TOTAL = 40 * 1024 * 1024;   // 照片框合計上限（和後端 MAX_IMAGES_TOTAL 相同）
+export const MAX_PHOTOS = 10;
 export const BG_MAX = 130;                          // 臉書文字背景貼文字數上限
 export const BG_FONT = { max: 30, min: 14 };          // 文字背景預覽字級：塞得下的最大字級（不自動換行）
 export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級（只用在排程發布）
@@ -24,24 +26,25 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   const canvas = $('cv');
   const ctx = canvas.getContext('2d');
   const st = {
-    mode: 'image',                               // image＝照片套圖｜color＝純文字圖｜text＝純文字（不附圖）｜photo＝原圖（照片原樣送出，不加框與標題）
-    frame: assets.company ? 'news' : 'generic',  // 沒有公司素材時只有通用框
+    mode: 'image',                               // image＝照片套圖｜color＝純文字圖｜text＝純文字（不附圖）
+    frame: assets.company ? 'news' : 'generic',  // 沒有公司素材時只有通用框；photo＝照片（不套框、可多張）
+    photos: [], cur: 0,                          // 照片清單 [{ img, blob }]；套版只用第 1 張，照片框全部送出；cur＝照片框預覽中的那張
     photo: null, view: newView(),
     color: PRESET_COLORS.includes('#c80000') ? '#c80000' : PRESET_COLORS[0],
     fx: [],                                      // 貼圖／馬賽克清單（選套版與純文字圖共用一份）
   };
 
   const source = () => (st.mode === 'color' ? { type: 'color', color: st.color }
-    : st.mode === 'image' && st.photo ? { type: 'image', image: st.photo, view: st.view }
-    : st.mode === 'photo' && st.photo ? { type: 'raw' } : null);
-  const usesPhoto = () => st.mode === 'image' || st.mode === 'photo';   // 照片套圖、原圖：要照片
+    : st.mode === 'image' && st.photo ? (isRaw() ? { type: 'raw' } : { type: 'image', image: st.photo, view: st.view }) : null);
+  const isRaw = () => st.mode === 'image' && st.frame === 'photo';   // 照片框：不套框、不畫標題、原樣送出
+  const usesPhoto = () => st.mode === 'image';
   // 有公司素材但公司標題字型沒載入：標題會改用 Noto Sans TC，提示原因
   if (assets.company && !assets.fontLoaded) {
     $('fontWarn').textContent = `公司標題字型沒載入，標題暫用 Noto Sans TC：${assets.fontError || '原因不明'}`;
     $('fontWarn').hidden = false;
   }
   const ready = () => !!source();
-  const fxReady = () => ready() && st.mode !== 'photo';   // 原圖不加貼圖／馬賽克（原樣送出）
+  const fxReady = () => ready() && !isRaw();   // 照片框不加貼圖／馬賽克（原樣送出）
   // 實際送出的貼文內容：純文字＝標題框；其他＝貼文內容（開頭留給小編文的空行沒填就拿掉）
   const postText = () => (st.mode === 'text' ? $('title').value.trim() : stripLead($('msg').value));
   const px = () => (st.mode === 'color' ? TITLE_PX.color : TITLE_PX.image);
@@ -59,9 +62,9 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     canvas.classList.remove('pannable');
   }
 
-  // 原圖預覽：整張照片放進方框（不裁切），四周淡灰；送出的是原始檔，不是這張預覽
+  // 照片框預覽：選中的那張整張放進方框（不裁切），四周淡灰；送出的是原始檔，不是這張預覽
   function drawRaw() {
-    const im = st.photo, k = Math.min(SIZE / im.naturalWidth, SIZE / im.naturalHeight);
+    const im = (st.photos[st.cur] || st.photos[0]).img, k = Math.min(SIZE / im.naturalWidth, SIZE / im.naturalHeight);
     const w = im.naturalWidth * k, h = im.naturalHeight * k;
     ctx.fillStyle = '#eef1f5'; ctx.fillRect(0, 0, SIZE, SIZE);
     ctx.drawImage(im, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
@@ -72,7 +75,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     $('cvEmpty').hidden = !!src;
     $('cvWrap').classList.toggle('is-blank', !src);
     const title = titleEd && titleEd.editing() ? '' : $('title').value;   // 預覽上編輯中：標題由輸入框顯示
-    if (!src) { if (st.mode === 'photo') { ctx.drawImage(blank, 0, 0); return; } drawBlank(st.mode === 'image' ? title : ''); return; }
+    if (!src) { if (isRaw()) { ctx.drawImage(blank, 0, 0); return; } drawBlank(st.mode === 'image' ? title : ''); return; }
     if (src.type === 'raw') { drawRaw(); return; }
     renderer.renderComposite(ctx, src, title, px(), st.frame, kit.drawFx(st.fx), undefined, { titleAnchor: 'bottom' });
   }
@@ -207,14 +210,14 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   // 視窗原本隱藏量不到高度：打開（尺寸改變）時再算一次；程式填值走 msgCount／titleChanged
   for (const id of ['title', 'msg']) { $(id).addEventListener('input', () => grow($(id))); new ResizeObserver(() => { if ($(id).offsetParent) grow($(id)); }).observe($(id)); }
   $('msg').addEventListener('input', msgCount); msgCount();
-  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !fxReady(); }); $('fxBar').classList.toggle('off', !fxReady()); $('fxBtn').hidden = st.mode === 'photo'; if (st.mode === 'photo') $('fxBar').hidden = true; editor.sync(); onState(); };
+  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !fxReady(); }); $('fxBar').classList.toggle('off', !fxReady()); $('fxBtn').hidden = isRaw(); if (isRaw()) $('fxBar').hidden = true; editor.sync(); onState(); };
 
-  titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready: () => st.mode !== 'text' && st.mode !== 'photo', redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
+  titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready: () => st.mode !== 'text' && !isRaw(), redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
   // ---- 照片拖曳移動、滾輪縮放 ----
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
-    if (st.mode !== 'image' || !st.photo || e.button !== 0) return;
+    if (st.mode !== 'image' || isRaw() || !st.photo || e.button !== 0) return;
     drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: st.view.x, y: st.view.y };
     canvas.setPointerCapture(e.pointerId);
   });
@@ -229,7 +232,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('wheel', (e) => {
-    if (st.mode !== 'image' || !st.photo) return;
+    if (st.mode !== 'image' || isRaw() || !st.photo) return;
     e.preventDefault();
     const before = coverGeometry(st.photo, st.view).s;
     st.view.zoom = Math.min(MAX_ZOOM, Math.max(1, st.view.zoom * Math.exp(-e.deltaY * 0.0015)));
@@ -242,15 +245,16 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   function showMode() {
     $('imgArea').hidden = st.mode === 'text';
     $('noImg').hidden = st.mode !== 'text';
-    $('frameSeg').hidden = st.mode !== 'image' || !assets.company;
+    $('frameSeg').hidden = st.mode !== 'image';
     $('swatchBox').hidden = st.mode !== 'color';
     const text = st.mode === 'text';
     $('msg').hidden = text; $('msgLbl').hidden = text;
     $('titleName').textContent = text ? '標題（貼文內容）' : '標題';
-    if (!text) { $('titleLines').hidden = st.mode === 'photo'; $('title').setAttribute('wrap', 'off'); }   // 純文字的換行與每行字數由 msgCount 依有無背景設定
-    if (st.mode === 'photo') $('titleName').textContent = '標題（不畫在圖上）';
-    $('title').placeholder = text ? '純文字貼文只發這一欄的內容' : st.mode === 'photo' ? '用在 RD 與貼文內容的【標題】' : '帶入時自動換行';
-    $('cvEmpty').querySelector('strong').textContent = st.mode === 'photo' ? '連點兩下選照片（原樣送出）' : '連點兩下選照片';
+    if (!text) { $('titleLines').hidden = isRaw(); $('title').setAttribute('wrap', 'off'); }   // 純文字的換行與每行字數由 msgCount 依有無背景設定
+    if (isRaw()) $('titleName').textContent = '標題（不畫在圖上）';
+    $('title').placeholder = text ? '純文字貼文只發這一欄的內容' : isRaw() ? '用在 RD 與貼文內容的【標題】' : '帶入時自動換行';
+    $('cvEmpty').querySelector('strong').textContent = isRaw() ? '連點兩下選照片（可多張，原樣送出）' : '連點兩下選照片';
+    renderStrip();
     if (!text) $('msgCount').classList.remove('bad');
     titleChanged();
     if (st.mode === 'color') requestAnimationFrame(showColor);
@@ -258,9 +262,18 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     draw(); syncFx(); msgCount();
   }
   const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
-  const setFrame = segmented($('frameSeg'), 'frame', (v) => { st.frame = v; draw(); });
+  const setFrame = segmented($('frameSeg'), 'frame', (v) => {
+    const wasRaw = isRaw();
+    if (titleEd) titleEd.end();
+    st.frame = v;
+    if (wasRaw !== isRaw()) showMode(); else draw();
+    if (!isRaw() && st.photos.length > 1) say('pullHint', `套版只會用第 1 張（其他 ${st.photos.length - 1} 張先保留，切回「照片」還在，送出時不會送）`);
+  });
+  // 沒有公司素材：只有「套版｜照片」
+  $('frameSeg').querySelector('[data-frame=generic]').hidden = !!assets.company;
+  for (const b of $('frameSeg').querySelectorAll('[data-frame=news],[data-frame=entertainment]')) b.hidden = !assets.company;
   setMode(st.mode);
-  if (assets.company) setFrame(st.frame);
+  setFrame(st.frame);
 
   PRESET_COLORS.forEach((c) => {
     const b = document.createElement('button');
@@ -285,7 +298,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       if ($('title').offsetParent) grow($('title'));
       return;
     }
-    if (st.mode === 'photo') {   // 原圖：標題不畫在圖上，不算每行字數
+    if (isRaw()) {   // 照片框：標題不畫在圖上，不算每行字數
       $('titleCount').textContent = ''; $('titleCount').classList.remove('bad'); $('titleLines').textContent = '';
       if ($('title').offsetParent) grow($('title'));
       return;
@@ -318,11 +331,26 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   new ResizeObserver(alignTitleLines).observe($('title'));
 
   // ---- 照片：帶入的主圖，或在新增發文視窗裡按 Ctrl+V 貼上 ----
-  function loadPhoto(blob) {
+  // 照片清單改了：第 1 張給套版用（換了第 1 張才重設位置）
+  function syncPhotos() {
+    const first = st.photos[0] || null;
+    if (!first || first.img !== st.photo) st.view = newView();
+    st.photo = first ? first.img : null; st.photoBlob = first ? first.blob : null;
+    st.cur = Math.min(Math.max(st.cur, 0), Math.max(st.photos.length - 1, 0));
+    renderStrip(); draw(); syncFx();
+  }
+  // add＝加一張（照片框）；不然換掉第 1 張（套版）
+  function loadPhoto(blob, add = isRaw()) {
     return new Promise((resolve) => {
+      if (add && st.photos.length >= MAX_PHOTOS) { say('pullHint', `最多 ${MAX_PHOTOS} 張`, true); resolve(false); return; }
       const url = URL.createObjectURL(blob);
       const im = new Image();
-      im.onload = () => { URL.revokeObjectURL(url); st.photo = im; st.photoBlob = blob; st.view = newView(); draw(); syncFx(); resolve(true); };
+      im.onload = () => {
+        URL.revokeObjectURL(url);
+        const item = { img: im, blob };
+        if (add) { st.photos.push(item); st.cur = st.photos.length - 1; } else st.photos[0] = item;
+        syncPhotos(); resolve(true);
+      };
       im.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
       im.src = url;
     });
@@ -330,23 +358,31 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   // 沒照片時：連點兩下選照片、拖曳照片進來（點一下只聚焦預覽框，方便 Ctrl+V）
   async function usePhoto(file, how) {
     if (!file || !/^image\//.test(file.type)) { say('pullHint', '請選擇圖片檔', true); return; }
-    if (!usesPhoto()) { st.mode = 'image'; setMode('image'); showMode(); }   // 原圖模式照舊
+    if (!usesPhoto()) { st.mode = 'image'; setMode('image'); showMode(); }
     if (await loadPhoto(file)) say('pullHint', how); else say('pullHint', '照片讀取失敗', true);
   }
   canvas.addEventListener('pointerdown', () => { if (!source()) $('cvWrap').focus({ preventScroll: true }); });
   // 沒照片時連點兩下＝選照片（搶在標題編輯器的「點兩下改標題」之前）；點在標題上第一下已進入改標題，就不開
   canvas.addEventListener('dblclick', (e) => { if (!source() && !titleEd.editing()) { e.stopImmediatePropagation(); $('photoFile').click(); } }, true);
   $('cvWrap').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !source() && e.target === $('cvWrap')) { e.preventDefault(); $('photoFile').click(); } });
-  $('photoFile').addEventListener('change', () => { const f = $('photoFile').files[0]; $('photoFile').value = ''; if (f) usePhoto(f, '已選擇照片'); });
+  $('photoFile').addEventListener('change', async () => {
+    const fs = [...$('photoFile').files]; $('photoFile').value = '';
+    if (!fs.length) return;
+    if (!isRaw()) { usePhoto(fs[0], '已選擇照片'); return; }   // 套版只用一張
+    let n = 0;
+    for (const f of fs) { if (st.photos.length >= MAX_PHOTOS) break; if (/^image\//.test(f.type) && await loadPhoto(f, true)) n++; }
+    say('pullHint', `已加入 ${n} 張照片` + (n < fs.length ? `（最多 ${MAX_PHOTOS} 張，或有檔案不是圖片）` : ''), n < fs.length);
+  });
   $('cvWrap').addEventListener('dragover', (e) => { if (st.mode === 'text') return; e.preventDefault(); $('cvWrap').classList.add('is-drop'); });
   $('cvWrap').addEventListener('dragleave', () => $('cvWrap').classList.remove('is-drop'));
   $('cvWrap').addEventListener('drop', (e) => {
     $('cvWrap').classList.remove('is-drop');
     if (st.mode === 'text') return;
     e.preventDefault();   // 不論是不是圖片都攔下，免得瀏覽器把頁面換成那個檔案
-    const f = [...(e.dataTransfer?.files || [])].find((x) => /^image\//.test(x.type));
-    if (!f) { say('pullHint', '請拖曳圖片檔', true); return; }
-    usePhoto(f, '已放入照片');
+    const fs = [...(e.dataTransfer?.files || [])].filter((x) => /^image\//.test(x.type));
+    if (!fs.length) { say('pullHint', '請拖曳圖片檔', true); return; }
+    if (isRaw()) { (async () => { let n = 0; for (const f of fs) { if (st.photos.length >= MAX_PHOTOS) break; if (await loadPhoto(f, true)) n++; } say('pullHint', `已加入 ${n} 張照片`); })(); return; }
+    usePhoto(fs[0], '已放入照片');
   });
 
   document.addEventListener('paste', async (e) => {
@@ -359,7 +395,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     const t = e.target;
     if (cd.getData('text/plain') && t && /^(INPUT|TEXTAREA)$/.test(t.tagName) && !t.classList.contains('cv-title')) return;
     e.preventDefault();
-    if (!usesPhoto()) { st.mode = 'image'; setMode('image'); showMode(); }   // 貼照片就是要套版（原圖模式照舊）
+    if (!usesPhoto()) { st.mode = 'image'; setMode('image'); showMode(); }   // 貼照片就是要套版（照片框＝加一張）
     if (await loadPhoto(file)) say('pullHint', '已貼上照片'); else say('pullHint', '照片讀取失敗', true);
   });
 
@@ -371,7 +407,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       try {
         const res = await tb.api.call('/fetch/image?url=' + encodeURIComponent(im.url), { raw: true });
         const blob = await res.blob();
-        if (blob && blob.size && (await loadPhoto(blob))) return true;
+        if (blob && blob.size && (await loadPhoto(blob, false))) return true;   // 帶入：換掉第 1 張
       } catch { /* 換下一張 */ }
     }
     return false;
@@ -399,7 +435,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
         say('pullHint', '已取消帶入'); return;
       }
       const done = [];
-      if (assets.company) { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
+      if (assets.company && st.frame !== 'photo') { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
       $('msg').value = '\n' + formatCopy({ title: article.title, caption: usesPhoto() ? mainCaption(article) : '', tags: article.tags });
       if (st.mode !== 'text' && article.title) $('msg').value = syncTitleLine($('msg').value, $('title').value);   // 【標題】照預覽的分行補空格
@@ -425,18 +461,55 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     if (ARTICLE_RE.test(url) && url !== lastPulled) typingTimer = setTimeout(() => { if ($('link').value.trim() !== lastPulled) pull(); }, 700);
   });
 
-  // 原圖送出用的檔案：JPG／PNG 且 ≤ 8MB 原樣送；其他格式或太大轉 JPG（長邊最多 4096）
-  async function rawFile() {
-    const b = st.photoBlob;
-    if (b && ['image/jpeg', 'image/png'].includes(b.type) && b.size <= RAW_MAX) return new File([b], b.type === 'image/png' ? 'photo.png' : 'photo.jpg', { type: b.type });
-    const im = st.photo, k = Math.min(1, 4096 / Math.max(im.naturalWidth, im.naturalHeight));
+  // 照片框送出用的檔案：JPG／PNG 且 ≤ 8MB 原樣送；其他格式或太大轉 JPG（長邊最多 4096）
+  async function rawFile({ img: im, blob: b }, n) {
+    const name = (ext) => `photo${n}.${ext}`;
+    if (b && ['image/jpeg', 'image/png'].includes(b.type) && b.size <= RAW_MAX) return new File([b], name(b.type === 'image/png' ? 'png' : 'jpg'), { type: b.type });
+    const k = Math.min(1, 4096 / Math.max(im.naturalWidth, im.naturalHeight));
     const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
     const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
     for (const q of [0.92, 0.85, 0.75]) {
       const out = await new Promise((r) => c.toBlob(r, 'image/jpeg', q));
-      if (out && out.size <= RAW_MAX) return new File([out], 'photo.jpg', { type: 'image/jpeg' });
+      if (out && out.size <= RAW_MAX) return new File([out], name('jpg'), { type: 'image/jpeg' });
     }
-    throw new Error('照片太大，請換一張小一點的照片');
+    throw new Error(`第 ${n} 張照片太大，請換一張小一點的照片`);
+  }
+
+  // ---- 照片框：縮圖列（點縮圖預覽、‹ › 調順序、× 移除、＋ 加照片） ----
+  function renderStrip() {
+    const box = $('photoStrip'), raw = isRaw();
+    box.hidden = !raw;
+    if (!raw) return;
+    const list = $('psList'); list.textContent = '';
+    st.photos.forEach((p, i) => {
+      const li = document.createElement('li'); li.className = 'ps-item' + (i === st.cur ? ' is-on' : '');
+      const t = document.createElement('button'); t.type = 'button'; t.className = 'ps-thumb'; t.setAttribute('aria-label', `預覽第 ${i + 1} 張`); t.setAttribute('aria-pressed', String(i === st.cur));
+      // 縮圖用小畫布畫（照片的物件網址載完就回收了，不能再當 img src）
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const k = Math.max(128 / p.img.naturalWidth, 128 / p.img.naturalHeight), w = p.img.naturalWidth * k, h = p.img.naturalHeight * k;
+      c.getContext('2d').drawImage(p.img, (128 - w) / 2, (128 - h) / 2, w, h); t.append(c);
+      t.onclick = () => { st.cur = i; renderStrip(); draw(); };
+      const mk = (txt, label, fn, dis) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ps-btn'; b.textContent = txt; b.setAttribute('aria-label', label); b.title = label; b.disabled = !!dis; b.onclick = fn; return b; };
+      const move = (d) => { const j = i + d; [st.photos[i], st.photos[j]] = [st.photos[j], st.photos[i]]; st.cur = j; syncPhotos(); };
+      const bar = document.createElement('div'); bar.className = 'ps-bar';
+      bar.append(mk('‹', `第 ${i + 1} 張往前`, () => move(-1), i === 0), mk('×', `移除第 ${i + 1} 張`, () => { st.photos.splice(i, 1); if (st.cur >= i && st.cur > 0) st.cur--; syncPhotos(); }), mk('›', `第 ${i + 1} 張往後`, () => move(1), i === st.photos.length - 1));
+      li.append(t, bar); list.append(li);
+    });
+    if (st.photos.length < MAX_PHOTOS) {
+      const li = document.createElement('li'); li.className = 'ps-item';
+      const add = document.createElement('button'); add.type = 'button'; add.className = 'ps-add'; add.textContent = '＋'; add.setAttribute('aria-label', '加照片'); add.title = '加照片（也可以 Ctrl+V 或拖曳）';
+      add.onclick = () => $('photoFile').click();
+      li.append(add); list.append(li);
+    }
+    $('psCount').textContent = st.photos.length ? `共 ${st.photos.length} 張（最多 ${MAX_PHOTOS} 張）` : `最多 ${MAX_PHOTOS} 張`;
+  }
+  // 照片清單整批換掉（幫直出、再發一次）；回成功張數
+  async function setPhotos(blobs) {
+    st.photos = []; st.cur = 0; syncPhotos();
+    let n = 0;
+    for (const b of blobs.slice(0, MAX_PHOTOS)) if (b instanceof Blob && await loadPhoto(b, true)) n++;
+    st.cur = 0; syncPhotos();
+    return n;
   }
 
   renderer.ready.then(draw);
@@ -448,55 +521,62 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     reset() {
       if (titleEd) titleEd.end();
       $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = ''; msgCount();
-      st.photo = null; st.photoBlob = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = randomBg();
+      st.photos = []; st.cur = 0; st.photo = null; st.photoBlob = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = randomBg();
       say('pullHint', '');
       titleChanged(); showMode();
     },
-    // 送出用的圖：照片套圖／純文字圖輸出 1080 PNG；原圖送原始檔（JPG／PNG ≤ 8MB，否則轉 JPG）；純文字或還沒有照片回 null
-    async image() {
-      if (!ready()) return null;
-      if (st.mode === 'photo') return rawFile();
+    // 送出用的圖（陣列）：照片框＝全部照片原樣（JPG／PNG ≤ 8MB，否則轉 JPG）；套版／純文字圖＝輸出 1080 PNG 一張；純文字或沒有照片＝[]
+    async images() {
+      if (!ready()) return [];
+      if (isRaw()) {
+        const out = [];
+        for (let i = 0; i < st.photos.length; i++) out.push(await rawFile(st.photos[i], i + 1));
+        if (out.reduce((a, f) => a + f.size, 0) > RAW_TOTAL) throw new Error('照片合計超過 40MB，請減少張數或換小一點的照片');
+        return out;
+      }
       if (titleEd) titleEd.end();
       await Promise.all([renderer.ready, loadTitleGlyphs($('title').value)]);
       draw();
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       if (!blob) throw new Error('產生圖片失敗');
-      return new File([blob], 'fbpost.png', { type: 'image/png' });
+      return [new File([blob], 'fbpost.png', { type: 'image/png' })];
     },
-    // 送出記錄用（再發一次）：文章網址、發出時的標題、模式、框、底色、原始照片
-    // 幫直出：清空後帶入已發佈貼文的文字、照片、連結（照片→原圖、沒照片→純文字）；不帶文字背景
-    async direct({ message = '', title = '', link = '', photo = null }) {
+    raw: isRaw,   // 照片框（操作紀錄記「照片」）
+    // 幫直出：清空後帶入已發佈貼文的文字、照片、連結（有照片→照片套圖的「照片」框；沒照片→純文字）；不帶文字背景
+    async direct({ message = '', title = '', link = '', photos = [] }) {
       this.reset();
       st.bg = '';
-      const mode = photo ? 'photo' : 'text';
-      st.mode = mode; setMode(mode);
+      const has = photos.length > 0;
+      st.mode = has ? 'image' : 'text'; setMode(st.mode);
+      if (has) { st.frame = 'photo'; setFrame('photo'); }
       $('link').value = link; lastPulled = link;
-      if (photo) { $('title').value = title; $('msg').value = message; }
+      if (has) { $('title').value = title; $('msg').value = message; }
       else $('title').value = message;
       showMode();
-      let ok = true;
-      if (photo) ok = await loadPhoto(photo);
+      const n = has ? await setPhotos(photos) : 0;
       draw(); msgCount(); titleChanged();
-      return ok;
+      return n;
     },
-    snapshot: () => ({ link: $('link').value.trim(), title: $('title').value, mode: st.mode, frame: st.frame, color: st.color, bg: st.bg, photo: st.photo ? st.photoBlob || null : null }),
+    // 送出記錄用（再發一次）：文章網址、發出時的標題、模式、框、底色、原始照片（照片框存全部，套版只存第 1 張）
+    snapshot: () => ({ link: $('link').value.trim(), title: $('title').value, mode: st.mode, frame: st.frame, color: st.color, bg: st.bg,
+      photo: st.photo ? st.photoBlob || null : null, photos: isRaw() ? st.photos.map((p) => p.blob) : undefined }),
     // 再發一次：清空後帶回（不自動重新帶入文章、不帶貼文內容）
     async restore(rec) {
       this.reset();
-      if (['image', 'color', 'text', 'photo'].includes(rec.mode)) { st.mode = rec.mode; setMode(rec.mode); }
-      if (assets.company && (rec.frame === 'news' || rec.frame === 'entertainment')) { st.frame = rec.frame; setFrame(rec.frame); }
+      if (['image', 'color', 'text'].includes(rec.mode)) { st.mode = rec.mode; setMode(rec.mode); }
+      if ((assets.company && (rec.frame === 'news' || rec.frame === 'entertainment')) || rec.frame === 'photo') { st.frame = rec.frame; setFrame(rec.frame); }
       if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; setColor(rec.color); }
       $('link').value = rec.link || ''; lastPulled = $('link').value.trim();
       $('title').value = rec.title || '';
       if (typeof rec.bg === 'string' && (rec.bg === '' || bgs.some((b) => b.id === rec.bg))) st.bg = rec.bg;   // 文字背景用當時的（含「無」）
       showMode();
-      let photoOk = true;
-      if (rec.photo instanceof Blob) photoOk = await loadPhoto(rec.photo);
+      const blobs = Array.isArray(rec.photos) && rec.photos.length ? rec.photos : rec.photo instanceof Blob ? [rec.photo] : [];
+      const n = blobs.length ? await setPhotos(blobs) : 0;
       draw();
-      say('pullHint', '已帶回上次送出的網址、標題' + (rec.photo ? (photoOk ? '、照片' : '（照片讀取失敗）') : '') + '；貼文內容請重新填寫');
+      say('pullHint', '已帶回上次送出的網址、標題' + (blobs.length ? (n === blobs.length ? '、照片' : '（照片讀取失敗）') : '') + '；貼文內容請重新填寫');
     },
     mode: () => st.mode,
-    needsPhoto: () => usesPhoto() && !st.photo,   // 照片套圖／原圖沒有照片：不能送出
+    needsPhoto: () => usesPhoto() && !st.photo,   // 照片套圖沒有照片：不能送出
     text: postText,   // 送出用的貼文內容
     bg: bgOn   // 送出用的文字背景代號（只有純文字模式；沒選＝''）
   };

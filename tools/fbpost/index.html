@@ -115,7 +115,6 @@
         <button type="button" data-mode="image">照片套圖</button>
         <button type="button" data-mode="color">純文字圖</button>
         <button type="button" data-mode="text">純文字</button>
-        <button type="button" data-mode="photo" title="照片原樣送出，不加框和標題">原圖</button>
       </div>
       <span class="pill warn test-pill">測試模式</span>
       <span class="grow"></span>
@@ -129,13 +128,16 @@
             <div class="canvas-wrap" id="cvWrap" tabindex="0">
               <canvas id="cv" width="1080" height="1080" aria-label="圖片預覽（沒照片時連點兩下選照片、點一下後 Ctrl+V 貼上；有照片時點兩下改標題）"></canvas>
               <p class="cv-empty" id="cvEmpty"><strong>連點兩下選照片</strong><span>也可以拖曳照片進來，或點一下後按 Ctrl+V 貼上</span></p>
-              <input type="file" id="photoFile" accept="image/*" hidden>
+              <input type="file" id="photoFile" accept="image/*" multiple hidden>
               <div class="cv-skel" id="cvSkel" aria-hidden="true" hidden><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
             </div>
             <p class="hint bad" id="fontWarn" hidden></p>
+            <div class="photo-strip" id="photoStrip" hidden><ul class="ps-list" id="psList" aria-label="照片（照順序發出）"></ul><p class="hint" id="psCount"></p></div>
             <div class="seg wide" id="frameSeg" role="group" aria-label="套版">
               <button type="button" data-frame="news">新聞（藍框）</button>
               <button type="button" data-frame="entertainment">娛樂（粉框）</button>
+              <button type="button" data-frame="generic">套版</button>
+              <button type="button" data-frame="photo" title="不套框、不畫標題，照片原樣送出（可 1～10 張）">照片</button>
             </div>
             <div class="swatch-box" id="swatchBox" hidden>
               <div class="sw-head"><strong>底色</strong><span id="colorCode"></span></div>
