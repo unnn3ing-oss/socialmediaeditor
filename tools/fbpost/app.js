@@ -108,8 +108,8 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   // 幫直出：讀這則已發佈貼文的文字、圖片、文章連結（後端去 utm），開新增發文帶入；粉專全部不勾
   async function direct(it, page, btn) {
     try { await ensureCompose(); } catch (e) { $('pagesState').textContent = '載入新增發文失敗：' + errText(e); return; }
-    const busy = $('link').value.trim() || $('title').value.trim() || $('msg').value.trim() || composer.snapshot().photo;
-    if (busy && !(await confirmBox('要用這則貼文覆蓋嗎？', '新增發文裡已經有內容，幫直出會清空它（網址、照片、標題、貼文內容、粉專勾選）。'))) return;
+    const filled = $('link').value.trim() || $('title').value.trim() || $('msg').value.trim() || composer.snapshot().photo;
+    if (filled && !(await confirmBox('要用這則貼文覆蓋嗎？', '新增發文裡已經有內容，幫直出會清空它（網址、照片、標題、貼文內容、粉專勾選）。'))) return;
     fx.busy(btn, '讀取中');
     let d;
     try { d = await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/source?page=${encodeURIComponent(page)}`); }

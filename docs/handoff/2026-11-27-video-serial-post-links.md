@@ -1,5 +1,5 @@
 # 影片一次傳一支＋列表開啟貼文＋側邊欄載入更多
-- 狀態：進行中（第二段）　- 分支：claude/trusting-clarke-h20olv　- 最後更新：2026-11-27
+- 狀態：已完成（待使用者確認與「推」）　- 分支：claude/trusting-clarke-h20olv　- 最後更新：2026-11-27
 - 使用者原始需求：「影片發布上傳改成一次一隻（兩隻長影片同時就會失敗）」「排程、已發布列表增加可以開啟貼文的連結按鈕」「外掛的已排程已發布列表下方出現【載入更多】，也要在背景預先載好」
 
 ## 已定案的決定
@@ -40,4 +40,9 @@
 | 後端 | `GET /fb/posts/:id/source?page=`（post 權限）：message、圖片（fbcdn 白名單由後端轉）、連結（計時器紀錄第 1 則 → 臉書粉專留言） |
 
 ### 進度
-- [ ] 垃圾桶 - [ ] 改名＋原圖模式＋kind photo - [ ] 後端 source - [ ] 前端幫直出 - [ ] 測試＋審查
+- [x] 垃圾桶 - [x] 改名＋原圖模式＋kind photo - [x] 後端 `server/fb/source.js` - [x] 前端幫直出（`app.js` `direct`、`targets.none`、`composer.direct`） - [x] 測試＋審查
+- 側邊欄與手機「開啟貼文」只顯示「開啟 ↗」（`.open-long` 隱藏）。原圖不加貼圖／馬賽克。
+- npm test 859、fbpost＋compose＋sidepanel e2e 96、build --check 通過；獨立審查無 Important。
+- 審查 Minor 未修：臉書沒回 content-length 時圖片先讀完才檢查大小（限 fbcdn）；連結分享貼文沒照片時會把連結預覽圖當原圖帶入。
+- 既有失敗（與本次無關）：admin e2e「頁面不用 emoji 或箭頭」仍檢查舊 robots 標籤 `noindex`。
+- **後端需重新部署（正式＋測試）**（幫直出 API、操作紀錄 photo）；外掛不升版。
