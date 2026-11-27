@@ -5,9 +5,10 @@
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
 import { $, errText, confirmBox, say } from './util.js';
-import { busy, ok, fail } from '../../ui/fx.js';
 import * as fx from '../../ui/fx.js';
 import { createManage } from './manage.js';
+import { initConnPill } from '../../ui/connpill.js';
+import { createSteps } from './steps.js';
 import { createDialog } from './dialog.js';
 import { createDuty } from './duty.js';
 import { createHistory } from './history.js';
@@ -27,6 +28,7 @@ $('tabs').addEventListener('click', (e) => {
 
 // 啟動：有公司憑證才問 /fb/pages；開放／關閉由後端決定（管理頁切換，關閉＝只有管理員密碼能用），403 就維持停用並顯示關閉原因
 // 骨架收掉：ok＝能用（顯示列表），否則顯示停用卡片
+initConnPill({ pill: $('connPill'), tip: $('connTip'), label: $('connLbl'), state: $('pagesState') });
 const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden = false; };
 (async () => {
   let st;
@@ -78,7 +80,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   $('fbpostApp').hidden = false;
   $('noPreview').addEventListener('change', () => { $('npNote').hidden = !$('noPreview').checked; });
   // 列表頁只載 manage／dialog；做圖、粉專膠囊、送出、素材、活動留言等到第一次按「＋ 新增發文」才載入（只載一次，之後內容保留）
-  let currentPages = pages, targets = null, loading = null, composer = null, sender = null;
+  let currentPages = pages, targets = null, loading = null, composer = null, sender = null, steps = null;
   const history = createHistory();
   const duty = createDuty({ pages: () => currentPages, canAsk: () => canPost, onChange: () => { if (targets) targets.applyDefaults(); manage.dutyChanged(); } });
   const ensureCompose = () => loading || (loading = (async () => {
@@ -89,12 +91,13 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton(), defaults: () => duty.ids() });
     sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }), history,
       onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
+    steps = createSteps({ composer, sender, dialog });   // 手機：① 編輯 → ② 選粉專＋RD
     targets.setPages(currentPages);
   })().catch((e) => { loading = null; throw e; }));
   // 留言失敗：回到列表就切到「已發佈」並讀出錯誤（最新一則失敗的粉專）；外掛側邊欄另有即時狀態燈
   const goFailed = (items) => { if (!items.length || !$('tab-pub')) return; showTab('pub'); manage.showPub(items[0].page); };
   const live = createLive({ tb, onClick: () => dialog.close() });
-  const dialog = createDialog({ beforeOpen: ensureCompose, onOpen: () => live.refresh(),
+  const dialog = createDialog({ beforeOpen: ensureCompose, onOpen: () => { if (steps) steps.reset(); live.refresh(); },
     onClose: () => { live.refresh().then(goFailed); } });   // 彈出視窗打開時，貼圖方框由 ResizeObserver 重新量尺寸
   // 再發一次：開新增發文、清空後帶回網址／照片／標題（粉專照值班粉專預勾）；正在編輯的內容先問
   async function resend(rec) {
@@ -134,8 +137,4 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
   const manage = createManage({ tb, history, onResend: resend, onDirect: direct, getDuty: () => duty.ids() });
   const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); duty.paint(); };
   showPages(pages);
-  $('pagesRefresh').addEventListener('click', async () => {
-    const b = $('pagesRefresh'), back = '重新整理粉專'; busy(b, '刷新中');
-    try { showPages(await tb.api.call('/fb/pages')); ok(b, '已更新', back); } catch (e) { $('pagesState').textContent = '讀取粉專失敗：' + errText(e); fail(b, back); }
-  });
 })();

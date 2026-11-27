@@ -1,0 +1,11 @@
+/* 「● 已連線」膠囊＋小視窗（ui/connpill.js） */
+.conn-wrap { position: relative; display: inline-flex; }
+.conn-pill { cursor: pointer; font: 600 12px/1.5 var(--font); padding: 3px 12px; border-radius: var(--radius-control, 12px); }
+.conn-pill::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; }
+.conn-pill.ok { background: var(--ok-bg, #ecfdf3); color: var(--ok-text, #067647); border: 1px solid var(--ok-line, #a6e3c0); }
+.conn-pill.bad { background: #fef3f2; color: #b42318; border: 1px solid #fecdca; }
+.conn-pill:focus-visible { outline: 2px solid var(--accent, #155eef); outline-offset: 2px; }
+.conn-tip { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: max-content; max-width: min(300px, calc(100vw - 24px)); padding: 8px 12px; border: 1px solid var(--line, #e4e7ec); border-radius: 12px; background: var(--surface, #fff); color: var(--text, #1f2328); box-shadow: 0 6px 20px rgba(16, 24, 40, .14); font: 13px/1.6 var(--font); white-space: normal; }
+.conn-tip[hidden] { display: none; }
+.conn-tip .who { display: block; color: var(--muted, #475467); font-size: 12px; }
+.conn-tip .who[hidden] { display: none; }

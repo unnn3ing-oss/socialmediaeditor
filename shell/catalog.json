@@ -9,7 +9,7 @@
       "requires": [],
       "icon": "tools/pattern/icon.svg",
       "thumb": "tools/pattern/thumb.svg",
-      "entry": "tools/pattern/index.html?v=b88e51dafc"
+      "entry": "tools/pattern/index.html?v=e9667b1275"
     },
     {
       "id": "linepush",
@@ -20,7 +20,7 @@
       "requires": [],
       "icon": "tools/linepush/icon.svg",
       "thumb": "tools/linepush/thumb.svg",
-      "entry": "tools/linepush/index.html?v=745f3a4782"
+      "entry": "tools/linepush/index.html?v=5895719c08"
     },
     {
       "id": "collage",
@@ -31,7 +31,7 @@
       "requires": [],
       "icon": "tools/collage/icon.svg",
       "thumb": "tools/collage/thumb.svg",
-      "entry": "tools/collage/index.html?v=e5d285a801"
+      "entry": "tools/collage/index.html?v=a7993fa0a0"
     },
     {
       "id": "watermark",
@@ -42,7 +42,7 @@
       "requires": [],
       "icon": "tools/watermark/icon.svg",
       "thumb": "tools/watermark/thumb.svg",
-      "entry": "tools/watermark/index.html?v=a5f24f4280"
+      "entry": "tools/watermark/index.html?v=cb6c03d80f"
     },
     {
       "id": "resize",
@@ -53,7 +53,7 @@
       "requires": [],
       "icon": "tools/resize/icon.svg",
       "thumb": "tools/resize/thumb.svg",
-      "entry": "tools/resize/index.html?v=fc9e1242bc"
+      "entry": "tools/resize/index.html?v=47e5f793a2"
     },
     {
       "id": "design",
@@ -64,7 +64,7 @@
       "requires": [],
       "icon": "tools/design/icon.svg",
       "thumb": "tools/design/thumb.svg",
-      "entry": "tools/design/index.html?v=0a90f1f58e"
+      "entry": "tools/design/index.html?v=2d239e92ec"
     },
     {
       "id": "fbpost",
@@ -79,7 +79,7 @@
       },
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=9bbe087f32"
+      "entry": "tools/fbpost/index.html?v=32d7fc8a90"
     },
     {
       "id": "fbvideo",
@@ -94,7 +94,7 @@
       },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=a70cf5a8ae"
+      "entry": "tools/fbvideo/index.html?v=36cf5f2c36"
     },
     {
       "id": "fbreports",
@@ -109,7 +109,7 @@
       },
       "icon": "tools/fbreports/icon.svg",
       "thumb": "tools/fbreports/thumb.svg",
-      "entry": "tools/fbreports/index.html?v=be8619d646"
+      "entry": "tools/fbreports/index.html?v=814f0970c2"
     },
     {
       "id": "livereq",
@@ -120,7 +120,7 @@
       "requires": [],
       "icon": "tools/livereq/icon.svg",
       "thumb": "tools/livereq/thumb.svg",
-      "entry": "tools/livereq/index.html?v=ca6b7af474"
+      "entry": "tools/livereq/index.html?v=f9d07ba12a"
     },
     {
       "id": "ytdl",
@@ -134,7 +134,7 @@
       ],
       "icon": "tools/ytdl/icon.svg",
       "thumb": "tools/ytdl/thumb.svg",
-      "entry": "tools/ytdl/index.html?v=ef341f282a"
+      "entry": "tools/ytdl/index.html?v=c7dc1b095f"
     }
   ]
 }

@@ -482,12 +482,14 @@ test('管理員手機 390px 無橫向捲動', async () => {
   await page.waitForSelector('#schedList li');
   assert.ok((await overflow(page)) <= 0, '已排程：' + (await overflow(page)));
   await openPost(page);
+  await page.fill('#msg', '手機'.repeat(40));
+  await page.fill('#link', 'https://news.tvbs.com.tw/life/1234567890123456789');
+  assert.ok((await overflow(page)) <= 0, '新增發文 ①：' + (await overflow(page)));
+  await page.click('#mNext');   // 手機兩步驟：粉專在 ②
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(111) + ' .chip-r');
   await page.click('#tpMenu [data-tp=sched]');
-  await page.fill('#msg', '手機'.repeat(40));
-  await page.fill('#link', 'https://news.tvbs.com.tw/life/1234567890123456789');
-  assert.ok((await overflow(page)) <= 0, '新增發文：' + (await overflow(page)));
+  assert.ok((await overflow(page)) <= 0, '新增發文 ②：' + (await overflow(page)));
   const box = await page.locator('#timePop').boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 390, '小視窗不超出畫面');
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-new-mobile.png'), fullPage: true });
@@ -502,10 +504,13 @@ test('管理員手機 320px 無橫向捲動，粉專膠囊與送出鈕可按（�
   await page.waitForSelector('#schedList li');
   assert.ok((await overflow(page)) <= 0, '已排程：' + (await overflow(page)));
   await openPost(page);
+  await page.fill('#msg', '手機'.repeat(40));
+  assert.ok((await overflow(page)) <= 0, '新增發文 ①：' + (await overflow(page)));
+  await page.click('#mNext');
   await page.click(chip(111) + ' .chip-l');
   await page.click(chip(111) + ' .chip-r');
-  await page.fill('#msg', '手機'.repeat(40));
-  assert.ok((await overflow(page)) <= 0, '新增發文：' + (await overflow(page)));
+  await page.keyboard.press('Escape');
+  assert.ok((await overflow(page)) <= 0, '新增發文 ②：' + (await overflow(page)));
   const send = await page.locator('#sendBtn').boundingBox();
   assert.ok(send.height >= 44, '送出鈕高度 ' + send.height);
   const chipBox = await page.locator(chip(111)).boundingBox();
@@ -713,7 +718,7 @@ test('文章網址必填：沒填按送出會提示、不送出', async () => {
 });
 
 test('粉專膠囊一列左右滑：不換行、滾輪左右捲、右邊淡出提示還有', async () => {
-  const { page } = await newPage('admin', { width: 300, height: 760 });
+  const { page } = await newPage('admin', { width: 1280, height: 760 });   // 手機網頁改成兩步驟直排；一列左右滑是電腦版與側邊欄
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await openPost(page);
   await page.$eval('#pages', (el) => { el.style.maxWidth = '160px'; });   // 測試只有 3 個粉專，縮窄才放不下
@@ -733,7 +738,12 @@ test('舊版版面：1280×800 與窄寬度下，新增發文底列（粉專、�
     const { page } = await newPage('admin', viewport);
     await page.goto(srv.url + 'tools/fbpost/index.html');
     await openPost(page);
-    for (const sel of ['#pages .chip', '#sendBtn', '#clearBtn', '#rdOn + .track']) {
+    const narrow = viewport.width <= 820;
+    if (narrow) {
+      for (const sel of ['#mCancel', '#mNext']) { const b = await page.locator(sel).boundingBox(); assert.ok(b && b.y + b.height <= viewport.height + 0.5, sel + ' 在畫面內'); }
+      await page.click('#mNext');   // 手機：粉專、RD、送出在 ②
+    }
+    for (const sel of narrow ? ['#pages .chip', '#sendBtn', '#mBack', '#rdOn + .track'] : ['#pages .chip', '#sendBtn', '#clearBtn', '#rdOn + .track']) {
       const box = await page.locator(sel).first().boundingBox();
       assert.ok(box && box.y >= 0 && box.y + box.height <= viewport.height + 0.5, `${viewport.width}px：${sel} 在畫面內`);
     }
@@ -890,7 +900,7 @@ test('只有 view 權限：看不到新增發文、改時間、刪除；標題�
   await t.page.goto(srv.url + 'tools/fbpost/index.html');
   await t.page.waitForSelector('#fbpostApp:not([hidden])');
   await t.page.waitForFunction(() => document.getElementById('whoAmI') && !document.getElementById('whoAmI').hidden);
-  assert.equal(await t.page.textContent('#whoAmI'), '王小明．唯讀組');
+  assert.equal(await t.page.textContent('#whoAmI'), '王小明．唯讀組');   // 在「● 已連線」小視窗裡
   assert.equal(await t.page.isVisible('#newBtn'), false);
   await t.page.click('#schedReload');
   await t.page.waitForSelector('#schedList li');
@@ -1017,7 +1027,9 @@ test('網頁版：窄版網址在最上面，電腦版回右欄最上面；按�
   assert.equal(await page.$eval('.link-box', (e) => e.parentElement.classList.contains('right') && !e.previousElementSibling), true);
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForFunction(() => document.querySelector('.link-box').nextElementSibling?.classList.contains('compose'));
-  assert.equal(await page.$eval('#pages .chip', (e) => Math.round(e.getBoundingClientRect().height)), 44, '網頁版手機膠囊仍 44');
+  await page.click('#mNext');
+  assert.ok(await page.$eval('#pages .chip', (e) => Math.round(e.getBoundingClientRect().height)) >= 44, '網頁版手機膠囊 ≥44');
+  await page.click('#mBack');
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForFunction(() => document.querySelector('.link-box').parentElement.classList.contains('right'));
   assert.deepEqual(errors, []);
@@ -1609,6 +1621,79 @@ test('多圖發多個粉專：一個粉專送一次請求（避免單次請求�
   assert.ok(api.posts.every((b) => /name="sendId"\r\n\r\n([^\r]+)\r\n/.exec(b)[1] === /name="sendId"\r\n\r\n([^\r]+)\r\n/.exec(api.posts[0])[1]), '同一則（同 sendId）');
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+test('手機兩步驟：① 底部只有取消發文／下一步 → ② 摘要、RD、粉專貼底、上一步／送出貼文；空白直接取消、有內容先問', async () => {
+  const { page, errors, api } = await newPage('admin', { width: 390, height: 800 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await openPost(page);
+  const vis = (sel) => page.isVisible(sel);
+  assert.equal(await vis('#mCancel'), true); assert.equal(await vis('#mNext'), true);
+  for (const sel of ['#pages', '#rdOn', '#clearBtn', '#sendBtn', '#mBack']) assert.equal(await vis(sel), false, sel + ' 在 ① 隱藏');
+  // 空白：直接回列表，不跳提醒
+  await page.click('#mCancel');
+  assert.equal(await page.isHidden('#postDlg'), true);
+  assert.equal(await page.evaluate(() => document.getElementById('cfDlg').open), false);
+  // 有內容：先問；繼續編輯＝留著
+  await page.click('#newBtn'); await page.waitForSelector('#postDlg:not([hidden])');
+  await page.fill('#link', 'https://example.com/a'); await page.fill('#title', '測試標題');
+  await page.click('#mCancel');
+  await page.waitForFunction(() => document.getElementById('cfDlg').open);
+  assert.equal(await page.textContent('#cfYes'), '取消發文'); assert.equal(await page.textContent('#cfNo'), '繼續編輯');
+  const box = await page.$eval('#cfDlg', (d) => { const r = d.getBoundingClientRect(); return [r.left, r.right, innerWidth]; });
+  assert.ok(box[0] >= 0 && box[1] <= box[2], '提醒不超出畫面 ' + box);
+  if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-m-cancel.png' });
+  await page.click('#cfNo');
+  assert.equal(await page.inputValue('#title'), '測試標題');
+  if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-m-step1.png' });
+  // ② 下一步
+  await page.click('#mNext');
+  assert.equal(await page.textContent('#postTitle'), '選擇發布粉專');
+  for (const sel of ['#pages', '.rd', '#sendBtn', '#mBack', '#mSum']) assert.equal(await vis(sel), true, sel + ' 在 ② 顯示');
+  assert.equal(await vis('#link'), false); assert.equal(await vis('#mNext'), false); assert.equal(await vis('#clearBtn'), false);
+  assert.match(await page.textContent('#mSum'), /純文字圖|照片套圖|純文字/);
+  const chips = await page.$$eval('#pages .chip', (cs) => cs.map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.page, Math.round(r.top), Math.round(r.width)]; }));
+  assert.ok(chips.every((c, i) => i === 0 || c[1] > chips[i - 1][1]), '一列一個、由上往下照原順序');
+  const last = chips[chips.length - 1], back = await page.$eval('#mBack', (b) => b.getBoundingClientRect().top);
+  assert.ok(back - (last[1] + 48) < 40, '粉專清單貼著底部按鈕');
+  assert.match(await page.textContent('#sendBtn'), /^送出貼文（\d+ 個粉專）$/);
+  if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-m-step2.png' });
+  // 上一步：內容還在
+  await page.click('#mBack');
+  assert.equal(await vis('#link'), true); assert.equal(await page.inputValue('#title'), '測試標題');
+  // 有內容取消：確定＝清空回列表
+  await page.click('#mCancel'); await page.waitForFunction(() => document.getElementById('cfDlg').open);
+  await page.click('#cfYes');
+  assert.equal(await page.isHidden('#postDlg'), true);
+  await page.click('#newBtn'); await page.waitForSelector('#postDlg:not([hidden])');
+  assert.equal(await page.inputValue('#title'), '', '已清空');
+  assert.equal(api.posts.length, 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('外掛側邊欄與電腦版不分步：底列照舊；頂端「● 已連線」游標移上／點一下才顯示粉專數與身分；沒有重新整理粉專；圖片按鈕與新聞娛樂同高', async () => {
+  for (const [vp, side] of [[{ width: 1280, height: 900 }, false], [{ width: 360, height: 760 }, true]]) {
+    const { page, errors } = await newPage('admin', vp, { me: { admin: true } });
+    if (side) await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('is-side')));
+    await page.goto(srv.url + 'tools/fbpost/index.html');
+    await page.waitForSelector('#fbpostApp:not([hidden])');
+    assert.equal(await page.$('#pagesRefresh'), null, '沒有重新整理粉專');
+    assert.equal((await page.textContent('#connLbl')).trim(), '已連線');
+    assert.equal(await page.isHidden('#connTip'), true);
+    await page.waitForFunction(() => !document.getElementById('whoAmI').hidden);
+    await page.hover('#connPill');
+    assert.equal(await page.isVisible('#connTip'), true);
+    if (SHOT) await page.screenshot({ path: SHOT + `/fbpost-conn-${side ? 'side' : 'web'}.png` });
+    assert.match(await page.textContent('#connTip'), /已連線 3 個粉專/);
+    assert.match(await page.textContent('#connTip'), /管理員/);
+    await openPost(page);
+    assert.equal(await page.isVisible('#mNext'), false); assert.equal(await page.isVisible('#sendBtn'), true);
+    const h = await page.$eval('#frameRow', (r) => [r.querySelector('.seg').getBoundingClientRect().height, r.querySelector('.raw-btn').getBoundingClientRect().height]);
+    assert.equal(h[0], h[1], '圖片按鈕同高 ' + h);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }
 });
 
 test('手機（390px）：刪除是 44px 垃圾桶', async () => {

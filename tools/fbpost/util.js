@@ -21,10 +21,13 @@ export const commentState = (c) => {
 
 export function say(id, text, bad) { $(id).textContent = text; $(id).classList.toggle('bad', !!bad); }
 
-export function confirmBox(title, body) {
+// opts：{ yes, no, danger }＝按鈕文字（預設 確定／返回）與「確定」用紅色
+export function confirmBox(title, body, opts = {}) {
   return new Promise((res) => {
     const d = $('cfDlg');
     $('cfTitle').textContent = title; $('cfBody').textContent = body;
+    $('cfYes').textContent = opts.yes || '確定'; $('cfNo').textContent = opts.no || '返回';
+    $('cfYes').classList.toggle('btn-danger', !!opts.danger); $('cfYes').classList.toggle('btn-primary', !opts.danger);
     const done = (v) => { d.close(); res(v); };
     $('cfYes').onclick = () => done(true);
     $('cfNo').onclick = () => done(false);

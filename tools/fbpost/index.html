@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="../../ui/tokens.css">
 <link rel="stylesheet" href="../../ui/fx.css">
 <link rel="stylesheet" href="../../ui/warnings.css">
+<link rel="stylesheet" href="../../ui/connpill.css">
 <link rel="stylesheet" href="fbpost.css">
 <link rel="stylesheet" href="../../ui/compose/fx.css">
 <script>
@@ -58,10 +59,8 @@
 <main class="fp" id="fbpostApp" hidden>
   <header class="fp-head">
     <h1>排程發布</h1>
-    <span class="pill ok" id="pagesState">已連線 0 個粉專</span>
-    <span class="who" id="whoAmI" hidden></span>
+    <span class="conn-wrap"><button type="button" class="pill conn-pill ok" id="connPill" aria-describedby="connTip" aria-expanded="false"><span id="connLbl">已連線</span></button><span class="conn-tip" id="connTip" role="tooltip" hidden><span id="pagesState">已連線 0 個粉專</span><span class="who" id="whoAmI" hidden></span></span></span>
     <span class="pill warn test-pill">測試模式（僅管理員）</span>
-    <button type="button" class="btn btn-secondary btn-sm" id="pagesRefresh">重新整理粉專</button>
     <button type="button" class="btn btn-secondary btn-sm duty-btn" id="dutyBtn">值班粉專</button>
     <span class="grow"></span>
     <button type="button" class="btn btn-primary new-btn" id="newBtn">＋ 新增發文</button>
@@ -192,7 +191,9 @@
         </div>
       </div>
     </div>
-    <footer class="post-foot">
+    <footer class="post-foot" id="postFoot">
+      <p class="m-sum" id="mSum"></p>
+      <p class="m-lbl">發布粉專（值班排前面）</p>
       <div class="chips hscroll" id="pages" role="group" aria-label="發到哪些粉專"></div>
       <div class="sendrow">
         <div class="rd">
@@ -204,7 +205,9 @@
           <button type="button" class="send" id="sendBtn" disabled aria-describedby="sendErr">全部送出（0 個粉專）</button>
           <p class="send-tip" id="sendErr" role="alert"></p>
         </div>
+        <button type="button" class="btn btn-secondary m-back" id="mBack">上一步</button>
       </div>
+      <div class="m-row"><button type="button" class="btn btn-secondary" id="mCancel">取消發文</button><button type="button" class="btn btn-primary" id="mNext">下一步</button></div>
     </footer>
   </section>
 </div>

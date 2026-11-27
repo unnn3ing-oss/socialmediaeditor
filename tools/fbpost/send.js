@@ -4,6 +4,7 @@ import { $, fmt, errText, COMMENT, confirmBox, copyText } from './util.js';
 
 const WARN = { done: '警語已留言', armed: '警語排程後補留言', retry: '警語稍後重試', failed: '警語排定失敗' };
 import { BG_MAX } from './compose.js';
+import { stepMode } from './steps.js';
 import { busy, idle, fail } from '../../ui/fx.js';
 
 const newSendId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
@@ -14,7 +15,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
   const unknown = new Set();   // 上次結果不明（可能已發出）的粉專
   function updateButton() {
     const n = targets.count(), noPhoto = composer.needsPhoto();
-    if ($('sendBtn').getAttribute('aria-busy') !== 'true' && !$('sendBtn').classList.contains('fx-bad')) idle($('sendBtn'), `全部送出（${n} 個粉專）`, { disabled: n === 0 || noPhoto });
+    if ($('sendBtn').getAttribute('aria-busy') !== 'true' && !$('sendBtn').classList.contains('fx-bad')) idle($('sendBtn'), `${stepMode() ? '送出貼文' : '全部送出'}（${n} 個粉專）`, { disabled: n === 0 || noPhoto });
     // 自動提示（沒勾粉專、照片套圖沒照片）：使用者送出時的錯誤訊息不蓋掉
     const auto = !n ? '請先勾選要發的粉專' : noPhoto ? '照片套圖需要照片，請貼上或選一張照片，或改用純文字' : '';
     if (!$('sendErr').textContent || $('sendErr').dataset.auto) { $('sendErr').textContent = auto; $('sendErr').dataset.auto = auto ? '1' : ''; }
@@ -144,6 +145,7 @@ export function createSender({ tb, composer, targets, rd, comments, onBack, hist
     composer.reset(); targets.reset(); rd.reset(); comments.reset();
     $('noPreview').checked = false; $('npNote').hidden = true;
     $('results').textContent = ''; $('sendErr').textContent = '';
+    document.dispatchEvent(new Event('fbpost:cleared'));   // 手機兩步驟回 ①
   }
   $('clearBtn').addEventListener('click', async () => {
     if (!(await confirmBox('清空這則發文', '網址、圖片、標題、貼文內容、粉專勾選和結果都會清掉。'))) return;

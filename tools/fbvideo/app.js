@@ -5,6 +5,7 @@
 //   上傳中：取消勾粉專、移除／取消勾影片、切換類型都擋下；關分頁先確認（tb.busy）；可手動「停止上傳」。
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
+import { initConnPill } from '../../ui/connpill.js';
 import { autoKind, rdText, rdTextQ, routeOf } from './rules.js';
 import { createEditor, STATE_TEXT, CROSS_TEXT } from './editor.js';
 import { pickCover } from './cover.js';
@@ -39,6 +40,7 @@ $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t
 
 // ===== 啟動：權限同排程發布 =====
 // 骨架收掉：ok＝能用（顯示內容），否則顯示停用卡片
+initConnPill({ pill: $('connPill'), tip: $('connTip'), label: $('connLbl'), state: $('pagesState') });
 const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden = false; };
 (async () => {
   let st;

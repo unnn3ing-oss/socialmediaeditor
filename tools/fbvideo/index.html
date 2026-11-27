@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="../../ui/tokens.css">
 <link rel="stylesheet" href="../../ui/fx.css">
 <link rel="stylesheet" href="../../ui/warnings.css">
+<link rel="stylesheet" href="../../ui/connpill.css">
 <link rel="stylesheet" href="fbvideo.css">
 </head>
 <body>
@@ -42,8 +43,7 @@
 <main class="fv" id="app" hidden>
   <header class="fv-head">
     <h1>影片發布</h1>
-    <span class="pill" id="pagesState">已連線 0 個粉專</span>
-    <span class="who" id="whoAmI" hidden></span>
+    <span class="conn-wrap"><button type="button" class="pill conn-pill ok" id="connPill" aria-describedby="connTip" aria-expanded="false"><span id="connLbl">已連線</span></button><span class="conn-tip" id="connTip" role="tooltip" hidden><span id="pagesState">已連線 0 個粉專</span><span class="who" id="whoAmI" hidden></span></span></span>
     <span class="pill pill-warn test-pill">測試模式（僅管理員）</span>
     <span class="grow"></span>
     <div class="seg" role="tablist" aria-label="分頁" id="tabs">
