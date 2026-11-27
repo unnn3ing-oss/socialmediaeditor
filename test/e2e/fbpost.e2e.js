@@ -1517,7 +1517,7 @@ test('幫直出（多圖）：照片套圖＋「照片」框、每張帶入、�
   assert.equal(await page.getAttribute('#modeSeg [data-mode=image]', 'aria-pressed'), 'true');
   assert.equal((await page.textContent('#modeSeg [data-mode=image]')).trim(), '照片套圖');
   assert.equal(await page.locator('#modeSeg [data-mode]').count(), 3, '模式只有三個');
-  assert.equal(await page.getAttribute('#frameSeg [data-frame=photo]', 'aria-pressed'), 'true', '「照片」框');
+  assert.equal(await page.getAttribute('#frameRow [data-frame=photo]', 'aria-pressed'), 'true', '「照片」框');
   assert.equal(await page.inputValue('#link'), 'https://news.tvbs.com.tw/politics/3000000');
   assert.equal(await page.inputValue('#msg'), '\n小編文\n【大新聞 標題】\n#tag');
   assert.equal(await page.inputValue('#title'), '大新聞 標題');
@@ -1559,14 +1559,14 @@ test('「照片」框：加多張、縮圖調順序／移除、不套框不加�
   if (SHOT) { await page.setViewportSize({ width: 360, height: 500 }); await page.click('[data-tab=pub]'); await page.waitForSelector('#pubList li .act-direct'); await page.screenshot({ path: SHOT + '/fbpost-side-pub.png' }); await page.click('[data-tab=sched]'); await page.setViewportSize({ width: 1280, height: 900 }); }
   await page.evaluate(() => document.documentElement.classList.remove('is-side'));
   await openPost(page);
-  assert.deepEqual(await page.locator('#frameSeg [data-frame]:visible').allTextContents(), ['套版', '照片'], '測試環境沒有公司素材：套版｜照片');
+  assert.deepEqual(await page.locator('#frameRow [data-frame]:visible').allTextContents(), ['套版', '圖片'], '測試環境沒有公司素材：套版｜圖片');
   assert.equal(await page.isHidden('#photoStrip'), true);
-  await page.click('#frameSeg [data-frame=photo]');
+  await page.click('#frameRow [data-frame=photo]');
   assert.equal(await page.isVisible('#photoStrip'), true);
   for (let k = 0; k < 3; k++) await pasteImage(page, fakeAsset());
   await page.waitForFunction(() => document.querySelectorAll('#psList .ps-thumb').length === 3);
   assert.equal(await page.getAttribute('#modeSeg [data-mode=image]', 'aria-pressed'), 'true');
-  assert.equal(await page.getAttribute('#frameSeg [data-frame=photo]', 'aria-pressed'), 'true', '貼照片＝加一張，框不變');
+  assert.equal(await page.getAttribute('#frameRow [data-frame=photo]', 'aria-pressed'), 'true', '貼照片＝加一張，框不變');
   assert.equal(await page.isHidden('#fxBtn'), true, '照片框不加貼圖');
   assert.match(await page.textContent('#psCount'), /共 3 張/);
   await page.click('#psList .ps-item:nth-child(2) [aria-label^="移除"]');
@@ -1577,7 +1577,7 @@ test('「照片」框：加多張、縮圖調順序／移除、不套框不加�
   await page.click('#frameSeg [data-frame=generic]');
   assert.match(await page.textContent('#pullHint'), /套版只會用第 1 張/);
   assert.equal(await page.isHidden('#photoStrip'), true);
-  await page.click('#frameSeg [data-frame=photo]');
+  await page.click('#frameRow [data-frame=photo]');
   assert.equal(await page.locator('#psList .ps-thumb').count(), 2, '切回照片：其他張還在');
   await page.click('#frameSeg [data-frame=generic]');
   await page.fill('#link', 'https://example.com/a');
@@ -1595,7 +1595,7 @@ test('多圖發多個粉專：一個粉專送一次請求（避免單次請求�
   const { page, errors, api } = await newPage('admin');
   await page.goto(srv.url + 'tools/fbpost/index.html');
   await openPost(page);
-  await page.click('#frameSeg [data-frame=photo]');
+  await page.click('#frameRow [data-frame=photo]');
   await pasteImage(page, fakeAsset()); await pasteImage(page, fakeAsset());
   await page.waitForFunction(() => document.querySelectorAll('#psList .ps-thumb').length === 2);
   await page.fill('#link', 'https://example.com/a');

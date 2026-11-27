@@ -245,7 +245,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   function showMode() {
     $('imgArea').hidden = st.mode === 'text';
     $('noImg').hidden = st.mode !== 'text';
-    $('frameSeg').hidden = st.mode !== 'image';
+    $('frameRow').hidden = st.mode !== 'image';
     $('swatchBox').hidden = st.mode !== 'color';
     const text = st.mode === 'text';
     $('msg').hidden = text; $('msgLbl').hidden = text;
@@ -262,12 +262,13 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     draw(); syncFx(); msgCount();
   }
   const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
-  const setFrame = segmented($('frameSeg'), 'frame', (v) => {
+  // 「新聞｜娛樂」一組切換＋右邊獨立的「圖片」按鈕（同一組 data-frame，一次只亮一個）
+  const setFrame = segmented($('frameRow'), 'frame', (v) => {
     const wasRaw = isRaw();
     if (titleEd) titleEd.end();
     st.frame = v;
     if (wasRaw !== isRaw()) showMode(); else draw();
-    if (!isRaw() && st.photos.length > 1) say('pullHint', `套版只會用第 1 張（其他 ${st.photos.length - 1} 張先保留，切回「照片」還在，送出時不會送）`);
+    if (!isRaw() && st.photos.length > 1) say('pullHint', `套版只會用第 1 張（其他 ${st.photos.length - 1} 張先保留，切回「圖片」還在，送出時不會送）`);
   });
   // 沒有公司素材：只有「套版｜照片」
   $('frameSeg').querySelector('[data-frame=generic]').hidden = !!assets.company;

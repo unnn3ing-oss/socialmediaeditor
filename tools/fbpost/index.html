@@ -133,11 +133,13 @@
             </div>
             <p class="hint bad" id="fontWarn" hidden></p>
             <div class="photo-strip" id="photoStrip" hidden><ul class="ps-list" id="psList" aria-label="照片（照順序發出）"></ul><p class="hint" id="psCount"></p></div>
-            <div class="seg wide" id="frameSeg" role="group" aria-label="套版">
-              <button type="button" data-frame="news">新聞（藍框）</button>
-              <button type="button" data-frame="entertainment">娛樂（粉框）</button>
-              <button type="button" data-frame="generic">套版</button>
-              <button type="button" data-frame="photo" title="不套框、不畫標題，照片原樣送出（可 1～10 張）">照片</button>
+            <div class="frame-row" id="frameRow">
+              <div class="seg wide" id="frameSeg" role="group" aria-label="套版">
+                <button type="button" data-frame="news">新聞（藍框）</button>
+                <button type="button" data-frame="entertainment">娛樂（粉框）</button>
+                <button type="button" data-frame="generic">套版</button>
+              </div>
+              <button type="button" class="raw-btn" data-frame="photo" title="不套框、不畫標題，圖片原樣送出（可 1～10 張）">圖片</button>
             </div>
             <div class="swatch-box" id="swatchBox" hidden>
               <div class="sw-head"><strong>底色</strong><span id="colorCode"></span></div>
