@@ -378,6 +378,10 @@ body.no-scroll { overflow: hidden; }
 .is-side .new-btn, .is-side #pagesRefresh { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
 .is-side .fp-head { gap: 8px; }
 .is-side .fp-head .pill { font-size: 12px; padding: 2px 10px; }
+.is-side .fp-head :is(.conn-pill, .duty-btn) {
+  height: 32px; min-height: 32px; padding: 0 10px;
+  border-radius: var(--radius-control); font-size: 13px; font-weight: 600; line-height: 1.5;
+}
 .is-side .tabs button, .is-side .seg.tabs button { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
 .is-side .bar select { height: 32px; min-height: 32px; padding: 0 8px; font-size: 13px; }
 .is-side .bar .btn, .is-side .bar .btn-sm, .is-side #pubMore { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; }
@@ -641,3 +645,26 @@ html:not(.is-side) .live-tip { display: none; }
   html:not(.is-side) .post.step2 .send-wrap { grid-column: 2; grid-row: 6; width: auto; min-width: 0; }
   html:not(.is-side) .post.step2 .send-wrap .send { height: 46px; min-height: 46px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* 外掛工具列：分頁與新增一列，篩選與檢視一列；保留網頁版尺寸。 */
+.is-side #listCard { padding: 12px; }
+.is-side .tabs-row { gap: 8px; margin-bottom: 8px; }
+.is-side .tabs-row .seg.tabs { padding: 4px; gap: 4px; border-radius: 14px; }
+.is-side .tabs-row .seg.tabs button { height: 30px; min-height: 30px; padding: 0 10px; border-radius: 10px; }
+.is-side .tabs-row .new-btn { height: 34px; min-height: 34px; margin-left: auto; padding: 0 10px; font-size: 13px; }
+.is-side .tabs-row .ctl { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.is-side .tabs-row .ctl[hidden] { display: none; }
+.is-side .ctl .inline { min-width: 0; flex: 1 1 0; gap: 0; font-size: 0; }
+.is-side .ctl .inline select { width: 100% !important; min-width: 0; padding: 0 3px; font-size: 12px; text-overflow: ellipsis; }
+.is-side .ctl .view-seg { flex: none; flex-wrap: nowrap; padding: 0; gap: 0; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); }
+.is-side .ctl .view-seg button { width: 28px; height: 30px; min-height: 30px; padding: 0; border-radius: 6px; font-size: 0; }
+.is-side .ctl .view-seg button + button { border-left: 1px solid var(--line-strong); }
+.is-side .ctl .view-seg button.is-on { background: var(--accent-soft); box-shadow: none; }
+.is-side .tabs-row .ctl .btn.btn-sm { flex: none; width: 32px; height: 32px; min-height: 32px; padding: 0; font-size: 0; gap: 0; }
+.is-side .ctl .btn::before, .is-side .ctl .view-seg button::before { content: ''; display: inline-block; width: 16px; height: 16px; background: currentColor; vertical-align: middle; }
+.is-side .ctl .btn.fx-busy::before { content: none; }
+.is-side .ctl .btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%207v5h-5M4%2017v-5h5%22%2F%3E%3Cpath%20d%3D%22M6%207a7%207%200%200%201%2012-1l2%206M4%2012l2%206a7%207%200%200%200%2012-1%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M20%207v5h-5M4%2017v-5h5%22%2F%3E%3Cpath%20d%3D%22M6%207a7%207%200%200%201%2012-1l2%206M4%2012l2%206a7%207%200%200%200%2012-1%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; }
+.is-side .ctl [data-view=list]::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%206h13M8%2012h13M8%2018h13M3%206h1M3%2012h1M3%2018h1%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%206h13M8%2012h13M8%2018h13M3%206h1M3%2012h1M3%2018h1%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; }
+.is-side .ctl [data-view=card]::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; }
+.is-side .ctl .btn.fx-ok::before { content: none; }
+.is-side .ctl .btn .fx-lbl { display: none; }

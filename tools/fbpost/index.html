@@ -75,15 +75,15 @@
         <button type="button" role="tab" aria-selected="false" data-tab="pub">已發佈</button>
       </div>
       <div class="bar ctl" id="ctl-sched">
-        <label class="inline">粉專 <select id="schedPage"></select></label>
-        <label class="inline">排序 <select id="schedSort"><option value="near">時間最近</option><option value="far">時間最遠</option></select></label>
-        <button type="button" class="btn btn-secondary btn-sm" id="schedReload">刷新</button>
-        <div class="seg view-seg" role="group" aria-label="顯示方式"><button type="button" data-view="list" class="is-on" aria-pressed="true">列表</button><button type="button" data-view="card" aria-pressed="false">卡片</button></div>
+        <label class="inline">粉專 <select id="schedPage" aria-label="粉專" title="粉專"></select></label>
+        <label class="inline">排序 <select id="schedSort" aria-label="排序方式" title="排序方式"><option value="near">時間最近</option><option value="far">時間最遠</option></select></label>
+        <button type="button" class="btn btn-secondary btn-sm" id="schedReload" aria-label="刷新貼文" title="刷新貼文">刷新</button>
+        <div class="seg view-seg" role="group" aria-label="顯示方式"><button type="button" title="列表顯示" aria-label="列表顯示" data-view="list" class="is-on" aria-pressed="true">列表</button><button type="button" title="卡片顯示" aria-label="卡片顯示" data-view="card" aria-pressed="false">卡片</button></div>
       </div>
       <div class="bar ctl" id="ctl-pub" hidden>
-        <label class="inline">粉專 <select id="pubPage"></select></label>
-        <button type="button" class="btn btn-secondary btn-sm" id="pubReload">刷新</button>
-        <div class="seg view-seg" role="group" aria-label="顯示方式"><button type="button" data-view="list" class="is-on" aria-pressed="true">列表</button><button type="button" data-view="card" aria-pressed="false">卡片</button></div>
+        <label class="inline">粉專 <select id="pubPage" aria-label="粉專" title="粉專"></select></label>
+        <button type="button" class="btn btn-secondary btn-sm" id="pubReload" aria-label="刷新貼文" title="刷新貼文">刷新</button>
+        <div class="seg view-seg" role="group" aria-label="顯示方式"><button type="button" title="列表顯示" aria-label="列表顯示" data-view="list" class="is-on" aria-pressed="true">列表</button><button type="button" title="卡片顯示" aria-label="卡片顯示" data-view="card" aria-pressed="false">卡片</button></div>
       </div>
     </div>
 
