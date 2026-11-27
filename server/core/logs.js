@@ -8,7 +8,7 @@ const pageCol = new WeakMap();   // D1 綁定 → Promise
 //   與處理狀態（st：open／read／retry／closed，st_by／st_name／st_at 誰、何時），與留言失敗通知（fb/notices.js）同一套
 const COLS = ['page TEXT', 'detail TEXT', 'post TEXT', 'title TEXT', 'ptype TEXT', 'pub_at INTEGER', 'page_name TEXT', 'st TEXT', 'st_by TEXT', 'st_name TEXT', 'st_at INTEGER']
   .map((c) => 'ALTER TABLE logs ADD COLUMN ' + c);
-export const PTYPES = ['template', 'textimg', 'text', 'video', 'reels'];
+export const PTYPES = ['template', 'textimg', 'text', 'photo', 'video', 'reels'];
 export const LOG_STATES = ['open', 'read', 'retry', 'closed'];
 export function ensurePageCol(env) {
   let p = pageCol.get(env.DB);

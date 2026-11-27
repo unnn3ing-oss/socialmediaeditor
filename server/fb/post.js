@@ -46,7 +46,7 @@ export function parseWarn(raw) {
   return [...w].length > MAX_WARN ? null : w;
 }
 
-export const KINDS = ['template', 'textimg', 'text'];
+export const KINDS = ['template', 'textimg', 'text', 'photo'];   // photo＝原圖（不套版）
 // 通知用的貼文摘要（≤40 字）：有整行【標題】用標題，沒有用第一行有字的
 export const TITLE_MAX = 40;
 export function summaryOf(message) {

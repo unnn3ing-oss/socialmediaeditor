@@ -79,10 +79,12 @@ function openBtn(it) {
   const href = (it.url && /^https:\/\/(www\.|m\.)?facebook\.com\//.test(it.url)) ? it.url : fbPostUrl(it.id);
   if (!href) return null;
   const a = document.createElement('a'); a.className = 'btn btn-sm btn-secondary act-open'; a.href = href; a.target = '_blank'; a.rel = 'noopener';
-  a.textContent = isSide() ? '開啟 ↗' : '開啟貼文 ↗';   // 側邊欄窄：五顆按鈕要擠在一列
+  a.innerHTML = '開啟<span class="open-long">貼文</span> ↗'; a.setAttribute('aria-label', '開啟貼文');   // 側邊欄與手機只顯示「開啟 ↗」（CSS）
   a.title = '在新分頁開啟這則貼文';
   return a;
 }
+// 刪除：側邊欄與手機（≤820px）只顯示垃圾桶圖示（CSS），按鈕名稱仍是「刪除」
+function delBtn(fn) { const b = btn('刪除', 'btn-secondary btn-del', fn); b.title = '刪除'; return b; }
 function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; if (fn) b.onclick = fn; return b; }
 
 // 查詢中骨架：3 列灰色占位（樣式 .sk 來自 ui/tokens.css）
@@ -237,7 +239,8 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
 
 // history：送出記錄（只在這個瀏覽器，7 天）；onResend(記錄)：再發一次；getDuty()：值班粉專 id 陣列（第一個＝預設）
 const NO_REC = '沒有記錄：只有這台電腦、這個瀏覽器 7 天內送出的貼文才能再發一次';
-export function createManage({ tb, history = null, onResend = null, getDuty = () => [] }) {
+// onDirect(貼文, 粉專, 按鈕)：幫直出（已發佈）
+export function createManage({ tb, history = null, onResend = null, onDirect = null, getDuty = () => [] }) {
   const recIndex = () => (history ? history.index() : Promise.resolve(new Map()));
   function resendBtn(it, idx) {
     const rec = idx.get(postKey(it.id));
@@ -296,7 +299,7 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
       const bEdit = btn('改時間', 'btn-secondary act-time', () => {
         const { min, max } = bounds(); dt.min = min; dt.max = max; dt.value = toLocalInput(it.at * 1000); edit.hidden = !edit.hidden;
       });
-      const bCancel = btn('刪除', 'btn-secondary btn-del', async () => {
+      const bCancel = delBtn(async () => {
         if (!await confirmBox('刪除排程貼文', '確定要刪除這則排程貼文嗎？刪除後不會發布，無法復原。')) return;
         fx.busy(bCancel, '刪除中');
         try {
@@ -328,7 +331,8 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
       if (bRetry) acts.append(bRetry);
       const bOpen = openBtn(it); if (bOpen) acts.append(bOpen);
       acts.append(editSoon(), resendBtn(it, idx));
-      const bDel = btn('刪除', 'btn-secondary btn-del', async () => {
+      if (onDirect) { const bDirect = btn('幫直出', 'btn-secondary act-direct', () => onDirect(it, page, bDirect)); bDirect.title = '帶入這則貼文的內容、圖片、連結，另外發到其他粉專'; acts.append(bDirect); }
+      const bDel = delBtn(async () => {
         if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
         fx.busy(bDel, '刪除中');
         try {

@@ -17,7 +17,7 @@ export function titleCheck(title) {
   return { widths, ok: true, text: `${RULE}・目前 ${widths.join('／')}` };
 }
 
-// 多行標題合併成一行：預覽（選套版、純文字圖）的每個換行處補一個空格
+// 多行標題合併成一行：預覽（照片套圖、純文字圖）的每個換行處補一個空格
 export function joinTitle(title) {
   const lines = String(title || '').split('\n').map((l) => l.trim()).filter(Boolean);
   return lines.join(' ');   // 預覽換行處一律空一格

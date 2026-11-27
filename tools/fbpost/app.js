@@ -4,8 +4,9 @@
 //   targets.js 粉專膠囊＋timepop.js 排程時間、rd.js 排入 RD、send.js 送出；time.js、slug.js、rules.js 是純規則，util.js 共用小工具
 // 工具內切換一律用 hidden，不重建畫面。
 import { tb } from '../../sdk/toolbox.js';
-import { $, errText, confirmBox } from './util.js';
+import { $, errText, confirmBox, say } from './util.js';
 import { busy, ok, fail } from '../../ui/fx.js';
+import * as fx from '../../ui/fx.js';
 import { createManage } from './manage.js';
 import { createDialog } from './dialog.js';
 import { createDuty } from './duty.js';
@@ -104,7 +105,34 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     await composer.restore(rec);
     dialog.open();
   }
-  const manage = createManage({ tb, history, onResend: resend, getDuty: () => duty.ids() });
+  // 幫直出：讀這則已發佈貼文的文字、圖片、文章連結（後端去 utm），開新增發文帶入；粉專全部不勾
+  async function direct(it, page, btn) {
+    try { await ensureCompose(); } catch (e) { $('pagesState').textContent = '載入新增發文失敗：' + errText(e); return; }
+    const busy = $('link').value.trim() || $('title').value.trim() || $('msg').value.trim() || composer.snapshot().photo;
+    if (busy && !(await confirmBox('要用這則貼文覆蓋嗎？', '新增發文裡已經有內容，幫直出會清空它（網址、照片、標題、貼文內容、粉專勾選）。'))) return;
+    fx.busy(btn, '讀取中');
+    let d;
+    try { d = await tb.api.call(`/fb/posts/${encodeURIComponent(it.id)}/source?page=${encodeURIComponent(page)}`); }
+    catch (e) { fx.fail(btn, '幫直出'); $('pubHint').textContent = '幫直出失敗：' + errText(e); return; }
+    fx.idle(btn, '幫直出');
+    let photo = null;
+    if (d.image && d.image.data) {
+      const bin = atob(d.image.data), u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      photo = new Blob([u8], { type: d.image.type || 'image/jpeg' });
+    }
+    const message = String(d.message || '');
+    const tl = message.split('\n').map((l) => l.trim()).find((l) => /^【.+】$/.test(l));
+    sender.clearAll();
+    targets.none();
+    const photoOk = await composer.direct({ message, title: tl ? tl.slice(1, -1) : '', link: d.link || '', photo });
+    const miss = [];
+    if (!d.link) miss.push('找不到文章連結，請自己貼上');
+    if (d.imageFailed || (photo && !photoOk)) miss.push('圖片讀取失敗，請自己貼上照片');
+    say('pullHint', '已帶入已發佈貼文的' + ['貼文內容', photo && photoOk ? '圖片' : '', d.link ? '連結' : ''].filter(Boolean).join('、') + '；請勾選要發的粉專' + (miss.length ? '（' + miss.join('；') + '）' : ''), miss.length > 0);
+    dialog.open();
+  }
+  const manage = createManage({ tb, history, onResend: resend, onDirect: direct, getDuty: () => duty.ids() });
   const showPages = (list) => { currentPages = list; $('pagesState').textContent = `已連線 ${list.length} 個粉專`; if (targets) targets.setPages(list); manage.setPages(list); duty.paint(); };
   showPages(pages);
   $('pagesRefresh').addEventListener('click', async () => {

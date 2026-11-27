@@ -362,7 +362,7 @@ body.no-scroll { overflow: hidden; }
 /* 依權限隱藏（用 class，不重建列表） */
 .who { font-size: 12px; color: var(--muted, #5b6472); }
 .noview { margin: 16px 0; padding: 14px 16px; border-radius: var(--radius-control); background: var(--warn-bg); color: var(--warn-text); }
-#fbpostApp.no-post #newBtn, #fbpostApp.no-post .act-resend, #fbpostApp.no-post .act-retry, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
+#fbpostApp.no-post #newBtn, #fbpostApp.no-post .act-resend, #fbpostApp.no-post .act-direct, #fbpostApp.no-post .act-retry, #fbpostApp.no-edit .act-time, #fbpostApp.no-delete .btn-del, #fbpostApp.no-view #listCard { display: none; }
 #needStaff { margin-top: 12px; }
 
 /* 臉書權杖快到期／失效提醒（只有管理員看得到） */
@@ -570,3 +570,20 @@ html:not(.is-side) .live-tip { display: none; }
 .list .acts .act-open { flex: 0 0 auto; }
 .is-side .list .acts { gap: 6px; }
 .is-side .list .acts .btn { flex: 1 1 auto; padding: 0 6px; }
+/* 刪除：側邊欄與手機改紅色垃圾桶圖示（文字留著當按鈕名稱，字級 0 不顯示；處理中只顯示轉圈） */
+.is-side .list .acts .btn.btn-del, .is-side #listCard[data-view=card] .list .acts .btn.btn-del { flex: 0 0 32px; width: 32px; min-width: 32px; padding: 0; font-size: 0; gap: 0; justify-content: center; }
+@media (max-width: 820px) {
+  .list .acts .btn.btn-del, #listCard[data-view=card] .list .acts .btn.btn-del { flex: 0 0 44px; width: 44px; min-width: 44px; padding: 0; font-size: 0; gap: 0; justify-content: center; }
+}
+.is-side .list .acts .btn.btn-del { flex-basis: 32px; width: 32px; min-width: 32px; }
+.is-side .list .acts .btn.btn-del::before, .list .acts .btn.btn-del::before { content: none; }
+.is-side .list .acts .btn.btn-del:not(.fx-busy)::before { content: ''; }
+@media (max-width: 820px) { .list .acts .btn.btn-del:not(.fx-busy)::before { content: ''; } }
+.list .acts .btn.btn-del::before {
+  width: 18px; height: 18px; flex: none; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* 開啟貼文：側邊欄與手機只顯示「開啟 ↗」 */
+.is-side .list .acts .open-long { display: none; }
+@media (max-width: 820px) { .list .acts .open-long { display: none; } }

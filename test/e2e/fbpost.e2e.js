@@ -58,6 +58,8 @@ async function newPage(mode, viewport = { width: 1280, height: 900 }, opts = {})
     if (p === '/fb/published' && opts.pubFn) return json(opts.pubFn(u));
     if (p === '/fb/published' && opts.pub) return json({ items: opts.pub, next: null });
     if (p === '/fb/published') return json({ items: [{ id: '111_5', message: '已發的貼文', time: new Date().toISOString(), picture: null, url: 'https://www.facebook.com/111/posts/5', comment: 'done' }], next: null });
+    let ms = /^\/fb\/posts\/([^/]+)\/source$/.exec(p);
+    if (ms) { api.sources = [...(api.sources || []), { id: decodeURIComponent(ms[1]), page: u.searchParams.get('page') }]; return opts.source ? (typeof opts.source === 'function' ? opts.source() : json(opts.source)) : json({ message: '', link: '', image: null, imageFailed: false }); }
     if (p === '/fb/presets') return json([{ name: '雙11抽獎', body: '留言＋分享抽 AirPods！\nhttps://example.com/a' }, { name: '訂閱', body: '記得訂閱 YouTube' }]);
     if (p === '/rundown') {
       const b = JSON.parse(req.postData() || '{}');
@@ -348,7 +350,7 @@ test('管理員：進入是已排程／已發佈；新增發文彈出、膠囊�
   assert.equal(await page.getAttribute('#pubList .pv-arm', 'aria-expanded'), 'true');
   await page.keyboard.press('Escape');
   assert.equal(await page.isVisible('#pubList .pv-open'), false);
-  assert.deepEqual(await page.$$eval('#pubList li:first-child .acts button', (b) => b.map((x) => x.textContent)), ['編輯', '再發一次', '刪除']);
+  assert.deepEqual(await page.$$eval('#pubList li:first-child .acts button', (b) => b.map((x) => x.textContent)), ['編輯', '再發一次', '幫直出', '刪除']);
   await page.click('#pubList li >> text=刪除');
   await page.waitForSelector('#cfDlg[open]');
   await page.click('#cfYes');
@@ -1281,7 +1283,7 @@ test('選套版沒照片：送出鈕停用並說明原因；改純文字就能�
   await page.fill('#title', '標題');
   await page.click(chip(111) + ' .chip-l');
   assert.equal(await page.locator('#sendBtn').isDisabled(), true);
-  assert.equal(await page.textContent('#sendErr'), '選套版需要照片，請貼上或選一張照片，或改用純文字');
+  assert.equal(await page.textContent('#sendErr'), '照片套圖／原圖需要照片，請貼上或選一張照片，或改用純文字');
   await page.click('#modeSeg [data-mode=text]');
   assert.equal(await page.locator('#sendBtn').isDisabled(), false);
   assert.equal(await page.textContent('#sendErr'), '');
@@ -1499,6 +1501,79 @@ test('列表每列「開啟貼文 ↗」：已發佈用 permalink、已排程用
   assert.equal(await page.getAttribute('#pubList li .act-open', 'href'), 'https://www.facebook.com/111/posts/5');
   if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-open-btn.png' });
   assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('幫直出（有圖）：帶入原圖模式、貼文內容、標題、去 utm 的連結，粉專全不勾；送出 kind=photo 且送原始圖片', async () => {
+  const png = fakeAsset().toString('base64');
+  const { page, errors, api } = await newPage('admin', undefined, { duty: ['111'], source: { message: '\n小編文\n【大新聞 標題】\n#tag', link: 'https://news.tvbs.com.tw/politics/3000000', image: { type: 'image/png', data: png }, imageFailed: false } });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.click('[data-tab=pub]');
+  await page.waitForSelector('#pubList li .act-direct');
+  await page.click('#pubList li .act-direct');
+  await page.waitForSelector('#postDlg:not([hidden])');
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+  assert.deepEqual(api.sources, [{ id: '111_5', page: '111' }]);
+  assert.equal(await page.getAttribute('#modeSeg [data-mode=photo]', 'aria-pressed'), 'true', '原圖模式');
+  assert.equal((await page.textContent('#modeSeg [data-mode=image]')).trim(), '照片套圖');
+  assert.equal(await page.inputValue('#link'), 'https://news.tvbs.com.tw/politics/3000000');
+  assert.equal(await page.inputValue('#msg'), '\n小編文\n【大新聞 標題】\n#tag');
+  assert.equal(await page.inputValue('#title'), '大新聞 標題');
+  assert.equal(await page.locator('#pages .chip.on').count(), 0, '粉專全部不勾（不套值班）');
+  assert.equal(await page.isHidden('#frameSeg'), true, '原圖沒有框');
+  if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-direct.png' });
+  await page.click(chip(111) + ' .chip-l');
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => window.__posted || document.querySelector('#doneDlg:not([hidden])') || document.getElementById('results').textContent);
+  for (let i = 0; !api.posts.length && i < 100; i++) await page.waitForTimeout(30);
+  const body = api.posts[0];
+  assert.match(body, /name="kind"\r\n\r\nphoto\r\n/);
+  assert.match(body, /name="image"; filename="photo\.png"/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('幫直出（純文字、沒有連結）：純文字模式、文字放標題框、提示自己貼連結', async () => {
+  const { page, errors } = await newPage('admin', undefined, { source: { message: '只有文字的貼文', link: '', image: null, imageFailed: false } });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.click('[data-tab=pub]');
+  await page.click('#pubList li .act-direct');
+  await page.waitForSelector('#postDlg:not([hidden])');
+  await page.waitForFunction(() => document.getElementById('title').value === '只有文字的貼文');
+  assert.equal(await page.getAttribute('#modeSeg [data-mode=text]', 'aria-pressed'), 'true');
+  assert.equal(await page.inputValue('#link'), '');
+  assert.match(await page.textContent('#pullHint'), /找不到文章連結/);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('原圖模式：手動選照片、預覽不加框；刪除在側邊欄是垃圾桶圖示（名稱仍是刪除）、電腦版是文字', async () => {
+  const { page, errors } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#schedList li .btn-del');
+  assert.equal(await page.$eval('#schedList li .btn-del', (b) => getComputedStyle(b).fontSize !== '0px'), true, '電腦版顯示文字');
+  await page.evaluate(() => document.documentElement.classList.add('is-side'));
+  const d = await page.$eval('#schedList li .btn-del', (b) => { const r = b.getBoundingClientRect(); return { w: r.width, h: r.height, fs: getComputedStyle(b).fontSize, ic: getComputedStyle(b, '::before').content, name: b.textContent.trim() }; });
+  assert.equal(d.fs, '0px'); assert.equal(d.w, d.h, '正方形'); assert.notEqual(d.ic, 'none'); assert.equal(d.name, '刪除');
+  if (SHOT) { await page.setViewportSize({ width: 360, height: 500 }); await page.click('[data-tab=pub]'); await page.waitForSelector('#pubList li .act-direct'); await page.screenshot({ path: SHOT + '/fbpost-side-pub.png' }); await page.click('[data-tab=sched]'); await page.setViewportSize({ width: 1280, height: 900 }); }
+  await page.evaluate(() => document.documentElement.classList.remove('is-side'));
+  await openPost(page);
+  await page.click('#modeSeg [data-mode=photo]');
+  await pasteImage(page, fakeAsset());
+  await page.waitForSelector('#cvEmpty', { state: 'hidden' });
+  assert.equal(await page.getAttribute('#modeSeg [data-mode=photo]', 'aria-pressed'), 'true', '貼照片不會跳回照片套圖');
+  assert.equal(await page.isHidden('#fxBtn'), true, '原圖不加貼圖');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('手機（390px）：刪除是 44px 垃圾桶', async () => {
+  const { page } = await newPage('admin', { width: 390, height: 800 });
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#schedList li .btn-del');
+  const d = await page.$eval('#schedList li .btn-del', (b) => { const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; });
+  assert.deepEqual(d, [44, 44]);
+  if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-phone-trash.png' });
   await page.close();
 });
 

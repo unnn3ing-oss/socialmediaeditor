@@ -65,6 +65,8 @@ export function createTargets({ timePop, onChange, defaults = () => [] }) {
       return { targets };
     },
     reset() { const d = defaults(); for (const [id, s] of sel) { s.on = d.includes(id); s.sched = false; s.at = defaultAt(); } for (const id of nodes.keys()) paint(id); onChange(); },
+    // 幫直出：全部不勾（不套值班預設）
+    none() { for (const s of sel.values()) { s.on = false; s.sched = false; s.at = defaultAt(); } for (const id of nodes.keys()) paint(id); onChange(); },
     // 值班粉專改了：重排（值班排前面）；還沒勾任何粉專時才套用勾選（不蓋掉正在編輯的勾選）
     applyDefaults() {
       if (timePop.isOpen()) timePop.close();

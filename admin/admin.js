@@ -229,7 +229,7 @@ if (window.top !== window.self) {
 
   // ---- 錯誤紀錄（/admin/logs）：留言失敗帶粉專、貼文摘要、類型、發布時間；狀態＝與首頁留言失敗通知同一套 ----
   var LG_TOOL = { fbpost: '排程發布', fbvideo: '影片發布' };
-  var LG_TYPE = { template: '套版', textimg: '字圖', text: '文字', video: '橫式影片', reels: 'Reels' };
+  var LG_TYPE = { template: '套版', textimg: '字圖', text: '文字', photo: '照片', video: '橫式影片', reels: 'Reels' };
   function lgCode(code) {
     var m = /^comment_failed(?::(\d+))?$/.exec(code || '');
     if (code === 'read_denied') return '讀不到貼文狀態';
@@ -1471,7 +1471,7 @@ if (window.top !== window.self) {
   // 操作紀錄：類別（工具／後台）依動作判斷；發文類型從 detail 的 kind= 讀（舊紀錄沒有）
   var AU_TOOL = { publish: 1, schedule: 1, reschedule: 1, delete: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1, post_gone: 1 };
   var AU_OPEN = { publish: 1, schedule: 1, reschedule: 1, video_publish: 1, video_schedule: 1, video_draft: 1, comment_retry: 1 };   // 這些的 post 是貼文／影片 ID
-  var AU_KIND = { template: '套版', textimg: '字圖', text: '文字' };
+  var AU_KIND = { template: '套版', textimg: '字圖', text: '文字', photo: '照片' };
   function auKind(detail) { var m = /(?:^|\s)kind=(\w+)/.exec(detail || ''); return m && AU_KIND[m[1]] ? AU_KIND[m[1]] : ''; }
   // 類別篩選在後端（?src=），這裡只畫這一頁
   function auRender(list) {

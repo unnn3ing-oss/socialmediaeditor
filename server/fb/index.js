@@ -15,6 +15,7 @@ import { listBackgrounds, findBackground } from './bgpresets.js';
 import { adminState as bgAdminState, parseImport as bgParseImport, importDiff as bgImportDiff, importApply as bgImportApply, updateOne as bgUpdate, setRandom as bgSetRandom, deleteOne as bgDelete, fetchBatch as bgFetchBatch, readImage as bgReadImage, ID_RE as BG_ID_RE, MAX_NAME as BG_MAX_NAME } from './bgstore.js';
 import { pageToken, listScheduled, listPublished, reschedule, removePost, timeOk } from './manage.js';
 import { retryTimer, timerStatus } from './timer.js';
+import { postSource } from './source.js';
 import { parseStart, startUpload, receiveChunk, parsePublish, publish, refreshStatus, stopUpload, listJobs, validUploadId, MAX_CHUNK, saveCover, MAX_COVER } from './video.js';
 import { getVideoSettings, validVideoSettings, saveVideoSettings } from './videoset.js';
 import { webhookState } from './webhook.js';
@@ -119,6 +120,13 @@ route('POST', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/(reschedule|cancel|delete
   }
   return ok(request, env, { ok: true });
 }, 'view');
+
+// 幫直出：讀已發佈貼文的文字、圖片、文章連結（帶進新增發文；只讀不寫）
+route('GET', /^\/fb\/posts\/(\d{1,30}(?:_\d{1,30})?)\/source$/, async (request, env, ctx, m) => {
+  const token = await pageToken(env, new URL(request.url).searchParams.get('page') || '');
+  if (!token) return fail(request, env, 'bad_request');
+  return ok(request, env, await postSource(env, new URL(request.url).searchParams.get('page'), token, m[1]));
+}, 'post');
 
 // 重新留言（排程發布列表、首頁通知）：交給計時器馬上重試失敗的那則；貼文或影片都可以
 route('POST', /^\/fb\/comment\/retry$/, async (request, env, ctx, m, me) => {

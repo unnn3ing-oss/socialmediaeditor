@@ -177,3 +177,30 @@ test('已排程列表：臉書時間和計時器不同（後台改晚）→ 計�
   assert.equal((await call('/fb/published?page=111')).status, 200);
   assert.ok((await timerStatus(env, '111_2')).at <= nowSec() - 60, '改早：當成已發布、到點時間拉到現在');
 });
+
+test('幫直出 source：大圖經後端轉 base64、連結從計時器紀錄拿（去 utm）、不打留言 API', async (t) => {
+  const IMG = 'https://scontent.xx.fbcdn.net/v/big.jpg';
+  const { f, call, armTimer, env } = await setup(t, {
+    'GET /111_5': () => ({ message: '小編文\n【標題】', full_picture: 'https://scontent.xx.fbcdn.net/v/small.jpg', attachments: { data: [{ type: 'photo', media: { image: { src: IMG } } }] } }),
+    [IMG]: () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } })
+  });
+  await armTimer(env, { pageId: '111', postId: '111_5', at: nowSec(), published: true, items: [{ message: '看更多新聞內容\nhttps://news.tvbs.com.tw/a/123?utm_source=fb&x=1', offset: 0 }] });
+  const r = await call('/fb/posts/111_5/source?page=111');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.data.message, '小編文\n【標題】');
+  assert.equal(r.body.data.link, 'https://news.tvbs.com.tw/a/123?x=1');
+  assert.deepEqual(r.body.data.image, { type: 'image/jpeg', data: Buffer.from([1, 2, 3]).toString('base64') });
+  assert.equal(f.calls.some((c) => c.path === '/111_5/comments'), false);
+});
+
+test('幫直出 source：沒有計時器紀錄改讀粉專自己的留言；圖片不是 fbcdn 不讀；沒權限的粉專回 bad_request', async (t) => {
+  const { f, call } = await setup(t, {
+    'GET /111_6': () => ({ message: '純文字', full_picture: 'https://evil.example.com/a.jpg' }),
+    'GET /111_6/comments': () => ({ data: [{ from: { id: '999' }, message: 'https://spam.example.com' }, { from: { id: '111' }, message: '看更多新聞內容\nhttps://news.tvbs.com.tw/a/9?utm_campaign=z' }] })
+  });
+  const r = await call('/fb/posts/111_6/source?page=111');
+  assert.equal(r.body.data.link, 'https://news.tvbs.com.tw/a/9');
+  assert.equal(r.body.data.image, null);
+  assert.equal(f.calls.some((c) => c.path.includes('evil')), false);
+  assert.equal((await call('/fb/posts/111_6/source?page=222')).status, 400);
+});
