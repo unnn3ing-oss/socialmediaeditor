@@ -1488,6 +1488,77 @@ test('進入自動讀兩批（50＋50）；第 2 批背景接著讀；只有 1 �
   await page.close();
 });
 
+test('列表每列「開啟貼文 ↗」：已發佈用 permalink、已排程用 /粉專/posts/貼文、另開分頁', async () => {
+  const { page, errors } = await newPage('admin');
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForSelector('#schedList li .act-open');
+  assert.equal(await page.getAttribute('#schedList li .act-open', 'href'), 'https://www.facebook.com/111/posts/7');
+  assert.equal(await page.getAttribute('#schedList li .act-open', 'target'), '_blank');
+  await page.click('[data-tab=pub]');
+  await page.waitForSelector('#pubList li .act-open');
+  assert.equal(await page.getAttribute('#pubList li .act-open', 'href'), 'https://www.facebook.com/111/posts/5');
+  if (SHOT) await page.screenshot({ path: SHOT + '/fbpost-open-btn.png' });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('外掛側邊欄：不分頁，先 20 則、載入更多 +20 不重查；剩不到 20 則才背景先讀一批、一次一批；讀完顯示已經到底了', async () => {
+  const soon = Math.floor(Date.now() / 1000) + 7200;
+  const { page, errors, fbCalls, api } = await newPage('admin', { width: 360, height: 760 }, {
+    schedFn: (u) => { const a = u.searchParams.get('after'); return a === 'C3' ? { items: mkSched(10, 150, soon), next: null } : a === 'C2' ? { items: mkSched(50, 100 - 50, soon).map((x, i) => ({ ...x, id: '111_' + (50 + i), message: '排程 ' + (50 + i) })), next: 'C3' } : a ? { items: [], next: null } : { items: mkSched(50, 0, soon), next: 'C2' }; },
+  });
+  await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('is-side')));
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForFunction(() => /共 100 則/.test(document.getElementById('schedHint').textContent));
+  const calls = () => fbCalls.filter((c) => c === '/fb/scheduled').length;
+  assert.equal(calls(), 2, '進入照舊自動讀兩批');
+  assert.equal(await page.locator('#schedList li').count(), 20, '先 20 則');
+  assert.equal(await page.isVisible('#schedPager'), false, '側邊欄不分頁');
+  assert.equal((await page.textContent('#schedMore')).trim(), '載入更多');
+  if (SHOT) { await page.evaluate(() => document.getElementById('schedMore').scrollIntoView({ block: 'end' })); await page.screenshot({ path: SHOT + '/fbpost-side-more.png' }); }
+  await page.click('#schedMore'); await page.click('#schedMore'); await page.click('#schedMore');
+  assert.equal(await page.locator('#schedList li').count(), 80);
+  await page.waitForTimeout(200);
+  assert.equal(calls(), 2, '還剩 20 則，不先讀');
+  await page.click('#schedMore');   // 顯示 100、剩 0 → 背景先讀第 3 批
+  await page.waitForFunction(() => /共 110 則/.test(document.getElementById('schedHint').textContent));
+  assert.equal(calls(), 3, '背景只先讀一批');
+  assert.match(api.schedQs[2], /after=C3/);
+  assert.equal(await page.isVisible('#schedMore'), true);
+  await page.click('#schedMore');
+  assert.equal(await page.locator('#schedList li').count(), 110);
+  assert.equal(await page.isVisible('#schedMore'), false);
+  assert.equal(await page.isVisible('#schedEnd'), true, '已經到底了');
+  assert.equal(calls(), 3);
+  if (SHOT) { await page.evaluate(() => document.getElementById('schedEnd').scrollIntoView()); await page.screenshot({ path: SHOT + '/fbpost-side-end.png' }); }
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+test('外掛側邊欄：背景還沒讀到就按載入更多＝等它接上；網頁版維持分頁', async () => {
+  const soon = Math.floor(Date.now() / 1000) + 7200;
+  let release; const gate = new Promise((r) => { release = r; });
+  const { page, errors } = await newPage('admin', { width: 360, height: 760 }, {
+    schedFn: (u) => { const a = u.searchParams.get('after'); return a === 'C3' ? { items: mkSched(5, 30, soon), next: null } : a ? { items: mkSched(10, 20, soon), next: 'C3' } : { items: mkSched(20, 0, soon), next: 'C2' }; }
+  });
+  await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.add('is-side')));
+  let n = 0;
+  await page.route(API_BASE + '/fb/scheduled**', async (r) => { if (++n >= 3) await gate; await r.fallback(); });   // 第 3 批（背景先讀）卡住
+  await page.goto(srv.url + 'tools/fbpost/index.html');
+  await page.waitForFunction(() => /共 30 則/.test(document.getElementById('schedHint').textContent) && document.querySelectorAll('#schedList li').length === 20);
+  for (let i = 0; n < 3 && i < 100; i++) await page.waitForTimeout(30);
+  await page.click('#schedMore');   // 快取裡還有 10 則：馬上接上
+  assert.equal(await page.locator('#schedList li').count(), 30);
+  await page.click('#schedMore');   // 背景還在讀：轉圈等它
+  await page.waitForFunction(() => document.getElementById('schedMore').getAttribute('aria-busy') === 'true');
+  release();
+  await page.waitForFunction(() => document.querySelectorAll('#schedList li').length === 35);
+  assert.equal(n, 3, '沒有重複讀');
+  assert.equal(await page.isVisible('#schedEnd'), true);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
 test('預設粉專＝值班粉專第一個；值班改了且沒手動換過就跟著切；手動換過就不動', async () => {
   const { page, errors, fbCalls, api } = await newPage('admin', undefined, { duty: ['222', '333'] });
   await page.goto(srv.url + 'tools/fbpost/index.html');

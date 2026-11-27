@@ -393,9 +393,9 @@ async function ensureStarted(v) {
     v.upload = 'error'; v.err = errText(e); v.ed.renderUpload(); renderQueue();
   } finally { v.starting = false; }
 }
-// 同時上傳 PARALLEL 支影片；每支一段一段傳（臉書要依 offset 順序）
+// 一次上傳 PARALLEL 支影片（2026-11-27 改 1：兩支長影片同時傳容易失敗）；每支一段一段傳（臉書要依 offset 順序）
 // 單段遇到連線／HTTP 錯誤自動重試 CHUNK_RETRY 次（間隔 2、4 秒）；後端回的粉專失敗不在這裡重試（後端已試過）
-const PARALLEL = 2, CHUNK_RETRY = 2;
+const PARALLEL = 1, CHUNK_RETRY = 2;
 let pumpers = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 已要求停止的不再撿（停止請求還在路上時，最後一段剛好傳完會帶回 next；不擋會在 pump 裡無限撿起又立刻結束，整頁卡死）

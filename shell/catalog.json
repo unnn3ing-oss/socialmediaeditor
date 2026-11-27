@@ -79,7 +79,7 @@
       },
       "icon": "tools/fbpost/icon.svg",
       "thumb": "tools/fbpost/thumb.svg",
-      "entry": "tools/fbpost/index.html?v=f135d86084"
+      "entry": "tools/fbpost/index.html?v=7ec952343b"
     },
     {
       "id": "fbvideo",
@@ -94,7 +94,7 @@
       },
       "icon": "tools/fbvideo/icon.svg",
       "thumb": "tools/fbvideo/thumb.svg",
-      "entry": "tools/fbvideo/index.html?v=0636cd1993"
+      "entry": "tools/fbvideo/index.html?v=a70cf5a8ae"
     },
     {
       "id": "fbreports",

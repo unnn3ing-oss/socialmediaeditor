@@ -2,6 +2,7 @@
 import { $, errText, bounds, inRange, toLocalInput, commentState, say, confirmBox } from './util.js';
 import { postKey } from './history.js';
 import * as fx from '../../ui/fx.js';
+import { fbPostUrl } from '../../shell/notices.js';
 
 // 列表（2026-11-18 使用者定版）：縮圖｜內容（一行）＋「相片／文字．粉專．留言」｜按鈕｜時間欄
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -73,6 +74,14 @@ function byAt(x, y, order) {
   if (!a || !b) return (a ? 0 : 1) - (b ? 0 : 1);
   return order === 'far' ? b - a : a - b;
 }
+// 開啟貼文 ↗：已發佈優先用臉書回的 permalink，否則 /粉專/posts/貼文；網址不合法就不放
+function openBtn(it) {
+  const href = (it.url && /^https:\/\/(www\.|m\.)?facebook\.com\//.test(it.url)) ? it.url : fbPostUrl(it.id);
+  if (!href) return null;
+  const a = document.createElement('a'); a.className = 'btn btn-sm btn-secondary act-open'; a.href = href; a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = isSide() ? '開啟 ↗' : '開啟貼文 ↗';   // 側邊欄窄：五顆按鈕要擠在一列 a.title = '在新分頁開啟這則貼文';
+  return a;
+}
 function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; if (fn) b.onclick = fn; return b; }
 
 // 查詢中骨架：3 列灰色占位（樣式 .sk 來自 ui/tokens.css）
@@ -87,6 +96,8 @@ function skel(ul) {
 
 const PAGE = 50;        // 每頁（也是後端每批）則數
 const AUTO_BATCHES = 2; // 進入／換粉專自動讀幾批（最多 100 則）；之後按「讀取更多」每次再讀一批
+const SIDE_STEP = 20;   // 外掛側邊欄：不分頁，先顯示 20 則、每按「載入更多」再 +20
+const isSide = () => document.documentElement.classList.contains('is-side');
 const VIEW_KEY = 'tbx.fbpost.view';
 const store = { get() { try { return localStorage.getItem(VIEW_KEY); } catch { return null; } }, set(v) { try { localStorage.setItem(VIEW_KEY, v); } catch { /* 無痕：只在這次有效 */ } } };
 const dedupe = (arr) => { const seen = new Set(); return (arr || []).filter((x) => !seen.has(x.id) && seen.add(x.id)); };
@@ -105,11 +116,13 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
     render() {
       const page = cur(), e = cache.get(page), ul = $(ids.list), ph = loading.get(page);
       ul.setAttribute('aria-busy', ph === 'first' ? 'true' : 'false');
-      $(ids.pager).hidden = true; $(ids.more).hidden = true;
+      $(ids.pager).hidden = true; $(ids.more).hidden = true; $(ids.end).hidden = true;
       if (ph === 'first') { skel(ul); hint('查詢中…'); return; }
       ul.textContent = '';
       if (!e) { hint(''); return; }
-      const all = sort(e.items), pages = Math.max(1, Math.ceil(all.length / PAGE));
+      const all = sort(e.items);
+      if (isSide()) { renderSide(page, e, all, ul, ph); return; }
+      const pages = Math.max(1, Math.ceil(all.length / PAGE));
       e.pageNo = Math.min(Math.max(e.pageNo || 0, 0), pages - 1);
       const pageName = $(ids.page).selectedOptions[0]?.textContent || '';
       const ctx = { page, pageName, idx, L };
@@ -133,9 +146,9 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
         const [d, i] = await Promise.all([fetchBatch(page, null), recIndex()]);
         if (gen.get(page) !== g) return;
         idx = i;
-        e = { items: dedupe(d.items), next: d.next || null, batches: 1, at: Date.now(), pageNo: 0 };
+        e = { items: dedupe(d.items), next: d.next || null, batches: 1, at: Date.now(), pageNo: 0, shown: SIDE_STEP };
         if (auto && old && old.batches > 1) { e.items = dedupe([...e.items, ...old.items]); e.next = old.next; e.batches = old.batches; }
-        if (auto && old) e.pageNo = old.pageNo || 0;
+        if (auto && old) { e.pageNo = old.pageNo || 0; e.shown = old.shown || SIDE_STEP; }
         cache.set(page, e);
       } catch (err) {
         if (gen.get(page) !== g) return;
@@ -148,12 +161,14 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
       // 第 1 批先顯示；第 2 批背景接著讀
       if (e.next && e.batches < AUTO_BATCHES) { loading.set(page, 'more'); if (cur() === page) L.render(); return await L.more(page, g); }
       loading.delete(page); if (cur() === page) L.render();
+      prefetch(page);
       return true;
     },
     // 再讀一批接在後面；g＝自動第 2 批沿用同一代，不帶＝「讀取更多」按鈕（開新的一代）
-    async more(page, g) {
+    // quiet＝側邊欄背景先讀：不改提示文字、失敗不顯示錯誤（按「載入更多」時再試並顯示）
+    async more(page, g, quiet = false) {
       const e = cache.get(page); if (!e || !e.next) return true;
-      if (g == null) { g = (gen.get(page) || 0) + 1; gen.set(page, g); loading.set(page, 'more'); if (cur() === page) L.render(); }
+      if (g == null) { g = (gen.get(page) || 0) + 1; gen.set(page, g); loading.set(page, quiet ? 'bg' : 'more'); if (cur() === page) L.render(); }
       try {
         const d = await fetchBatch(page, e.next);
         if (gen.get(page) !== g) return;
@@ -163,7 +178,7 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
       } catch (err) {
         if (gen.get(page) !== g) return;
         loading.delete(page);
-        if (cur() === page) { L.render(); hint(errText(err), true); }
+        if (cur() === page) { L.render(); if (!quiet) hint(errText(err), true); }
         return false;
       }
     },
@@ -173,7 +188,49 @@ function makeList({ ids, fetchBatch, build, sort, empty, recIndex }) {
   };
   $(ids.prev).onclick = () => { const e = L.entry(); if (e) { e.pageNo--; L.render(); } };
   $(ids.next).onclick = () => { const e = L.entry(); if (e) { e.pageNo++; L.render(); } };
-  $(ids.more).onclick = () => L.more(cur());
+  // ===== 外掛側邊欄：載入更多＋背景先讀 =====
+  const pending = new Map();   // 粉專 → 背景先讀中的 Promise
+  function renderSide(page, e, all, ul, ph) {
+    const pageName = $(ids.page).selectedOptions[0]?.textContent || '';
+    const ctx = { page, pageName, idx, L };
+    e.shown = Math.max(SIDE_STEP, e.shown || SIDE_STEP);
+    for (const it of all.slice(0, e.shown)) ul.append(build(it, ctx));
+    const rest = all.length > e.shown || !!e.next, b = $(ids.more);
+    if (b.getAttribute('aria-busy') !== 'true') b.textContent = '載入更多';
+    $(ids.more).hidden = !rest || ph === 'more';
+    $(ids.end).hidden = rest || !all.length || ph === 'more';
+    hint(ph === 'more' ? `共 ${all.length} 則，讀取更多中…` : all.length ? `共 ${all.length} 則${e.next ? '（還有更多）' : ''}` : empty);
+  }
+  // 還沒顯示的少於 20 則、臉書還有下一批：背景讀一批（一次只讀一批；側邊欄看不到時不讀）
+  function prefetch(page) {
+    if (!isSide() || document.hidden || pending.has(page) || loading.get(page)) return;
+    const e = cache.get(page);
+    if (!e || !e.next || e.items.length - (e.shown || SIDE_STEP) >= SIDE_STEP) return;
+    // 成功才接著判斷要不要再讀（失敗不連續重打，等使用者按「載入更多」）
+    const p = L.more(page, undefined, true).then((ok) => { pending.delete(page); if (ok === true) prefetch(page); return ok; }, () => { pending.delete(page); return false; });
+    pending.set(page, p);
+  }
+  async function sideMore() {
+    const page = cur(), b = $(ids.more);
+    let e = cache.get(page); if (!e) return;
+    if (e.items.length <= e.shown) {
+      if (!e.next) return;
+      const want = e.shown;
+      fx.busy(b, '載入中');
+      if (pending.has(page)) await pending.get(page);   // 背景已在讀：等它
+      e = cache.get(page);
+      if (e && e.items.length <= want && e.next) await L.more(page);   // 沒先讀到（或背景失敗）：這次照一般方式讀，失敗會顯示原因
+      fx.idle(b, '載入更多');
+      e = cache.get(page);
+      if (!e || e.items.length <= want) return;
+    }
+    e.shown = (e.shown || SIDE_STEP) + SIDE_STEP;
+    if (cur() === page) L.render();
+    prefetch(page);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) prefetch(cur()); });
+  L.prefetch = () => prefetch(cur());
+  $(ids.more).onclick = () => (isSide() ? sideMore() : L.more(cur()));
   return L;
 }
 
@@ -209,7 +266,7 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
 
   // ===== 已排程 =====
   const sched = makeList({
-    ids: { page: 'schedPage', list: 'schedList', hint: 'schedHint', pager: 'schedPager', prev: 'schedPrev', no: 'schedNo', next: 'schedNext', more: 'schedMore' },
+    ids: { page: 'schedPage', list: 'schedList', hint: 'schedHint', pager: 'schedPager', prev: 'schedPrev', no: 'schedNo', next: 'schedNext', more: 'schedMore', end: 'schedEnd' },
     empty: '沒有排程貼文', recIndex,
     // 只顯示晚於現在的排程；已過時間的不列（沒有時間的照列，免得漏看）
     fetchBatch: async (page, after) => {
@@ -250,6 +307,7 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
       });
       const bRetry = retryBtn(it, li, page, 'schedHint');
       if (bRetry) acts.append(bRetry);
+      const bOpen = openBtn(it); if (bOpen) acts.append(bOpen);
       acts.append(editSoon(), resendBtn(it, idx), bEdit, bCancel);
       li.insertBefore(acts, li.querySelector('.when')); li.append(edit);
       return li;
@@ -258,7 +316,7 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
 
   // ===== 已發佈 =====
   const pub = makeList({
-    ids: { page: 'pubPage', list: 'pubList', hint: 'pubHint', pager: 'pubPager', prev: 'pubPrev', no: 'pubNo', next: 'pubNext', more: 'pubMore' },
+    ids: { page: 'pubPage', list: 'pubList', hint: 'pubHint', pager: 'pubPager', prev: 'pubPrev', no: 'pubNo', next: 'pubNext', more: 'pubMore', end: 'pubEnd' },
     empty: '沒有已發佈貼文', recIndex,
     fetchBatch: async (page, after) => norm(await tb.api.call('/fb/published?' + q(page, after))),
     sort: (items) => items,
@@ -267,6 +325,7 @@ export function createManage({ tb, history = null, onResend = null, getDuty = ()
       const acts = document.createElement('div'); acts.className = 'acts';
       const bRetry = retryBtn(it, li, page, 'pubHint');
       if (bRetry) acts.append(bRetry);
+      const bOpen = openBtn(it); if (bOpen) acts.append(bOpen);
       acts.append(editSoon(), resendBtn(it, idx));
       const bDel = btn('刪除', 'btn-secondary btn-del', async () => {
         if (!await confirmBox('刪除貼文', '確定要刪除這則已發佈的貼文嗎？無法復原。')) return;
