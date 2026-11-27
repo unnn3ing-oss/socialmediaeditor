@@ -37,8 +37,10 @@ export function createSteps({ composer, sender, dialog }) {
     return [...document.querySelectorAll('#extras textarea')].some((t) => t.value.trim());
   }
   $('mNext').addEventListener('click', () => { set(2); const c = document.querySelector('#pages .chip button'); if (c) c.focus({ preventScroll: true }); });
-  $('mBack').addEventListener('click', () => { set(1); $('mNext').focus({ preventScroll: true }); });
+  const sending = () => $('sendBtn').getAttribute('aria-busy') === 'true';   // 送出中不能回 ① 或取消（否則清空後貼文仍在送，使用者以為取消了）
+  $('mBack').addEventListener('click', () => { if (sending()) return; set(1); $('mNext').focus({ preventScroll: true }); });
   $('mCancel').addEventListener('click', async () => {
+    if (sending()) return;
     if (hasContent() && !(await confirmBox('取消這則發文？', '網址、照片、標題、貼文內容都會清掉，回到列表。', { yes: '取消發文', no: '繼續編輯', danger: true }))) return;
     sender.clearAll(); set(1); dialog.close();
   });
