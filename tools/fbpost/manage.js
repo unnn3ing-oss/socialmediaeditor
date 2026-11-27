@@ -79,7 +79,8 @@ function openBtn(it) {
   const href = (it.url && /^https:\/\/(www\.|m\.)?facebook\.com\//.test(it.url)) ? it.url : fbPostUrl(it.id);
   if (!href) return null;
   const a = document.createElement('a'); a.className = 'btn btn-sm btn-secondary act-open'; a.href = href; a.target = '_blank'; a.rel = 'noopener';
-  a.textContent = isSide() ? '開啟 ↗' : '開啟貼文 ↗';   // 側邊欄窄：五顆按鈕要擠在一列 a.title = '在新分頁開啟這則貼文';
+  a.textContent = isSide() ? '開啟 ↗' : '開啟貼文 ↗';   // 側邊欄窄：五顆按鈕要擠在一列
+  a.title = '在新分頁開啟這則貼文';
   return a;
 }
 function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-sm ' + cls; b.textContent = text; if (fn) b.onclick = fn; return b; }
