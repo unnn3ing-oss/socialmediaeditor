@@ -14,7 +14,7 @@ export const assetTools = {
   'tbao-meh': ['design', 'fbpost', 'linepush', 'pattern'],
   'tbao-shock': ['design', 'fbpost', 'linepush', 'pattern'],
   'tbao-smile': ['design', 'fbpost', 'linepush', 'pattern'],
-  'tvbs-news-logo': ['watermark'],
+  'tvbs-news-logo': ['fbpost', 'watermark'],
   'tvbs-old-logo': ['watermark'],
 };
 export const toolNames = {

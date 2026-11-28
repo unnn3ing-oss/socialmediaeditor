@@ -1,3 +1,4 @@
+import { loadWatermark, paintWatermark, watermarkPosition } from './watermark.js';
 // 做圖＋帶入：貼上文章網址就自動帶入標題、主圖、貼文內容、框；[照片套圖｜純文字圖｜純文字]，照片套圖的框可選 新聞｜娛樂｜照片（不套框、1～10 張原樣送出）。
 // 畫圖用共用核心 ui/compose（和「圖片套版」同一份畫法）；字級本工具固定：照片套圖 66px、純文字圖 76px。框的判斷用 rules.js。
 import { $, errText, say, confirmBox, segmented, stripLead, hscroll } from './util.js';
@@ -21,6 +22,23 @@ export const TITLE_PX = { image: 66, color: 76 };      // 使用者指定字級�
 const ARTICLE_RE = /^https?:\/\/\S+\/\d{6,9}\/?(?:[?#]\S*)?$/i;   // 打完一個新聞網址（結尾是文章編號）就自動帶入
 
 export function createComposer({ tb, assets, onState = () => {} }) {   // onState：模式／照片改變（送出鈕要重算能不能送）
+  const side = document.documentElement.classList.contains('is-side');
+  let manualPhotos = 0, manualTemplate = false, importedCaption = '', captionRemoved = false;
+  const watermark = side ? loadWatermark(tb).catch(() => null) : Promise.resolve(null);
+  let logo = null;
+  const positionCache = new WeakMap();
+  const position = (im) => {
+    if (!positionCache.has(im)) positionCache.set(im, watermarkPosition(im, logo));
+    return positionCache.get(im);
+  };
+  const watermarkOn = () => side && $('sideWatermark').checked;
+  if (side) {
+    watermark.then((result) => { logo = result; $('sideWatermarkError').hidden = !!logo || !watermarkOn(); draw(); });
+    $('sideWatermark').onchange = () => {
+      $('sideWatermarkError').hidden = !!logo || !watermarkOn();
+      draw();
+    };
+  }
   const renderer = createRenderer(assets);
   const kit = createFxKit({ stickerUrls: assets.stickers });
   const canvas = $('cv');
@@ -44,7 +62,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     $('fontWarn').hidden = false;
   }
   const ready = () => !!source();
-  const fxReady = () => ready() && !isRaw();   // 照片框不加貼圖／馬賽克（原樣送出）
+  const fxReady = () => ready() && !isRaw() && (!side || st.mode === 'image');   // 照片框不加貼圖／馬賽克（原樣送出）
   // 實際送出的貼文內容：純文字＝標題框；其他＝貼文內容（開頭留給小編文的空行沒填就拿掉）
   const postText = () => (st.mode === 'text' ? $('title').value.trim() : stripLead($('msg').value));
   const px = () => (st.mode === 'color' ? TITLE_PX.color : TITLE_PX.image);
@@ -67,7 +85,9 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     const im = (st.photos[st.cur] || st.photos[0]).img, k = Math.min(SIZE / im.naturalWidth, SIZE / im.naturalHeight);
     const w = im.naturalWidth * k, h = im.naturalHeight * k;
     ctx.fillStyle = '#eef1f5'; ctx.fillRect(0, 0, SIZE, SIZE);
-    ctx.drawImage(im, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+    const x = (SIZE - w) / 2, y = (SIZE - h) / 2;
+    ctx.drawImage(im, x, y, w, h);
+    if (logo && watermarkOn()) paintWatermark(ctx, logo, position(im), x, y, w, h);
     canvas.classList.remove('pannable');
   }
   function draw() {
@@ -77,7 +97,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     const title = titleEd && titleEd.editing() ? '' : $('title').value;   // 預覽上編輯中：標題由輸入框顯示
     if (!src) { if (isRaw()) { ctx.drawImage(blank, 0, 0); return; } drawBlank(st.mode === 'image' ? title : ''); return; }
     if (src.type === 'raw') { drawRaw(); return; }
-    renderer.renderComposite(ctx, src, title, px(), st.frame, kit.drawFx(st.fx), undefined, { titleAnchor: 'bottom' });
+    renderer.renderComposite(ctx, src, title, px(), st.frame, (!side || st.mode === 'image') ? kit.drawFx(st.fx) : null, undefined, { titleAnchor: 'bottom' });
   }
 
   // ---- 貼圖／馬賽克 ----
@@ -210,7 +230,8 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   // 視窗原本隱藏量不到高度：打開（尺寸改變）時再算一次；程式填值走 msgCount／titleChanged
   for (const id of ['title', 'msg']) { $(id).addEventListener('input', () => grow($(id))); new ResizeObserver(() => { if ($(id).offsetParent) grow($(id)); }).observe($(id)); }
   $('msg').addEventListener('input', msgCount); msgCount();
-  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !fxReady(); }); $('fxBar').classList.toggle('off', !fxReady()); $('fxBtn').hidden = isRaw(); if (isRaw()) $('fxBar').hidden = true; editor.sync(); onState(); };
+  const syncFx = () => { fxRow.tiles.forEach((b) => { b.disabled = !fxReady(); }); $('fxBar').classList.toggle('off', !fxReady()); const hidden = isRaw() || (side && st.mode !== 'image'); $('fxBtn').hidden = hidden;
+    if (hidden) { $('fxBar').hidden = true; $('fxBtn').setAttribute('aria-expanded', 'false'); } editor.sync(); onState(); };
 
   titleEd = createTitleEditor({ canvas, input: $('title'), renderer, mode: () => st.mode, px, ready: () => st.mode !== 'text' && !isRaw(), redraw: draw, light: () => usesDarkTitle({ type: 'color', color: st.color }) });
 
@@ -245,9 +266,21 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   function showMode() {
     $('imgArea').hidden = st.mode === 'text';
     $('noImg').hidden = st.mode !== 'text';
-    $('frameRow').hidden = st.mode !== 'image';
+    $('frameRow').hidden = st.mode !== 'image' || (side && isRaw());
     $('swatchBox').hidden = st.mode !== 'color';
     const text = st.mode === 'text';
+    if (side) {
+      const raw = isRaw();
+      $('sideRawMode').setAttribute('aria-pressed', String(raw));
+      $('sideRawMode').classList.toggle('is-on', raw);
+      if (raw) $('modeSeg').querySelector('[data-mode=image]').setAttribute('aria-pressed', 'false');
+      $('modeSeg').querySelector('[data-mode=image]').classList.toggle('is-on', st.mode === 'image' && !raw);
+      $('titleLabel').hidden = $('titleRow').hidden = raw;
+      $('imgArea').classList.toggle('side-raw', raw);
+      $('sideAddPhoto').hidden = !raw;
+      $('photoFile').multiple = raw;
+      $('msg').placeholder = raw ? '小編文（第一行）\n【標題】\n#hashtag' : '小編文（第一行）\n【標題】\n（圖說）\n#hashtag';
+    }
     $('msg').hidden = text; $('msgLbl').hidden = text;
     $('titleName').textContent = text ? '標題（貼文內容）' : '標題';
     if (!text) { $('titleLines').hidden = isRaw(); $('title').setAttribute('wrap', 'off'); }   // 純文字的換行與每行字數由 msgCount 依有無背景設定
@@ -261,15 +294,69 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     if (st.mode === 'text') { bgLoadImgs(); if (bgRow) requestAnimationFrame(() => bgRow.sync()); }
     draw(); syncFx(); msgCount();
   }
-  const setMode = segmented($('modeSeg'), 'mode', (v) => { if (titleEd) titleEd.end(); st.mode = v; showMode(); });
-  // 「新聞｜娛樂」一組切換＋右邊獨立的「圖片」按鈕（同一組 data-frame，一次只亮一個）
-  const setFrame = segmented($('frameRow'), 'frame', (v) => {
+  const defaultFrame = () => assets.company ? frameForUrl($('link').value.trim()) : 'generic';
+  function updateCaption(raw) {
+    if (!side || !importedCaption) return;
+    const msg = $('msg'), lines = msg.value.split('\n');
+    const headline = lines.findIndex((line, i) => i > 0 && /^【.*】$/.test(line.trim()));
+    if (headline < 0) return;
+    const index = headline + 1;
+    if (raw && lines[index] === importedCaption) {
+      lines.splice(index, 1);
+      captionRemoved = true;
+    } else if (!raw && captionRemoved && (!lines[index] || lines[index].startsWith('#'))) {
+      lines.splice(index, 0, importedCaption);
+      captionRemoved = false;
+    } else return;
+    msg.value = lines.join('\n');
+  }
+  const setMode = segmented($('modeSeg'), 'mode', (v) => {
+    if (titleEd) titleEd.end();
+    st.mode = v;
+    if (side && v !== 'image') manualTemplate = false;
+    if (side && v === 'image' && st.frame === 'photo') {
+      manualTemplate = true;
+      pickFrame(defaultFrame());
+    }
+    showMode();
+  });
+  const applyFrame = (v) => {
     const wasRaw = isRaw();
     if (titleEd) titleEd.end();
     st.frame = v;
-    if (wasRaw !== isRaw()) showMode(); else draw();
-    if (!isRaw() && st.photos.length > 1) say('pullHint', `套版只會用第 1 張（其他 ${st.photos.length - 1} 張先保留，切回「圖片」還在，送出時不會送）`);
+    if (wasRaw !== isRaw()) { updateCaption(isRaw()); showMode(); } else draw();
+    if (!isRaw() && st.photos.length > 1) say('pullHint', `套版只會用第 1 張（其他 ${st.photos.length - 1} 張先保留，切回「純照片」還在）`);
+  };
+  if (side) $('msg').addEventListener('input', () => {
+    if (captionRemoved || !importedCaption) return;
+    const lines = $('msg').value.split('\n');
+    const headline = lines.findIndex((line, i) => i > 0 && /^【.*】$/.test(line.trim()));
+    if (headline < 0 || lines[headline + 1] !== importedCaption) importedCaption = '';
   });
+  const setFrame = segmented($('frameRow'), 'frame', applyFrame);
+  const pickFrame = (frame) => { setFrame(frame); applyFrame(frame); };
+  if (side) {
+    $('sideRawMode').onclick = () => {
+      manualTemplate = false;
+      st.mode = 'image';
+      setMode('image');
+      pickFrame('photo');
+      showMode();
+    };
+    $('sideAddPhoto').onclick = () => $('photoFile').click();
+    $('sidePrevPhoto').onclick = () => browseRaw(-1);
+    $('sideNextPhoto').onclick = () => browseRaw(1);
+    $('sideRawEarlier').onclick = () => moveRaw(-1);
+    $('sideRawLater').onclick = () => moveRaw(1);
+    $('sideRawRemove').onclick = () => {
+      st.photos.splice(st.cur, 1);
+      manualPhotos = st.photos.filter((p) => p.manual).length;
+      syncPhotos();
+    };
+    updateLinkPreview();
+    $('link').addEventListener('input', updateLinkPreview);
+  }
+
   // 沒有公司素材：只有「套版｜照片」
   $('frameSeg').querySelector('[data-frame=generic]').hidden = !!assets.company;
   for (const b of $('frameSeg').querySelectorAll('[data-frame=news],[data-frame=entertainment]')) b.hidden = !assets.company;
@@ -341,13 +428,14 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     renderStrip(); draw(); syncFx();
   }
   // add＝加一張（照片框）；不然換掉第 1 張（套版）
-  function loadPhoto(blob, add = isRaw()) {
+  function loadPhoto(blob, add = isRaw(), generation) {
     return new Promise((resolve) => {
       if (add && st.photos.length >= MAX_PHOTOS) { say('pullHint', `最多 ${MAX_PHOTOS} 張`, true); resolve(false); return; }
       const url = URL.createObjectURL(blob);
       const im = new Image();
       im.onload = () => {
         URL.revokeObjectURL(url);
+        if (generation !== undefined && generation !== photoGeneration) { resolve(false); return; }
         const item = { img: im, blob };
         if (add) { st.photos.push(item); st.cur = st.photos.length - 1; } else st.photos[0] = item;
         syncPhotos(); resolve(true);
@@ -356,6 +444,30 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       im.src = url;
     });
   }
+  let photoQueue = Promise.resolve(), photoGeneration = 0;
+  function addSidePhotos(files) {
+    const valid = [...files].filter((f) => /^image\//.test(f.type));
+    if (!valid.length) return;
+    if (st.mode !== 'image') { st.mode = 'image'; setMode('image'); showMode(); }
+    const generation = photoGeneration;
+    photoQueue = photoQueue.then(async () => {
+      for (const file of valid) {
+        if (generation !== photoGeneration) return;
+        if (manualPhotos === 0 && (!isRaw() || st.photos[0]?.imported)) {
+          if (!await loadPhoto(file, false, generation)) continue;
+          st.photos[0].manual = true;
+        } else {
+          if (!await loadPhoto(file, true, generation)) continue;
+          st.photos.at(-1).manual = true;
+        }
+        manualPhotos = st.photos.filter((p) => p.manual).length;
+        if (manualPhotos >= 2 && !manualTemplate && !isRaw()) { st.cur = 0; pickFrame('photo'); }
+      }
+      if (generation !== photoGeneration) return;
+      say('pullHint', st.photos.length >= MAX_PHOTOS ? `最多 ${MAX_PHOTOS} 張` : '');
+    }).catch((err) => say('pullHint', errText(err), true));
+  }
+
   // 沒照片時：連點兩下選照片、拖曳照片進來（點一下只聚焦預覽框，方便 Ctrl+V）
   async function usePhoto(file, how) {
     if (!file || !/^image\//.test(file.type)) { say('pullHint', '請選擇圖片檔', true); return; }
@@ -364,11 +476,13 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   }
   canvas.addEventListener('pointerdown', () => { if (!source()) $('cvWrap').focus({ preventScroll: true }); });
   // 沒照片時連點兩下＝選照片（搶在標題編輯器的「點兩下改標題」之前）；點在標題上第一下已進入改標題，就不開
-  canvas.addEventListener('dblclick', (e) => { if (!source() && !titleEd.editing()) { e.stopImmediatePropagation(); $('photoFile').click(); } }, true);
+  if (side) canvas.addEventListener('click', () => { if (!source() && st.mode === 'image') $('photoFile').click(); });
+  canvas.addEventListener('dblclick', (e) => { if (!side && !source() && !titleEd.editing()) { e.stopImmediatePropagation(); $('photoFile').click(); } }, true);
   $('cvWrap').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !source() && e.target === $('cvWrap')) { e.preventDefault(); $('photoFile').click(); } });
   $('photoFile').addEventListener('change', async () => {
     const fs = [...$('photoFile').files]; $('photoFile').value = '';
     if (!fs.length) return;
+    if (side) { addSidePhotos(fs); return; }
     if (!isRaw()) { usePhoto(fs[0], '已選擇照片'); return; }   // 套版只用一張
     let n = 0;
     for (const f of fs) { if (st.photos.length >= MAX_PHOTOS) break; if (/^image\//.test(f.type) && await loadPhoto(f, true)) n++; }
@@ -382,6 +496,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     e.preventDefault();   // 不論是不是圖片都攔下，免得瀏覽器把頁面換成那個檔案
     const fs = [...(e.dataTransfer?.files || [])].filter((x) => /^image\//.test(x.type));
     if (!fs.length) { say('pullHint', '請拖曳圖片檔', true); return; }
+    if (side) { addSidePhotos(fs); return; }
     if (isRaw()) { (async () => { let n = 0; for (const f of fs) { if (st.photos.length >= MAX_PHOTOS) break; if (await loadPhoto(f, true)) n++; } say('pullHint', `已加入 ${n} 張照片`); })(); return; }
     usePhoto(fs[0], '已放入照片');
   });
@@ -396,19 +511,24 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     const t = e.target;
     if (cd.getData('text/plain') && t && /^(INPUT|TEXTAREA)$/.test(t.tagName) && !t.classList.contains('cv-title')) return;
     e.preventDefault();
+    if (side) { addSidePhotos(cd.files); return; }
     if (!usesPhoto()) { st.mode = 'image'; setMode('image'); showMode(); }   // 貼照片就是要套版（照片框＝加一張）
     if (await loadPhoto(file)) say('pullHint', '已貼上照片'); else say('pullHint', '照片讀取失敗', true);
   });
 
   // ---- 帶入：貼上或打完新聞網址就自動帶入；Enter 也可以重新帶入 ----
   let busy = false, pending = false, lastPulled = '', typingTimer = 0;
-  async function firstImage(images) {
+  async function firstImage(images, generation) {
     for (const im of images.slice(0, MAX_IMAGES)) {
       if (!im || !im.url) continue;
       try {
         const res = await tb.api.call('/fetch/image?url=' + encodeURIComponent(im.url), { raw: true });
         const blob = await res.blob();
-        if (blob && blob.size && (await loadPhoto(blob, false))) return true;   // 帶入：換掉第 1 張
+        if (side && (generation !== photoGeneration || manualPhotos)) return false;
+        if (blob && blob.size && (await loadPhoto(blob, false, generation))) {
+          st.photos[0].imported = true;
+          return true;
+        }
       } catch { /* 換下一張 */ }
     }
     return false;
@@ -419,6 +539,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     if (!/^https?:\/\//i.test(url)) return;
     if (busy) { pending = true; return; }          // 讀取中又換了網址：讀完再帶入一次
     busy = true; lastPulled = url;
+    const generation = photoGeneration;
     if (titleEd) titleEd.end();                    // 預覽上編輯中：先收起，免得舊內容蓋掉帶入的標題
     say('pullHint', '讀取中…');
     const skel = (on) => { $('cvSkel').hidden = !on; $('cvWrap').setAttribute('aria-busy', on ? 'true' : 'false'); };
@@ -435,17 +556,23 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
           !(await confirmBox('要用文章內容覆蓋嗎？', '目前已有標題、貼文內容或照片，帶入會覆蓋它們（框也會依網址切換）。'))) {
         say('pullHint', '已取消帶入'); return;
       }
+      if (generation !== photoGeneration) return;
       const done = [];
       if (assets.company && st.frame !== 'photo') { st.frame = frameForUrl(url); setFrame(st.frame); done.push(st.frame === 'entertainment' ? '娛樂粉框' : '新聞藍框'); }
       if (article.title) { $('title').value = autoLines(article.title).join('\n'); titleChanged(); done.push('標題'); }
-      $('msg').value = '\n' + formatCopy({ title: article.title, caption: usesPhoto() ? mainCaption(article) : '', tags: article.tags });
+      importedCaption = usesPhoto() ? mainCaption(article) : '';
+      captionRemoved = side && isRaw();
+      $('msg').value = '\n' + formatCopy({ title: article.title, caption: captionRemoved ? '' : importedCaption, tags: article.tags });
       if (st.mode !== 'text' && article.title) $('msg').value = syncTitleLine($('msg').value, $('title').value);   // 【標題】照預覽的分行補空格
       msgCount();
       done.push('貼文內容');
       let imgFail = false;
       skel(true);
-      if (article.images.length) { if (await firstImage(article.images)) done.push('主圖'); else imgFail = true; } else imgFail = true;
+      if (side && manualPhotos) { /* 保留手動加入的照片。 */ }
+      else if (article.images.length) { if (await firstImage(article.images, generation)) done.push('主圖'); else imgFail = true; } else imgFail = true;
+      if (generation !== photoGeneration) return;
       draw();
+      if (side) updateLinkPreview();
       say('pullHint', '已帶入：' + done.join('、') + (imgFail ? '（主圖讀取失敗，請在預覽按 Ctrl+V 貼上照片）' : ''));
     } finally {
       skel(false);
@@ -465,10 +592,15 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   // 照片框送出用的檔案：JPG／PNG 且 ≤ 8MB 原樣送；其他格式或太大轉 JPG（長邊最多 4096）
   async function rawFile({ img: im, blob: b }, n) {
     const name = (ext) => `photo${n}.${ext}`;
-    if (b && ['image/jpeg', 'image/png'].includes(b.type) && b.size <= RAW_MAX) return new File([b], name(b.type === 'image/png' ? 'png' : 'jpg'), { type: b.type });
+    if (!watermarkOn() && b && ['image/jpeg', 'image/png'].includes(b.type) && b.size <= RAW_MAX) return new File([b], name(b.type === 'image/png' ? 'png' : 'jpg'), { type: b.type });
     const k = Math.min(1, 4096 / Math.max(im.naturalWidth, im.naturalHeight));
     const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
     const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+    if (watermarkOn()) {
+      const mark = await watermark;
+      if (!mark) throw new Error('無法載入新版浮水印，可取消勾選後送出。');
+      paintWatermark(x, mark, position(im), 0, 0, c.width, c.height);
+    }
     for (const q of [0.92, 0.85, 0.75]) {
       const out = await new Promise((r) => c.toBlob(r, 'image/jpeg', q));
       if (out && out.size <= RAW_MAX) return new File([out], name('jpg'), { type: 'image/jpeg' });
@@ -477,10 +609,59 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   }
 
   // ---- 照片框：縮圖列（點縮圖預覽、‹ › 調順序、× 移除、＋ 加照片） ----
+  function updateLinkPreview() {
+    $('leadBubbleUrl').textContent = $('link').value.trim();
+  }
+  function moveRaw(offset) {
+    const next = st.cur + offset;
+    if (!st.photos[next]) return;
+    [st.photos[st.cur], st.photos[next]] = [st.photos[next], st.photos[st.cur]];
+    st.cur = next;
+    syncPhotos();
+  }
+  if (side) {
+    let start;
+    canvas.addEventListener('pointerdown', (event) => {
+      if (isRaw() && st.photos.length > 1) { start = event.clientX; canvas.setPointerCapture(event.pointerId); }
+    });
+    canvas.addEventListener('pointerup', (event) => {
+      if (start == null) return;
+      const delta = event.clientX - start;
+      start = null;
+      if (Math.abs(delta) > 30) browseRaw(delta < 0 ? 1 : -1);
+    });
+    canvas.addEventListener('pointercancel', () => { start = null; });
+    $('cvWrap').addEventListener('keydown', (event) => {
+      if (!isRaw() || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      browseRaw(event.key === 'ArrowLeft' ? -1 : 1);
+    });
+  }
+  function browseRaw(offset) {
+    if (!st.photos[st.cur + offset]) return;
+    st.cur += offset;
+    renderStrip(); draw();
+  }
   function renderStrip() {
     const box = $('photoStrip'), raw = isRaw();
-    box.hidden = !raw;
-    if (!raw) return;
+    box.hidden = side || !raw;
+    if (side) {
+      $('sideRawActions').hidden = !raw || !st.photos.length;
+      $('sideRawCount').textContent = `${st.photos.length ? st.cur + 1 : 0} / ${st.photos.length}`;
+      $('sideRawEarlier').disabled = !st.cur;
+      $('sideRawLater').disabled = st.cur + 1 >= st.photos.length;
+      const peek = (id, index) => {
+        const button = $(id), blob = st.photos[index]?.blob;
+        button.hidden = !raw || !blob;
+        if (button.photo === blob) return;
+        if (button.assetUrl) URL.revokeObjectURL(button.assetUrl);
+        button.photo = blob;
+        button.assetUrl = blob ? URL.createObjectURL(blob) : '';
+        button.style.setProperty('--neighbor', button.assetUrl ? `url("${button.assetUrl}")` : 'none');
+      };
+      peek('sidePrevPhoto', raw ? st.cur - 1 : -1);
+      peek('sideNextPhoto', raw ? st.cur + 1 : -1);
+    }
+    if (!raw || side) return;
     const list = $('psList'); list.textContent = '';
     st.photos.forEach((p, i) => {
       const li = document.createElement('li'); li.className = 'ps-item' + (i === st.cur ? ' is-on' : '');
@@ -522,6 +703,8 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
     reset() {
       if (titleEd) titleEd.end();
       $('link').value = ''; $('title').value = ''; $('msg').value = ''; $('lead').value = ''; msgCount();
+      photoGeneration++; manualPhotos = 0; manualTemplate = false; importedCaption = ''; captionRemoved = false;
+      if (side) { $('sideWatermark').checked = true; $('sideWatermark').onchange(); updateLinkPreview(); }
       st.photos = []; st.cur = 0; st.photo = null; st.photoBlob = null; st.view = newView(); st.fx.length = 0; st.fx.gray = false; lastPulled = ''; st.bg = randomBg();
       say('pullHint', '');
       titleChanged(); showMode();
@@ -550,7 +733,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       const has = photos.length > 0;
       st.mode = has ? 'image' : 'text'; setMode(st.mode);
       if (has) { st.frame = 'photo'; setFrame('photo'); }
-      $('link').value = link; lastPulled = link;
+      $('link').value = link; lastPulled = link; if (side) updateLinkPreview();
       if (has) { $('title').value = title; $('msg').value = message; }
       else $('title').value = message;
       showMode();
@@ -568,7 +751,7 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
       if (['image', 'color', 'text'].includes(rec.mode)) { st.mode = rec.mode; setMode(rec.mode); }
       if ((assets.company && (rec.frame === 'news' || rec.frame === 'entertainment')) || rec.frame === 'photo') { st.frame = rec.frame; setFrame(rec.frame); }
       if (typeof rec.color === 'string' && PRESET_COLORS.includes(rec.color)) { st.color = rec.color; setColor(rec.color); }
-      $('link').value = rec.link || ''; lastPulled = $('link').value.trim();
+      $('link').value = rec.link || ''; lastPulled = $('link').value.trim(); if (side) updateLinkPreview();
       $('title').value = rec.title || '';
       if (typeof rec.bg === 'string' && (rec.bg === '' || bgs.some((b) => b.id === rec.bg))) st.bg = rec.bg;   // 文字背景用當時的（含「無」）
       showMode();

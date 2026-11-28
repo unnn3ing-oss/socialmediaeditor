@@ -26,8 +26,12 @@ const BGS = [{ id: '106018623298955', name: '純紫', type: 'solid', css: '#C600
 const BG_IMG_HITS = [];
 
 // 公司模式（假外殼＋假憑證）開排程發布
-async function openFb() {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+async function openFb({ side = false } = {}) {
+  const page = await browser.newPage({ viewport: { width: side ? 366 : 1280, height: 1000 } });
+  if (side) await page.route(srv.url + 'tools/fbpost/index.html', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()).replace('<html lang="zh-Hant-TW">', '<html lang="zh-Hant-TW" class="is-side">') });
+  });
   const posts = [], errors = [], articles = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await presetDuty(page);
@@ -39,6 +43,7 @@ async function openFb() {
     if (p.startsWith('/assets/')) return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset() });
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
+    if (p === '/fb/presets') return json([{ name: '活動範本', body: '活動留言' }]);
     if (p === '/fb/backgrounds') return json(BGS);
     if (p.startsWith('/fb/bg/')) { BG_IMG_HITS.push({ p, auth: req.headers().authorization || '' }); return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([10, 200, 30]) }); }
     if (p === '/fetch/article') {
@@ -726,4 +731,73 @@ test('隨機背景：照管理頁「列入隨機」（rnd）挑；舊後端沒�
   await frame.click('#clearBtn'); await frame.waitForSelector('#cfDlg[open]'); await frame.click('#cfYes');
   assert.equal(await frame.textContent('#bgName'), '紅→藍漸層');
   await page.close();
+});
+
+
+test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮水印，切回套版仍可使用 T寶', async () => {
+  const { page, frame, posts, errors } = await openFb({ side: true });
+  try {
+    assert.equal(await frame.isVisible('#sideRawMode'), true);
+    assert.equal(await frame.isVisible('#sideAddPhoto'), false);
+    assert.equal(await frame.evaluate(() => document.querySelector('.link-box').nextElementSibling.id), 'modeSeg');
+    await frame.fill('#link', 'https://news.tvbs.com.tw/sports/4051394');
+    await frame.waitForFunction(() => document.getElementById('pullHint').textContent.includes('主圖'));
+    await frame.evaluate(() => {
+      const paste = () => {
+        const transfer = new DataTransfer();
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 16;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#558755';
+        ctx.fillRect(0, 0, 16, 16);
+        return new Promise((resolve) => canvas.toBlob((blob) => {
+          transfer.items.add(new File([blob], 'photo.png', { type: 'image/png' }));
+          document.getElementById('cv').dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+          resolve();
+        }));
+      };
+      return paste().then(paste);
+    });
+    await frame.waitForFunction(() => document.getElementById('sideRawMode').getAttribute('aria-pressed') === 'true');
+    assert.equal(await frame.isVisible('#titleRow'), false);
+    assert.equal(await frame.isVisible('#photoStrip'), false);
+    assert.equal(await frame.isVisible('#frameRow'), false);
+    assert.equal(await frame.isVisible('#fxBtn'), false);
+    assert.equal(await frame.isVisible('#sideAddPhoto'), true);
+    assert.deepEqual((await frame.inputValue('#msg')).split('\n'), ['', '【' + (await frame.inputValue('#title')).split('\n').join(' ') + '】', '#監視器 #吃到飽 #詐欺']);
+    assert.equal(await frame.isChecked('#sideWatermark'), true);
+    if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-side-raw.png') });
+    const withLogo = await canvasHash(frame, '#cv');
+    await frame.uncheck('#sideWatermark');
+    assert.notEqual(await canvasHash(frame, '#cv'), withLogo);
+    await frame.click('#sideNextPhoto');
+    assert.equal(await frame.textContent('#sideRawCount'), '2 / 2');
+    assert.equal(await frame.isVisible('#sidePrevPhoto'), true);
+    await frame.click('#modeSeg [data-mode=image]');
+    assert.equal(await frame.isVisible('#titleRow'), true);
+    assert.equal(await frame.isVisible('#fxBtn'), true);
+    await frame.click('#fxBtn');
+    assert.equal(await frame.isVisible('#fxBar'), true);
+    await frame.click('#fxSlot .fx-sticker-tile >> nth=0');
+    assert.equal(await frame.locator('#cvWrap .fx-item').count(), 1);
+    if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-side-stickers.png') });
+    await frame.click('#modeSeg [data-mode=color]');
+    assert.equal(await frame.isVisible('#fxBtn'), false);
+    await frame.click('#addComment');
+    await frame.getByRole('button', { name: '帶入活動留言' }).click();
+    await frame.getByRole('button', { name: '活動：活動範本' }).click();
+    assert.equal(await frame.inputValue('#extras textarea'), '活動留言');
+    await frame.getByRole('button', { name: '延遲 5 分鐘' }).click();
+    await frame.getByRole('button', { name: '15 分鐘', exact: true }).click();
+    assert.equal(await frame.inputValue('#extras select.delay'), '15');
+    await frame.click('#sideRawMode');
+    await frame.check('#sideWatermark');
+    await frame.click('#pages .chip[data-page="111"] .chip-l');
+    await frame.click('#sendBtn');
+    await frame.waitForSelector('#doneDlg[open]');
+    assert.equal(posts.length, 1);
+    assert.match(posts[0].toString(), /filename="photo1.jpg"/);
+    assert.match(posts[0].toString(), /filename="photo2.jpg"/);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
 });

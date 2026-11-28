@@ -8,6 +8,8 @@ const DELAYS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 90, 120, 180, 240
 const delayLabel = (m) => (m < 60 ? `${m} 分鐘` : m % 60 ? `${Math.floor(m / 60)} 小時 ${m % 60} 分` : `${m / 60} 小時`);
 
 export function createComments({ tb }) {
+  const side = document.documentElement.classList.contains('is-side');
+  const sideChoices = new WeakMap();
   let presets = [];
   const box = $('extras');
   const addBtn = $('addComment');
@@ -21,7 +23,46 @@ export function createComments({ tb }) {
     presets.forEach((p, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = '活動：' + p.name; sel.append(o); });
     sel.value = cur && presets[+cur] ? cur : '';
   }
-  const refreshPresets = () => box.querySelectorAll('select.preset').forEach(fillPresetOptions);
+  const refreshPresets = () => box.querySelectorAll('select.preset').forEach((select) => {
+    fillPresetOptions(select);
+    sideChoices.get(select)?.();
+  });
+
+  function choiceButtons(select, label) {
+    const trigger = document.createElement('button');
+    trigger.type = 'button'; trigger.className = 'soft-btn';
+    trigger.setAttribute('aria-expanded', 'false');
+    const options = document.createElement('div');
+    options.className = 'side-comment-options'; options.hidden = true;
+    options.setAttribute('role', 'group'); options.setAttribute('aria-label', label);
+    const open = (visible) => {
+      options.hidden = !visible;
+      trigger.setAttribute('aria-expanded', String(visible));
+    };
+    const sync = () => {
+      trigger.textContent = label === '延遲' ? `延遲 ${select.selectedOptions[0].textContent}` : label;
+      trigger.hidden = select.options.length <= 1;
+      options.replaceChildren(...[...select.options].map((option) => {
+        const choice = document.createElement('button');
+        choice.type = 'button'; choice.className = 'soft-btn'; choice.textContent = option.textContent;
+        choice.setAttribute('aria-pressed', String(option.selected));
+        choice.onclick = () => {
+          select.value = option.value;
+          select.dispatchEvent(new Event('change'));
+          open(false); sync(); trigger.focus();
+        };
+        return choice;
+      }));
+    };
+    trigger.onclick = () => open(options.hidden);
+    options.onkeydown = (event) => {
+      if (event.key === 'Escape') { event.stopPropagation(); open(false); trigger.focus(); }
+    };
+    select.hidden = true;
+    sideChoices.set(select, sync);
+    sync();
+    return { trigger, options };
+  }
 
   function renumber() {
     [...box.children].forEach((el, i) => { el.querySelector('.extra-title').textContent = `第 ${i + 2} 則留言`; });
@@ -45,6 +86,15 @@ export function createComments({ tb }) {
     preset.addEventListener('change', () => { const p = presets[+preset.value]; if (preset.value !== '' && p) ta.value = p.body; });
     del.addEventListener('click', () => { el.remove(); renumber(); });
     el.append(head, ta);
+    if (side) {
+      dl.hidden = true;
+      const sources = choiceButtons(preset, '帶入活動留言');
+      const interval = choiceButtons(delay, '延遲');
+      const row = document.createElement('div');
+      row.className = 'side-comment-options';
+      row.append(sources.trigger, interval.trigger);
+      el.append(row, sources.options, interval.options);
+    }
     box.append(el);
     renumber();
     ta.focus();
