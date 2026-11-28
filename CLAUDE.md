@@ -63,6 +63,8 @@
 
 ## 目前進度
 
+- **追加留言**：第 2、3 則依序接在首則下方，活動下拉與延遲放在標頭，操作列留在最後。零延遲與上一則同時到點，需部署更新後的 Worker。交接見 `docs/handoff/2026-11-28-fbpost-comment-timing.md`。
+
 - **側邊欄留言預覽**：加回頭像、粉專名稱、留言泡泡下方資訊與操作列，沿用現有發文及移除連結預覽流程。交接見 `docs/handoff/2026-11-28-fbpost-comment-preview.md`。
 
 - **純照片預覽留白**：前後照片的淡出提示移到畫布外並留白，主圖與浮水印完整顯示。已驗證 320px、366px 側邊欄。交接見 `docs/handoff/2026-11-28-fbpost-photo-preview-spacing.md`。

@@ -272,10 +272,24 @@ test('第 2、3 則留言：排程＝三則一起交給計時器', async (t) => 
 
 });
 
-test('第 2、3 則留言驗證：最多 2 則、5 分鐘倍數、5～1440、內容不可空白', async (t) => {
+test('零延遲：與上一則使用同一個到點時間，立即發布不加排程等待', async (t) => {
+  const { env, headers } = await setup(t, {
+    'POST /111/feed': () => ({ id: '111_7' }),
+    'POST /111_7/comments': () => ({ id: 'C1' })
+  });
+  const comments = JSON.stringify([{ message: '二', delay: 0 }, { message: '三', delay: 0 }]);
+  assert.equal((await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at: null }]), comments })).status, 200);
+  assert.equal(RecTimer.log[0][1].immediateExtras, true);
+  assert.deepEqual(RecTimer.log[0][1].items.map(it => it.offset), [0, 0]);
+  const at = nowSec() + 3600;
+  assert.equal((await send(env, headers, { message: 'm', link: LINK, targets: JSON.stringify([{ page: '111', at }]), comments: JSON.stringify([{ message: '二', delay: 5 }, { message: '三', delay: 0 }]) })).status, 200);
+  assert.deepEqual(RecTimer.log[1][1].items.map(it => it.offset), [0, 5, 5]);
+});
+
+test('第 2、3 則留言驗證：最多 2 則、5 分鐘倍數、0～1440、內容不可空白', async (t) => {
   const { env, headers } = await setup(t, {});
   const go = (comments) => send(env, headers, { message: 'm', targets: JSON.stringify([{ page: '111', at: null }]), comments: JSON.stringify(comments) });
-  for (const c of [[{ message: 'a', delay: 7 }], [{ message: 'a', delay: 0 }], [{ message: 'a', delay: 1445 }], [{ message: ' ', delay: 5 }], [{ message: 'a', delay: 5 }, { message: 'b', delay: 5 }, { message: 'c', delay: 5 }]]) {
+  for (const c of [[{ message: 'a', delay: 7 }], [{ message: 'a', delay: -5 }], [{ message: 'a', delay: 1445 }], [{ message: ' ', delay: 5 }], [{ message: 'a', delay: 5 }, { message: 'b', delay: 5 }, { message: 'c', delay: 5 }]]) {
     assert.equal((await go(c)).status, 400, JSON.stringify(c));
   }
 });

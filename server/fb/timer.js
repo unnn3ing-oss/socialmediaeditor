@@ -38,7 +38,7 @@ export const MAX_ITEMS = 4;                 // 一則貼文最多 4 則留言（
 // rec：{ pageId, postId, at（貼文發布時間，秒）, published, retimes, kind?（'video'＝影片物件）,
 //        items: [{ message, offset（距發布幾分鐘）, status: pending|posting|done|failed|canceled, attempts, commentId?, error? }] }
 // 每則的到點時間＝at＋60 秒＋offset 分鐘；到點的依序留，沒到的排下一個鬧鐘。
-const dueOf = (rec, it) => (rec.at + FIRST_DELAY + it.offset * 60) * 1000;
+const dueOf = (rec, it) => (rec.at + (rec.immediateExtras && it.offset === 0 ? 0 : FIRST_DELAY) + it.offset * 60) * 1000;
 const open = (it) => it.status === 'pending' || it.status === 'posting';
 // 多文（影片發布）：rec.cross＝[{ page, status: pending|posting|done|failed|unknown, attempts, next?（下次可試的毫秒）, videoId?, error? }]
 // 原影片發布後才做：先在原影片 allow_crossposting_for_pages（一次全部），再用各目標粉專 POST /{page}/videos crossposted_video_id
@@ -153,7 +153,7 @@ export class FbCommentTimer {
       const cross = body.kind === 'video' ? normCross(body) : [];
       const items = normItems(body, !!(cross && cross.length));
       if (!body.pageId || !body.postId || !items || !cross || !Number.isInteger(at)) return reply({ ok: false, error: '資料不完整' });
-      const r = { v: 2, pageId: String(body.pageId), postId: String(body.postId), at, published: body.published === true, retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
+      const r = { v: 2, pageId: String(body.pageId), postId: String(body.postId), at, published: body.published === true, ...(body.published === true && body.immediateExtras === true ? { immediateExtras: true } : {}), retimes: 0, items, ...(typeof body.by === 'string' && body.by ? { by: body.by.slice(0, 20) } : {}), ...(typeof body.title === 'string' && body.title ? { title: [...body.title].slice(0, 41).join('') } : {}), ...(body.kind === 'video' ? { kind: 'video' } : {}), ...(PTYPES.includes(body.ptype) ? { ptype: body.ptype } : {}), ...(typeof body.pageName === 'string' && body.pageName ? { pageName: body.pageName.slice(0, 80) } : {}), ...(cross.length ? { cross } : {}) };
       await s.put('rec', r);
       await this.schedule(r);
       return reply({ ok: true });

@@ -36,6 +36,16 @@ test('arm：鬧鐘＝排定時間＋60 秒', async (t) => {
   assert.equal((await post('status')).status, 'pending');
 });
 
+test('立即貼文的零延遲留言立即到點，依原順序發送', async (t) => {
+  const { f, state, obj, post } = await mk(t, { 'POST /111_5/comments': () => ({ id: 'C9' }) });
+  const at = nowSec();
+  assert.equal((await post('arm', { ...REC(at), published: true, immediateExtras: true, items: [{ message: '二', offset: 0 }, { message: '三', offset: 0 }, { message: '稍後', offset: 5 }] })).ok, true);
+  assert.equal(await state.storage.getAlarm(), at * 1000);
+  await obj.alarm();
+  assert.deepEqual(comments(f).map(call => call.body.message), ['二', '三']);
+  assert.equal(await state.storage.getAlarm(), (at + 360) * 1000);
+});
+
 test('到點已發布 → 留言一次、done', async (t) => {
   const { f, obj, post } = await mk(t, {
     'GET /111_5': () => ({ id: '111_5', is_published: true }),
