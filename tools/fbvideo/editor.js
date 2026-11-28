@@ -278,7 +278,7 @@ export function createEditor(v, ctx) {
   });
   renumber();
   // 警語留言：獨立一則、與第 1 則同時（沒有留言＝發布後就留），不佔 3 則名額
-  const warnCm = createWarnPicker({ button: q('.warn-btn'), box: q('.warn-box'), textarea: q('.warn-text'), clear: q('.warn-del') });
+  const warnCm = createWarnPicker({ button: q('.warn-btn'), box: q('.warn-box'), textarea: q('.warn-text'), clear: q('.warn-del'), load: ctx.loadWarnings });
 
   // ===== 上傳進度與各粉專狀態：畫在底部工具列（只畫目前選中的影片） =====
   // 這支影片的上傳狀態（編輯區「發布粉專」下方）：一行總結＋每個粉專一行

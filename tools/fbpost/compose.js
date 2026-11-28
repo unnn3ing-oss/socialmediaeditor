@@ -610,7 +610,13 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
 
   // ---- 照片框：縮圖列（點縮圖預覽、‹ › 調順序、× 移除、＋ 加照片） ----
   function updateLinkPreview() {
-    $('leadBubbleUrl').textContent = $('link').value.trim();
+    const field = $('link'), preview = $('leadBubbleUrl');
+    const value = field.value.trim();
+    const show = /^https?:\/\//i.test(value) && field.validity.valid;
+    preview.hidden = !show;
+    preview.textContent = show ? value : '';
+    if (show) preview.href = value;
+    else preview.removeAttribute('href');
   }
   function moveRaw(offset) {
     const next = st.cur + offset;

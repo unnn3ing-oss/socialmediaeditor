@@ -16,6 +16,7 @@ let PG_SAVED = null;
 let GD_SAVED = null;
 const GD_CHECKS = [];
 let PS_SAVED = null;
+let warnings = { revision: 0, groups: [{ group: '原分類', items: ['既有警語'] }] };
 // 文字背景替身
 const PNG1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
 const BG = { list: [], posts: [], fetches: [] };
@@ -96,6 +97,8 @@ const DATA = {
   'POST /admin/fb/backgrounds/fetch': (b) => { BG.fetches.push(b); return { done: 0, failed: 1, left: 0 }; },
   'POST /admin/fb/backgrounds/106018623298955': (b) => { BG.posts.push(b); if (b.name) BG.list[0].name = b.name; if (b.show !== undefined) BG.list[0].show = b.show; if (b.rnd !== undefined) BG.list[0].rnd = b.rnd; return { list: BG.list, batch: 10 }; },
   'POST /admin/fb/pages': (b) => { PG_SAVED = b; return b.pages.map((p) => ({ ...PAGES.find((x) => x.id === p.id), ...p })); },
+  'GET /admin/fb/warnings': () => warnings,
+  'POST /admin/fb/warnings': (b) => (warnings = { revision: b.revision + 1, groups: b.groups }),
   'GET /admin/fb/presets': [{ name: '雙11抽獎', body: '雙11活動連結 https://example.com/a' }, { name: '訂閱', body: '歡迎訂閱' }],
   'POST /admin/fb/presets': (b) => { PS_SAVED = b; return b.presets; },
   'GET /admin/fb/video-settings': { prefixes: ['1118_'], suffixes: [], reelsTag: '#焦點新聞影音都在TVBS', tags: ['#國際'] },
@@ -414,6 +417,25 @@ test('影片設定：讀到既有設定；每行一個，儲存時去空白行',
   await page.click('#vsSave');
   await page.waitForFunction(() => document.getElementById('vsMsg').textContent === '已儲存');
   assert.deepEqual(VS_SAVED, { prefixes: ['1118_'], suffixes: ['_v2', '_final'], reelsTag: '#焦點新聞影音都在TVBS', tags: ['#國際', '#TVBS新聞'] });
+});
+
+test('警語：新增、刪除、儲存後重新載入', async () => {
+  const { page } = await open({ width: 390, height: 860 }, '#fb');
+  await login(page);
+  await show(page, 'wnCard');
+  await page.getByRole('button', { name: '刪除警語 既有警語' }).click();
+  await page.fill('#wnGroup', '測試分類');
+  await page.fill('#wnText', '新版警語');
+  await page.click('#wnAdd');
+  await page.click('#wnSave');
+  await page.waitForFunction(() => document.getElementById('wnMsg').textContent === '已儲存');
+  assert.deepEqual(warnings.groups, [{ group: '測試分類', items: ['新版警語'] }]);
+  if (SHOT) await page.screenshot({ path: path.join(SHOT, 'admin-warning-settings.png') });
+  const { page: reopened } = await open({ width: 390, height: 860 }, '#fb');
+  await login(reopened);
+  await show(reopened, 'wnCard');
+  await reopened.getByRole('button', { name: '刪除警語 新版警語' }).waitFor();
+  assert.equal(await reopened.getByRole('button', { name: '刪除警語 既有警語' }).count(), 0);
 });
 
 test('活動留言：顯示既有兩則；新增、刪除後儲存，body 依順序', async () => {
@@ -1239,7 +1261,7 @@ test('左側分類手風琴：目前分類展開、游標移上展開並往下�
   assert.equal(await page.isVisible('#vsCard'), true);
   assert.equal(await page.isVisible('#pgCard'), false);
   assert.equal(await page.getAttribute('#sub-post-video', 'aria-selected'), 'true');
-  assert.deepEqual(await page.$$eval('#subs-post button', (b) => b.filter((x) => !x.hidden).map((x) => x.textContent)), ['粉專設定', '活動留言', '文字背景', '影片設定']);
+  assert.deepEqual(await page.$$eval('#subs-post button', (b) => b.filter((x) => !x.hidden).map((x) => x.textContent)), ['粉專設定', '活動留言', '警語', '文字背景', '影片設定']);
   // 目前分類一直展開，標出目前功能
   assert.equal(await page.isVisible('#side-post'), true);
   assert.equal(await page.getAttribute('#side-post-video', 'aria-current'), 'true');

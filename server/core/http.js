@@ -32,7 +32,7 @@ export const MESSAGES = {
   fb_self_pending: '帳號尚未指派權限組，請聯絡管理者。'
 };
 export const STATUS = { bad_password: 200, unauthorized: 401, forbidden: 403, not_found: 404, too_large: 413, bad_request: 400, misconfigured: 500,
-  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502, report_scope: 409, fb_retry: 503, reg_closed: 403, reg_taken: 200, reg_limit: 429, reg_full: 503, fb_self_pending: 403 };
+  fb_off: 503, fb_token: 502, fb_forbidden: 403, bad_staff: 200, locked: 429, need_setup: 200, setup_expired: 200, fb_need_staff: 403, fb_no_perm: 403, fb_no_pages: 503, fb_error: 502, fb_bad_time: 400, rundown_off: 503, rundown_failed: 502, report_scope: 409, warning_conflict: 409, fb_retry: 503, reg_closed: 403, reg_taken: 200, reg_limit: 429, reg_full: 503, fb_self_pending: 403 };
 
 export function originAllowed(request, env) {
   const origin = request.headers.get('origin');

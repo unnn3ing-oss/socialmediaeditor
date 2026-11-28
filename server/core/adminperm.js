@@ -22,7 +22,7 @@ export const ROUTES = [
   [/^\/admin\/fb\/guard(\/pages(\/\d{1,30})?|\/log(\/\d{1,30}(_\d{1,30})?\/(hide|unhide))?)?$/, 'guard'],
   [/^\/admin\/fb\/usage(\/refresh)?$/, 'usage'],
   [/^\/admin\/fb\/pages$/, 'pages'],
-  [/^\/admin\/fb\/presets$/, 'presets'],
+  [/^\/admin\/fb\/(presets|warnings)$/, 'presets'],
   [/^\/admin\/fb\/(comment|video|preview)-opts$/, 'labs'],
   [/^\/admin\/fb\/video-settings$/, 'video'],
   [/^\/admin\/fb\/backgrounds(\/fetch|\/random|\/\d{6,20}(\/img)?)?$/, 'bg'],

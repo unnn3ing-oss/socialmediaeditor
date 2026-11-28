@@ -92,6 +92,25 @@
       <div class="row"><button id="psAdd" type="button">＋ 新增一則</button><button id="psSave" class="primary" type="button">儲存</button></div>
       </section>
 
+      <section class="card" id="wnCard" data-card="presets">
+        <h2>警語</h2>
+        <p>這份清單供排程發布與影片發布選用。新增或刪除後，按「儲存」生效。</p>
+        <p class="msg" id="wnMsg" role="status"></p>
+        <fieldset id="wnEditor" disabled>
+          <div id="wnRows"></div>
+          <label for="wnGroup">分類</label>
+          <input id="wnGroup" type="text" list="wnGroups" maxlength="40">
+          <datalist id="wnGroups"></datalist>
+          <label for="wnText">警語內容</label>
+          <input id="wnText" type="text" maxlength="500">
+          <div class="row">
+            <button id="wnAdd" type="button">＋ 新增警語</button>
+            <button id="wnSave" class="primary" type="button" disabled>儲存</button>
+          </div>
+        </fieldset>
+        <div class="row"><button id="wnReload" type="button" hidden>重新載入</button></div>
+      </section>
+
       <section class="card" id="bgCard" data-card="bg">
         <h2>文字背景（排程發布純文字）</h2>
         <p>在粉專「建立貼文」點 Aa 彩色方塊、顯示所有背景並捲到底，按下面「複製擷取腳本」，到 DevTools Console 貼上執行，再把結果貼到下面。圖樣的網址幾天後會過期，貼上後請<b>當天</b>按「下載圖樣」。還沒匯入時，排程發布用內建的純色＋漸層。</p>

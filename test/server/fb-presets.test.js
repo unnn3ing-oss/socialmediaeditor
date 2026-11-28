@@ -40,3 +40,24 @@ test('活動留言：管理頁整份存、讀；排程發布讀得到；驗證',
   assert.equal(await bad('nope'), 400);
   assert.deepEqual((await call(env, '/admin/fb/presets', adm)).body.data, [list[1]], '失敗時不動既有資料');
 });
+
+test('警語：保留初始警語，允許新增與刪光，防止舊版本覆蓋', async () => {
+  const env = mkEnv();
+  const admin = await auth(env, 'admin');
+  const staff = await auth(env, 'company', true);
+  const adminPath = '/admin/fb/warnings', pickerPath = '/fb/warnings';
+  const initial = (await call(env, adminPath, admin)).body.data;
+  assert.equal(initial.revision, 0);
+  assert.ok(initial.groups.length > 0);
+  assert.deepEqual((await call(env, pickerPath, staff)).body.data, initial.groups);
+  const groups = [...initial.groups, { group: '測試分類', items: ['測試警語'] }];
+  const saved = (await call(env, adminPath, admin, { revision: 0, groups })).body.data;
+  assert.ok(saved.revision > 0);
+  assert.deepEqual((await call(env, pickerPath, staff)).body.data, groups);
+  assert.equal((await call(env, adminPath, admin, { revision: 0, groups: [] })).status, 409);
+  assert.equal((await call(env, adminPath, admin, { revision: saved.revision, groups: [{ group: '測試', items: ['重複', '重複'] }] })).status, 400);
+  assert.equal((await call(env, adminPath, {}, { revision: saved.revision, groups: [] })).status, 401);
+  assert.deepEqual((await call(env, adminPath, admin, { revision: saved.revision, groups: [] })).body.data.groups, []);
+  assert.deepEqual((await call(env, pickerPath, staff)).body.data, []);
+  assert.equal((await call(env, pickerPath, {})).status, 401);
+});

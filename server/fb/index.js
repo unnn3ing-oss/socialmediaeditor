@@ -1,3 +1,4 @@
+import { readWarnings, saveWarnings, validWarnings } from './warnings.js';
 // 排程發布後端：/fb/*（權限見 access.js：管理頁切換只開放管理員／開放公司帳號）與管理路由 /admin/fb/*、/admin/rundown*
 import { ok, fail, readBody, corsHeaders } from '../core/http.js';
 import { fbAccess, accessMode, accessState, setAccessState, ACCESS_MODES, MAX_REASON } from './access.js';
@@ -53,6 +54,8 @@ route('GET', /^\/fb\/pages$/, async (request, env) => {
   return ok(request, env, pages.map((p) => ({ id: p.id, short: p.short, order: p.order, rd: p.rd, noTextUtm: !p.utmText })));
 });
 route('GET', /^\/fb\/access$/, async (request, env) => ok(request, env, { mode: await accessMode(env) }));
+
+route('GET', /^\/fb\/warnings$/, async (request, env) => ok(request, env, (await readWarnings(env)).groups, { 'cache-control': 'no-store' }), ['post', 'vpost']);
 
 route('GET', /^\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 
@@ -253,6 +256,14 @@ adminRoute('POST', /^\/admin\/fb\/preview-opts$/, async (request, env) => {
   const opts = validNpOpts(await readJsonBody(request, 40000));
   if (!opts) return fail(request, env, 'bad_request');
   return ok(request, env, { ...(await saveNpOpts(env, opts)), people: await labPeople(env) });
+});
+adminRoute('GET', /^\/admin\/fb\/warnings$/, async (request, env) => ok(request, env, await readWarnings(env)));
+adminRoute('POST', /^\/admin\/fb\/warnings$/, async (request, env) => {
+  const body = await readJsonBody(request, 256000);
+  const groups = validWarnings(body?.groups);
+  if (!groups || !Number.isSafeInteger(body.revision) || body.revision < 0) return fail(request, env, 'bad_request', '請輸入完整且不重複的警語。');
+  const saved = await saveWarnings(env, groups, body.revision);
+  return saved ? ok(request, env, saved) : fail(request, env, 'warning_conflict', '警語清單已被更新，請重新載入後再修改。');
 });
 adminRoute('GET', /^\/admin\/fb\/presets$/, async (request, env) => ok(request, env, await listPresets(env)));
 adminRoute('POST', /^\/admin\/fb\/presets$/, async (request, env) => {
