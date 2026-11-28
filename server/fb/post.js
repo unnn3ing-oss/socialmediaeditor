@@ -18,7 +18,7 @@ const MAX_MESSAGE = 63206;
 export const timeOk = (at, now = Math.floor(Date.now() / 1000)) => Number.isInteger(at) && at >= now + MIN_LEAD && at <= now + MAX_LEAD;
 
 // 驗證表單；不合法回 null
-// 第 2、3 則留言：[{ message, delay（距上一則幾分鐘，5 的倍數，5～1440） }] → [{ message, offset（距發布幾分鐘） }]；不合法回 null
+// 第 2、3 則留言：[{ message, delay（距上一則幾分鐘，5 的倍數，0～1440） }] → [{ message, offset（距發布幾分鐘） }]；不合法回 null
 export const MAX_EXTRAS = 2;
 // 第 2、3 則留言帶上「第幾則」（通知與列表顯示用）
 const numbered = (extras) => extras.map((x, i) => ({ ...x, n: i + 2 }));
@@ -33,7 +33,7 @@ export function parseExtras(raw) {
     const message = c && typeof c.message === 'string' ? c.message.trim() : '';
     const delay = c && c.delay;
     if (!message || [...message].length > 8000) return null;
-    if (!Number.isInteger(delay) || delay < 5 || delay > 1440 || delay % 5) return null;
+    if (!Number.isInteger(delay) || delay < 0 || delay > 1440 || delay % 5) return null;
     offset += delay;
     out.push({ message, offset });
   }
@@ -244,7 +244,7 @@ export async function createPosts(env, form, who = null) {
     if (items.length) {
       try {
         // published：貼文剛剛由臉書回應成功發出，計時器不用再問「發布了沒」（那一步需要讀取權限，可能被擋）
-        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), published: true, items, by, title, ptype: form.kind || undefined, pageName: p.name });
+        await armTimer(env, { pageId: t.page, postId: r.postId, at: Math.floor(Date.now() / 1000), published: true, immediateExtras: extras.some((x) => x.offset === 0), items, by, title, ptype: form.kind || undefined, pageName: p.name });
         if (first && !firstOk) r.comment = 'retry';
         if (warnLeft.length) r.warn = 'retry';
         if (extras.length) r.extra = extras.length;

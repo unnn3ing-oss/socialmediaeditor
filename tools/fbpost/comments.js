@@ -4,12 +4,11 @@ import { $ } from './util.js';
 import { createWarnPicker } from '../../ui/warnings.js';
 
 const MAX_EXTRAS = 2;   // 第 1 則以外最多 2 則（共 3 則）
-const DELAYS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 90, 120, 180, 240, 360, 720, 1440];
-const delayLabel = (m) => (m < 60 ? `${m} 分鐘` : m % 60 ? `${Math.floor(m / 60)} 小時 ${m % 60} 分` : `${m / 60} 小時`);
+const DELAYS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 90, 120, 180, 240, 360, 720, 1440];
+const delayLabel = (m) => (m === 0 ? '同時發布' : m < 60 ? `${m} 分鐘` : m % 60 ? `${Math.floor(m / 60)} 小時 ${m % 60} 分` : `${m / 60} 小時`);
 
 export function createComments({ tb }) {
   const side = document.documentElement.classList.contains('is-side');
-  const sideChoices = new WeakMap();
   let presets = [];
   const box = $('extras');
   const addBtn = $('addComment');
@@ -23,45 +22,40 @@ export function createComments({ tb }) {
     presets.forEach((p, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = '活動：' + p.name; sel.append(o); });
     sel.value = cur && presets[+cur] ? cur : '';
   }
-  const refreshPresets = () => box.querySelectorAll('select.preset').forEach((select) => {
-    fillPresetOptions(select);
-    sideChoices.get(select)?.();
-  });
+  const refreshPresets = () => box.querySelectorAll('select.preset').forEach(fillPresetOptions);
 
-  function choiceButtons(select, label) {
-    const trigger = document.createElement('button');
-    trigger.type = 'button'; trigger.className = 'soft-btn';
-    trigger.setAttribute('aria-expanded', 'false');
-    const options = document.createElement('div');
-    options.className = 'side-comment-options'; options.hidden = true;
-    options.setAttribute('role', 'group'); options.setAttribute('aria-label', label);
-    const open = (visible) => {
-      options.hidden = !visible;
-      trigger.setAttribute('aria-expanded', String(visible));
-    };
+  function delayInput() {
+    const label = document.createElement('label');
+    label.className = 'extra-delay';
+    const before = document.createElement('span'), after = document.createElement('span');
+    before.textContent = '晚'; after.textContent = '分鐘發';
+    const input = document.createElement('input');
+    Object.assign(input, { type: 'number', className: 'delay', min: '0', max: '1440', step: '5', value: '5' });
+    input.setAttribute('aria-label', '距上一則留言的分鐘數');
+    const zero = document.createElement('span');
+    zero.className = 'extra-delay-zero'; zero.textContent = '同時發布';
+    zero.setAttribute('aria-hidden', 'true');
     const sync = () => {
-      trigger.textContent = label === '延遲' ? `延遲 ${select.selectedOptions[0].textContent}` : label;
-      trigger.hidden = select.options.length <= 1;
-      options.replaceChildren(...[...select.options].map((option) => {
-        const choice = document.createElement('button');
-        choice.type = 'button'; choice.className = 'soft-btn'; choice.textContent = option.textContent;
-        choice.setAttribute('aria-pressed', String(option.selected));
-        choice.onclick = () => {
-          select.value = option.value;
-          select.dispatchEvent(new Event('change'));
-          open(false); sync(); trigger.focus();
-        };
-        return choice;
-      }));
+      const same = input.valueAsNumber === 0;
+      label.classList.toggle('is-zero', same);
+      input.setAttribute('aria-valuetext', same ? '同時發布' : `晚 ${input.value} 分鐘發`);
     };
-    trigger.onclick = () => open(options.hidden);
-    options.onkeydown = (event) => {
-      if (event.key === 'Escape') { event.stopPropagation(); open(false); trigger.focus(); }
-    };
-    select.hidden = true;
-    sideChoices.set(select, sync);
+    input.addEventListener('input', sync);
+    input.addEventListener('change', () => {
+      const n = input.valueAsNumber;
+      input.value = String(Number.isFinite(n) ? Math.min(1440, Math.max(0, Math.round(n / 5) * 5)) : 5);
+      sync();
+    });
+    input.addEventListener('wheel', (event) => {
+      if (!event.deltaY || event.ctrlKey) return;
+      event.preventDefault();
+      if (event.deltaY < 0) input.stepUp(); else input.stepDown();
+      sync();
+    }, { passive: false });
+    label.title = '滾輪每格調整 5 分鐘，輸入 0 為同時發布';
+    label.append(before, input, after, zero);
     sync();
-    return { trigger, options };
+    return label;
   }
 
   function renumber() {
@@ -76,25 +70,21 @@ export function createComments({ tb }) {
     const title = document.createElement('strong'); title.className = 'extra-title';
     const preset = document.createElement('select'); preset.className = 'preset'; preset.setAttribute('aria-label', '留言內容來源');
     fillPresetOptions(preset);
-    const dl = document.createElement('label'); dl.className = 'extra-delay'; dl.textContent = '距上一則 ';
-    const delay = document.createElement('select'); delay.className = 'delay'; delay.setAttribute('aria-label', '距上一則留言');
-    DELAYS.forEach((m) => { const o = document.createElement('option'); o.value = String(m); o.textContent = delayLabel(m); delay.append(o); });
-    dl.append(delay);
     const del = document.createElement('button'); del.type = 'button'; del.className = 'extra-del'; del.textContent = '刪除';
-    head.append(title, preset, dl, del);
+    if (side) head.append(title, preset, delayInput());
+    else {
+      const label = document.createElement('label'); label.className = 'extra-delay'; label.textContent = '距上一則 ';
+      const delay = document.createElement('select'); delay.className = 'delay'; delay.setAttribute('aria-label', '距上一則留言');
+      for (const m of DELAYS) delay.add(new Option(delayLabel(m), String(m)));
+      delay.value = '5';
+      label.append(delay);
+      head.append(title, preset, label, del);
+    }
     const ta = document.createElement('textarea'); ta.rows = 3; ta.placeholder = '輸入留言內容（不帶連結）'; ta.setAttribute('aria-label', '留言內容');
     preset.addEventListener('change', () => { const p = presets[+preset.value]; if (preset.value !== '' && p) ta.value = p.body; });
     del.addEventListener('click', () => { el.remove(); renumber(); });
     el.append(head, ta);
-    if (side) {
-      dl.hidden = true;
-      const sources = choiceButtons(preset, '帶入活動留言');
-      const interval = choiceButtons(delay, '延遲');
-      const row = document.createElement('div');
-      row.className = 'side-comment-options';
-      row.append(sources.trigger, interval.trigger);
-      el.append(row, sources.options, interval.options);
-    }
+    if (side) el.append(del);
     box.append(el);
     renumber();
     ta.focus();
@@ -111,7 +101,9 @@ export function createComments({ tb }) {
       for (const [i, el] of [...box.children].entries()) {
         const message = el.querySelector('textarea').value.trim();
         if (!message) return { error: `第 ${i + 2} 則留言沒有內容（不需要就按刪除）。` };
-        comments.push({ message, delay: +el.querySelector('select.delay').value });
+        const control = el.querySelector('.delay'), delay = Number(control.value);
+        if (!control.value || !Number.isInteger(delay) || delay < 0 || delay > 1440 || delay % 5) return { error: `第 ${i + 2} 則留言的延遲須為 0～1440 分鐘，並以 5 分鐘為單位。` };
+        comments.push({ message, delay });
       }
       return { comments, warn: warn.value() };
     },

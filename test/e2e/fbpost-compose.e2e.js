@@ -807,12 +807,22 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     await frame.click('#npChk');
     assert.equal(await frame.isChecked('#noPreview'), true);
     await frame.click('#addComment');
-    await frame.getByRole('button', { name: '帶入活動留言' }).click();
-    await frame.getByRole('button', { name: '活動：活動範本' }).click();
+    assert.equal(await frame.evaluate(() => document.querySelector('.lead-preview-row').nextElementSibling.id), 'extras');
+    assert.equal(await frame.evaluate(() => document.getElementById('extras').compareDocumentPosition(document.getElementById('leadPreviewActions')) & Node.DOCUMENT_POSITION_FOLLOWING), 4);
+    const preset = frame.locator('#extras select.preset');
+    assert.equal(await preset.inputValue(), '');
+    await preset.selectOption({ label: '活動：活動範本' });
     assert.equal(await frame.inputValue('#extras textarea'), '活動留言');
-    await frame.getByRole('button', { name: '延遲 5 分鐘' }).click();
-    await frame.getByRole('button', { name: '15 分鐘', exact: true }).click();
-    assert.equal(await frame.inputValue('#extras select.delay'), '15');
+    const delay = frame.locator('#extras input.delay');
+    assert.equal(await delay.inputValue(), '5');
+    await delay.hover();
+    await page.mouse.wheel(0, 100);
+    await frame.waitForFunction(() => document.querySelector('#extras input.delay').value === '0');
+    assert.equal(await delay.getAttribute('aria-valuetext'), '同時發布');
+    await page.mouse.wheel(0, -100);
+    await frame.waitForFunction(() => document.querySelector('#extras input.delay').value === '5');
+    await delay.fill('0');
+    await delay.blur();
     await frame.click('#sideRawMode');
     await frame.check('#sideWatermark');
     await frame.click('#pages .chip[data-page="111"] .chip-l');
@@ -822,6 +832,7 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     assert.match(posts[0].toString(), /filename="photo1.jpg"/);
     assert.match(posts[0].toString(), /filename="photo2.jpg"/);
     assert.match(posts[0].toString(), /name="commentLead"\r\n\r\n留言預覽直接編輯/);
+    assert.match(posts[0].toString(), /"message":"活動留言","delay":0/);
     assert.match(posts[0].toString(), /name="noPreview"\r\n\r\n1/);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

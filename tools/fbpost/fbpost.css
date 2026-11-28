@@ -700,9 +700,6 @@ html:not(.is-side) .live-tip { display: none; }
 .is-side #leadBubbleHead { font-size: 12px; font-weight: 700; }
 .is-side #leadPreview #lead { padding: 2px 0; min-height: 26px; height: 26px; border: 0; background: transparent; }
 .is-side #leadBubbleUrl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-size: 12px; }
-.is-side .side-comment-options { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
-.is-side .side-comment-options[hidden], .is-side .extra select[hidden], .is-side .extra-delay[hidden] { display: none; }
-.is-side .side-comment-options [aria-pressed=true], .is-side .side-comment-options [aria-expanded=true] { color: var(--accent); background: var(--accent-soft); }
 .is-side .extra { border: 0; padding-inline: 0; background: transparent; }
 .is-side .extra textarea, .is-side #warnText { background: #f0f2f5; border: 0; border-radius: 14px; }
 .is-side #sideRawActions label { display: flex; align-items: center; gap: 6px; margin: 0; }
@@ -720,3 +717,15 @@ html:not(.is-side) .live-tip { display: none; }
 .is-side #leadPreviewActions #addComment { margin: 0; }
 .is-side #leadPreviewActions .np-chk { position: relative; min-height: 32px; }
 .is-side #leadPreviewActions .np-chk input { position: absolute; opacity: 0; }
+
+.is-side .extra-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.is-side .extra .extra-title, .is-side .extra .extra-delay { white-space: nowrap; font-size: 12px; }
+.is-side .extra .extra-head select.preset { width: 100%; min-width: 0; max-width: none; height: 24px; min-height: 24px; padding: 0 3px; font-size: 12px; }
+.is-side .extra .extra-delay { display: flex; align-items: center; position: relative; gap: 2px; margin: 0; }
+.is-side .extra .extra-delay input { width: 40px; height: 24px; min-height: 24px; padding: 0 2px; text-align: center; font-size: 12px; appearance: textfield; }
+.is-side .extra .extra-delay input::-webkit-inner-spin-button { appearance: none; }
+.extra-delay-zero { display: none; }
+.is-side .extra-delay.is-zero:not(:focus-within) > span:not(.extra-delay-zero) { visibility: hidden; }
+.is-side .extra-delay.is-zero:not(:focus-within) input { color: transparent; }
+.is-side .extra-delay.is-zero:not(:focus-within) .extra-delay-zero { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 6px; background: var(--accent-soft); color: var(--accent); pointer-events: none; }
+.is-side .extra > .extra-del { display: block; margin-inline-start: auto; }
