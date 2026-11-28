@@ -71,7 +71,12 @@ export function createComments({ tb }) {
     const preset = document.createElement('select'); preset.className = 'preset'; preset.setAttribute('aria-label', '留言內容來源');
     fillPresetOptions(preset);
     const del = document.createElement('button'); del.type = 'button'; del.className = 'extra-del'; del.textContent = '刪除';
-    if (side) head.append(title, preset, delayInput());
+    if (side) {
+      del.textContent = '×';
+      del.setAttribute('aria-label', '刪除留言');
+      del.title = '刪除留言';
+      head.append(del, title, preset, delayInput());
+    }
     else {
       const label = document.createElement('label'); label.className = 'extra-delay'; label.textContent = '距上一則 ';
       const delay = document.createElement('select'); delay.className = 'delay'; delay.setAttribute('aria-label', '距上一則留言');
@@ -84,7 +89,6 @@ export function createComments({ tb }) {
     preset.addEventListener('change', () => { const p = presets[+preset.value]; if (preset.value !== '' && p) ta.value = p.body; });
     del.addEventListener('click', () => { el.remove(); renumber(); });
     el.append(head, ta);
-    if (side) el.append(del);
     box.append(el);
     renumber();
     ta.focus();
