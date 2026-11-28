@@ -770,9 +770,20 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     const withLogo = await canvasHash(frame, '#cv');
     await frame.uncheck('#sideWatermark');
     assert.notEqual(await canvasHash(frame, '#cv'), withLogo);
+    const edgeGap = (id, previous) => frame.evaluate(({ id, previous }) => {
+      const canvas = document.getElementById('cv').getBoundingClientRect();
+      const edge = document.getElementById(id).getBoundingClientRect();
+      return previous ? canvas.left - edge.right : edge.left - canvas.right;
+    }, { id, previous });
+    assert.ok(await edgeGap('sideNextPhoto', false) >= 9);
     await frame.click('#sideNextPhoto');
     assert.equal(await frame.textContent('#sideRawCount'), '2 / 2');
     assert.equal(await frame.isVisible('#sidePrevPhoto'), true);
+    assert.ok(await edgeGap('sidePrevPhoto', true) >= 9);
+    await page.setViewportSize({ width: 320, height: 1000 });
+    assert.ok(await edgeGap('sidePrevPhoto', true) >= 9);
+    await frame.click('#sidePrevPhoto');
+    assert.ok(await edgeGap('sideNextPhoto', false) >= 9);
     await frame.click('#modeSeg [data-mode=image]');
     assert.equal(await frame.isVisible('#titleRow'), true);
     assert.equal(await frame.isVisible('#fxBtn'), true);

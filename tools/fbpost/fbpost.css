@@ -685,9 +685,17 @@ html:not(.is-side) .live-tip { display: none; }
 .is-side #sideRawActions { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; width: min(100%, 320px); margin: 8px auto 0; font-size: 13px; }
 .is-side .side-raw-order, .is-side #sideWatermarkError { grid-column: 1 / -1; }
 .is-side .side-raw-order { display: flex; gap: 5px; justify-content: flex-end; }
-.side-photo-edge { position: absolute; inset-block: 0; width: 16px; border: 0; background: linear-gradient(var(--fade), white, transparent), var(--neighbor); background-size: cover; cursor: pointer; }
-.side-photo-edge.prev { inset-inline-start: 0; --fade: to right; }
-.side-photo-edge.next { inset-inline-end: 0; --fade: to left; }
+.is-side .side-raw #cvWrap:has(.side-photo-edge:not([hidden])) {
+  --photo-edge: 12px;
+  --photo-gap: 10px;
+  --photo-gutter: calc(var(--photo-edge) + var(--photo-gap));
+  width: min(320px, calc(100% - 2 * var(--photo-gutter)));
+  overflow: visible;
+}
+.is-side .side-raw #cv { border-radius: inherit; }
+.side-photo-edge { position: absolute; inset-block: 0; width: var(--photo-edge); border-radius: 8px; border: 0; background: linear-gradient(var(--fade), white, transparent), var(--neighbor); background-size: cover; cursor: pointer; }
+.side-photo-edge.prev { inset-inline-end: calc(100% + var(--photo-gap)); --fade: to right; }
+.side-photo-edge.next { inset-inline-start: calc(100% + var(--photo-gap)); --fade: to left; }
 .is-side #leadPreview { background: #f0f2f5; border-radius: 14px; padding: 8px 11px; }
 .is-side #leadBubbleHead { font-size: 12px; font-weight: 700; }
 .is-side #leadPreview #lead { padding: 2px 0; min-height: 26px; height: 26px; border: 0; background: transparent; }
