@@ -111,8 +111,15 @@ export function createComposer({ tb, assets, onState = () => {} }) {   // onStat
   $('fxHint').textContent = kit.hintText;
   // 「T寶／馬賽克」按鈕：點了才展開貼圖列（隱藏切換）
   $('fxBtn').addEventListener('click', () => { const open = $('fxBar').hidden; $('fxBar').hidden = !open; $('fxBtn').setAttribute('aria-expanded', String(open)); if (open) editor.sync(); });
-  // 標題、貼文內容：最少 4 行，內容多就往下長（不出現框內捲軸）
-  const grow = (ta) => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`; };
+  // 標題、貼文內容依內容增高，外掛模式最少一行。
+  if (side) for (const id of ['title', 'msg']) $(id).rows = 1;
+  const grow = (ta) => {
+    const placeholder = ta.placeholder;
+    if (side && !ta.value) ta.placeholder = '';
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`;
+    ta.placeholder = placeholder;
+  };
   // ---- 純文字的臉書文字背景（清單由後端 /fb/backgrounds 給；讀不到就不顯示）----
   let bgs = [];
   let bgRow = null;   // 文字背景一列（無｜圖樣｜純色｜漸層）的左右滑
