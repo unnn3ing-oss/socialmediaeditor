@@ -23,13 +23,39 @@ export function createDialog({ beforeOpen, onOpen, onClose } = {}) {
   const placeLink = () => {
     const box = document.querySelector('.link-box'), compose = document.querySelector('.compose');
     const hadFocus = document.activeElement === $('link');   // 搬動 DOM 會失焦，搬完補回
-    if (mq.matches) { if (box.nextElementSibling !== compose) compose.before(box); }
+    if (document.documentElement.classList.contains('is-side')) { if (compose.parentElement.firstElementChild !== box) compose.parentElement.prepend(box); }
+    else if (mq.matches) { if (box.nextElementSibling !== compose) compose.before(box); }
     else if (box.parentElement !== compose.querySelector('.right')) compose.querySelector('.right').prepend(box);
     if (hadFocus && document.activeElement !== $('link')) $('link').focus();
   };
   placeLink(); mq.addEventListener('change', placeLink);
   // 外掛側邊欄：「＋ 新增發文」搬到「已排程／已發佈」右邊；不能檢視列表（卡片隱藏）時放回標題列
   if (document.documentElement.classList.contains('is-side')) {
+    const post = document.querySelector('.post-body');
+    post.insertBefore($('modeSeg'), post.firstElementChild.nextSibling);
+    $('sideRawMode').hidden = false;
+    $('sideImageBar').hidden = false;
+    $('sideImageBar').insertBefore($('fxBtn'), $('sideAddPhoto'));
+    $('sideImageBar').append($('fxBar'));
+    const closeFx = () => {
+      $('fxBar').hidden = true;
+      $('fxBtn').setAttribute('aria-expanded', 'false');
+    };
+    document.addEventListener('pointerdown', (event) => {
+      if (!$('sideImageBar').contains(event.target)) closeFx();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !$('fxBar').hidden) {
+        event.preventDefault();
+        closeFx();
+        $('fxBtn').focus();
+      }
+    });
+    $('leadBubbleHead').hidden = false;
+    $('leadBubbleUrl').hidden = false;
+    $('leadLabel').textContent = '留言預覽';
+    $('warnBtn').textContent = '警語';
+    $('addComment').textContent = '＋ 新增留言';
     const app = $('fbpostApp'), row = $('tabsRow'), head = document.querySelector('.fp-head');
     const placeNew = () => {
       const want = app.classList.contains('no-view') ? head : row;
@@ -52,7 +78,7 @@ export function createDialog({ beforeOpen, onOpen, onClose } = {}) {
   $('dlgClose').addEventListener('click', close);
   // Esc：排程時間小視窗或確認對話開著時由它們自己處理
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || veil.hidden || !$('timePop').hidden || !$('tpMenu').hidden || $('cfDlg').open || $('doneDlg').open || $('dutyDlg').open) return;
+    if (e.defaultPrevented || e.key !== 'Escape' || veil.hidden || !$('timePop').hidden || !$('tpMenu').hidden || $('cfDlg').open || $('doneDlg').open || $('dutyDlg').open) return;
     close();
   });
   return { open, close, isOpen: () => !veil.hidden };

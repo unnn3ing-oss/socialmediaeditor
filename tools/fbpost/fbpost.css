@@ -668,3 +668,35 @@ html:not(.is-side) .live-tip { display: none; }
 .is-side .ctl [data-view=card]::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%223%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2214%22%20y%3D%2214%22%20width%3D%227%22%20height%3D%227%22%20rx%3D%221%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat; }
 .is-side .ctl .btn.fx-ok::before { content: none; }
 .is-side .ctl .btn .fx-lbl { display: none; }
+
+/* 側邊欄維持一頁，編輯工具跟著預覽，送出列留在視窗底部。 */
+.is-side .post-body > #modeSeg { display: flex; margin: 0 0 14px; }
+.is-side #modeSeg button { flex: 1; min-width: 0; padding-inline: 3px; white-space: nowrap; }
+.is-side .compose { border: 0; }
+.is-side #sideImageBar { display: flex; position: relative; align-items: center; gap: 6px; margin-bottom: 8px; }
+.is-side #sideImageBar[hidden], .is-side #sideRawActions[hidden], .is-side #titleRow[hidden], .is-side #titleLabel[hidden] { display: none; }
+.is-side #sideImageBar .grow { flex: 1; }
+.is-side #cvWrap, .is-side #bgPrev { width: min(100%, 320px); margin-inline: auto; }
+.is-side #frameRow { justify-content: flex-start; }
+.is-side #frameRow .raw-btn { display: none; }
+.is-side #fxBar { position: absolute; z-index: 8; inset: calc(100% + 5px) 0 auto; margin: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-menu); }
+.is-side #fxSlot > * { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.is-side #fxSlot button { flex: none; }
+.is-side #sideRawActions { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; width: min(100%, 320px); margin: 8px auto 0; font-size: 13px; }
+.is-side .side-raw-order, .is-side #sideWatermarkError { grid-column: 1 / -1; }
+.is-side .side-raw-order { display: flex; gap: 5px; justify-content: flex-end; }
+.side-photo-edge { position: absolute; inset-block: 0; width: 16px; border: 0; background: linear-gradient(var(--fade), white, transparent), var(--neighbor); background-size: cover; cursor: pointer; }
+.side-photo-edge.prev { inset-inline-start: 0; --fade: to right; }
+.side-photo-edge.next { inset-inline-end: 0; --fade: to left; }
+.is-side #leadPreview { background: #f0f2f5; border-radius: 14px; padding: 8px 11px; }
+.is-side #leadBubbleHead { font-size: 12px; font-weight: 700; }
+.is-side #leadPreview #lead { padding: 2px 0; min-height: 26px; height: 26px; border: 0; background: transparent; }
+.is-side #leadBubbleUrl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-size: 12px; }
+.is-side .side-comment-options { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+.is-side .side-comment-options[hidden], .is-side .extra select[hidden], .is-side .extra-delay[hidden] { display: none; }
+.is-side .side-comment-options [aria-pressed=true], .is-side .side-comment-options [aria-expanded=true] { color: var(--accent); background: var(--accent-soft); }
+.is-side .extra { border: 0; padding-inline: 0; background: transparent; }
+.is-side .extra textarea, .is-side #warnText { background: #f0f2f5; border: 0; border-radius: 14px; }
+.is-side #sideRawActions label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.is-side #sideRawActions input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; }
+.is-side .side-raw #fontWarn, .is-side #frameRow[hidden] { display: none; }

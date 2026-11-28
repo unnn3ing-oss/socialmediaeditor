@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="../../ui/fx.css">
 <link rel="stylesheet" href="../../ui/warnings.css">
 <link rel="stylesheet" href="../../ui/connpill.css">
-<link rel="stylesheet" href="fbpost.css?v=side-toolbar-1">
+<link rel="stylesheet" href="fbpost.css?v=side-composer-1">
 <link rel="stylesheet" href="../../ui/compose/fx.css">
 <script>
   // 被外掛側邊欄（chrome-extension://）嵌入：先加 class，第一次畫面就是窄版按鈕，不閃爍
@@ -111,9 +111,10 @@
     <header class="post-head">
       <h2 id="postTitle">新增發文</h2>
       <div class="seg" id="modeSeg" role="group" aria-label="圖片">
-        <button type="button" data-mode="image">照片套圖</button>
+        <button type="button" data-mode="image">照片套版</button>
         <button type="button" data-mode="color">純文字圖</button>
         <button type="button" data-mode="text">純文字</button>
+        <button type="button" id="sideRawMode" aria-pressed="false" hidden>純照片</button>
       </div>
       <span class="pill warn test-pill">測試模式</span>
       <span class="grow"></span>
@@ -124,11 +125,19 @@
       <div class="compose">
         <div class="left">
           <div id="imgArea">
+            <div id="sideImageBar" hidden><strong>圖片預覽</strong><span class="grow"></span><button type="button" id="sideAddPhoto" class="soft-btn" hidden>＋ 加照片</button></div>
             <div class="canvas-wrap" id="cvWrap" tabindex="0">
               <canvas id="cv" width="1080" height="1080" aria-label="圖片預覽（沒照片時連點兩下選照片、點一下後 Ctrl+V 貼上；有照片時點兩下改標題）"></canvas>
+              <button type="button" id="sidePrevPhoto" class="side-photo-edge prev" aria-label="上一張照片" hidden></button><button type="button" id="sideNextPhoto" class="side-photo-edge next" aria-label="下一張照片" hidden></button>
               <p class="cv-empty" id="cvEmpty"><strong>連點兩下選照片</strong><span>也可以拖曳照片進來，或點一下後按 Ctrl+V 貼上</span></p>
               <input type="file" id="photoFile" accept="image/*" multiple hidden>
               <div class="cv-skel" id="cvSkel" aria-hidden="true" hidden><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
+            </div>
+            <div id="sideRawActions" hidden>
+              <label><input type="checkbox" id="sideWatermark" checked> 自動套用浮水印</label>
+              <span id="sideRawCount" aria-live="polite"></span>
+              <div class="side-raw-order"><button type="button" id="sideRawEarlier" class="soft-btn">前移</button><button type="button" id="sideRawLater" class="soft-btn">後移</button><button type="button" id="sideRawRemove" class="soft-btn">移除</button></div>
+              <p class="hint" id="sideWatermarkError" role="status" hidden>無法載入新版浮水印，可取消勾選後送出。</p>
             </div>
             <p class="hint bad" id="fontWarn" hidden></p>
             <div class="photo-strip" id="photoStrip" hidden><ul class="ps-list" id="psList" aria-label="照片（照順序發出）"></ul><p class="hint" id="psCount"></p></div>
@@ -167,19 +176,19 @@
             <input id="link" type="url" inputmode="url" required aria-required="true" placeholder="https://news.tvbs.com.tw/...">
             <p class="hint" id="pullHint" role="status"></p>
           </div>
-          <label class="lbl" for="title"><span id="titleName">標題</span> <small id="titleCount"></small></label>
-          <div class="title-row">
+          <label class="lbl" for="title" id="titleLabel"><span id="titleName">標題</span> <small id="titleCount"></small></label>
+          <div class="title-row" id="titleRow">
             <textarea id="title" rows="4" wrap="off" placeholder="帶入時自動換行"></textarea>
             <div class="title-lines" id="titleLines" aria-hidden="true"></div>
           </div>
           <label class="lbl" for="msg" id="msgLbl">貼文內容 <small id="msgCount"></small></label>
           <textarea id="msg" rows="4" placeholder="小編文（第一行）&#10;【標題】&#10;（圖說）&#10;#hashtag"></textarea>
           <div class="lbl-row">
-            <label class="lbl" for="lead">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
+            <label class="lbl" for="lead" id="leadLabel">留言內容 <small>發布後第一則留言，會自動接文章連結＋各粉專 UTM</small></label>
             <label class="np-chk" id="npChk" hidden title="實驗功能：只對這一次送出有效"><input type="checkbox" id="noPreview"> 移除預覽</label>
             <span class="warn-anchor"><button type="button" class="warn-btn" id="warnBtn">警語 ▾</button></span>
           </div>
-          <input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）">
+          <div id="leadPreview"><div id="leadBubbleHead" hidden>第一則留言</div><input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）"><div id="leadBubbleUrl" hidden></div></div>
           <p class="np-note" id="npNote" hidden>這則貼文的第 1 則留言會試著移除連結預覽（只限這次送出，請到粉專確認效果）</p>
           <div class="warn-box" id="warnBox" hidden>
             <div class="warn-head"><strong>警語留言</strong><small>與第 1 則同時發，不佔 3 則名額</small><button type="button" class="warn-del" id="warnDel">移除警語</button></div>

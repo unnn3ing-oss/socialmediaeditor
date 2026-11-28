@@ -10,6 +10,7 @@
   "requires": [],
   "gate": { "check": "/fb/open", "badge": "管理員測試" },
   "assets": {
+    "watermark.news": { "company": "tvbs-news-logo", "public": null },
     "sticker.smile": {
       "company": "tbao-smile",
       "public": "../../assets-public/stickers/smile.webp"
