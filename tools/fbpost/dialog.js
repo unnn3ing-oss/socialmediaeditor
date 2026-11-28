@@ -52,8 +52,18 @@ export function createDialog({ beforeOpen, onOpen, onClose } = {}) {
       }
     });
     $('leadBubbleHead').hidden = false;
+    $('leadAvatar').hidden = false;
+    $('leadPreviewMeta').hidden = false;
+    const actions = $('leadPreviewActions');
+    actions.hidden = false;
+    actions.append($('addComment'), $('warnBtn').closest('.warn-anchor'), $('npChk'));
+    $('npChk').lastChild.textContent = '移除連結預覽';
+    $('lead').placeholder = '看更多新聞內容';
     $('leadBubbleUrl').hidden = false;
     $('leadLabel').textContent = '留言預覽';
+    const editHint = document.createElement('small');
+    editHint.textContent = '可直接編輯';
+    $('leadLabel').append(editHint);
     $('warnBtn').textContent = '警語';
     $('addComment').textContent = '＋ 新增留言';
     const app = $('fbpostApp'), row = $('tabsRow'), head = document.querySelector('.fp-head');

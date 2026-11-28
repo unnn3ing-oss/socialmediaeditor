@@ -43,6 +43,7 @@ async function openFb({ side = false } = {}) {
     if (p.startsWith('/assets/')) return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset() });
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
+    if (side && p === '/fb/me') return json({ admin: true, noPreview: true });
     if (p === '/fb/presets') return json([{ name: '活動範本', body: '活動留言' }]);
     if (p === '/fb/backgrounds') return json(BGS);
     if (p.startsWith('/fb/bg/')) { BG_IMG_HITS.push({ p, auth: req.headers().authorization || '' }); return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([10, 200, 30]) }); }
@@ -794,6 +795,17 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-side-stickers.png') });
     await frame.click('#modeSeg [data-mode=color]');
     assert.equal(await frame.isVisible('#fxBtn'), false);
+    assert.equal(await frame.isVisible('#leadAvatar'), true);
+    assert.match(await frame.textContent('#leadPreviewMeta'), /剛剛.*讚.*回覆/);
+    assert.equal(await frame.textContent('#leadBubbleHead'), '新聞粉專');
+    await frame.click('#pages .chip[data-page="222"] .chip-l');
+    assert.equal(await frame.textContent('#leadBubbleHead'), '娛樂粉專');
+    await frame.click('#pages .chip[data-page="222"] .chip-l');
+    assert.match(await frame.textContent('#leadBubbleUrl'), /4051394/);
+    await frame.fill('#lead', '留言預覽直接編輯');
+    assert.deepEqual(await frame.locator('#leadPreviewActions').evaluate(node => [...node.children].map(child => child.innerText.trim())), ['＋ 新增留言', '警語', '移除連結預覽']);
+    await frame.click('#npChk');
+    assert.equal(await frame.isChecked('#noPreview'), true);
     await frame.click('#addComment');
     await frame.getByRole('button', { name: '帶入活動留言' }).click();
     await frame.getByRole('button', { name: '活動：活動範本' }).click();
@@ -809,6 +821,8 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     assert.equal(posts.length, 1);
     assert.match(posts[0].toString(), /filename="photo1.jpg"/);
     assert.match(posts[0].toString(), /filename="photo2.jpg"/);
+    assert.match(posts[0].toString(), /name="commentLead"\r\n\r\n留言預覽直接編輯/);
+    assert.match(posts[0].toString(), /name="noPreview"\r\n\r\n1/);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

@@ -88,7 +88,13 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
       await Promise.all([import('../../ui/compose/assets.js'), import('./compose.js'), import('./targets.js'), import('./send.js'),
         import('./timepop.js'), import('./rd.js'), import('./comments.js')]);
     composer = createComposer({ tb, assets: await loadComposeAssets(tb), onState: () => sender && sender.updateButton() });
-    targets = createTargets({ timePop: createTimePop(), onChange: () => sender && sender.updateButton(), defaults: () => duty.ids() });
+    targets = createTargets({ timePop: createTimePop(), onChange: () => {
+      if (sender) sender.updateButton();
+      if (!document.documentElement.classList.contains('is-side')) return;
+      const selected = $('pages').querySelector('.chip.on') || $('pages').querySelector('.chip');
+      const short = selected && targets.shortOf(selected.dataset.page);
+      $('leadBubbleHead').textContent = short ? (short.endsWith('粉專') ? short : short + '粉專') : '第一則留言';
+    }, defaults: () => duty.ids() });
     sender = createSender({ tb, composer, targets, rd: createRd({ tb }), comments: createComments({ tb }), history,
       onBack: () => { dialog.close(); showTab('sched'); } });   // 返回列表：不自動查詢
     steps = createSteps({ composer, sender, dialog });   // 手機：① 編輯 → ② 選粉專＋RD

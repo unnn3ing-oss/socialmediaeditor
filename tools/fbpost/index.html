@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="../../ui/fx.css">
 <link rel="stylesheet" href="../../ui/warnings.css">
 <link rel="stylesheet" href="../../ui/connpill.css">
-<link rel="stylesheet" href="fbpost.css?v=side-composer-2">
+<link rel="stylesheet" href="fbpost.css?v=side-composer-3">
 <link rel="stylesheet" href="../../ui/compose/fx.css">
 <script>
   // 被外掛側邊欄（chrome-extension://）嵌入：先加 class，第一次畫面就是窄版按鈕，不閃爍
@@ -188,7 +188,14 @@
             <label class="np-chk" id="npChk" hidden title="實驗功能：只對這一次送出有效"><input type="checkbox" id="noPreview"> 移除預覽</label>
             <span class="warn-anchor"><button type="button" class="warn-btn" id="warnBtn">警語 ▾</button></span>
           </div>
-          <div id="leadPreview"><div id="leadBubbleHead" hidden>第一則留言</div><input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）"><div id="leadBubbleUrl" hidden></div></div>
+          <div class="lead-preview-row">
+            <span id="leadAvatar" aria-hidden="true" hidden>粉</span>
+            <div class="lead-preview-content">
+              <div id="leadPreview"><div id="leadBubbleHead" hidden>第一則留言</div><input id="lead" type="text" maxlength="200" placeholder="看更多新聞內容（沒輸入就用這句）"><div id="leadBubbleUrl" hidden></div></div>
+              <p id="leadPreviewMeta" aria-hidden="true" hidden>剛剛　讚　回覆</p>
+            </div>
+          </div>
+          <div id="leadPreviewActions" role="group" aria-label="留言操作" hidden></div>
           <p class="np-note" id="npNote" hidden>這則貼文的第 1 則留言會試著移除連結預覽（只限這次送出，請到粉專確認效果）</p>
           <div class="warn-box" id="warnBox" hidden>
             <div class="warn-head"><strong>警語留言</strong><small>與第 1 則同時發，不佔 3 則名額</small><button type="button" class="warn-del" id="warnDel">移除警語</button></div>
