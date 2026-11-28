@@ -63,6 +63,8 @@
 
 ## 目前進度
 
+- **留言預覽與警語管理**：首則／追加留言及操作列左側對齊，首則文章連結唯讀、只有小編文可直接編輯。後台「發文設定 → 警語」支援分類新增、刪除與儲存，沿用活動留言管理權限，排程及影片共用清單。需部署新版 Worker。交接見 `docs/handoff/2026-11-28-fbpost-warning-admin.md` 與 `docs/handoff/2026-11-28-fbpost-comment-alignment.md`。
+
 - **追加留言**：第 2、3 則依序接在首則下方，活動下拉與延遲放在標頭，操作列留在最後。零延遲與上一則同時到點，需部署更新後的 Worker。交接見 `docs/handoff/2026-11-28-fbpost-comment-timing.md`。
 
 - **側邊欄留言預覽**：加回頭像、粉專名稱、留言泡泡下方資訊與操作列，沿用現有發文及移除連結預覽流程。交接見 `docs/handoff/2026-11-28-fbpost-comment-preview.md`。

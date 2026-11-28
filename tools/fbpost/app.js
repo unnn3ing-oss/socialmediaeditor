@@ -69,7 +69,7 @@ const booted = (ok) => { $('bootSk').hidden = true; if (!ok) $('offMain').hidden
     const who = me.admin ? '管理員' : [me.name, me.group].filter(Boolean).join('．');
     if (who) { $('whoAmI').textContent = who; $('whoAmI').hidden = false; }
     // 實驗功能「第一則留言移除連結預覽」：管理頁開啟且這個人適用才顯示（勾選只對這一次送出有效）
-    $('npChk').hidden = !me.noPreview;
+    $('npChk').hidden = !me.noPreview || document.documentElement.classList.contains('is-side');
     if (me.tokenWarn && me.tokenWarn.text) { const w = $('tokWarn'); w.textContent = me.tokenWarn.text; w.classList.toggle('bad', me.tokenWarn.level === 'bad'); w.hidden = false; }
   }).catch(() => {}).then(() => {
     $('dutyBtn').hidden = !canPost; duty.check();

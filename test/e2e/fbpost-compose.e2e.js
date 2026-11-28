@@ -44,6 +44,7 @@ async function openFb({ side = false } = {}) {
     if (p === '/auth/status') return json({ company: true, exp: 9e9, admin: true });
     if (p === '/fb/pages') return json(PAGES);
     if (side && p === '/fb/me') return json({ admin: true, noPreview: true });
+    if (p === '/fb/warnings') return json([{ group: '自訂分類', items: ['新版警語'] }]);
     if (p === '/fb/presets') return json([{ name: '活動範本', body: '活動留言' }]);
     if (p === '/fb/backgrounds') return json(BGS);
     if (p.startsWith('/fb/bg/')) { BG_IMG_HITS.push({ p, auth: req.headers().authorization || '' }); return r.fulfill({ headers: { ...CORS, 'content-type': 'image/png' }, body: fakeAsset([10, 200, 30]) }); }
@@ -801,14 +802,29 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     await frame.click('#pages .chip[data-page="222"] .chip-l');
     assert.equal(await frame.textContent('#leadBubbleHead'), '娛樂粉專');
     await frame.click('#pages .chip[data-page="222"] .chip-l');
-    assert.match(await frame.textContent('#leadBubbleUrl'), /4051394/);
+    assert.equal(await frame.getAttribute('#leadBubbleUrl', 'href'), 'https://news.tvbs.com.tw/sports/4051394');
+    assert.equal(await frame.isVisible('#leadBubbleUrl'), true);
+    assert.equal(await frame.locator('#leadBubbleUrl').evaluate(node => node.isContentEditable), false);
     await frame.fill('#lead', '留言預覽直接編輯');
-    assert.deepEqual(await frame.locator('#leadPreviewActions').evaluate(node => [...node.children].map(child => child.innerText.trim())), ['＋ 新增留言', '警語', '移除連結預覽']);
-    await frame.click('#npChk');
-    assert.equal(await frame.isChecked('#noPreview'), true);
+    assert.equal(await frame.getAttribute('#leadBubbleUrl', 'href'), 'https://news.tvbs.com.tw/sports/4051394');
+    assert.deepEqual(await frame.locator('#leadPreviewActions').evaluate(node => [...node.children].map(child => child.innerText.trim())), ['＋ 新增留言', '警語']);
+    assert.equal(await frame.isVisible('#npChk'), false);
+    await frame.click('#warnBtn');
+    await frame.getByRole('menuitemcheckbox', { name: '新版警語' }).click();
+    assert.equal(await frame.inputValue('#warnText'), '新版警語');
+    await frame.getByRole('menuitemcheckbox', { name: '新版警語' }).press('Escape');
+    await frame.click('#warnDel');
     await frame.click('#addComment');
     assert.equal(await frame.evaluate(() => document.querySelector('.lead-preview-row').nextElementSibling.id), 'extras');
     assert.equal(await frame.evaluate(() => document.getElementById('extras').compareDocumentPosition(document.getElementById('leadPreviewActions')) & Node.DOCUMENT_POSITION_FOLLOWING), 4);
+    assert.equal(await frame.textContent('#extras .extra-title'), '第二則');
+    const leftEdges = await frame.evaluate(() => ['#leadPreview', '#extras textarea', '#addComment'].map(
+      (selector) => document.querySelector(selector).getBoundingClientRect().left
+    ));
+    assert.ok(leftEdges.every(left => Math.abs(left - leftEdges[0]) < 1), JSON.stringify(leftEdges));
+    assert.equal(await frame.evaluate(() => document.documentElement.scrollWidth), 320);
+    if (SHOT) await frame.locator('#leadPreviewActions').evaluate(node => node.scrollIntoView({ block: 'end' }));
+    if (SHOT) await page.screenshot({ path: path.join(SHOT, 'fbpost-side-comment-alignment.png') });
     const preset = frame.locator('#extras select.preset');
     assert.equal(await preset.inputValue(), '');
     await preset.selectOption({ label: '活動：活動範本' });
@@ -833,7 +849,7 @@ test('外掛編輯器：依序貼兩張切純照片，保留貼文格式和浮�
     assert.match(posts[0].toString(), /filename="photo2.jpg"/);
     assert.match(posts[0].toString(), /name="commentLead"\r\n\r\n留言預覽直接編輯/);
     assert.match(posts[0].toString(), /"message":"活動留言","delay":0/);
-    assert.match(posts[0].toString(), /name="noPreview"\r\n\r\n1/);
+    assert.doesNotMatch(posts[0].toString(), /name="noPreview"/);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

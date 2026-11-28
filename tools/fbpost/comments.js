@@ -59,7 +59,7 @@ export function createComments({ tb }) {
   }
 
   function renumber() {
-    [...box.children].forEach((el, i) => { el.querySelector('.extra-title').textContent = `第 ${i + 2} 則留言`; });
+    [...box.children].forEach((el, i) => { el.querySelector('.extra-title').textContent = side ? (i === 0 ? '第二則' : '第三則') : `第 ${i + 2} 則留言`; });
     addBtn.disabled = box.children.length >= MAX_EXTRAS;
   }
 
@@ -92,7 +92,7 @@ export function createComments({ tb }) {
   addBtn.addEventListener('click', add);
   renumber();
   // 警語留言：獨立一則、與第 1 則同時，不佔第 2、3 則名額
-  const warn = createWarnPicker({ button: $('warnBtn'), box: $('warnBox'), textarea: $('warnText'), clear: $('warnDel') });
+  const warn = createWarnPicker({ button: $('warnBtn'), box: $('warnBox'), textarea: $('warnText'), clear: $('warnDel'), load: () => tb.api.call('/fb/warnings') });
 
   return {
     // 回傳 { comments: [{ message, delay }], warn } 或 { error }

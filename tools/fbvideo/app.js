@@ -149,6 +149,7 @@ function readMeta(v) {
 }
 
 const edCtx = {
+  loadWarnings: () => tb.api.call('/fb/warnings'),
   settings: () => S.settings,
   presets: () => S.presets,
   pages: () => S.pages,

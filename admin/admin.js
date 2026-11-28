@@ -476,7 +476,7 @@ if (window.top !== window.self) {
     if (can('profiles')) jobs.push(tpLoad().then(function () { if (can('fbconn')) return fbReload(); }));
     else if (can('fbconn')) jobs.push(fbReload());
     if (can('pages')) jobs.push(pgLoad());
-    if (can('presets')) jobs.push(psLoad());
+    if (can('presets')) jobs.push(psLoad(), wnLoad());
     if (can('video')) jobs.push(vsLoad());
     if (can('bg')) jobs.push(bgLoad());
     if (can('webhook')) jobs.push(whLoad());
@@ -944,6 +944,97 @@ if (window.top !== window.self) {
       else say($('psMsg'), res.error || '儲存失敗。', 'err');
     }).catch(function () { say($('psMsg'), '連不上後端，請稍後再試。', 'err'); })
       .then(function () { fxEnd($('psSave'), $('psMsg'), '已儲存'); });
+  };
+
+  var wnGroups = [], wnRevision = 0;
+  function wnChanged() {
+    $('wnSave').disabled = false;
+    say($('wnMsg'), '有尚未儲存的變更。');
+    wnRender();
+  }
+  function wnRender() {
+    var rows = $('wnRows'), choices = $('wnGroups');
+    rows.textContent = '';
+    choices.textContent = '';
+    if (!wnGroups.length) rows.textContent = '目前沒有預設警語。';
+    wnGroups.forEach(function (group, groupIndex) {
+      var title = document.createElement('h3');
+      title.textContent = group.group;
+      var option = document.createElement('option');
+      option.value = group.group;
+      choices.append(option);
+      var list = document.createElement('ul');
+      group.items.forEach(function (item, index) {
+        var row = document.createElement('li');
+        var del = document.createElement('button');
+        del.type = 'button'; del.className = 'danger'; del.textContent = '刪除';
+        del.setAttribute('aria-label', '刪除警語 ' + item);
+        del.onclick = function () {
+          group.items.splice(index, 1);
+          if (!group.items.length) wnGroups.splice(groupIndex, 1);
+          wnChanged();
+        };
+        row.append(item, ' ', del);
+        list.append(row);
+      });
+      rows.append(title, list);
+    });
+  }
+  function wnApply(data) {
+    wnGroups = data.groups;
+    wnRevision = data.revision;
+    wnRender();
+    $('wnSave').disabled = true;
+    $('wnEditor').disabled = false;
+  }
+  async function wnLoad() {
+    $('wnEditor').disabled = true;
+    $('wnReload').hidden = true;
+    say($('wnMsg'), '讀取中');
+    try {
+      var res = await api('/admin/fb/warnings');
+      if (res.code === 'unauthorized') return expired();
+      if (!res.ok) throw new Error(res.error || '讀取警語失敗。');
+      wnApply(res.data);
+      say($('wnMsg'), '');
+    } catch (e) {
+      say($('wnMsg'), e.message, 'err');
+      $('wnReload').hidden = false;
+    }
+  }
+  $('wnReload').onclick = wnLoad;
+  $('wnAdd').onclick = function () {
+    var name = $('wnGroup').value.trim(), item = $('wnText').value.trim();
+    if (!name || !item) return say($('wnMsg'), '請填寫分類與警語內容。', 'err');
+    if (wnGroups.some(function (g) { return g.items.includes(item); })) return say($('wnMsg'), '這則警語已存在。', 'err');
+    var group = wnGroups.find(function (g) { return g.group === name; });
+    var count = wnGroups.reduce(function (total, g) { return total + g.items.length; }, 0);
+    if (count >= 100 || (!group && wnGroups.length >= 20)) return say($('wnMsg'), '最多可儲存 20 個分類、100 則警語。', 'err');
+    if (group) group.items.push(item);
+    else wnGroups.push({ group: name, items: [item] });
+    $('wnText').value = '';
+    $('wnText').focus();
+    wnChanged();
+  };
+  $('wnSave').onclick = async function () {
+    $('wnEditor').disabled = true;
+    $('wnReload').hidden = true;
+    say($('wnMsg'), '儲存中');
+    try {
+      var res = await api('/admin/fb/warnings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revision: wnRevision, groups: wnGroups })
+      });
+      if (res.code === 'unauthorized') return expired();
+      if (res.code === 'warning_conflict') $('wnReload').hidden = false;
+      if (!res.ok) throw new Error(res.error || '儲存警語失敗。');
+      wnApply(res.data);
+      say($('wnMsg'), '已儲存', 'good');
+    } catch (e) {
+      say($('wnMsg'), e.message, 'err');
+    } finally {
+      $('wnEditor').disabled = false;
+    }
   };
 
   // ---- 文字背景（/admin/fb/backgrounds）：匯入擷取結果、分批下載圖樣、改名／顯示／刪除 ----
@@ -1699,7 +1790,7 @@ if (window.top !== window.self) {
   var OLD_TABS = { fb: 'post', staff: 'people', rd: 'conn', logs: 'rec' };
   // 各分類的功能（＝右側上方分頁）：[代號, 名稱, 卡片 id]；首頁、素材設定不拆
   var SUBS = {
-    post: [['pages', '粉專設定', 'pgCard'], ['presets', '活動留言', 'psCard'], ['bg', '文字背景', 'bgCard'], ['video', '影片設定', 'vsCard']],
+    post: [['pages', '粉專設定', 'pgCard'], ['presets', '活動留言', 'psCard'], ['warnings', '警語', 'wnCard'], ['bg', '文字背景', 'bgCard'], ['video', '影片設定', 'vsCard']],
     guard: [['set', '設定', 'gdCard'], ['log', '紀錄', 'gdLogCard']],
     people: [['online', '目前在線', 'olCard'], ['msg', '發送通知', 'msCard'], ['staff', '授權名單', 'sfCard']],
     conn: [['fb', '臉書粉專連線狀態', 'fsCard'], ['rd', 'Rundown 連線', 'rdCard'], ['usage', '速率限制', 'usCard']],

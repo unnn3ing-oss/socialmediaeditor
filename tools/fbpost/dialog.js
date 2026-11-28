@@ -57,10 +57,8 @@ export function createDialog({ beforeOpen, onOpen, onClose } = {}) {
     const actions = $('leadPreviewActions');
     actions.hidden = false;
     $('leadPreviewMeta').closest('.lead-preview-row').after($('extras'), $('warnBox'), $('npNote'), actions);
-    actions.append($('addComment'), $('warnBtn').closest('.warn-anchor'), $('npChk'));
-    $('npChk').lastChild.textContent = '移除連結預覽';
+    actions.append($('addComment'), $('warnBtn').closest('.warn-anchor'));
     $('lead').placeholder = '看更多新聞內容';
-    $('leadBubbleUrl').hidden = false;
     $('leadLabel').textContent = '留言預覽';
     const editHint = document.createElement('small');
     editHint.textContent = '可直接編輯';
